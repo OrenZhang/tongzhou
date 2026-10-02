@@ -99,7 +99,22 @@ export interface Snapshot {
   runs: Run[];
   approvals: Approval[];
 }
+export type CodexLoginMethod = 'browser' | 'device';
+export interface CodexAuthState {
+  available: boolean;
+  account: string;
+  plan?: string;
+  error?: string;
+  login?: {
+    method: CodexLoginMethod;
+    phase: 'starting' | 'waiting' | 'success' | 'error' | 'cancelled';
+    url?: string;
+    userCode?: string;
+    error?: string;
+  };
+}
 export type AppEvent =
+  | { type: 'codex-auth'; state: CodexAuthState }
   | { type: 'changed' }
   | { type: 'message'; message: Message }
   | { type: 'approval'; approval: Approval };
@@ -140,8 +155,11 @@ export interface TongzhouAPI {
   diff(projectId: string): Promise<string>;
   importCCSwitch(): Promise<ImportPreview | null>;
   exportSession(id: string): Promise<string | null>;
-  codexStatus(): Promise<{ available: boolean; account: string; error?: string }>;
-  codexLogin(): Promise<string>;
+  codexStatus(): Promise<CodexAuthState>;
+  codexLogin(method: CodexLoginMethod): Promise<CodexAuthState>;
+  codexLoginCancel(): Promise<void>;
+  codexLoginOpen(): Promise<void>;
+  codexLoginCopyCode(): Promise<void>;
   codexLogout(): Promise<void>;
   onEvent(callback: (event: AppEvent) => void): () => void;
 }

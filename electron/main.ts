@@ -1,4 +1,5 @@
-import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell, clipboard } from 'electron';
+import { CodexAuth } from './codex-auth';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { realpath, stat, writeFile } from 'node:fs/promises';
@@ -24,6 +25,7 @@ app.setName('Tongzhou');
 let window: BrowserWindow | undefined;
 let store: Store;
 let runtime: Runtime;
+let auth: CodexAuth;
 let quitting = false;
 const pendingImports = new Map<string, ProviderInput>();
 const page = path.join(__dirname, '../dist/index.html');
@@ -68,6 +70,20 @@ function setup() {
     },
   });
   runtime = new Runtime(store, dataDir, emit);
+  auth = new CodexAuth(
+    runtime.authClient,
+    (url) => shell.openExternal(url),
+    (state) => emit({ type: 'codex-auth', state }),
+    async () => {
+      const result = await runtime.authClient.request('model/list', { includeHidden: false });
+      const models = result.data
+        .map((m: any) => m.model ?? m.id)
+        .filter((m: unknown) => typeof m === 'string');
+      for (const p of store.list<Provider>('provider'))
+        if (p.protocol === 'codex') store.put('provider', { ...p, models });
+      runtime.changed();
+    },
+  );
   register('snapshot', () => runtime.snapshot());
   register('messages', (id) => store.messages(idSchema.parse(id)));
   register('saveProvider', (raw) => {
@@ -249,31 +265,23 @@ function setup() {
     await writeFile(result.filePath, redact(content), 'utf8');
     return result.filePath;
   });
-  register('codexStatus', async () => {
-    try {
-      await runtime.authClient.start();
-      const result = await runtime.authClient.request('account/read', {});
-      return { available: true, account: result.account?.email ?? result.account?.type ?? '' };
-    } catch (e: any) {
-      return { available: false, account: '', error: redact(e.message) };
-    }
+  register('codexStatus', () => auth.read());
+  register('codexLogin', async (method) => {
+    if (
+      runtime.snapshot().runs.some((r) => r.config?.protocol === 'codex' && r.status === 'running')
+    )
+      throw new Error('请先停止 Codex 任务，再切换登录账号');
+    return auth.start(z.enum(['browser', 'device']).parse(method ?? 'browser'));
   });
-  register('codexLogin', async () => {
-    await runtime.authClient.start();
-    const result = await runtime.authClient.request('account/login/start', { type: 'chatgpt' });
-    const url = new URL(result.authUrl);
-    if (url.protocol !== 'https:' || url.hostname !== 'auth.openai.com')
-      throw new Error('Codex 返回了不受信任的登录地址');
-    await shell.openExternal(url.href);
-    return '已在系统浏览器打开 OpenAI 登录。完成后点击刷新状态。';
-  });
+  register('codexLoginCancel', () => auth.cancel());
+  register('codexLoginOpen', () => auth.openPage());
+  register('codexLoginCopyCode', () => clipboard.writeText(auth.code()));
   register('codexLogout', async () => {
     if (
       runtime.snapshot().runs.some((r) => r.config?.protocol === 'codex' && r.status === 'running')
     )
       throw new Error('请先停止 Codex 任务');
-    await runtime.authClient.start();
-    await runtime.authClient.request('account/logout', {});
+    await auth.logout();
     runtime.changed();
   });
 }
@@ -335,6 +343,7 @@ else {
     if (quitting || !runtime) return;
     event.preventDefault();
     quitting = true;
+    auth.dispose();
     runtime.stop();
     void runtime.waitForIdle().finally(() => {
       store.close();

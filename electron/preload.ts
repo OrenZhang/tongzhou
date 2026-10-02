@@ -24,7 +24,10 @@ const api: TongzhouAPI = {
   importCCSwitch: () => call('importCCSwitch'),
   exportSession: (id) => call('exportSession', id),
   codexStatus: () => call('codexStatus'),
-  codexLogin: () => call('codexLogin'),
+  codexLogin: (method) => call('codexLogin', method),
+  codexLoginCancel: () => call('codexLoginCancel'),
+  codexLoginOpen: () => call('codexLoginOpen'),
+  codexLoginCopyCode: () => call('codexLoginCopyCode'),
   codexLogout: () => call('codexLogout'),
   onEvent: (callback) => {
     const listener = (_event: unknown, payload: any) => callback(payload);

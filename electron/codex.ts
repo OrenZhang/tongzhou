@@ -81,13 +81,18 @@ export class CodexClient extends EventEmitter {
         detached: process.platform !== 'win32',
       },
     );
-    this.child.on('error', (error) => this.fail(error));
-    this.child.on('exit', () => {
+    const child = this.child;
+    child.on('error', (error) => {
+      if (this.child === child) this.fail(error);
+    });
+    child.on('exit', () => {
+      if (this.child !== child) return;
       this.starting = undefined;
       this.child = undefined;
       this.fail(new Error(this.lastError || 'Codex 进程已退出'));
     });
-    this.child.stderr.on('data', (b) => {
+    child.stderr.on('data', (b) => {
+      if (this.child !== child) return;
       this.lastError = String(b).slice(-1000);
     });
     const lines = createInterface({ input: this.child.stdout });

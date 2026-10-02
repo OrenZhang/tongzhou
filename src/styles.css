@@ -678,6 +678,35 @@ svg {
 .selected-agent-note strong {
   font-size: 12px;
 }
+.auth-progress {
+  margin-top: 18px;
+  padding: 16px;
+  background: #f3f7f5;
+  border: 1px solid #dce8e0;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.auth-progress p {
+  margin: 8px 0;
+  overflow-wrap: anywhere;
+}
+.auth-progress.error {
+  color: #984d3f;
+  background: #fcf5f2;
+}
+.device-code-row {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin: 12px 0;
+}
+.device-code-row code {
+  font-size: 24px;
+  letter-spacing: 3px;
+  user-select: all;
+  color: #275c49;
+}
 .selected-agent-note span {
   font-size: 11px;
   color: #6f8179;

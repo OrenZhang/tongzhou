@@ -81,7 +81,7 @@ Codex 请求流程：initialize → initialized → thread/start → turn/start 
 
 Renderer 启用 contextIsolation、sandbox、关闭 Node 集成；preload 仅暴露明确的业务方法。主进程验证 IPC sender 与主 frame；禁止新窗口、导航和 WebView，默认拒绝浏览器权限。
 
-模型文本使用 Markdown 渲染，禁用原始 HTML执行、外部图片加载和自动外链打开。OAuth 仅允许从 Codex 返回的 `https://auth.openai.com` 地址打开系统浏览器。API 地址允许 HTTPS 或 loopback HTTP；拒绝 URL 内账号、密码和查询密钥，拒绝 HTTP 重定向以避免凭据跨域。
+模型文本使用 Markdown 渲染，禁用原始 HTML执行、外部图片加载和自动外链打开。OAuth 仅允许打开 Codex 返回的 HTTPS `auth.openai.com` 或 `chatgpt.com` 地址，拒绝非标准端口、URL 内凭据和相似域名。浏览器授权和设备码授权由 `electron/codex-auth.ts` 管理，监听完成通知后重新读取账号，以实际账号结果确认成功；一次性代码不落盘，取消、失败、成功时清除。API 地址允许 HTTPS 或 loopback HTTP；拒绝 URL 内账号、密码和查询密钥，拒绝 HTTP 重定向以避免凭据跨域。
 
 文件工具拒绝绝对路径、越界、符号链接/目录联接；不允许直接写 .git。写入前展示旧/新内容，批准后再次验证路径及原内容。命令工具每次审批，使用最小环境变量集合，设置超时并终止进程树，限制输出大小。应用层检查不等于内核沙箱，已批准命令具有当前用户权限。
 

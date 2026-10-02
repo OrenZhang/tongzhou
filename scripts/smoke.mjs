@@ -78,6 +78,9 @@ try {
   app = await electron.launch(launchOptions);
   const page = await app.firstWindow();
   await page.waitForSelector('.welcome');
+  await app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows().forEach((w) => w.setIgnoreMouseEvents(true)),
+  );
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.screenshot({ path: 'test-results/01-workspace.png' });
@@ -186,6 +189,9 @@ try {
   app = await electron.launch(launchOptions);
   const again = await app.firstWindow();
   await again.waitForSelector('.welcome');
+  await app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows().forEach((w) => w.setIgnoreMouseEvents(true)),
+  );
   const recovered = await again.evaluate(() => window.tongzhou.snapshot());
   assert.equal(recovered.runs[0].status, 'completed');
   assert.equal(recovered.sessions.length, 3);

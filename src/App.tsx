@@ -39,6 +39,8 @@ import {
 } from 'lucide-react';
 import type {
   AgentProfile,
+  CodexAuthState,
+  CodexLoginMethod,
   FileEntry,
   ImportPreview,
   Message,
@@ -154,11 +156,10 @@ export default function App() {
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [fileView, setFileView] = useState<{ path: string; content: string } | null>(null);
   const [diff, setDiff] = useState('');
-  const [codex, setCodex] = useState<{
-    available: boolean;
-    account: string;
-    error?: string;
-  } | null>(null);
+  const [codex, setCodex] = useState<CodexAuthState | null>(null);
+  const authPending = codex?.login?.phase === 'starting' || codex?.login?.phase === 'waiting';
+  const startLogin = (method: CodexLoginMethod) =>
+    perform(async () => setCodex(await api.codexLogin(method)));
   const feed = useRef<HTMLDivElement>(null);
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const session = data.sessions.find((s) => s.id === sessionId);
@@ -195,6 +196,10 @@ export default function App() {
     if (!api) return;
     void refresh().catch(report);
     return api.onEvent((event) => {
+      if (event.type === 'codex-auth') {
+        setCodex(event.state);
+        if (event.state.login?.phase === 'success') setNotice('ChatGPT 授权成功，账号已连接');
+      }
       if (event.type === 'message' && event.message.sessionId === sessionRef.current)
         setMessages((old) => {
           const i = old.findIndex((m) => m.id === event.message.id);
@@ -224,6 +229,12 @@ export default function App() {
   useEffect(() => {
     if (!providerId && data.providers.length) setProviderId(data.providers[0].id);
   }, [providerId, data.providers]);
+  useEffect(() => {
+    if (!model && provider?.models[0]) setModel(provider.models[0]);
+  }, [model, provider?.models]);
+  useEffect(() => {
+    if (view === 'settings') void api.codexStatus().then(setCodex).catch(report);
+  }, [view, api]);
   useEffect(() => {
     const el = feed.current;
     if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 300)
@@ -1172,16 +1183,25 @@ export default function App() {
                 <span className={'live-dot ' + (!codex?.account ? 'gray' : '')} />
                 {codex
                   ? codex.account || (codex.available ? 'Codex 可用，尚未登录' : 'Codex 未就绪')
-                  : '点击刷新检查状态'}
+                  : '正在检查账号状态…'}
+                {codex?.plan && <small>{codex.plan}</small>}
                 {codex?.error && <small>{codex.error}</small>}
               </div>
               <div className="row">
                 <button
                   className="primary"
-                  onClick={() => perform(async () => setNotice(await api.codexLogin()))}
+                  disabled={authPending}
+                  onClick={() => startLogin('browser')}
                 >
-                  登录 ChatGPT
+                  ChatGPT 浏览器登录
                   <ArrowRight size={15} />
+                </button>
+                <button
+                  className="secondary"
+                  disabled={authPending}
+                  onClick={() => startLogin('device')}
+                >
+                  设备码登录
                 </button>
                 <button
                   className="secondary"
@@ -1190,7 +1210,7 @@ export default function App() {
                   <RefreshCw size={14} />
                   刷新状态
                 </button>
-                {codex?.account && (
+                {codex?.account && !authPending && (
                   <button
                     className="text-button danger"
                     onClick={() =>
@@ -1204,6 +1224,79 @@ export default function App() {
                   </button>
                 )}
               </div>
+              {codex?.login && (
+                <div className={'auth-progress ' + codex.login.phase} aria-live="polite">
+                  {codex.login.phase === 'starting' && (
+                    <p>
+                      <Spinner /> 正在创建授权请求…
+                    </p>
+                  )}
+                  {codex.login.phase === 'waiting' && (
+                    <>
+                      <strong>
+                        {codex.login.method === 'device'
+                          ? '输入设备码完成授权'
+                          : '等待浏览器授权完成'}
+                      </strong>
+                      <p>
+                        {codex.login.method === 'device'
+                          ? '打开官方授权页面，登录你的 ChatGPT 账号并输入以下一次性设备码。'
+                          : '在系统浏览器中登录 ChatGPT 并完成授权；同舟会自动更新状态。若浏览器回调失败，可以取消后改用设备码登录。'}
+                      </p>
+                      {codex.login.userCode && (
+                        <div className="device-code-row">
+                          <code aria-label="设备授权码">{codex.login.userCode}</code>
+                          <button
+                            className="secondary"
+                            onClick={() =>
+                              perform(async () => {
+                                await api.codexLoginCopyCode();
+                                setNotice('设备码已复制');
+                              })
+                            }
+                          >
+                            复制设备码
+                          </button>
+                        </div>
+                      )}
+                      {codex.login.method === 'device' && (
+                        <p>设备码登录需要在 ChatGPT 安全设置或工作区权限中启用。</p>
+                      )}
+                      {codex.login.error && <p role="alert">{codex.login.error}</p>}
+                      <div className="row">
+                        <button
+                          className="primary"
+                          onClick={() => perform(() => api.codexLoginOpen())}
+                        >
+                          打开授权页面
+                        </button>
+                        <button
+                          className="text-button"
+                          onClick={() => perform(() => api.codexLoginCancel())}
+                        >
+                          取消授权
+                        </button>
+                      </div>
+                    </>
+                  )}
+                  {codex.login.phase === 'success' && (
+                    <p>
+                      <CheckCircle2 size={16} /> 授权成功，已连接 {codex.account}
+                      。模型列表将自动更新。
+                    </p>
+                  )}
+                  {codex.login.phase === 'error' && (
+                    <p role="alert">授权失败：{codex.login.error}。可重新授权或切换登录方式。</p>
+                  )}
+                  {codex.login.phase === 'cancelled' && (
+                    <p>已取消本次授权，可以重新选择登录方式。</p>
+                  )}
+                </div>
+              )}
+              <p className="footnote">
+                这两种方式均使用 ChatGPT 账号授权给内置 Codex，成功后选择“OpenAI · ChatGPT”连接。API
+                Key 连接仍需单独配置。
+              </p>
             </section>
             <section className="settings-card">
               <div className="settings-card-title">
@@ -1306,7 +1399,16 @@ export default function App() {
             {providerEdit.protocol === 'codex' ? (
               <div className="info-strip">
                 <ShieldCheck size={18} />
-                <span>在“设置与关于”中登录 ChatGPT，然后获取模型列表或手动填写模型 ID。</span>
+                <span>支持 ChatGPT 浏览器授权和设备码授权，完成后自动同步模型列表。</span>
+                <button
+                  className="text-button"
+                  onClick={() => {
+                    setProviderEdit(null);
+                    setView('settings');
+                  }}
+                >
+                  前往登录
+                </button>
               </div>
             ) : (
               <>

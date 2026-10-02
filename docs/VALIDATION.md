@@ -47,3 +47,13 @@ Remove-Item Env:TONGZHOU_SMOKE_EXECUTABLE
 本地源码新增了不关联项目的会话，已通过 33 项自动化测试和更新后的桌面测试。覆盖首页直接发送、不弹出文件夹选择器、连续聊天与切换模型、重启后保留普通会话、无项目团队讨论、拒绝 API 返回的未授权文件工具，以及专属 Agent 提示卡的启用与移除。生产构建和类型检查通过，现有项目会话的写文件审批流程仍通过。
 
 此次验证运行源码生产构建；之前导出的 0.1.0 安装包和源码压缩包不包含这些后续改动。
+
+## 后续本地迭代：ChatGPT 授权
+
+修复登录地址校验、缺失登录完成通知、无法感知失败的问题；补充设备码入口、取消、重开授权页、复制一次性代码、账号自动更新和模型同步。42 项测试通过，包含成功通知后读取账号确认、错误与取消、超时、提前到达的完成通知、官方域名校验及浏览器打不开时的恢复。普通聊天和项目操作桌面回归通过。
+
+2026-10-02 使用内置 Codex 0.160.0 和全新独立目录实测 `chatgpt` 与 `chatgptDeviceCode` 两种授权请求：均成功返回官方地址，设备码非空，两种流程均可取消。桌面在线验证确认了等待状态、设备码展示、导航后状态保留和取消后清除。没有完成用户账号确认，没有读取或复制既有 OAuth 凭据，没有进行真实模型推理。
+
+显式在线复现：先 `npm run build`，再在 PowerShell 设置 `$env:TONGZHOU_LIVE_AUTH_SMOKE='1'` 后执行 `node scripts/auth-smoke.mjs`。该测试会请求真实授权流程并取消，用测试替身阻止打开系统浏览器。普通 CI 测试不需要此环境变量。
+
+协议依据：[OpenAI App Server 认证文档](https://learn.chatgpt.com/docs/app-server)、[设备码授权说明](https://learn.chatgpt.com/docs/auth)。另核对了内置二进制生成的 LoginAccountParams / LoginAccountResponse schema。

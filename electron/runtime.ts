@@ -367,6 +367,9 @@ export class Runtime {
     try {
       await client.start();
       if (signal.aborted) throw new Error('已停止');
+      const account = await client.request('account/read', { refreshToken: false });
+      if (!account.account)
+        throw new Error('尚未登录 ChatGPT，请在设置中完成浏览器授权或设备码授权后重试。');
       const cwd = project?.path ?? path.join(this.dataDir, 'chat-workspaces', input.sessionId);
       if (!project) await mkdir(cwd, { recursive: true });
       // Each turn gets a fresh engine segment; the app's transcript is the portable source of truth.
