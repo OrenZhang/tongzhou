@@ -11,7 +11,7 @@ await writeFile(path.join(project, 'README.md'), '# Fixture project\n');
 const server = createServer(async (req, res) => {
   if (req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ data: [{ id: 'fixture-model' }] }));
+    res.end(JSON.stringify({ data: [{ id: 'fixture-model' }, { id: 'fixture-reviewer' }] }));
     return;
   }
   let raw = '';
@@ -70,15 +70,29 @@ try {
   await page.getByLabel('连接名称', { exact: true }).fill('本地测试服务');
   await page.getByLabel('API Base URL').fill(`http://127.0.0.1:${server.address().port}/v1`);
   await page.getByLabel('认证方式', { exact: true }).selectOption('none');
-  await page.getByLabel('模型列表（每行一个 ID）', { exact: true }).fill('fixture-model');
+  await page.getByRole('button', { name: '保存连接并获取模型', exact: true }).click();
+  await page.getByText('2 个模型已配置，可在会话和 Agent 中搜索选择。', { exact: true }).waitFor();
   await page.getByRole('button', { name: '保存连接', exact: true }).click();
   await page.getByRole('heading', { name: '本地测试服务' }).waitFor();
+  const provider = await page.evaluate(async () =>
+    (await window.tongzhou.snapshot()).providers.find((p) => p.name === '本地测试服务'),
+  );
   await page.screenshot({ path: 'test-results/02-connections.png' });
   await page.getByRole('button', { name: 'Agent 团队', exact: true }).click();
   await page.getByRole('button', { name: '编辑 代码审查', exact: true }).click();
   await page.getByLabel('角色指令', { exact: true }).fill('只读检查代码，给出证据。');
+  await page.getByLabel('模型连接', { exact: true }).selectOption(provider.id);
+  await page.getByRole('button', { name: 'Agent 模型', exact: true }).click();
+  await page.getByLabel('搜索模型', { exact: true }).fill('reviewer');
+  await page.getByLabel('搜索模型', { exact: true }).press('Enter');
   await page.getByRole('button', { name: '保存 Agent', exact: true }).click();
   await page.locator('.modal').waitFor({ state: 'hidden' });
+  assert.equal(
+    await page.evaluate(
+      async () => (await window.tongzhou.snapshot()).agents.find((a) => a.id === 'reviewer').model,
+    ),
+    'fixture-reviewer',
+  );
   await page.screenshot({ path: 'test-results/03-agents.png' });
   await app.evaluate(({ dialog }, project) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [project] });
@@ -86,11 +100,17 @@ try {
   await page.getByRole('button', { name: '工作空间', exact: true }).click();
   await page.getByRole('button', { name: '打开项目，开始创作', exact: true }).click();
   await page.getByLabel('消息', { exact: true }).waitFor();
-  const provider = await page.evaluate(async () =>
-    (await window.tongzhou.snapshot()).providers.find((p) => p.name === '本地测试服务'),
-  );
+  await page.evaluate(async (p) => window.tongzhou.saveProvider({ ...p, models: [] }), provider);
   await page.getByLabel('当前连接', { exact: true }).selectOption(provider.id);
-  await page.getByLabel('当前模型', { exact: true }).fill('fixture-model');
+  await page.getByLabel('当前模型', { exact: true }).click();
+  await page.getByLabel('搜索模型', { exact: true }).fill('fixture');
+  await page.getByRole('button', { name: 'fixture-model', exact: true }).waitFor();
+  await page.screenshot({ path: 'test-results/07-model-picker.png' });
+  await page.getByRole('button', { name: 'fixture-model', exact: true }).click();
+  await page
+    .getByRole('button', { name: '当前模型', exact: true })
+    .filter({ hasText: 'fixture-model' })
+    .waitFor();
   await page.getByLabel('消息', { exact: true }).fill('创建 hello.txt，写入“同舟”。');
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
   await page
@@ -119,6 +139,10 @@ try {
   const recovered = await again.evaluate(() => window.tongzhou.snapshot());
   assert.equal(recovered.runs[0].status, 'completed');
   assert.equal(recovered.sessions.length, 1);
+  assert.deepEqual(recovered.providers.find((p) => p.id === provider.id).models, [
+    'fixture-model',
+    'fixture-reviewer',
+  ]);
   await writeFile(
     'test-results/desktop-report.json',
     JSON.stringify(
@@ -128,6 +152,7 @@ try {
         checks: [
           'window startup',
           'provider UI save',
+          'model discovery and searchable selection',
           'agent UI edit',
           'project selection',
           'streaming',

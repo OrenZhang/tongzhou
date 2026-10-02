@@ -46,7 +46,7 @@ import type {
   Session,
   Snapshot,
 } from './shared/types';
-import { ChatMessage, Field, Mark, Modal, Spinner } from './components';
+import { ChatMessage, Field, Mark, Modal, Spinner, ModelPicker } from './components';
 const empty: Snapshot = {
   providers: [],
   agents: [],
@@ -323,7 +323,7 @@ export default function App() {
       const saved = await api.saveProvider(normalizedProvider());
       const models = await api.models(saved.id);
       setProviderEdit({ ...saved, models, secret: '' });
-      setNotice(`已发现 ${models.length} 个模型，保存后生效`);
+      setNotice(`已获取并保存 ${models.length} 个模型`);
       await refresh();
     } catch (e) {
       report(e);
@@ -650,20 +650,16 @@ export default function App() {
                           </option>
                         ))}
                       </select>
-                      <input
-                        className="model-input"
-                        list="model-options"
-                        aria-label="当前模型"
-                        placeholder="输入模型 ID"
+                      <ModelPicker
+                        key={providerId}
+                        label="当前模型"
+                        compact
                         value={model}
-                        onChange={(e) => setModel(e.target.value)}
+                        models={provider?.models ?? []}
+                        load={provider ? () => api.models(provider.id) : undefined}
+                        onChange={setModel}
                         disabled={!!running}
                       />
-                      <datalist id="model-options">
-                        {provider?.models.map((m) => (
-                          <option key={m} value={m} />
-                        ))}
-                      </datalist>
                       <select
                         aria-label="当前 Agent"
                         value={agentId}
@@ -1319,20 +1315,27 @@ export default function App() {
                 )}
               </>
             )}
-            <Field label="模型列表（每行一个 ID）">
-              <textarea
-                rows={4}
-                placeholder="模型 ID，以服务商实际支持为准"
-                value={providerEdit.models.join('\n')}
-                onChange={(e) =>
-                  setProviderEdit({ ...providerEdit, models: e.target.value.split('\n') })
-                }
-              />
-            </Field>
-            <button className="text-button" disabled={busy} onClick={fetchModels}>
-              <RefreshCw size={14} />
+            <button className="secondary" disabled={busy} onClick={fetchModels}>
+              {busy ? <Spinner /> : <RefreshCw size={14} />}
               保存连接并获取模型
             </button>
+            <p className="muted">
+              {providerEdit.models.filter(Boolean).length} 个模型已配置，可在会话和 Agent
+              中搜索选择。
+            </p>
+            <details>
+              <summary>高级：手动维护模型 ID</summary>
+              <Field label="模型列表（每行一个 ID）">
+                <textarea
+                  rows={4}
+                  placeholder="模型 ID，以服务商实际支持为准"
+                  value={providerEdit.models.join('\n')}
+                  onChange={(e) =>
+                    setProviderEdit({ ...providerEdit, models: e.target.value.split('\n') })
+                  }
+                />
+              </Field>
+            </details>
             <div className="form-grid">
               <Field label="单次最大输出 Tokens">
                 <input
@@ -1435,7 +1438,9 @@ export default function App() {
               <Field label="模型连接">
                 <select
                   value={agentEdit.providerId}
-                  onChange={(e) => setAgentEdit({ ...agentEdit, providerId: e.target.value })}
+                  onChange={(e) =>
+                    setAgentEdit({ ...agentEdit, providerId: e.target.value, model: '' })
+                  }
                 >
                   <option value="">继承会话连接</option>
                   {data.providers.map((p) => (
@@ -1445,11 +1450,22 @@ export default function App() {
                   ))}
                 </select>
               </Field>
-              <Field label="模型 ID">
-                <input
-                  placeholder="留空继承会话模型"
+              <Field label="模型">
+                <ModelPicker
+                  key={agentEdit.providerId || providerId}
+                  label="Agent 模型"
+                  inherit
                   value={agentEdit.model}
-                  onChange={(e) => setAgentEdit({ ...agentEdit, model: e.target.value })}
+                  models={
+                    data.providers.find((p) => p.id === (agentEdit.providerId || providerId))
+                      ?.models ?? []
+                  }
+                  load={
+                    agentEdit.providerId || providerId
+                      ? () => api.models(agentEdit.providerId || providerId)
+                      : undefined
+                  }
+                  onChange={(model) => setAgentEdit({ ...agentEdit, model })}
                 />
               </Field>
             </div>

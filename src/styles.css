@@ -676,9 +676,118 @@ svg {
   color: #6f8179;
   max-width: 145px;
 }
-.composer-controls input {
-  width: 145px;
-  max-width: 28vw;
+.model-picker {
+  min-width: 0;
+}
+.model-picker-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #dfe6e2;
+  border-radius: 7px;
+  background: #fff;
+  color: #395b48;
+}
+.model-picker-trigger span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.model-picker.compact .model-picker-trigger {
+  max-width: 200px;
+  min-width: 130px;
+  height: 27px;
+  padding: 4px 7px;
+  font-size: 10px;
+  border: 0;
+  background: #f3f6f4;
+}
+.model-picker-panel {
+  position: fixed;
+  z-index: 60;
+  width: 320px;
+  max-height: 360px;
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  gap: 8px;
+  border: 1px solid #dfe6e2;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 12px 40px #12382c26;
+}
+.model-picker-panel > input {
+  width: 100%;
+  font-size: 12px;
+  min-height: 36px;
+  flex-shrink: 0;
+}
+.model-picker-list {
+  overflow: auto;
+  min-height: 40px;
+}
+.model-picker-list button {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.model-picker-list button span {
+  overflow-wrap: anywhere;
+}
+.model-picker-list button:hover,
+.model-picker-list button[aria-pressed='true'] {
+  background: #eaf3ee;
+  color: #236d58;
+}
+.model-picker-list p,
+.model-picker-error {
+  padding: 8px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: #6b7d72;
+}
+.model-picker-error {
+  color: #9f553f;
+  max-height: 80px;
+  overflow: auto;
+}
+.model-picker-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #edf1ee;
+  flex-shrink: 0;
+}
+.model-picker-footer small {
+  font-size: 11px;
+  color: #6b7d72;
+}
+.model-picker-custom {
+  padding: 8px;
+  text-align: left;
+  color: #67796f;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.modal-content details {
+  margin: 16px 0;
+}
+.modal-content summary {
+  cursor: pointer;
+  color: #6b7d72;
+  font-size: 12px;
+  margin-bottom: 12px;
 }
 .send-button {
   width: 32px;

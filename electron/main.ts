@@ -116,12 +116,21 @@ function setup() {
   });
   register('models', async (raw) => {
     const p = store.get<Provider>('provider', idSchema.parse(raw));
+    let models: string[];
     if (p.protocol === 'codex') {
       await runtime.authClient.start();
       const result = await runtime.authClient.request('model/list', { includeHidden: false });
-      return result.data.map((m: any) => m.model ?? m.id);
+      models = result.data.map((m: any) => m.model ?? m.id);
+    } else {
+      models = await listModels(p, store.secret(p.id));
     }
-    return listModels(p, store.secret(p.id));
+    const current = store.get<Provider>('provider', p.id);
+    if (current.baseUrl !== p.baseUrl || current.protocol !== p.protocol)
+      throw new Error('连接已变更，请重新获取模型');
+    models = [...new Set(models.filter((m) => typeof m === 'string' && m.trim()))];
+    store.put('provider', { ...current, models: [...new Set([...current.models, ...models])] });
+    runtime.changed();
+    return models;
   });
   register('saveAgent', (raw) => {
     const a = agentSchema.parse(raw);
