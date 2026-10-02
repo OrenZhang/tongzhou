@@ -18,34 +18,50 @@ const server = createServer(async (req, res) => {
   for await (const b of req) raw += b;
   const body = JSON.parse(raw);
   const done = body.messages.some((m) => m.role === 'tool');
-  const data = done
+  const data = !body.tools?.length
     ? {
-        choices: [
-          { delta: { content: '已创建 hello.txt，内容为同舟。验证完成。' }, finish_reason: 'stop' },
-        ],
-        usage: { prompt_tokens: 20, completion_tokens: 10 },
-      }
-    : {
         choices: [
           {
             delta: {
-              content: '我将创建一个项目文件。',
-              tool_calls: [
-                {
-                  index: 0,
-                  id: 'test_call',
-                  function: {
-                    name: 'write_file',
-                    arguments: JSON.stringify({ path: 'hello.txt', content: '同舟' }),
-                  },
-                },
-              ],
+              content:
+                '普通聊天回复：' + body.messages.filter((m) => m.role === 'user').at(-1).content,
             },
-            finish_reason: 'tool_calls',
+            finish_reason: 'stop',
           },
         ],
-        usage: { prompt_tokens: 10, completion_tokens: 5 },
-      };
+        usage: { prompt_tokens: 5, completion_tokens: 4 },
+      }
+    : done
+      ? {
+          choices: [
+            {
+              delta: { content: '已创建 hello.txt，内容为同舟。验证完成。' },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: { prompt_tokens: 20, completion_tokens: 10 },
+        }
+      : {
+          choices: [
+            {
+              delta: {
+                content: '我将创建一个项目文件。',
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: 'test_call',
+                    function: {
+                      name: 'write_file',
+                      arguments: JSON.stringify({ path: 'hello.txt', content: '同舟' }),
+                    },
+                  },
+                ],
+              },
+              finish_reason: 'tool_calls',
+            },
+          ],
+          usage: { prompt_tokens: 10, completion_tokens: 5 },
+        };
   res.writeHead(200, { 'Content-Type': 'text/event-stream' });
   res.end('data: ' + JSON.stringify(data) + '\n\ndata: [DONE]\n\n');
 });
@@ -94,6 +110,34 @@ try {
     'fixture-reviewer',
   );
   await page.screenshot({ path: 'test-results/03-agents.png' });
+  await page.getByRole('button', { name: '使用 代码审查', exact: true }).click();
+  await page.getByRole('button', { name: '移除专属 Agent', exact: true }).click();
+  assert.equal(await page.getByLabel('当前 Agent', { exact: true }).count(), 0);
+  assert.equal(await page.locator('.selected-agent-note').count(), 0);
+  await app.evaluate(({ dialog }) => {
+    dialog.showOpenDialog = async () => {
+      throw new Error('普通聊天不应打开文件夹选择器');
+    };
+  });
+  await page.getByRole('button', { name: '工作空间', exact: true }).click();
+  await page.getByLabel('当前连接', { exact: true }).selectOption(provider.id);
+  await page.getByRole('button', { name: '当前模型', exact: true }).click();
+  await page.getByRole('button', { name: 'fixture-model', exact: true }).click();
+  await page.getByLabel('消息', { exact: true }).fill('你好，不打开项目聊天');
+  await page.getByRole('button', { name: '发送消息', exact: true }).click();
+  await page.getByText('普通聊天回复：你好，不打开项目聊天', { exact: true }).waitFor();
+  const ordinary = await page.evaluate(() => window.tongzhou.snapshot());
+  assert.equal(ordinary.projects.length, 0);
+  assert.equal(ordinary.sessions[0].projectId, null);
+  assert.equal(ordinary.runs[0].status, 'completed');
+  await page.getByRole('button', { name: '当前模型', exact: true }).click();
+  await page.getByRole('button', { name: 'fixture-reviewer', exact: true }).click();
+  await page.getByLabel('消息', { exact: true }).fill('换一个模型继续');
+  await page.getByRole('button', { name: '发送消息', exact: true }).click();
+  await page.getByText('普通聊天回复：换一个模型继续', { exact: true }).waitFor();
+  await page.screenshot({ path: 'test-results/08-ordinary-chat.png' });
+  await page.getByRole('button', { name: /开启新会话/ }).click();
+  await page.getByRole('heading', { name: '新会话', exact: true }).waitFor();
   await app.evaluate(({ dialog }, project) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [project] });
   }, project);
@@ -103,6 +147,12 @@ try {
   await page.evaluate(async (p) => window.tongzhou.saveProvider({ ...p, models: [] }), provider);
   await page.getByLabel('当前连接', { exact: true }).selectOption(provider.id);
   await page.getByLabel('当前模型', { exact: true }).click();
+  await page.getByRole('button', { name: '刷新模型列表', exact: true }).click();
+  await page.waitForFunction(
+    async (id) =>
+      (await window.tongzhou.snapshot()).providers.find((p) => p.id === id).models.length === 2,
+    provider.id,
+  );
   await page.getByLabel('搜索模型', { exact: true }).fill('fixture');
   await page.getByRole('button', { name: 'fixture-model', exact: true }).waitFor();
   await page.screenshot({ path: 'test-results/07-model-picker.png' });
@@ -138,7 +188,8 @@ try {
   await again.waitForSelector('.welcome');
   const recovered = await again.evaluate(() => window.tongzhou.snapshot());
   assert.equal(recovered.runs[0].status, 'completed');
-  assert.equal(recovered.sessions.length, 1);
+  assert.equal(recovered.sessions.length, 3);
+  assert.equal(recovered.sessions.filter((s) => s.projectId === null).length, 2);
   assert.deepEqual(recovered.providers.find((p) => p.id === provider.id).models, [
     'fixture-model',
     'fixture-reviewer',
@@ -153,6 +204,8 @@ try {
           'window startup',
           'provider UI save',
           'model discovery and searchable selection',
+          'ordinary chat without opening a project',
+          'ordinary chat model switching and restart recovery',
           'agent UI edit',
           'project selection',
           'streaming',

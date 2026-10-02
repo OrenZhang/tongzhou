@@ -175,8 +175,8 @@ export class Store {
       .run(message.id, message.sessionId, JSON.stringify(message));
     return message;
   }
-  createSession(projectId: string, parentId?: string): Session {
-    this.get<Project>('project', projectId);
+  createSession(projectId: string | null = null, parentId?: string): Session {
+    if (projectId) this.get<Project>('project', projectId);
     const provider = this.providers()[0];
     return this.put('session', {
       id: randomUUID(),

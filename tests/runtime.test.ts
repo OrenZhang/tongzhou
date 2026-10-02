@@ -73,6 +73,59 @@ const text = (content: string) => ({
   usage: { prompt_tokens: 10, completion_tokens: 4 },
 });
 describe('agent execution lifecycle', () => {
+  it('chats and hands history to another model without any project or tools', async () => {
+    const f = await fixture(() => [text('Chat answer')]);
+    f.store.remove('project', 'project');
+    const session = f.store.createSession();
+    expect(session.projectId).toBeNull();
+    const input = { ...f.input, sessionId: session.id, prompt: 'Hello without a project' };
+    f.runtime.start(input);
+    await f.runtime.waitForIdle();
+    f.runtime.start({ ...input, prompt: 'Continue', model: 'second' });
+    await f.runtime.waitForIdle();
+    expect(f.requests.every((r) => !r.tools)).toBe(true);
+    expect(f.requests[1].messages.some((m: any) => m.content === input.prompt)).toBe(true);
+    expect(f.store.list<Run>('run').every((r) => r.status === 'completed')).toBe(true);
+    expect(f.runtime.snapshot().approvals).toHaveLength(0);
+  });
+  it('rejects unsolicited file tools in ordinary chat', async () => {
+    const f = await fixture(() => [
+      {
+        choices: [
+          {
+            delta: {
+              tool_calls: [
+                {
+                  index: 0,
+                  id: 'bad',
+                  function: {
+                    name: 'write_file',
+                    arguments: '{"path":"unexpected.txt","content":"no"}',
+                  },
+                },
+              ],
+            },
+            finish_reason: 'tool_calls',
+          },
+        ],
+      },
+    ]);
+    const session = f.store.createSession();
+    f.runtime.start({ ...f.input, sessionId: session.id });
+    await f.runtime.waitForIdle();
+    expect(f.store.list<Run>('run')[0].status).toBe('failed');
+    expect(f.runtime.snapshot().approvals).toHaveLength(0);
+    await expect(readFile(path.join(f.root, 'unexpected.txt'))).rejects.toThrow();
+  });
+  it('runs a projectless team without assigning project tools to children', async () => {
+    const f = await fixture(() => [text('Discussion finding')]);
+    const session = f.store.createSession();
+    await f.runtime.team({ ...f.input, sessionId: session.id }, ['reviewer', 'architect']);
+    await f.runtime.waitForIdle();
+    expect(f.store.list<Run>('run').every((r) => r.status === 'completed')).toBe(true);
+    expect(f.requests.every((r) => !r.tools)).toBe(true);
+    expect(f.store.messages(session.id).at(-1)?.content).toContain('Discussion finding');
+  });
   it('completes a tool loop, waits for approval, and records actual usage', async () => {
     const f = await fixture((body) =>
       body.messages.some((m: any) => m.role === 'tool')

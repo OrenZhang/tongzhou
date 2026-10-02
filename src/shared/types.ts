@@ -55,7 +55,7 @@ export interface Message {
 }
 export interface Session {
   id: string;
-  projectId: string;
+  projectId: string | null;
   title: string;
   providerId: string;
   model: string;
@@ -129,7 +129,7 @@ export interface TongzhouAPI {
   saveAgent(agent: AgentProfile): Promise<AgentProfile>;
   deleteAgent(id: string): Promise<void>;
   addProject(): Promise<Project | null>;
-  createSession(projectId: string): Promise<Session>;
+  createSession(projectId?: string | null): Promise<Session>;
   updateSession(id: string, patch: { title?: string; archived?: boolean }): Promise<void>;
   run(input: RunInput): Promise<string>;
   team(input: RunInput, agentIds: string[]): Promise<string>;

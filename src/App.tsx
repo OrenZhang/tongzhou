@@ -164,6 +164,8 @@ export default function App() {
   const session = data.sessions.find((s) => s.id === sessionId);
   const project = data.projects.find((p) => p.id === session?.projectId);
   const provider = data.providers.find((p) => p.id === providerId);
+  const selectedAgent =
+    agentId !== 'builder' ? data.agents.find((a) => a.id === agentId) : undefined;
   const running = data.runs.find((r) => r.sessionId === sessionId && r.status === 'running');
   const activateSession = (selected: Session) => {
     sessionRef.current = selected.id;
@@ -245,14 +247,14 @@ export default function App() {
   }, [project?.id, filePath, contextTab, view, running?.id]);
   const newSession = async (projectId?: string) => {
     await perform(async () => {
-      let id = projectId ?? project?.id ?? data.projects[0]?.id;
-      if (!id) {
-        const p = await api.addProject();
-        if (!p) return;
-        id = p.id;
-      }
-      const s = await api.createSession(id);
-      activateSession(s);
+      const s = await api.createSession(projectId);
+      activateSession({
+        ...s,
+        providerId: providerId || s.providerId,
+        model: model || s.model,
+        agentId: 'builder',
+      });
+      setDraft('');
       await refresh();
     });
   };
@@ -262,10 +264,17 @@ export default function App() {
       if (p) await newSession(p.id);
     });
   const send = async (team = false) => {
-    if (!sessionId || !draft.trim() || !model.trim()) return;
+    if (busy || running || session?.archived || !draft.trim() || !model.trim() || !providerId)
+      return;
     setBusy(true);
     try {
-      const input = { sessionId, prompt: draft, providerId, model, agentId };
+      let targetId = sessionId;
+      if (!targetId) {
+        const created = await api.createSession();
+        targetId = created.id;
+        activateSession({ ...created, providerId, model, agentId });
+      }
+      const input = { sessionId: targetId, prompt: draft, providerId, model, agentId };
       if (team) await api.team(input, teamIds);
       else await api.run(input);
       setDraft('');
@@ -499,7 +508,7 @@ export default function App() {
                 <div className="conversation-header">
                   <div>
                     <h2>{session.title}</h2>
-                    <span>{project?.path}</span>
+                    <span>{project?.path ?? '普通聊天 · 未关联项目'}</span>
                   </div>
                   <div className="row">
                     <button
@@ -551,11 +560,18 @@ export default function App() {
                     <p>
                       连接你喜欢的模型，让不同的 Agent 并肩协作。
                       <br />
-                      从一个问题，到一个完成的项目。
+                      随时开始聊天，也可以打开项目一起创作。
                     </p>
                     <div className="welcome-actions">
                       {!session && (
-                        <button className="primary" onClick={openProject}>
+                        <button className="primary" onClick={() => newSession()}>
+                          <MessageSquare size={16} />
+                          开始聊天
+                          <ArrowRight size={15} />
+                        </button>
+                      )}
+                      {!project && (
+                        <button className="secondary" onClick={openProject}>
                           <FolderOpen size={16} />
                           打开项目，开始创作
                           <ArrowRight size={15} />
@@ -567,28 +583,46 @@ export default function App() {
                       </button>
                     </div>
                     <div className="prompt-grid">
-                      {[
-                        {
-                          icon: Code2,
-                          title: '读懂一个项目',
-                          text: '分析这个项目的结构、核心模块和运行方式。',
-                        },
-                        {
-                          icon: GitBranch,
-                          title: '一起规划实现',
-                          text: '阅读项目，提出下一阶段最值得实现的功能与具体步骤。',
-                        },
-                        {
-                          icon: ShieldCheck,
-                          title: '发现潜在问题',
-                          text: '审查项目中的代码，找出有证据的缺陷和测试缺口。',
-                        },
-                      ].map((p) => (
+                      {(project
+                        ? [
+                            {
+                              icon: Code2,
+                              title: '读懂一个项目',
+                              text: '分析这个项目的结构、核心模块和运行方式。',
+                            },
+                            {
+                              icon: GitBranch,
+                              title: '一起规划实现',
+                              text: '阅读项目，提出下一阶段最值得实现的功能与具体步骤。',
+                            },
+                            {
+                              icon: ShieldCheck,
+                              title: '发现潜在问题',
+                              text: '审查项目中的代码，找出有证据的缺陷和测试缺口。',
+                            },
+                          ]
+                        : [
+                            {
+                              icon: MessageSquare,
+                              title: '聊一个问题',
+                              text: '帮我用通俗的语言解释大语言模型是如何工作的。',
+                            },
+                            {
+                              icon: Sparkles,
+                              title: '一起想点子',
+                              text: '我想做一个个人开源项目，帮我梳理方向和第一步。',
+                            },
+                            {
+                              icon: Code2,
+                              title: '学习与写作',
+                              text: '帮我设计一个循序渐进的编程学习计划。',
+                            },
+                          ]
+                      ).map((p) => (
                         <button
                           key={p.title}
                           onClick={() => {
                             setDraft(p.text);
-                            if (!session) setNotice('先打开一个项目，即可开始会话');
                           }}
                         >
                           <p.icon size={20} />
@@ -610,16 +644,34 @@ export default function App() {
                 )}
               </div>
               <div className="composer-wrap">
+                {selectedAgent && (
+                  <div className="selected-agent-note">
+                    <Bot size={16} />
+                    <div>
+                      <strong>{selectedAgent.name}</strong>
+                      <span>{selectedAgent.description}</span>
+                    </div>
+                    <button
+                      className="icon-button"
+                      aria-label="移除专属 Agent"
+                      title="恢复默认助手"
+                      disabled={!!running}
+                      onClick={() => setAgentId('builder')}
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+                )}
                 <div className={'composer ' + (running ? 'is-running' : '')}>
                   <textarea
                     aria-label="消息"
                     placeholder={
-                      session
+                      project
                         ? '描述你的想法，或让 Agent 接着完成任务…'
-                        : '打开项目后，开始你的第一个任务…'
+                        : '直接输入消息开始聊天，无需打开项目…'
                     }
                     value={draft}
-                    disabled={!session || session.archived}
+                    disabled={!!session?.archived}
                     onChange={(e) => setDraft(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -660,25 +712,15 @@ export default function App() {
                         onChange={setModel}
                         disabled={!!running}
                       />
-                      <select
-                        aria-label="当前 Agent"
-                        value={agentId}
-                        onChange={(e) => setAgentId(e.target.value)}
-                        disabled={!!running}
-                      >
-                        {data.agents.map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.name}
-                          </option>
-                        ))}
-                      </select>
                     </div>
                     <div className="row">
                       <button
                         className="icon-button"
                         title="多 Agent 协作（只读分析）"
                         aria-label="多 Agent 协作"
-                        disabled={!session || !draft.trim() || !!running || !model}
+                        disabled={
+                          !!session?.archived || !draft.trim() || !!running || busy || !model
+                        }
                         onClick={() => setTeamOpen(true)}
                       >
                         <Users size={18} />
@@ -696,12 +738,11 @@ export default function App() {
                           className="send-button"
                           aria-label="发送消息"
                           disabled={
-                            !session ||
                             !draft.trim() ||
                             !model.trim() ||
                             !providerId ||
                             busy ||
-                            session.archived
+                            !!session?.archived
                           }
                           onClick={() => send()}
                         >
@@ -721,7 +762,7 @@ export default function App() {
                     ) : (
                       <>
                         <ShieldCheck size={12} />
-                        文件修改与命令执行受权限控制
+                        {project ? '文件修改与命令执行受权限控制' : '普通聊天 · 无需项目文件夹'}
                       </>
                     )}
                   </span>
@@ -766,11 +807,11 @@ export default function App() {
               {!project ? (
                 <div className="context-empty">
                   <Folder size={32} />
-                  <p>还没有打开项目</p>
+                  <p>普通聊天</p>
                   <span>
-                    添加项目后，在这里浏览文件
+                    直接发送消息即可，无需选择文件夹。
                     <br />
-                    和查看代码变更。
+                    需要操作文件时，可以另开项目会话。
                   </span>
                   <button onClick={openProject}>
                     选择文件夹
@@ -941,7 +982,7 @@ export default function App() {
               <div className="page-title-row">
                 <div>
                   <h1>各有所长，一起向前。</h1>
-                  <p>给每位 Agent 配置模型、职责和权限，让协作更有章法。</p>
+                  <p>按需启用专属角色，普通聊天无需选择 Agent。</p>
                 </div>
                 <button
                   className="primary"
@@ -998,6 +1039,18 @@ export default function App() {
                     <span>
                       {data.providers.find((p) => p.id === a.providerId)?.name ?? '继承会话连接'}
                     </span>
+                    <button
+                      aria-label={`使用 ${a.name}`}
+                      disabled={!!running}
+                      onClick={() => {
+                        setAgentId(a.id);
+                        if (a.providerId) setProviderId(a.providerId);
+                        if (a.model) setModel(a.model);
+                        setView('workspace');
+                      }}
+                    >
+                      {a.id === 'builder' ? '使用默认助手' : '用于当前会话'}
+                    </button>
                     <button onClick={() => setAgentEdit(a)}>
                       配置
                       <ArrowRight size={13} />

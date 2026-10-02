@@ -657,6 +657,31 @@ svg {
   padding: 6px 12px 12px;
   gap: 8px;
 }
+.selected-agent-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #dfe9e2;
+  background: #f3f8f5;
+  border-radius: 9px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  color: #4b6c5a;
+}
+.selected-agent-note > div {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.selected-agent-note strong {
+  font-size: 12px;
+}
+.selected-agent-note span {
+  font-size: 11px;
+  color: #6f8179;
+}
 .composer-controls {
   display: flex;
   align-items: center;

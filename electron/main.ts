@@ -166,7 +166,7 @@ function setup() {
     return project;
   });
   register('createSession', (id) => {
-    const s = store.createSession(idSchema.parse(id));
+    const s = store.createSession(idSchema.nullish().parse(id) ?? null);
     runtime.changed();
     return s;
   });
