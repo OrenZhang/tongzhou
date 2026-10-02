@@ -2,17 +2,17 @@
 
 仓库包含主分支/PR 检查和标签草稿发布流程。源码使用 Apache-2.0；模型账号、个人数据库、安装包和依赖目录不进入 Git 历史。
 
-## 首次发布
+## 仓库与本地推送
 
-以下步骤需要维护者自己的 GitHub 登录与创建仓库权限。命令是发布说明，首版交付时尚未在远端执行。
+仓库地址为 `https://github.com/OrenZhang/tongzhou`，默认分支为 `main`。已有工作目录应先检查 `git remote -v`，新环境可直接 clone。Codex 的 GitHub 连接不等于电脑上的 Git 命令已登录；使用命令行推送时，需要维护者自行完成 GitHub CLI 或 Git Credential Manager 登录。
 
 ```bash
 gh auth login
-gh repo create tongzhou --public --source . --remote origin --push
-git push origin v0.1.0
+gh auth setup-git
+git push -u origin main
 ```
 
-如果仓库已经存在，应核实其用途和内容，再设置正确的 origin 并正常推送。不要覆盖已有仓库历史或强制推送。
+首次通过 GitHub 连接器导入时，提交说明保留来源本地提交 ID；GitHub 会为导入记录生成新的提交 ID。后续从远端历史继续维护。不要覆盖已有仓库历史或强制推送。
 
 ## 后续版本
 
