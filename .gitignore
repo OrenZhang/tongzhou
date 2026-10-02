@@ -1,15 +1,62 @@
+# Dependencies, build output and development caches
 node_modules/
-dist/
-dist-electron/
-release/
-coverage/
-test-results/
+/dist/
+/dist-electron/
+/release/
+.vite/
+.cache/
+.eslintcache
+*.tsbuildinfo
+
+# Generated test output; source tests and sanitized fixtures stay tracked
+/coverage/
+/test-results/
+/playwright-report/
+/blob-report/
+/.test-data/
+
+# Local workspaces, preview profiles, exports and temporary files
+/work/
+/local-data/
+/tongzhou-data/
+/.tongzhou/
+/tmp/
+/temp/
+*.log
+*.pid
+*.pid.lock
+
+# Local environment and account configuration (never put real secrets in examples)
 .env*
+!.env.example
+!.env.sample
+.npmrc
+/.codex/
+/.kimi/
+/.minimax/
+/.cc-switch/
+
+# User databases and SQLite sidecar files
 *.db
 *.db-shm
 *.db-wal
-*.log
+*.db-journal
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite-journal
+*.sqlite3-shm
+*.sqlite3-wal
+*.sqlite3-journal
+
+# Machine-specific editor and operating-system files
+/.idea/
+/.vscode/
+*.code-workspace
+*.swp
+*.swo
+*~
 .DS_Store
-.test-data/
-.codex/
-work/
+Thumbs.db
+Desktop.ini

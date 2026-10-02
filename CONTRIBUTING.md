@@ -9,6 +9,10 @@
 3. 修改共享接口时，同时更新 preload、IPC 参数校验与 UI。
 4. 提交前执行 `npm test`、`npm run build`；涉及桌面边界或关键用户流程时执行 `npm run test:desktop`。
 
+本地预览数据统一放在 `work/` 下，例如设置 `TONGZHOU_USER_DATA` 指向 `work/tongzhou-preview-profile`；自动化测试使用 `test-results/` 或 `.test-data/` 中的独立目录。这些目录及本地环境配置、数据库、日志、缓存、编辑器设置和打包产物均由 `.gitignore` 排除。可提交只含占位值的 `.env.example` / `.env.sample`；不要把真实凭据写入示例。
+
+保留 `tests/`、`scripts/`、`.github/`、锁文件、发行所需的 `build/` 资源，以及经过检查的文档图片。不要用全局忽略 JSON 或图片的规则掩盖测试数据；临时截图与导出文件应放进上述忽略目录。提交前检查 `git status --short`，可用 `git check-ignore -v <文件路径>` 确认规则。忽略规则不会自动移除已经被 Git 跟踪的文件。
+
 ## 模型与认证适配
 
 优先复用现有协议，自定义服务地址不应要求改代码。新增协议需覆盖：多字节 UTF-8、任意 SSE 分片、多个工具、JSON 参数分片、工具结果回传、结束标记、取消、错误与实际用量。

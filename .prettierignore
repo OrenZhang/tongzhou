@@ -8,3 +8,20 @@ LICENSE
 
 work
 build/computer
+coverage
+playwright-report
+blob-report
+.test-data
+local-data
+tongzhou-data
+.tongzhou
+tmp
+temp
+.cache
+.vite
+.env*
+.npmrc
+.codex
+.kimi
+.minimax
+.cc-switch
