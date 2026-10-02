@@ -2003,3 +2003,48 @@ input[type='checkbox'] {
 .account-dialog .row {
   flex-wrap: wrap;
 }
+
+.extensions-page .settings-card {
+  margin-bottom: 32px;
+}
+.extensions-page .section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 28px 0 18px;
+}
+.extensions-page .provider-card p {
+  overflow-wrap: anywhere;
+}
+.tool-permissions {
+  border: 1px solid var(--border, #dde5df);
+  border-radius: 12px;
+  padding: 16px;
+  margin: 12px 0;
+}
+.tool-permissions legend {
+  font-weight: 600;
+  padding: 0 8px;
+}
+.tool-permissions .checkbox-line {
+  margin: 12px 0;
+}
+.skill-preview {
+  white-space: pre-wrap;
+  overflow: auto;
+  max-height: 220px;
+  font-size: 12px;
+}
+.extension-notice {
+  padding: 12px 16px;
+  background: #e8f3ed;
+  border-radius: 10px;
+}
+
+.tool-screenshot {
+  display: block;
+  max-width: 100%;
+  max-height: 600px;
+  object-fit: contain;
+  margin: 12px 0;
+}

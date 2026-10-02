@@ -50,6 +50,7 @@ import type {
   Session,
   Snapshot,
 } from './shared/types';
+import { Extensions, AgentTools } from './Extensions';
 import { AuthBadge, ChatMessage, Field, Mark, Modal, Spinner, ModelPicker } from './components';
 const empty: Snapshot = {
   providers: [],
@@ -154,7 +155,7 @@ const presets = [
     models: [],
   },
 ] as const;
-type View = 'workspace' | 'providers' | 'agents' | 'activity' | 'settings';
+type View = 'workspace' | 'providers' | 'agents' | 'activity' | 'settings' | 'extensions';
 export default function App() {
   const api = window.tongzhou;
   const [data, setData] = useState<Snapshot>(empty);
@@ -399,8 +400,17 @@ export default function App() {
     { id: 'workspace', label: '工作空间', icon: MessageSquare },
     { id: 'providers', label: '模型连接', icon: Network },
     { id: 'agents', label: 'Agent 团队', icon: Users },
+    { id: 'extensions', label: '插件与工具', icon: Terminal },
     { id: 'activity', label: '运行记录', icon: Activity },
   ] as const;
+  const selectModel = (connection: string, selectedModel: string) => {
+    setProviderId(connection);
+    setModel(selectedModel);
+    if (sessionId)
+      void perform(() =>
+        api.updateSession(sessionId, { providerId: connection, model: selectedModel }),
+      );
+  };
   const statusLabel = (s: string) =>
     ({ running: '运行中', completed: '已完成', interrupted: '已停止', failed: '失败' })[s] ?? s;
   const renderAccounts = (only?: 'codex' | NativeEngine) => (
@@ -701,7 +711,7 @@ export default function App() {
             <strong>同舟</strong>
             <span>TONGZHOU</span>
           </div>
-          <span className="version">0.2</span>
+          <span className="version">0.3</span>
         </div>
         <button className="new-chat" onClick={() => newSession()}>
           <Plus size={17} />
@@ -824,6 +834,7 @@ export default function App() {
                     agents: 'Agent 团队',
                     activity: '运行记录',
                     settings: '设置与关于',
+                    extensions: '插件与工具',
                   }[view]}
             </strong>
           </div>
@@ -975,7 +986,7 @@ export default function App() {
                   </div>
                 ) : (
                   messages
-                    .filter((m) => project || m.role !== 'tool')
+                    .filter((m) => project || m.role !== 'tool' || m.visibleTool)
                     .map((m) => <ChatMessage key={m.id} message={m} />)
                 )}
               </div>
@@ -1022,8 +1033,8 @@ export default function App() {
                         aria-label="当前连接"
                         value={providerId}
                         onChange={(e) => {
-                          setProviderId(e.target.value);
-                          setModel(
+                          selectModel(
+                            e.target.value,
                             data.providers.find((p) => p.id === e.target.value)?.models[0] ?? '',
                           );
                         }}
@@ -1046,7 +1057,7 @@ export default function App() {
                         models={provider?.models ?? []}
                         modelLabels={provider?.modelLabels}
                         load={provider ? () => api.models(provider.id) : undefined}
-                        onChange={setModel}
+                        onChange={(m) => selectModel(providerId, m)}
                         disabled={!!running}
                       />
                     </div>
@@ -1322,6 +1333,9 @@ export default function App() {
             </div>
           </main>
         )}
+        {view === 'extensions' && (
+          <Extensions api={api} data={data} refresh={refresh} report={report} />
+        )}
         {view === 'agents' && (
           <main className="page">
             <div className="page-heading">
@@ -1505,7 +1519,7 @@ export default function App() {
             <div className="page-heading">
               <div className="eyebrow">BUILT FOR YOU</div>
               <h1>轻装出发，掌控在你。</h1>
-              <p>同舟 0.2.1 · 开源多模型桌面工作台</p>
+              <p>同舟 0.3.0 · 开源多模型桌面工作台</p>
             </div>
             {renderAccounts()}
             <section className="settings-card">
@@ -1812,6 +1826,7 @@ export default function App() {
                 </select>
               </Field>
             </div>
+            <AgentTools agent={agentEdit} data={data} onChange={setAgentEdit} />
             <Field label="职责描述">
               <input
                 value={agentEdit.description}

@@ -74,7 +74,64 @@ export const agentSchema = z.object({
   model: z.string().max(200),
   permission: z.enum(['read-only', 'ask']),
   maxSteps: z.number().int().min(1).max(40),
+  pluginIds: z.array(id).max(20).optional(),
+  skillIds: z.array(id).max(20).optional(),
+  computerEnabled: z.boolean().optional(),
 });
+export const pluginSchema = z
+  .object({
+    id,
+    name: z.string().trim().min(1).max(100),
+    transport: z.enum(['stdio', 'http']),
+    command: z.string().max(2048),
+    args: z.array(z.string().max(4096)).max(100),
+    url: z.string().max(2048),
+    enabled: z.boolean(),
+    readOnlyTools: z.array(z.string().min(1).max(200)).max(200),
+    secret: z.string().max(20000).optional(),
+    clearSecret: z.boolean().optional(),
+  })
+  .superRefine((p, ctx) => {
+    if (p.transport === 'stdio' && !p.command.trim())
+      ctx.addIssue({ code: 'custom', message: '请输入 MCP 启动命令' });
+    if (p.transport === 'http') {
+      try {
+        const u = new URL(p.url);
+        if (
+          u.username ||
+          u.password ||
+          u.search ||
+          u.hash ||
+          !(
+            u.protocol === 'https:' ||
+            (u.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(u.hostname))
+          )
+        )
+          throw new Error();
+      } catch {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'MCP 地址必须为 HTTPS 或本机 HTTP，不能包含凭据或查询参数',
+        });
+      }
+    }
+    if (p.secret) {
+      try {
+        const s = JSON.parse(p.secret);
+        if (
+          !s ||
+          Array.isArray(s) ||
+          typeof s !== 'object' ||
+          Object.entries(s).some(
+            ([k, v]) => !/^[A-Za-z_][A-Za-z0-9_-]*$/.test(k) || typeof v !== 'string',
+          )
+        )
+          throw new Error();
+      } catch {
+        ctx.addIssue({ code: 'custom', message: '环境变量 / 请求头必须为字符串值的 JSON 对象' });
+      }
+    }
+  });
 export const runSchema = z.object({
   sessionId: id,
   prompt: z.string().trim().min(1).max(100000),

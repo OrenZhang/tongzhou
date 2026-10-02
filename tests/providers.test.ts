@@ -54,6 +54,92 @@ async function serve(events: string[], fn: (base: string, requests: any[]) => Pr
 }
 const event = (d: any) => 'data: ' + JSON.stringify(d) + '\n\n';
 describe('streaming protocol adapters', () => {
+  it('preserves interrupted replies and failed tool evidence during a provider switch', () => {
+    const params = input('anthropic');
+    params.messages = [
+      message,
+      {
+        ...message,
+        id: 'partial',
+        role: 'assistant',
+        status: 'interrupted',
+        content: 'Already wrote first file',
+        providerId: 'old',
+        model: 'old-model',
+        toolCalls: [{ id: 'old-call', name: 'write_file', arguments: '{}' }],
+      },
+      {
+        ...message,
+        id: 'result',
+        role: 'tool',
+        toolCallId: 'old-call',
+        toolName: 'write_file',
+        content: 'File saved before interruption',
+        status: 'error',
+      },
+      { ...message, id: 'next', content: 'Continue without repeating' },
+    ];
+    const body = JSON.stringify(requestBody(params).body);
+    expect(body).toContain('Already wrote first file');
+    expect(body).toContain('File saved before interruption');
+    expect(body).toContain('未完成');
+    expect(body).not.toContain('"tool_use"');
+    expect(body).not.toContain('"tool_result"');
+  });
+  it('converts orphan results to portable text, without manufacturing an executable call', () => {
+    for (const protocol of ['openai-chat', 'openai-responses', 'anthropic', 'gemini'] as const) {
+      const params = input(protocol);
+      params.messages = [
+        message,
+        {
+          ...message,
+          id: 'orphan',
+          role: 'tool',
+          toolCallId: 'missing',
+          toolName: 'click',
+          content: 'done',
+        },
+      ];
+      const body = JSON.stringify(requestBody(params).body);
+      expect(body).toContain('历史工具结果');
+      expect(body).not.toContain('"tool_call_id"');
+      expect(body).not.toContain('"tool_result"');
+      expect(body).not.toContain('"function_call_output"');
+    }
+  });
+  it('sends only the current turn screenshot and never forwards stale images on handoff', () => {
+    for (const protocol of ['openai-chat', 'openai-responses', 'anthropic', 'gemini'] as const) {
+      const params = input(protocol);
+      params.messages = [
+        { ...message, runId: 'r' },
+        {
+          ...message,
+          id: 'a',
+          role: 'assistant',
+          providerId: 'p',
+          model: 'test',
+          toolCalls: [{ id: 'c', name: 'computer_screenshot', arguments: '{}' }],
+          runId: 'r',
+        },
+        {
+          ...message,
+          id: 't',
+          role: 'tool',
+          toolCallId: 'c',
+          toolName: 'computer_screenshot',
+          content: 'frame',
+          runId: 'r',
+          images: [{ mimeType: 'image/png', data: 'cGl4ZWxz' }],
+        },
+      ];
+      expect(JSON.stringify(requestBody(params).body)).toContain('cGl4ZWxz');
+      params.messages.push({ ...message, id: 'next', content: 'Switch', runId: 'next' });
+      params.provider.id = 'other';
+      const switched = JSON.stringify(requestBody(params).body);
+      expect(switched).not.toContain('cGl4ZWxz');
+      expect(switched).toContain('frame');
+    }
+  });
   it('preserves MiniMax/Anthropic thinking blocks across a tool round, but not a provider handoff', async () => {
     const blocks = [
       { type: 'thinking', thinking: 'fixture reasoning', signature: 'fixture-signature' },

@@ -18,3 +18,12 @@ await build({
   external: ['electron'],
   target: 'node22',
 });
+
+await build({
+  entryPoints: ['electron/tool-proxy.ts'],
+  outfile: 'dist-electron/tool-proxy.cjs',
+  bundle: true,
+  platform: 'node',
+  format: 'cjs',
+  target: 'node22',
+});

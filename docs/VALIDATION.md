@@ -85,3 +85,19 @@ Windows 0.2.0 已生成 NSIS 安装包，打包后的原生引擎与普通聊天
 普通聊天隐藏历史内部工具条，并提示原生引擎直接在正文提问；同模型连续轮次复用引擎进程/会话，减少启动与历史重传开销。
 
 Windows 0.2.1 NSIS 安装包已生成。打包程序从独立目录启动，通过单供应商认证弹窗/成功标志测试和完整桌面回归（普通聊天、项目写入审批、流式输出及重启恢复）。
+
+## 0.3.0：公共插件、电脑操作与会话切换
+
+2026-10-02，Windows x64。74 项自动化测试通过，类型检查与生产构建通过。新增覆盖真实 stdio MCP 握手/调用、凭据脱敏、权限范围、拒绝/取消、重复调用去重、Skill 附属文件边界、图片大小限制、私有桥接认证、电脑坐标映射，以及四种模型协议中的截图传递和历史交接。
+
+`npm run test:extensions` 使用独立 Electron 配置验证 MCP 添加与连接检查、Skill 导入、默认助手工具配置、普通聊天工具审批、同一会话切换供应商、历史与选择持久化。测试确认切换后保留文本和工具结果，不重新执行上一供应商的工具调用。中断或失败的回复会明确标记；缺失结果的工具调用转换为历史记录，不发送孤立的工具协议消息。
+
+`npm run test:bridge` 验证真实 MCP stdio 代理与每轮独立的本地认证通道。内置 Codex 接受 experimentalApi / dynamicTools 线程配置；此项没有完成 ChatGPT 登录或真实 Codex 推理。额外使用用户已登录的同舟 Kimi 隔离配置，实测 Kimi ACP 调用测试 MCP 工具并返回结果；没有改写用户聊天数据库。MiniMax 共用 ACP 桥接，但未完成真实账号推理工具验收。
+
+显式设置 `TONGZHOU_COMPUTER_SMOKE=1` 后执行 `node scripts/computer-smoke.mjs`，使用独立测试窗口和本地模型替身验证真实 Windows 窗口发现、截图、聚焦、中文 Unicode 输入、Ctrl+A、按截图坐标点击。工具调用经过同舟审批界面；没有向外部模型发送截图。滚动和拖动已实现，但没有本次实机交互验收。macOS 适配已实现，仍未在 Mac 上实机验证或签名、公证。
+
+安全边界：电脑截图和输入逐次审批；坐标只绑定本轮窗口截图，窗口移动或截图过期后拒绝操作。新一轮要求重新截图，历史图片不会自动传给新供应商。全局停止快捷键与界面停止按钮会取消任务。第三方 MCP 子进程不是操作系统沙箱；Skill 导入只保存文本，不自动执行脚本或安装依赖。本版不包含 MCP OAuth 向导或在线插件市场。
+
+协议依据：[OpenAI App Server](https://learn.chatgpt.com/docs/app-server)、[MCP TypeScript SDK](https://ts.sdk.modelcontextprotocol.io/client)、[ACP 会话配置](https://agentclientprotocol.com/protocol/v1/session-setup)、[Electron 窗口截图](https://www.electronjs.org/docs/latest/api/desktop-capturer)。同舟实现自己的公共工具层，不将 Codex 桌面端专有插件描述为已开源或随包分发。
+
+Windows 0.3.0 NSIS 安装包已生成。打包程序使用独立配置通过完整桌面回归、单供应商认证弹窗、插件与会话切换测试、真实电脑测试窗口操作，以及内置 Kimi / MiniMax ACP 初始化与未登录状态检查。旧原生引擎测试的精确文字定位与新增授权标志冲突，已调整为账号状态容器匹配并重新通过；此测试故障不属于供应商认证超时。格式检查和 Git 差异空白检查通过。GitHub 仍未配置可推送远端，未声称已发布线上版本。

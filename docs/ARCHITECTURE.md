@@ -89,7 +89,7 @@ Renderer 启用 contextIsolation、sandbox、关闭 Node 集成；preload 仅暴
 
 ## 交付与演进
 
-版本 0.1 的范围和未实现能力在 README 中明确列出。下一步优先增加真实模型兼容性矩阵、同引擎 thread/resume、携带来源的上下文摘要，以及协作时 worktree 隔离。之后再考虑 MCP/Skills 管理、认证插件、自动路由和签名自动更新。
+版本 0.1 的范围和未实现能力在 README 中明确列出。下一步优先增加真实模型兼容性矩阵、同引擎 thread/resume、携带来源的上下文摘要，以及协作时 worktree 隔离。MCP/Skills 管理已在 0.3.0 接入，后续继续完善认证插件、自动路由和签名自动更新。
 
 参考：[Codex App Server](https://learn.chatgpt.com/docs/app-server)、[Codex 开源仓库](https://github.com/openai/codex)、[CC Switch providers schema](https://github.com/farion1231/cc-switch/blob/main/src-tauri/src/database/schema.rs)、[Electron 安全指南](https://www.electronjs.org/docs/latest/tutorial/security)。
 
@@ -102,3 +102,11 @@ Renderer 启用 contextIsolation、sandbox、关闭 Node 集成；preload 仅暴
 三个官方引擎均随应用分发。Kimi/MiniMax 使用内置 Node 22.23.3，避免 Electron Node ABI 与 MiniMax better-sqlite3 不兼容。打包关闭 npmRebuild，保留 Node 22 构建的 SQLite；开发/CI 安装固定 Node 22 系列。CLI、Node 与其原生依赖解包到 app.asar.unpacked，Mac 安装在目标平台生成对应二进制。
 
 MiniMax API 复用 Anthropic SSE 适配器，完整保存 thinking/text/tool_use 内容块、thinking 签名与顺序。同连接同模型继续时回传；跨连接/模型交接只传文本和工具结果证据。API Key 预设切换到不同端点会清除旧密钥，避免将旧供应商凭据发送到新地址。
+
+## 0.3.0 公共工具层
+
+`ToolScope` 在每个 Run 开始时冻结工具目录与 Agent 权限，统一审批、去重、超时、取消和结果记录。直接 API 将工具编译为对应协议；Codex 使用 experimental dynamicTools / item/tool/call；Kimi 与 MiniMax 使用 ACP stdio MCP 配置，经内置 Node 代理访问仅绑定 127.0.0.1 的随机端口。代理需要每轮随机令牌，拒绝 Origin 请求，关闭或停止任务后销毁，不复用跨轮凭证。
+
+MCP 客户端使用官方 TypeScript SDK 1.x，支持 stdio 与 Streamable HTTP；跨域重定向拒绝。每次调用均通过同舟审批，readOnlyHint 不构成授权。内置电脑适配器的截图帧按 Run 隔离，窗口 ID / PID / 位置校验，输入操作使用图片到窗口坐标映射，全局互斥及中断后的修饰键释放。
+
+截图作为规范化 ToolImage 存入消息。API 编译器只发送当前轮次最后一张截图，按 OpenAI、Responses、Anthropic、Gemini 各自格式编译。交接转为文本证据，去掉供应商专属调用与签名；错误和中断内容不再静默丢弃，孤立工具结果不会进入目标 API 的工具响应结构。

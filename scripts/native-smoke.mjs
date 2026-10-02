@@ -35,7 +35,10 @@ try {
     ['minimax', 'MiniMax Code'],
   ]) {
     const card = page.getByRole('region', { name: `${label} 账号`, exact: true });
-    await card.getByText('尚未登录', { exact: true }).waitFor({ timeout: 65000 });
+    await card
+      .locator('.account-status')
+      .filter({ hasText: '尚未登录' })
+      .waitFor({ timeout: 65000 });
     const state = await page.evaluate((engine) => window.tongzhou.nativeStatus(engine), engine);
     assert.equal(state.authenticated, false);
     assert.equal(state.error, undefined);
@@ -67,6 +70,10 @@ try {
     ),
   );
   console.log('Native engine smoke passed; no user sign-in or model inference performed.');
+} catch (error) {
+  const page = await app.firstWindow();
+  await page.screenshot({ path: 'test-results/native-failure.png' }).catch(() => {});
+  throw error;
 } finally {
   await app.close();
 }

@@ -1,6 +1,6 @@
 {
   "name": "tongzhou",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "同舟 — 多模型协作，一个工作台。An open-source, local-first agent workspace.",
   "private": true,
   "type": "module",
@@ -22,11 +22,14 @@
     "format:check": "prettier --check .",
     "dist": "npm run build && electron-builder --publish never",
     "dist:win": "npm run build && electron-builder --win --publish never",
-    "dist:mac": "npm run build && electron-builder --mac --publish never"
+    "dist:mac": "npm run build && electron-builder --mac --publish never",
+    "test:extensions": "node scripts/extensions-smoke.mjs",
+    "test:bridge": "node scripts/bridge-smoke.mjs"
   },
   "dependencies": {
     "@iarna/toml": "^2.2.5",
     "@minimax-ai/code": "0.4.12",
+    "@modelcontextprotocol/sdk": "1.31.0",
     "@moonshot-ai/kimi-code": "2.1.1",
     "@openai/codex": "0.160.0",
     "lucide-react": "^0.468.0",
@@ -64,10 +67,13 @@
       "package.json",
       "LICENSE",
       "NOTICE",
-      "build/node-LICENSE.txt"
+      "build/node-LICENSE.txt",
+      "build/computer/**/*"
     ],
     "asarUnpack": [
-      "node_modules/**/*"
+      "node_modules/**/*",
+      "build/computer/**/*",
+      "dist-electron/tool-proxy.cjs"
     ],
     "win": {
       "icon": "build/icon.ico",
@@ -91,7 +97,10 @@
         "dmg",
         "zip"
       ],
-      "category": "public.app-category.developer-tools"
+      "category": "public.app-category.developer-tools",
+      "extendInfo": {
+        "NSAppleEventsUsageDescription": "同舟需要在你批准后聚焦指定窗口并完成电脑操作。"
+      }
     },
     "linux": {
       "target": [

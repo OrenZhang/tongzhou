@@ -3,6 +3,15 @@ import type { TongzhouAPI } from '../src/shared/types';
 const call = (method: string, ...args: unknown[]) =>
   ipcRenderer.invoke('tongzhou:' + method, ...args);
 const api: TongzhouAPI = {
+  savePlugin: (p) => call('savePlugin', p),
+  deletePlugin: (id) => call('deletePlugin', id),
+  testPlugin: (id) => call('testPlugin', id),
+  importSkill: () => call('importSkill'),
+  saveSkill: (s) => call('saveSkill', s),
+  deleteSkill: (id) => call('deleteSkill', id),
+  computerStatus: () => call('computerStatus'),
+  computerPermission: () => call('computerPermission'),
+  emergencyStop: () => call('emergencyStop'),
   snapshot: () => call('snapshot'),
   messages: (id) => call('messages', id),
   saveProvider: (p) => call('saveProvider', p),

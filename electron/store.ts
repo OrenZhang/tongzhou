@@ -156,6 +156,19 @@ export class Store {
       | undefined;
     return row ? this.codec.decrypt(row.value) : '';
   }
+  saveSecret(id: string, value?: string, clear = false) {
+    const encrypted = value ? this.codec.encrypt(value) : undefined;
+    if (clear) this.db.prepare('DELETE FROM secrets WHERE id=?').run(id);
+    if (encrypted)
+      this.db
+        .prepare(
+          'INSERT INTO secrets VALUES(?,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value',
+        )
+        .run(id, encrypted);
+  }
+  hasSecret(id: string) {
+    return !!this.db.prepare('SELECT id FROM secrets WHERE id=?').get(id);
+  }
   deleteProvider(id: string) {
     this.remove('provider', id);
     this.db.prepare('DELETE FROM secrets WHERE id=?').run(id);

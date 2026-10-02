@@ -1,4 +1,13 @@
-import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell, clipboard } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  safeStorage,
+  shell,
+  clipboard,
+  globalShortcut,
+} from 'electron';
 import { NativeAccount, nativeEngine } from './native-engine';
 import { CodexAuth } from './codex-auth';
 import path from 'node:path';
@@ -8,7 +17,16 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { Store } from './store';
 import { Runtime } from './runtime';
-import { agentSchema, idSchema, providerSchema, redact, runSchema } from './validation';
+import { DesktopComputer } from './computer';
+import { PluginConnection, importSkillDirectory } from './extensions';
+import {
+  agentSchema,
+  idSchema,
+  providerSchema,
+  redact,
+  runSchema,
+  pluginSchema,
+} from './validation';
 import { complete, listModels } from './providers';
 import { command, files, read } from './workspace';
 import { importCCSwitch } from './cc-switch';
@@ -18,6 +36,8 @@ import type {
   Project,
   Provider,
   ProviderInput,
+  PluginConfig,
+  SkillRecord,
   Session,
 } from '../src/shared/types';
 
@@ -27,6 +47,7 @@ let window: BrowserWindow | undefined;
 let store: Store;
 let runtime: Runtime;
 let auth: CodexAuth;
+const computer = new DesktopComputer();
 const nativeAccounts = {} as Record<'kimi' | 'minimax', NativeAccount>;
 let quitting = false;
 const pendingImports = new Map<string, ProviderInput>();
@@ -71,7 +92,7 @@ function setup() {
       return safeStorage.decryptString(Buffer.from(value, 'base64'));
     },
   });
-  runtime = new Runtime(store, dataDir, emit);
+  runtime = new Runtime(store, dataDir, emit, computer);
   auth = new CodexAuth(
     runtime.authClient,
     (url) => shell.openExternal(url),
@@ -143,6 +164,86 @@ function setup() {
     assertNativeIdle(raw);
     await accountFor(raw).logout();
     runtime.changed();
+  });
+  const requireIdle = () => {
+    if (runtime.snapshot().runs.some((r) => r.status === 'running'))
+      throw new Error('请先停止正在运行的任务，再修改插件或 Skill');
+  };
+  register('savePlugin', (raw) => {
+    requireIdle();
+    const { secret, clearSecret, ...config } = pluginSchema.parse(raw);
+    store.saveSecret('plugin_' + config.id, secret, clearSecret);
+    store.put('plugin', config);
+    runtime.invalidateNative();
+    runtime.changed();
+  });
+  register('deletePlugin', (raw) => {
+    requireIdle();
+    const id = idSchema.parse(raw);
+    store.remove('plugin', id);
+    store.saveSecret('plugin_' + id, undefined, true);
+    for (const a of store.list<AgentProfile>('agent'))
+      store.put('agent', { ...a, pluginIds: a.pluginIds?.filter((p) => p !== id) });
+    runtime.invalidateNative();
+    runtime.changed();
+  });
+  register('testPlugin', async (raw) => {
+    requireIdle();
+    const p = store.get<PluginConfig>('plugin', idSchema.parse(raw));
+    const c = new PluginConnection(p, store.secret('plugin_' + p.id));
+    try {
+      const signal = AbortSignal.timeout(30000);
+      await c.connect(signal);
+      return (await c.tools(signal)).map((t) => ({
+        name: t.name,
+        description: t.description ?? '',
+      }));
+    } finally {
+      await c.close();
+    }
+  });
+  register('importSkill', async () => {
+    requireIdle();
+    const chosen = await dialog.showOpenDialog(window!, {
+      title: '选择包含 SKILL.md 的目录',
+      properties: ['openDirectory'],
+    });
+    if (chosen.canceled) return null;
+    const skill = await importSkillDirectory(chosen.filePaths[0]);
+    store.put('skill', skill);
+    runtime.changed();
+    return skill;
+  });
+  register('saveSkill', (raw) => {
+    requireIdle();
+    const p = z
+      .object({
+        id: idSchema,
+        name: z.string().min(1).max(100),
+        description: z.string().max(500),
+        instructions: z.string().max(32000),
+        enabled: z.boolean(),
+      })
+      .parse(raw);
+    const old = store.get<SkillRecord>('skill', p.id);
+    store.put('skill', { ...old, ...p });
+    runtime.invalidateNative();
+    runtime.changed();
+  });
+  register('deleteSkill', (raw) => {
+    requireIdle();
+    const id = idSchema.parse(raw);
+    store.remove('skill', id);
+    for (const a of store.list<AgentProfile>('agent'))
+      store.put('agent', { ...a, skillIds: a.skillIds?.filter((s) => s !== id) });
+    runtime.invalidateNative();
+    runtime.changed();
+  });
+  register('computerStatus', () => computer.status());
+  register('computerPermission', () => computer.requestPermission());
+  register('emergencyStop', async () => {
+    for (const r of runtime.snapshot().runs)
+      if (r.status === 'running') await runtime.cancel(r.sessionId);
   });
   register('snapshot', () => runtime.snapshot());
   register('messages', (id) => store.messages(idSchema.parse(id)));
@@ -223,6 +324,8 @@ function setup() {
   register('saveAgent', (raw) => {
     const a = agentSchema.parse(raw);
     if (a.providerId) store.get('provider', a.providerId);
+    for (const id of a.pluginIds ?? []) store.get('plugin', id);
+    for (const id of a.skillIds ?? []) store.get('skill', id);
     store.put('agent', a);
     runtime.changed();
     return a;
@@ -264,9 +367,16 @@ function setup() {
       .object({
         title: z.string().trim().min(1).max(120).optional(),
         archived: z.boolean().optional(),
+        providerId: idSchema.optional(),
+        model: z.string().max(200).optional(),
       })
       .parse(patch);
-    if (runtime.isActive(id) && update.archived) throw new Error('请先停止执行');
+    if (
+      runtime.isActive(id) &&
+      (update.archived || update.providerId !== undefined || update.model !== undefined)
+    )
+      throw new Error('请先停止执行，再切换模型');
+    if (update.providerId) store.get('provider', update.providerId);
     store.put('session', {
       ...store.get<Session>('session', id),
       ...update,
@@ -407,6 +517,10 @@ else {
     .then(async () => {
       setup();
       await createWindow();
+      computer.emergencyShortcut = globalShortcut.register('CommandOrControl+Alt+Escape', () => {
+        for (const r of runtime.snapshot().runs)
+          if (r.status === 'running') void runtime.cancel(r.sessionId);
+      });
     })
     .catch((error) => {
       dialog.showErrorBox('同舟启动失败', redact(String(error)));
@@ -422,6 +536,7 @@ else {
     if (quitting || !runtime) return;
     event.preventDefault();
     quitting = true;
+    globalShortcut.unregisterAll();
     auth.dispose();
     for (const account of Object.values(nativeAccounts)) account.dispose();
     runtime.stop();

@@ -364,10 +364,26 @@ export function ChatMessage({ message: m }: { message: Message }) {
         <button onClick={() => setOpen(!open)}>
           <Terminal size={14} />
           <span>{m.toolName ?? '工具结果'}</span>
-          <Check size={13} />
+          {m.status === 'error' ? (
+            <X size={13} aria-label="未完成" />
+          ) : (
+            <Check size={13} aria-label="已完成" />
+          )}
           <ChevronDown size={14} className={open ? 'rotate' : ''} />
         </button>
-        {open && <pre>{m.content}</pre>}
+        {open && (
+          <>
+            <pre>{m.content}</pre>
+            {m.images?.map((image, index) => (
+              <img
+                className="tool-screenshot"
+                key={index}
+                alt="工具截图"
+                src={`data:${image.mimeType};base64,${image.data}`}
+              />
+            ))}
+          </>
+        )}
       </div>
     );
   return (

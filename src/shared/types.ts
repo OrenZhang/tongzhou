@@ -41,6 +41,48 @@ export interface AgentProfile {
   model: string;
   permission: 'read-only' | 'ask';
   maxSteps: number;
+  pluginIds?: string[];
+  skillIds?: string[];
+  computerEnabled?: boolean;
+}
+export interface PluginConfig {
+  id: string;
+  name: string;
+  transport: 'stdio' | 'http';
+  command: string;
+  args: string[];
+  url: string;
+  enabled: boolean;
+  readOnlyTools: string[];
+  hasSecret?: boolean;
+}
+export interface PluginInput extends PluginConfig {
+  secret?: string;
+  clearSecret?: boolean;
+}
+export interface SkillRecord {
+  id: string;
+  name: string;
+  description: string;
+  instructions: string;
+  enabled: boolean;
+  files: Record<string, string>;
+}
+export interface ToolImage {
+  data: string;
+  mimeType: 'image/png' | 'image/jpeg' | 'image/webp';
+}
+export interface ToolOutput {
+  text: string;
+  images?: ToolImage[];
+  isError?: boolean;
+}
+export interface ComputerStatus {
+  supported: boolean;
+  platform: string;
+  screen: string;
+  accessibility: boolean;
+  emergencyShortcut: boolean;
 }
 export interface Project {
   id: string;
@@ -70,6 +112,8 @@ export interface Message {
   toolCallId?: string;
   toolName?: string;
   status?: 'streaming' | 'complete' | 'interrupted' | 'error';
+  images?: ToolImage[];
+  visibleTool?: boolean;
 }
 export interface Session {
   id: string;
@@ -110,6 +154,8 @@ export interface Approval {
   detail: string;
 }
 export interface Snapshot {
+  plugins?: PluginConfig[];
+  skills?: SkillRecord[];
   providers: Provider[];
   agents: AgentProfile[];
   projects: Project[];
@@ -154,6 +200,15 @@ export interface ImportPreview {
   warnings: string[];
 }
 export interface TongzhouAPI {
+  savePlugin(plugin: PluginInput): Promise<void>;
+  deletePlugin(id: string): Promise<void>;
+  testPlugin(id: string): Promise<{ name: string; description: string }[]>;
+  importSkill(): Promise<SkillRecord | null>;
+  saveSkill(skill: SkillRecord): Promise<void>;
+  deleteSkill(id: string): Promise<void>;
+  computerStatus(): Promise<ComputerStatus>;
+  computerPermission(): Promise<ComputerStatus>;
+  emergencyStop(): Promise<void>;
   snapshot(): Promise<Snapshot>;
   messages(sessionId: string): Promise<Message[]>;
   saveProvider(provider: ProviderInput): Promise<Provider>;
@@ -164,7 +219,10 @@ export interface TongzhouAPI {
   deleteAgent(id: string): Promise<void>;
   addProject(): Promise<Project | null>;
   createSession(projectId?: string | null): Promise<Session>;
-  updateSession(id: string, patch: { title?: string; archived?: boolean }): Promise<void>;
+  updateSession(
+    id: string,
+    patch: { title?: string; archived?: boolean; providerId?: string; model?: string },
+  ): Promise<void>;
   run(input: RunInput): Promise<string>;
   team(input: RunInput, agentIds: string[]): Promise<string>;
   cancel(sessionId: string): Promise<void>;

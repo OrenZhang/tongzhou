@@ -5,3 +5,6 @@ release
 test-results
 package-lock.json
 LICENSE
+
+work
+build/computer

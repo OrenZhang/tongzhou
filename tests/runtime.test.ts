@@ -6,12 +6,13 @@ import path from 'node:path';
 import os from 'node:os';
 import { Store } from '../electron/store';
 import { Runtime } from '../electron/runtime';
+import type { ComputerAdapter } from '../electron/extensions';
 import type { AppEvent, Run } from '../src/shared/types';
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
 });
-async function fixture(handler: (body: any) => any[] | Promise<any[]>) {
+async function fixture(handler: (body: any) => any[] | Promise<any[]>, computer?: ComputerAdapter) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'tongzhou-runtime-'));
   cleanups.push(() => rm(root, { recursive: true, force: true }));
   const requests: any[] = [];
@@ -48,7 +49,7 @@ async function fixture(handler: (body: any) => any[] | Promise<any[]>) {
   store.put('project', { id: 'project', name: 'test', path: root, createdAt: Date.now() });
   const session = store.createSession('project');
   const events: AppEvent[] = [];
-  const runtime = new Runtime(store, root, (e) => events.push(e));
+  const runtime = new Runtime(store, root, (e) => events.push(e), computer);
   cleanups.push(async () => {
     runtime.stop();
     await runtime.waitForIdle();
@@ -73,6 +74,93 @@ const text = (content: string) => ({
   usage: { prompt_tokens: 10, completion_tokens: 4 },
 });
 describe('agent execution lifecycle', () => {
+  it('uses an explicit model selection instead of silently reverting to Agent defaults', async () => {
+    const f = await fixture(() => [text('Selected model answer')]);
+    f.store.put('agent', {
+      ...f.store.get<any>('agent', 'builder'),
+      providerId: 'openai-codex',
+      model: 'pinned-model',
+    });
+    f.runtime.start(f.input);
+    await f.runtime.waitForIdle();
+    expect(f.requests[0].model).toBe('mock');
+    expect(f.store.list<Run>('run')[0].status).toBe('completed');
+  });
+  it('uses selected computer tools without a project, approves once and preserves the same session after switching', async () => {
+    let executed = 0;
+    const adapter: ComputerAdapter = {
+      specs: () => [
+        {
+          name: 'computer_screenshot',
+          description: 'fixture screenshot',
+          parameters: { type: 'object', properties: {} },
+        },
+      ],
+      execute: async () => {
+        executed++;
+        return {
+          text: 'Screenshot of test window',
+          images: [{ mimeType: 'image/png', data: 'cGl4ZWxz' }],
+        };
+      },
+    };
+    const f = await fixture(
+      (body) =>
+        body.messages.some((m: any) => m.role === 'tool') || body.model === 'second'
+          ? [text('Done without repeating')]
+          : [
+              {
+                choices: [
+                  {
+                    delta: {
+                      tool_calls: [
+                        {
+                          index: 0,
+                          id: 'capture',
+                          function: { name: 'computer_screenshot', arguments: '{}' },
+                        },
+                      ],
+                    },
+                    finish_reason: 'tool_calls',
+                  },
+                ],
+              },
+            ],
+      adapter,
+    );
+    const session = f.store.createSession();
+    f.store.put('agent', { ...f.store.get<any>('agent', 'builder'), computerEnabled: true });
+    f.runtime.start({ ...f.input, sessionId: session.id });
+    await expect.poll(() => f.runtime.snapshot().approvals.length).toBe(1);
+    f.runtime.approve(f.runtime.snapshot().approvals[0].id, true);
+    await f.runtime.waitForIdle();
+    expect(executed).toBe(1);
+    expect(JSON.stringify(f.requests[1])).toContain('cGl4ZWxz');
+    f.store.saveProvider({
+      ...f.store.get<any>('provider', 'fixture'),
+      id: 'other',
+      name: 'Other',
+    });
+    f.runtime.start({
+      ...f.input,
+      sessionId: session.id,
+      providerId: 'other',
+      model: 'second',
+      prompt: 'Continue',
+    });
+    await f.runtime.waitForIdle();
+    expect(executed).toBe(1);
+    expect(f.store.messages(session.id).some((m) => m.content === 'Done without repeating')).toBe(
+      true,
+    );
+    const last = JSON.stringify(f.requests.at(-1));
+    expect(last).toContain('Screenshot of test window');
+    expect(last).not.toContain('cGl4ZWxz');
+    expect(last).not.toContain('"tool_calls"');
+    expect(
+      f.store.list<Run>('run').every((r) => r.sessionId === session.id && r.status === 'completed'),
+    ).toBe(true);
+  });
   it('chats and hands history to another model without any project or tools', async () => {
     const f = await fixture(() => [text('Chat answer')]);
     f.store.remove('project', 'project');
