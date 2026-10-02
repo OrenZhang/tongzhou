@@ -39,6 +39,8 @@ import {
 } from 'lucide-react';
 import type {
   AgentProfile,
+  NativeAuthState,
+  NativeEngine,
   CodexAuthState,
   CodexLoginMethod,
   FileEntry,
@@ -63,6 +65,8 @@ const protocolLabels: Record<string, string> = {
   anthropic: 'Anthropic Messages',
   gemini: 'Google Gemini',
   codex: 'Codex · ChatGPT',
+  kimi: 'Kimi Code · 账号授权',
+  minimax: 'MiniMax Code · 账号授权',
 };
 const presets = [
   {
@@ -94,11 +98,32 @@ const presets = [
     models: ['qwen-plus'],
   },
   {
-    name: 'Kimi',
+    name: 'Kimi 开放平台',
     protocol: 'openai-chat',
     baseUrl: 'https://api.moonshot.cn/v1',
     auth: 'api-key',
     models: [],
+  },
+  {
+    name: 'Kimi Code 套餐 Key',
+    protocol: 'openai-chat',
+    baseUrl: 'https://api.kimi.com/coding/v1',
+    auth: 'api-key',
+    models: ['kimi-for-coding'],
+  },
+  {
+    name: 'MiniMax 国内 API / 套餐',
+    protocol: 'anthropic',
+    baseUrl: 'https://api.minimax.cn/anthropic/v1',
+    auth: 'api-key',
+    models: ['MiniMax-M3', 'MiniMax-M2.7', 'MiniMax-M2.5'],
+  },
+  {
+    name: 'MiniMax 国际 API / 套餐',
+    protocol: 'anthropic',
+    baseUrl: 'https://api.minimax.io/anthropic/v1',
+    auth: 'api-key',
+    models: ['MiniMax-M3', 'MiniMax-M2.7', 'MiniMax-M2.5'],
   },
   {
     name: '智谱 GLM',
@@ -156,6 +181,13 @@ export default function App() {
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [fileView, setFileView] = useState<{ path: string; content: string } | null>(null);
   const [diff, setDiff] = useState('');
+  const [nativeAccounts, setNativeAccounts] = useState<
+    Partial<Record<NativeEngine, NativeAuthState>>
+  >({});
+  const [nativeRegions, setNativeRegions] = useState<Record<NativeEngine, 'cn' | 'global'>>({
+    kimi: 'cn',
+    minimax: 'cn',
+  });
   const [codex, setCodex] = useState<CodexAuthState | null>(null);
   const authPending = codex?.login?.phase === 'starting' || codex?.login?.phase === 'waiting';
   const startLogin = (method: CodexLoginMethod) =>
@@ -196,6 +228,8 @@ export default function App() {
     if (!api) return;
     void refresh().catch(report);
     return api.onEvent((event) => {
+      if (event.type === 'native-auth')
+        setNativeAccounts((previous) => ({ ...previous, [event.state.engine]: event.state }));
       if (event.type === 'codex-auth') {
         setCodex(event.state);
         if (event.state.login?.phase === 'success') setNotice('ChatGPT 授权成功，账号已连接');
@@ -233,7 +267,14 @@ export default function App() {
     if (!model && provider?.models[0]) setModel(provider.models[0]);
   }, [model, provider?.models]);
   useEffect(() => {
-    if (view === 'settings') void api.codexStatus().then(setCodex).catch(report);
+    if (view === 'settings') {
+      void api.codexStatus().then(setCodex).catch(report);
+      for (const engine of ['kimi', 'minimax'] as const)
+        void api
+          .nativeStatus(engine)
+          .then((state) => setNativeAccounts((previous) => ({ ...previous, [engine]: state })))
+          .catch(report);
+    }
   }, [view, api]);
   useEffect(() => {
     const el = feed.current;
@@ -378,7 +419,7 @@ export default function App() {
             <strong>同舟</strong>
             <span>TONGZHOU</span>
           </div>
-          <span className="version">0.1</span>
+          <span className="version">0.2</span>
         </div>
         <button className="new-chat" onClick={() => newSession()}>
           <Plus size={17} />
@@ -719,6 +760,7 @@ export default function App() {
                         compact
                         value={model}
                         models={provider?.models ?? []}
+                        modelLabels={provider?.modelLabels}
                         load={provider ? () => api.models(provider.id) : undefined}
                         onChange={setModel}
                         disabled={!!running}
@@ -935,7 +977,7 @@ export default function App() {
                       )}
                     </div>
                     <span className="tag">
-                      {p.protocol === 'codex'
+                      {p.protocol === 'codex' || p.auth === 'native'
                         ? '账号授权'
                         : p.auth === 'none'
                           ? '无需密钥'
@@ -1169,7 +1211,7 @@ export default function App() {
             <div className="page-heading">
               <div className="eyebrow">BUILT FOR YOU</div>
               <h1>轻装出发，掌控在你。</h1>
-              <p>同舟 0.1.0 · 开源多模型桌面工作台</p>
+              <p>同舟 0.2.0 · 开源多模型桌面工作台</p>
             </div>
             <section className="settings-card">
               <div className="settings-card-title">
@@ -1298,6 +1340,124 @@ export default function App() {
                 Key 连接仍需单独配置。
               </p>
             </section>
+            {(['kimi', 'minimax'] as const).map((engine) => {
+              const state = nativeAccounts[engine];
+              const pending = !!state && ['starting', 'waiting', 'checking'].includes(state.phase);
+              const label = engine === 'kimi' ? 'Kimi Code' : 'MiniMax Code';
+              return (
+                <section className="settings-card" key={engine} aria-label={`${label} 账号`}>
+                  <div className="settings-card-title">
+                    <Globe2 size={23} />
+                    <div>
+                      <h3>{label} 账号授权</h3>
+                      <p>登录后可在同一会话中切换模型，也可分配给子 Agent。</p>
+                    </div>
+                  </div>
+                  <div className="account-status">
+                    <span className={'live-dot ' + (state?.authenticated ? '' : 'gray')} />
+                    {state
+                      ? state.authenticated
+                        ? '账号已授权'
+                        : '尚未登录'
+                      : '正在检查账号状态…'}
+                  </div>
+                  <div className="row">
+                    <select
+                      aria-label={`${label} 账号地区`}
+                      disabled={pending || state?.authenticated}
+                      value={nativeRegions[engine]}
+                      onChange={(e) =>
+                        setNativeRegions((previous) => ({
+                          ...previous,
+                          [engine]: e.target.value as 'cn' | 'global',
+                        }))
+                      }
+                    >
+                      <option value="cn">国内账号</option>
+                      <option value="global">国际账号</option>
+                    </select>
+                    <button
+                      className="primary"
+                      disabled={pending || state?.authenticated}
+                      onClick={() => perform(() => api.nativeLogin(engine, nativeRegions[engine]))}
+                    >
+                      登录 {label}
+                      <ArrowRight size={15} />
+                    </button>
+                    <button
+                      className="secondary"
+                      disabled={pending}
+                      onClick={() => perform(() => api.nativeStatus(engine))}
+                    >
+                      <RefreshCw size={14} />
+                      刷新状态
+                    </button>
+                    {state?.authenticated && !pending && (
+                      <button
+                        className="text-button danger"
+                        onClick={() => perform(() => api.nativeLogout(engine))}
+                      >
+                        退出登录
+                      </button>
+                    )}
+                  </div>
+                  {pending && (
+                    <div className="auth-progress waiting" aria-live="polite">
+                      <p>
+                        {state.phase === 'starting'
+                          ? '正在创建授权请求…'
+                          : state.phase === 'checking'
+                            ? '正在验证账号并同步模型…'
+                            : '请在官方授权页面登录账号并确认授权。'}
+                      </p>
+                      {state.userCode && (
+                        <div className="device-code-row">
+                          <code aria-label={`${label} 设备码`}>{state.userCode}</code>
+                          <button
+                            className="secondary"
+                            onClick={() => perform(() => api.nativeCopyCode(engine))}
+                          >
+                            复制设备码
+                          </button>
+                        </div>
+                      )}
+                      <div className="row">
+                        {state.url && (
+                          <button
+                            className="primary"
+                            onClick={() => perform(() => api.nativeOpen(engine))}
+                          >
+                            打开授权页面
+                          </button>
+                        )}
+                        <button
+                          className="text-button"
+                          onClick={() => perform(() => api.nativeCancel(engine))}
+                        >
+                          取消授权
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {state?.phase === 'success' && (
+                    <div className="auth-progress success">
+                      授权成功，已同步模型列表。请选择“{engine === 'kimi' ? 'Kimi' : 'MiniMax'} ·
+                      账号授权”连接开始聊天。
+                    </div>
+                  )}
+                  {state?.phase === 'cancelled' && <p className="muted">本次授权已取消。</p>}
+                  {state?.error && (
+                    <div className="auth-progress error" role="alert">
+                      {state.error}
+                    </div>
+                  )}
+                  <p className="footnote">
+                    使用内置官方引擎管理登录与续期，凭据保存在同舟独立目录。账号套餐与 API Key
+                    分开配置；API / 套餐 Key 可在“模型连接”中添加。
+                  </p>
+                </section>
+              );
+            })}
             <section className="settings-card">
               <div className="settings-card-title">
                 <ShieldCheck size={23} />
@@ -1324,7 +1484,7 @@ export default function App() {
               </div>
               <p className="footnote">
                 直接 API
-                模式的终端命令经你批准后，以当前系统用户权限运行；它不提供操作系统级沙箱。项目内容会发送给所选模型服务。第一版不包含云同步、自动更新或遥测。
+                模式的终端命令经你批准后，以当前系统用户权限运行；它不提供操作系统级沙箱。项目内容会发送给所选模型服务。同舟不提供云同步或自动更新；原生引擎的遥测以各自实现为准。
               </p>
             </section>
             <section className="settings-card about-card">
@@ -1349,18 +1509,31 @@ export default function App() {
           title={
             data.providers.some((p) => p.id === providerEdit.id) ? '管理模型连接' : '添加模型连接'
           }
-          subtitle="选择协议与认证方式，模型 ID 可按服务商文档手动填写。"
+          subtitle="选择服务与认证方式，保存后即可获取并选择模型。"
           onClose={() => !busy && setProviderEdit(null)}
           wide
         >
           <div className="modal-content">
-            {providerEdit.protocol !== 'codex' && (
+            {!['codex', 'kimi', 'minimax'].includes(providerEdit.protocol) && (
               <div className="preset-row">
                 {presets.map((p) => (
                   <button
                     key={p.name}
                     onClick={() =>
-                      setProviderEdit({ ...providerEdit, ...p, models: [...p.models], secret: '' })
+                      setProviderEdit({
+                        ...providerEdit,
+                        ...p,
+                        models: [...p.models],
+                        modelLabels: undefined,
+                        secret: '',
+                        clearSecret:
+                          providerEdit.baseUrl !== p.baseUrl ||
+                          providerEdit.protocol !== p.protocol,
+                        hasSecret:
+                          providerEdit.baseUrl === p.baseUrl &&
+                          providerEdit.protocol === p.protocol &&
+                          providerEdit.hasSecret,
+                      })
                     }
                   >
                     {p.name}
@@ -1378,7 +1551,7 @@ export default function App() {
               <Field label="接口协议">
                 <select
                   value={providerEdit.protocol}
-                  disabled={providerEdit.protocol === 'codex'}
+                  disabled={['codex', 'kimi', 'minimax'].includes(providerEdit.protocol)}
                   onChange={(e) =>
                     setProviderEdit({
                       ...providerEdit,
@@ -1387,7 +1560,10 @@ export default function App() {
                   }
                 >
                   {Object.entries(protocolLabels)
-                    .filter(([k]) => k !== 'codex' || providerEdit.protocol === 'codex')
+                    .filter(
+                      ([k]) =>
+                        !['codex', 'kimi', 'minimax'].includes(k) || k === providerEdit.protocol,
+                    )
                     .map(([k, v]) => (
                       <option key={k} value={k}>
                         {v}
@@ -1396,10 +1572,10 @@ export default function App() {
                 </select>
               </Field>
             </div>
-            {providerEdit.protocol === 'codex' ? (
+            {['codex', 'kimi', 'minimax'].includes(providerEdit.protocol) ? (
               <div className="info-strip">
                 <ShieldCheck size={18} />
-                <span>支持 ChatGPT 浏览器授权和设备码授权，完成后自动同步模型列表。</span>
+                <span>通过官方引擎完成账号授权，完成后自动同步可选模型。</span>
                 <button
                   className="text-button"
                   onClick={() => {
@@ -1610,6 +1786,10 @@ export default function App() {
                   key={agentEdit.providerId || providerId}
                   label="Agent 模型"
                   inherit
+                  modelLabels={
+                    data.providers.find((p) => p.id === (agentEdit.providerId || providerId))
+                      ?.modelLabels
+                  }
                   value={agentEdit.model}
                   models={
                     data.providers.find((p) => p.id === (agentEdit.providerId || providerId))

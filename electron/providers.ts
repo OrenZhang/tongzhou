@@ -10,6 +10,7 @@ export interface ToolSpec {
 export interface Completion {
   text: string;
   toolCalls: ToolCall[];
+  anthropicContent?: Record<string, any>[];
   inputTokens: number;
   outputTokens: number;
 }
@@ -138,6 +139,7 @@ export function requestBody(input: CompletionInput) {
       return {
         ...m,
         toolCalls: undefined,
+        anthropicContent: undefined,
         content: [
           m.content,
           ...m.toolCalls.map(
@@ -209,17 +211,22 @@ export function requestBody(input: CompletionInput) {
     for (const m of messages) {
       const role = m.role === 'assistant' ? 'assistant' : 'user';
       const content: any[] =
-        m.role === 'tool'
-          ? [{ type: 'tool_result', tool_use_id: m.toolCallId, content: m.content }]
-          : [
-              ...(m.content ? [{ type: 'text', text: m.content }] : []),
-              ...(m.toolCalls ?? []).map((t) => ({
-                type: 'tool_use',
-                id: t.id,
-                name: t.name,
-                input: JSON.parse(t.arguments),
-              })),
-            ];
+        m.role === 'assistant' &&
+        m.providerId === p.id &&
+        m.model === model &&
+        m.anthropicContent?.length
+          ? m.anthropicContent
+          : m.role === 'tool'
+            ? [{ type: 'tool_result', tool_use_id: m.toolCallId, content: m.content }]
+            : [
+                ...(m.content ? [{ type: 'text', text: m.content }] : []),
+                ...(m.toolCalls ?? []).map((t) => ({
+                  type: 'tool_use',
+                  id: t.id,
+                  name: t.name,
+                  input: JSON.parse(t.arguments),
+                })),
+              ];
       if (history.at(-1)?.role === role) history.at(-1).content.push(...content);
       else history.push({ role, content });
     }
@@ -290,6 +297,7 @@ export async function complete(input: CompletionInput): Promise<Completion> {
     throw new Error('服务未返回 SSE 流，请检查协议与服务地址。');
   const result: Completion = { text: '', toolCalls: [], inputTokens: 0, outputTokens: 0 };
   const calls = new Map<string, ToolCall>();
+  const anthropicBlocks = new Map<string, Record<string, any>>();
   let finished = false;
   let finishReason = '';
   const delta = (text: string) => {
@@ -364,10 +372,20 @@ export async function complete(input: CompletionInput): Promise<Completion> {
       }
       case 'anthropic': {
         const key = String(d.index);
+        if (d.type === 'content_block_start' && d.content_block)
+          anthropicBlocks.set(key, { ...d.content_block });
         if (d.type === 'message_start') result.inputTokens = d.message?.usage?.input_tokens ?? 0;
         if (d.type === 'content_block_start' && d.content_block?.type === 'tool_use')
           calls.set(key, { id: d.content_block.id, name: d.content_block.name, arguments: '' });
         if (d.type === 'content_block_delta') {
+          const block = anthropicBlocks.get(key);
+          if (block) {
+            if (d.delta?.type === 'text_delta') block.text = (block.text ?? '') + d.delta.text;
+            if (d.delta?.type === 'thinking_delta')
+              block.thinking = (block.thinking ?? '') + d.delta.thinking;
+            if (d.delta?.type === 'signature_delta')
+              block.signature = (block.signature ?? '') + d.delta.signature;
+          }
           if (d.delta?.type === 'text_delta') delta(d.delta.text);
           if (d.delta?.type === 'input_json_delta') {
             const c = calls.get(key);
@@ -425,6 +443,11 @@ export async function complete(input: CompletionInput): Promise<Completion> {
     } catch {
       throw new Error(`工具 ${call.name} 参数不完整，未执行。`);
     }
+  }
+  if (input.provider.protocol === 'anthropic') {
+    for (const [key, block] of anthropicBlocks)
+      if (block.type === 'tool_use') block.input = JSON.parse(calls.get(key)?.arguments || '{}');
+    result.anthropicContent = [...anthropicBlocks.values()];
   }
   return result;
 }

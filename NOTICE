@@ -15,3 +15,11 @@ The project is acknowledged as a design reference and compatible configuration s
 Electron, React, Lucide, remark, react-markdown, Zod, @iarna/toml and other dependencies retain their respective licenses. See package-lock.json and the dependency distributions for the complete inventory and notices.
 
 The Tongzhou sail mark is an original vector asset created for this project.
+
+Kimi Code: https://github.com/MoonshotAI/kimi-code
+@moonshot-ai/kimi-code 2.1.1, MIT. Copyright Moonshot AI and contributors.
+MiniMax Code: https://github.com/MiniMax-AI/minimax-code
+@minimax-ai/code 0.4.12, MIT (first-party source; bundled dependencies retain their own notices).
+Both official CLI distributions are unmodified runtime dependencies driven through ACP and documented login commands. Original license and third-party notice files remain in their package directories. Tongzhou is not affiliated with or endorsed by Moonshot AI or MiniMax.
+
+Node.js 22.23.3 is distributed through the node npm package. Copyright Node.js contributors, MIT and bundled third-party licenses; see build/node-LICENSE.txt for the original Node.js and bundled third-party license notices.

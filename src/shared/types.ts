@@ -1,5 +1,21 @@
-export type Protocol = 'openai-chat' | 'openai-responses' | 'anthropic' | 'gemini' | 'codex';
-export type AuthMode = 'api-key' | 'bearer' | 'none' | 'chatgpt';
+export type NativeEngine = 'kimi' | 'minimax';
+export interface NativeAuthState {
+  engine: NativeEngine;
+  phase: 'idle' | 'starting' | 'waiting' | 'checking' | 'success' | 'error' | 'cancelled';
+  authenticated: boolean;
+  region?: 'cn' | 'global';
+  url?: string;
+  userCode?: string;
+  error?: string;
+}
+export type Protocol =
+  | NativeEngine
+  | 'openai-chat'
+  | 'openai-responses'
+  | 'anthropic'
+  | 'gemini'
+  | 'codex';
+export type AuthMode = 'api-key' | 'bearer' | 'none' | 'chatgpt' | 'native';
 export interface Provider {
   id: string;
   name: string;
@@ -7,6 +23,7 @@ export interface Provider {
   baseUrl: string;
   auth: AuthMode;
   models: string[];
+  modelLabels?: Record<string, string>;
   hasSecret?: boolean;
   maxOutputTokens: number;
   contextChars: number;
@@ -49,6 +66,7 @@ export interface Message {
   providerId?: string;
   agent?: string;
   toolCalls?: ToolCall[];
+  anthropicContent?: Record<string, any>[];
   toolCallId?: string;
   toolName?: string;
   status?: 'streaming' | 'complete' | 'interrupted' | 'error';
@@ -114,6 +132,7 @@ export interface CodexAuthState {
   };
 }
 export type AppEvent =
+  | { type: 'native-auth'; state: NativeAuthState }
   | { type: 'codex-auth'; state: CodexAuthState }
   | { type: 'changed' }
   | { type: 'message'; message: Message }
@@ -155,6 +174,12 @@ export interface TongzhouAPI {
   diff(projectId: string): Promise<string>;
   importCCSwitch(): Promise<ImportPreview | null>;
   exportSession(id: string): Promise<string | null>;
+  nativeStatus(engine: NativeEngine): Promise<NativeAuthState>;
+  nativeLogin(engine: NativeEngine, region: 'cn' | 'global'): Promise<NativeAuthState>;
+  nativeCancel(engine: NativeEngine): Promise<void>;
+  nativeOpen(engine: NativeEngine): Promise<void>;
+  nativeCopyCode(engine: NativeEngine): Promise<void>;
+  nativeLogout(engine: NativeEngine): Promise<void>;
   codexStatus(): Promise<CodexAuthState>;
   codexLogin(method: CodexLoginMethod): Promise<CodexAuthState>;
   codexLoginCancel(): Promise<void>;

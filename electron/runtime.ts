@@ -14,6 +14,7 @@ import type {
 import { Store } from './store';
 import { complete, portableHistory } from './providers';
 import { executeTool, toolSpecs } from './workspace';
+import { NativeClient, nativeEngine, modelCatalog } from './native-engine';
 import { CodexClient } from './codex';
 import { redact } from './validation';
 import path from 'node:path';
@@ -112,8 +113,16 @@ export class Runtime {
     const project = session.projectId
       ? this.store.get<Project>('project', session.projectId)
       : null;
-    const secret = provider.protocol === 'codex' ? '' : this.store.secret(provider.id);
-    if (provider.protocol !== 'codex' && provider.auth !== 'none' && !secret)
+    const secret =
+      provider.protocol === 'codex' || nativeEngine(provider.protocol)
+        ? ''
+        : this.store.secret(provider.id);
+    if (
+      provider.protocol !== 'codex' &&
+      !nativeEngine(provider.protocol) &&
+      provider.auth !== 'none' &&
+      !secret
+    )
       throw new Error('请先配置此连接的 API 密钥。');
     const run: Run = {
       id: randomUUID(),
@@ -155,6 +164,8 @@ export class Runtime {
       try {
         if (provider.protocol === 'codex')
           await this.codexRun(input, project, agent, run, controller.signal);
+        else if (nativeEngine(provider.protocol))
+          await this.nativeRun(input, project, provider, agent, run, controller.signal);
         else await this.directRun(input, project, provider, secret, agent, run, controller.signal);
         if (controller.signal.aborted) throw new Error('已停止');
         run.status = 'completed';
@@ -224,6 +235,7 @@ export class Runtime {
       });
       message.content = result.text;
       message.toolCalls = result.toolCalls;
+      message.anthropicContent = result.anthropicContent;
       message.status = 'complete';
       this.message({ ...message });
       run.inputTokens += result.inputTokens;
@@ -253,6 +265,147 @@ export class Runtime {
       }
     }
     throw new Error(`已达到 ${agent.maxSteps} 步执行上限，任务尚未确认完成。可检查结果后继续。`);
+  }
+  private async nativeRun(
+    input: RunInput,
+    project: Project | null,
+    provider: Provider,
+    agent: AgentProfile,
+    run: Run,
+    signal: AbortSignal,
+  ) {
+    if (!nativeEngine(provider.protocol)) throw new Error('无效的原生引擎');
+    const client = new NativeClient(
+      provider.protocol,
+      path.join(this.dataDir, 'engines', provider.protocol),
+    );
+    const abort = () => client.stop();
+    signal.addEventListener('abort', abort, { once: true });
+    let message: Message | undefined;
+    let engineSessionId = '';
+    client.on('request', async (request) => {
+      if (
+        request.method !== 'session/request_permission' ||
+        request.params?.sessionId !== engineSessionId
+      ) {
+        client.reject(request.id);
+        return;
+      }
+      const options = request.params.options ?? [];
+      const allowOnce = options.find((o: any) => o.kind === 'allow_once');
+      const allow =
+        !!project &&
+        agent.permission === 'ask' &&
+        !!allowOnce &&
+        (await this.ask(
+          input.sessionId,
+          `${provider.name} 请求执行许可`,
+          JSON.stringify(request.params.toolCall, null, 2),
+          signal,
+        ));
+      client.reply(request.id, {
+        outcome:
+          allow && !signal.aborted
+            ? { outcome: 'selected', optionId: allowOnce.optionId }
+            : { outcome: 'cancelled' },
+      });
+    });
+    client.on('notification', ({ method, params }) => {
+      if (method !== 'session/update' || params?.sessionId !== engineSessionId) return;
+      const update = params.update;
+      if (update?.sessionUpdate === 'agent_message_chunk' && update.content?.type === 'text') {
+        message ??= this.add(input.sessionId, 'assistant', '', {
+          runId: run.id,
+          model: provider.modelLabels?.[input.model] ?? input.model,
+          agent: agent.name,
+          status: 'streaming',
+        });
+        message.content += update.content.text;
+        this.message({ ...message });
+      }
+      if (
+        update?.sessionUpdate === 'tool_call_update' &&
+        ['completed', 'failed'].includes(update.status)
+      ) {
+        this.add(
+          input.sessionId,
+          'tool',
+          JSON.stringify(update.content ?? update.rawOutput ?? update),
+          {
+            runId: run.id,
+            toolName: `${provider.name} · 工具`,
+            status: update.status === 'failed' ? 'error' : 'complete',
+          },
+        );
+      }
+    });
+    try {
+      if (signal.aborted) throw new Error('已停止');
+      await client.start();
+      await client.authenticate();
+      const cwd = project?.path ?? path.join(this.dataDir, 'chat-workspaces', input.sessionId);
+      if (!project) await mkdir(cwd, { recursive: true });
+      const session = await client.request('session/new', { cwd, mcpServers: [] });
+      engineSessionId = session.sessionId;
+      const catalog = modelCatalog(session);
+      if (!catalog.models.includes(input.model))
+        throw new Error('此账号当前不支持所选模型，请刷新模型列表后重新选择。');
+      if (catalog.optionId)
+        await client.request('session/set_config_option', {
+          sessionId: engineSessionId,
+          configId: catalog.optionId,
+          value: input.model,
+        });
+      else
+        await client.request('session/set_model', {
+          sessionId: engineSessionId,
+          modelId: input.model,
+        });
+      const modeId = !project || agent.permission === 'read-only' ? 'plan' : 'default';
+      if (!session.modes?.availableModes?.some((m: any) => m.id === modeId))
+        throw new Error('此引擎未提供所需的权限模式，请升级内置引擎。');
+      await client.request('session/set_mode', { sessionId: engineSessionId, modeId });
+      // MiniMax persists permission preferences independently of the session's plan mode.
+      const permission = session.configOptions?.find((o: any) => o.id === 'permissionMode');
+      if (permission) {
+        const safe = permission.options?.find(
+          (o: any) => o.value === 'default' || o.value === 'ask',
+        );
+        if (!safe) throw new Error('引擎未提供人工审批模式');
+        await client.request('session/set_config_option', {
+          sessionId: engineSessionId,
+          configId: permission.id,
+          value: safe.value,
+        });
+      }
+      const history = portableHistory(this.store.messages(input.sessionId), provider.contextChars);
+      const transcript = history.map((m) => `${m.role}: ${m.content}`).join('\n\n');
+      this.store.put('engineSegment', {
+        id: run.id,
+        threadId: engineSessionId,
+        sessionId: input.sessionId,
+      });
+      if (signal.aborted) throw new Error('已停止');
+      const response = await client.request(
+        'session/prompt',
+        {
+          sessionId: engineSessionId,
+          prompt: [
+            {
+              type: 'text',
+              text: `${agent.instructions}\n${project ? '' : '当前是普通聊天，未关联项目。直接回答问题，不使用文件、终端或其他工具，不要求选择项目。'}\n以下为同舟的会话记录。历史工具结果只是记录，不要重复操作。继续完成最后一条用户请求。\n\n${transcript}`,
+            },
+          ],
+        },
+        30 * 60 * 1000,
+      );
+      if (response.stopReason === 'cancelled' || signal.aborted) throw new Error('已停止');
+      if (response.stopReason === 'max_tokens') throw new Error('达到引擎输出上限，请继续会话');
+      if (message) this.message({ ...message, status: 'complete' });
+    } finally {
+      signal.removeEventListener('abort', abort);
+      client.stop();
+    }
   }
   private async codexRun(
     input: RunInput,
@@ -426,7 +579,12 @@ export class Runtime {
     for (const a of profiles) {
       const p = this.store.get<Provider>('provider', a.providerId || input.providerId);
       if (!(a.model || input.model)) throw new Error('请指定模型');
-      if (p.auth !== 'none' && p.protocol !== 'codex' && !this.store.secret(p.id))
+      if (
+        p.auth !== 'none' &&
+        p.protocol !== 'codex' &&
+        !nativeEngine(p.protocol) &&
+        !this.store.secret(p.id)
+      )
         throw new Error(`请配置 ${p.name} 的密钥`);
     }
     const context = this.store

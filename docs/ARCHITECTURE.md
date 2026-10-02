@@ -92,3 +92,13 @@ Renderer 启用 contextIsolation、sandbox、关闭 Node 集成；preload 仅暴
 版本 0.1 的范围和未实现能力在 README 中明确列出。下一步优先增加真实模型兼容性矩阵、同引擎 thread/resume、携带来源的上下文摘要，以及协作时 worktree 隔离。之后再考虑 MCP/Skills 管理、认证插件、自动路由和签名自动更新。
 
 参考：[Codex App Server](https://learn.chatgpt.com/docs/app-server)、[Codex 开源仓库](https://github.com/openai/codex)、[CC Switch providers schema](https://github.com/farion1231/cc-switch/blob/main/src-tauri/src/database/schema.rs)、[Electron 安全指南](https://www.electronjs.org/docs/latest/tutorial/security)。
+
+## 0.2.0 原生账号引擎
+
+新增 `kimi` / `minimax` 协议和 `native` 认证模式。主进程通过固定版本官方 CLI 的 login 命令创建授权，通过 ACP `authenticate` 确认状态后 `session/new` 获取模型；URL 与设备码仅存在内存，取消/超时/完成后清除。通过 epoch 忽略过期进程的回调。授权链接仅开放审核过的供应商 HTTPS 域名，不支持界面传入任意 URL。登录目录独立，不读取或迁移系统已有 CLI 凭据。
+
+会话每轮创建新 ACP session，注入同舟的可移植文本历史；模型使用引擎返回的不透明 ID，界面显示名称。无项目和只读 Agent 必须有 plan 模式，否则执行失败；项目任务使用 default/Ask。ACP 权限请求只允许 allow_once，其他交互拒绝。取消结束专属进程树，不重放任务。当前 ACP 用量未映射，界面显示未报告，不能据此推断免费。直接 API 的最大输出和轮次上限不控制原生引擎。
+
+三个官方引擎均随应用分发。Kimi/MiniMax 使用内置 Node 22.23.3，避免 Electron Node ABI 与 MiniMax better-sqlite3 不兼容。打包关闭 npmRebuild，保留 Node 22 构建的 SQLite；开发/CI 安装固定 Node 22 系列。CLI、Node 与其原生依赖解包到 app.asar.unpacked，Mac 安装在目标平台生成对应二进制。
+
+MiniMax API 复用 Anthropic SSE 适配器，完整保存 thinking/text/tool_use 内容块、thinking 签名与顺序。同连接同模型继续时回传；跨连接/模型交接只传文本和工具结果证据。API Key 预设切换到不同端点会清除旧密钥，避免将旧供应商凭据发送到新地址。

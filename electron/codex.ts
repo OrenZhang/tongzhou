@@ -111,7 +111,7 @@ export class CodexClient extends EventEmitter {
       } catch {}
     });
     await this.request('initialize', {
-      clientInfo: { name: 'tongzhou', title: '同舟 Tongzhou', version: '0.1.0' },
+      clientInfo: { name: 'tongzhou', title: '同舟 Tongzhou', version: '0.2.0' },
     });
     this.notify('initialized', {});
   }

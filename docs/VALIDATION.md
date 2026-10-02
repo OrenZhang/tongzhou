@@ -57,3 +57,17 @@ Remove-Item Env:TONGZHOU_SMOKE_EXECUTABLE
 显式在线复现：先 `npm run build`，再在 PowerShell 设置 `$env:TONGZHOU_LIVE_AUTH_SMOKE='1'` 后执行 `node scripts/auth-smoke.mjs`。该测试会请求真实授权流程并取消，用测试替身阻止打开系统浏览器。普通 CI 测试不需要此环境变量。
 
 协议依据：[OpenAI App Server 认证文档](https://learn.chatgpt.com/docs/app-server)、[设备码授权说明](https://learn.chatgpt.com/docs/auth)。另核对了内置二进制生成的 LoginAccountParams / LoginAccountResponse schema。
+
+## 0.2.0：Kimi / MiniMax 认证
+
+2026-10-02，Windows x64。固定引擎：Kimi Code 2.1.1、MiniMax Code 0.4.12、内置 Node 22.23.3。55 项自动化测试通过、类型检查与生产构建通过。新增测试覆盖官方域名/设备码提取、原生认证参数、隔离目录、环境密钥不继承、完成后的 ACP 账号验证及模型同步、取消/过期/晚到回调、退出登录、普通聊天和历史交接、单次审批、未知模型拒绝，以及 MiniMax thinking 内容块与签名的同模型回传。
+
+实际供应商验证：Kimi 国内与 MiniMax 国内设备码请求均返回官方授权页面和一次性代码，取消后状态/代码清除。真实 Electron UI 在线测试通过：两个登录入口、未登录检查、设备码展示、重开页面、导航后保留、取消和清除。Kimi 官方 CLI 自行打开系统浏览器；测试没有提交用户账号确认，也没有复制既有凭据或调用付费模型。国际账号参数已接入，国际服务本次未实测。
+
+Windows 0.2.0 已生成 NSIS 安装包，打包后的原生引擎与普通聊天/项目操作桌面回归通过。MiniMax 的原生 SQLite 使用 Node 22 ABI；CLI 通过随包 Node 运行，不使用 Electron 的 Node ABI。Node 及完整生产依赖从 asar 解包，避免外部 Node 无法读取虚拟 asar 模块。开发安装/CI 要求 Node 22，不应直接用 Electron 重建 better-sqlite3。
+
+复现：`node scripts/native-smoke.mjs` 验证真实引擎与未登录状态；设置 `TONGZHOU_LIVE_NATIVE_SMOKE=1` 后会向两家请求真实设备授权并取消，Kimi 可能打开浏览器。可设置 `TONGZHOU_SMOKE_EXECUTABLE` 指向打包程序验证。测试报告/截图保存在忽略目录 test-results。
+
+仍未完成：用户账号授权后的真实模型推理、真实套餐额度/续期验证、macOS 实机和远端 GitHub 工作流。ACP 会话/权限执行测试使用协议替身；不得描述为两家真实付费模型已全链路验收。原 0.1.0 安装包/归档保留为历史产物，新安装包位于 release/Tongzhou Setup 0.2.0.exe。
+
+依据：[Kimi ACP 文档](https://www.kimi.com/code/docs/en/kimi-code-cli/reference/kimi-acp.html)、[Kimi 会员接入说明](https://www.kimi.com/en/help/kimi-code/membership-guide)、[MiniMax Code](https://github.com/MiniMax-AI/minimax-code)、[MiniMax Anthropic 兼容接口](https://platform.minimax.cn/docs/api-reference/text-anthropic-api)。同舟使用官方终端认证入口，不复用厂商 OAuth client ID 编写自己的 OAuth 客户端。

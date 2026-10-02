@@ -54,6 +54,74 @@ async function serve(events: string[], fn: (base: string, requests: any[]) => Pr
 }
 const event = (d: any) => 'data: ' + JSON.stringify(d) + '\n\n';
 describe('streaming protocol adapters', () => {
+  it('preserves MiniMax/Anthropic thinking blocks across a tool round, but not a provider handoff', async () => {
+    const blocks = [
+      { type: 'thinking', thinking: 'fixture reasoning', signature: 'fixture-signature' },
+      { type: 'text', text: 'Working' },
+      { type: 'tool_use', id: 'call-1', name: 'read_file', input: { path: 'README.md' } },
+    ];
+    await serve(
+      [
+        event({
+          type: 'content_block_start',
+          index: 0,
+          content_block: { type: 'thinking', thinking: '' },
+        }),
+        event({
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'thinking_delta', thinking: 'fixture reasoning' },
+        }),
+        event({
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'signature_delta', signature: 'fixture-signature' },
+        }),
+        event({ type: 'content_block_start', index: 1, content_block: { type: 'text', text: '' } }),
+        event({
+          type: 'content_block_delta',
+          index: 1,
+          delta: { type: 'text_delta', text: 'Working' },
+        }),
+        event({
+          type: 'content_block_start',
+          index: 2,
+          content_block: { type: 'tool_use', id: 'call-1', name: 'read_file', input: {} },
+        }),
+        event({
+          type: 'content_block_delta',
+          index: 2,
+          delta: { type: 'input_json_delta', partial_json: '{"path":"README.md"}' },
+        }),
+        event({ type: 'message_delta', delta: { stop_reason: 'tool_use' } }),
+        event({ type: 'message_stop' }),
+      ],
+      async (base) => {
+        const request = input('anthropic', base);
+        const result = await complete(request);
+        expect(result.anthropicContent).toEqual(blocks);
+        const assistant: Message = {
+          ...message,
+          id: 'assistant',
+          role: 'assistant',
+          content: result.text,
+          providerId: 'p',
+          model: 'test',
+          toolCalls: result.toolCalls,
+          anthropicContent: result.anthropicContent,
+        };
+        request.messages = [
+          message,
+          assistant,
+          { ...message, id: 'tool', role: 'tool', toolCallId: 'call-1', content: 'file contents' },
+        ];
+        expect((requestBody(request).body as any).messages[1].content).toEqual(blocks);
+        const foreign = requestBody({ ...request, provider: { ...request.provider, id: 'other' } });
+        expect(JSON.stringify(foreign)).not.toContain('fixture-signature');
+        expect(JSON.stringify(foreign)).not.toContain('fixture reasoning');
+      },
+    );
+  });
   it('handles UTF-8, CRLF and multiline SSE at arbitrary byte boundaries', async () => {
     const bytes = Buffer.from('event: test\r\ndata: {"text":\r\ndata: "同舟"}\r\n\r\n');
     const stream = new ReadableStream<Uint8Array>({

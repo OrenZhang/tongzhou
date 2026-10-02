@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell, clipboard } from 'electron';
+import { NativeAccount, nativeEngine } from './native-engine';
 import { CodexAuth } from './codex-auth';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -26,6 +27,7 @@ let window: BrowserWindow | undefined;
 let store: Store;
 let runtime: Runtime;
 let auth: CodexAuth;
+const nativeAccounts = {} as Record<'kimi' | 'minimax', NativeAccount>;
 let quitting = false;
 const pendingImports = new Map<string, ProviderInput>();
 const page = path.join(__dirname, '../dist/index.html');
@@ -84,6 +86,63 @@ function setup() {
       runtime.changed();
     },
   );
+  for (const engine of ['kimi', 'minimax'] as const) {
+    const providerId = `${engine}-account`;
+    if (!store.list<Provider>('provider').some((p) => p.id === providerId))
+      store.saveProvider({
+        id: providerId,
+        name: engine === 'kimi' ? 'Kimi · 账号授权' : 'MiniMax · 账号授权',
+        protocol: engine,
+        auth: 'native',
+        baseUrl: '',
+        models: [],
+        maxOutputTokens: 8192,
+        contextChars: 160000,
+      });
+    nativeAccounts[engine] = new NativeAccount(
+      engine,
+      path.join(dataDir, 'engines', engine),
+      (state) => emit({ type: 'native-auth', state }),
+      (catalog) => {
+        for (const p of store.list<Provider>('provider'))
+          if (p.protocol === engine)
+            store.put('provider', {
+              ...p,
+              models: catalog.models,
+              modelLabels: catalog.modelLabels,
+            });
+        runtime.changed();
+      },
+    );
+  }
+  const accountFor = (raw: unknown) => nativeAccounts[z.enum(['kimi', 'minimax']).parse(raw)];
+  const assertNativeIdle = (engine: unknown) => {
+    if (
+      runtime.snapshot().runs.some((r) => r.config?.protocol === engine && r.status === 'running')
+    )
+      throw new Error('请先停止该引擎的任务，再切换账号');
+  };
+  register('nativeStatus', (raw) => accountFor(raw).read());
+  register('nativeLogin', (raw, region) => {
+    assertNativeIdle(raw);
+    return accountFor(raw).start(z.enum(['cn', 'global']).parse(region));
+  });
+  register('nativeCancel', (raw) => accountFor(raw).cancel());
+  register('nativeOpen', (raw) => {
+    const state = accountFor(raw).state;
+    if (state.phase !== 'waiting' || !state.url) throw new Error('授权链接已失效，请重新登录');
+    return shell.openExternal(state.url);
+  });
+  register('nativeCopyCode', (raw) => {
+    const state = accountFor(raw).state;
+    if (state.phase !== 'waiting' || !state.userCode) throw new Error('设备码已失效');
+    clipboard.writeText(state.userCode);
+  });
+  register('nativeLogout', async (raw) => {
+    assertNativeIdle(raw);
+    await accountFor(raw).logout();
+    runtime.changed();
+  });
   register('snapshot', () => runtime.snapshot());
   register('messages', (id) => store.messages(idSchema.parse(id)));
   register('saveProvider', (raw) => {
@@ -104,6 +163,12 @@ function setup() {
   register('testProvider', async (raw, model) => {
     const p = store.get<Provider>('provider', idSchema.parse(raw));
     const selected = z.string().min(1).max(200).parse(model);
+    if (nativeEngine(p.protocol)) {
+      const catalog = await nativeAccounts[p.protocol].catalog();
+      store.put('provider', { ...p, models: catalog.models, modelLabels: catalog.modelLabels });
+      runtime.changed();
+      return '账号已通过官方引擎验证，模型列表已同步；实际调用权限以账号套餐为准。';
+    }
     if (p.protocol === 'codex') {
       await runtime.authClient.start();
       const a = await runtime.authClient.request('account/read', {});
@@ -133,6 +198,12 @@ function setup() {
   register('models', async (raw) => {
     const p = store.get<Provider>('provider', idSchema.parse(raw));
     let models: string[];
+    if (nativeEngine(p.protocol)) {
+      const catalog = await nativeAccounts[p.protocol].catalog();
+      store.put('provider', { ...p, models: catalog.models, modelLabels: catalog.modelLabels });
+      runtime.changed();
+      return catalog.models;
+    }
     if (p.protocol === 'codex') {
       await runtime.authClient.start();
       const result = await runtime.authClient.request('model/list', { includeHidden: false });
@@ -344,6 +415,7 @@ else {
     event.preventDefault();
     quitting = true;
     auth.dispose();
+    for (const account of Object.values(nativeAccounts)) account.dispose();
     runtime.stop();
     void runtime.waitForIdle().finally(() => {
       store.close();

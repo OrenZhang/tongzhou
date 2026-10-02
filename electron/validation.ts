@@ -8,7 +8,15 @@ export const providerSchema = z
   .object({
     id,
     name: z.string().trim().min(1).max(100),
-    protocol: z.enum(['openai-chat', 'openai-responses', 'anthropic', 'gemini', 'codex']),
+    protocol: z.enum([
+      'openai-chat',
+      'openai-responses',
+      'anthropic',
+      'gemini',
+      'codex',
+      'kimi',
+      'minimax',
+    ]),
     baseUrl: z
       .string()
       .max(2048)
@@ -28,8 +36,9 @@ export const providerSchema = z
           return false;
         }
       }, '服务地址必须是 HTTPS，或本机 HTTP 地址，且不包含密钥、查询参数或片段'),
-    auth: z.enum(['api-key', 'bearer', 'none', 'chatgpt']),
+    auth: z.enum(['api-key', 'bearer', 'none', 'chatgpt', 'native']),
     models: z.array(z.string().trim().min(1).max(200)).max(200),
+    modelLabels: z.record(z.string().max(200), z.string().max(200)).optional(),
     maxOutputTokens: z.number().int().min(256).max(131072),
     contextChars: z.number().int().min(4000).max(1000000),
     secret: z.string().max(16000).optional(),
@@ -38,7 +47,18 @@ export const providerSchema = z
   .superRefine((p, ctx) => {
     if (p.protocol === 'codex' && p.auth !== 'chatgpt')
       ctx.addIssue({ code: 'custom', message: 'Codex 连接使用 ChatGPT 登录', path: ['auth'] });
-    if (p.protocol !== 'codex' && (!p.baseUrl || p.auth === 'chatgpt'))
+    const native = p.protocol === 'kimi' || p.protocol === 'minimax';
+    if (native && (p.auth !== 'native' || p.baseUrl || p.secret))
+      ctx.addIssue({
+        code: 'custom',
+        message: '原生账号连接由官方引擎管理认证，无需密钥或地址',
+        path: ['auth'],
+      });
+    if (
+      !native &&
+      p.protocol !== 'codex' &&
+      (!p.baseUrl || p.auth === 'chatgpt' || p.auth === 'native')
+    )
       ctx.addIssue({
         code: 'custom',
         message: 'API 连接需要服务地址及匹配的认证方式',

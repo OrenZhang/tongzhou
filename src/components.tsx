@@ -92,6 +92,7 @@ export function ModelPicker({
   label,
   value,
   models,
+  modelLabels = {},
   onChange,
   load,
   disabled = false,
@@ -102,6 +103,7 @@ export function ModelPicker({
   label: string;
   value: string;
   models: string[];
+  modelLabels?: Record<string, string>;
   onChange: (value: string) => void;
   load?: () => Promise<string[]>;
   disabled?: boolean;
@@ -119,7 +121,9 @@ export function ModelPicker({
   const [position, setPosition] = useState({ left: 0, top: 0, transform: '' });
   const trigger = useRef<HTMLButtonElement>(null);
   const options = [...new Set([...models, ...discovered, ...(value ? [value] : [])])];
-  const filtered = options.filter((m) => m.toLowerCase().includes(query.toLowerCase()));
+  const filtered = options.filter((m) =>
+    (m + ' ' + (modelLabels[m] ?? '')).toLowerCase().includes(query.toLowerCase()),
+  );
   const refresh = async () => {
     if (!load || loading) return;
     attempted.current = true;
@@ -189,7 +193,7 @@ export function ModelPicker({
           if (!open && !attempted.current) void refresh();
         }}
       >
-        <span>{value || (inherit ? '继承会话模型' : '选择模型')}</span>
+        <span>{modelLabels[value] || value || (inherit ? '继承会话模型' : '选择模型')}</span>
         <ChevronDown size={14} />
       </button>
       {open &&
@@ -235,7 +239,7 @@ export function ModelPicker({
                   aria-pressed={m === value}
                   onClick={() => choose(m)}
                 >
-                  <span>{m}</span>
+                  <span>{modelLabels[m] ?? m}</span>
                   {m === value && <Check size={14} />}
                 </button>
               ))}
