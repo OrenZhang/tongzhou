@@ -194,4 +194,4 @@ work/          本地开发和预览数据（忽略，不提交）
 
 ## 致谢与许可证
 
-同舟采用 [Apache License 2.0](LICENSE)。[Codex](https://github.com/openai/codex) 提供开源执行内核；[Kimi Code](https://github.com/MoonshotAI/kimi-code) 和 [MiniMax Code](https://github.com/MiniMax-AI/minimax-code) 提供账号与 ACP 引擎；[CC Switch](https://github.com/farion1231/cc-switch) 为供应商管理和迁移体验提供参考。代码归属和依赖说明见 [NOTICE](NOTICE)。
+同舟采用 [Apache License 2.0](LICENSE)。[Codex](https://github.com/openai/codex) 提供开源执行内核；[Kimi Code](https://github.com/MoonshotAI/kimi-code) 和 [MiniMax Code](https://github.com/MiniMax-AI/minimax-code) 提供账号与 ACP 引擎。代码归属和依赖说明见 [NOTICE](NOTICE)。
