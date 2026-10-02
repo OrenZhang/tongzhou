@@ -22,16 +22,14 @@ try {
     BrowserWindow.getAllWindows().forEach((w) => w.setIgnoreMouseEvents(true)),
   );
   await page.getByRole('button', { name: '设置与关于', exact: true }).click();
-  await page.getByText('Codex 可用，尚未登录', { exact: true }).waitFor();
+  await page.getByText('Codex 可用，尚未登录', { exact: false }).waitFor();
   await page.getByRole('button', { name: 'ChatGPT 浏览器登录', exact: true }).click();
   await page.getByText('等待浏览器授权完成', { exact: true }).waitFor({ timeout: 65000 });
   assert.equal(
     await page.getByRole('button', { name: '设备码登录', exact: true }).isDisabled(),
     true,
   );
-  await page.getByRole('button', { name: '取消授权', exact: true }).click();
-  await page.getByText('已取消本次授权，可以重新选择登录方式。', { exact: true }).waitFor();
-  await page.getByRole('button', { name: '设备码登录', exact: true }).click();
+  await page.getByRole('button', { name: '改用设备码登录', exact: true }).click();
   await page.getByLabel('设备授权码', { exact: true }).waitFor({ timeout: 65000 });
   assert.ok((await page.getByLabel('设备授权码', { exact: true }).innerText()).length > 0);
   await page.getByRole('button', { name: '打开授权页面', exact: true }).click();
@@ -51,7 +49,7 @@ try {
         checks: [
           'real browser login request',
           'pending state',
-          'cancel browser flow',
+          'cancel browser flow before switching to device login',
           'real device code request',
           'device UI',
           'reopen link',

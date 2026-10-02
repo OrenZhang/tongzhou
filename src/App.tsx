@@ -50,7 +50,7 @@ import type {
   Session,
   Snapshot,
 } from './shared/types';
-import { ChatMessage, Field, Mark, Modal, Spinner, ModelPicker } from './components';
+import { AuthBadge, ChatMessage, Field, Mark, Modal, Spinner, ModelPicker } from './components';
 const empty: Snapshot = {
   providers: [],
   agents: [],
@@ -159,6 +159,7 @@ export default function App() {
   const api = window.tongzhou;
   const [data, setData] = useState<Snapshot>(empty);
   const [view, setView] = useState<View>('workspace');
+  const [authPanel, setAuthPanel] = useState<'codex' | NativeEngine | null>(null);
   const [sessionId, setSessionId] = useState('');
   const sessionRef = useRef('');
   const [messages, setMessages] = useState<Message[]>([]);
@@ -189,7 +190,7 @@ export default function App() {
     minimax: 'cn',
   });
   const [codex, setCodex] = useState<CodexAuthState | null>(null);
-  const authPending = codex?.login?.phase === 'starting' || codex?.login?.phase === 'waiting';
+  const authPending = ['starting', 'waiting', 'checking'].includes(codex?.login?.phase ?? '');
   const startLogin = (method: CodexLoginMethod) =>
     perform(async () => setCodex(await api.codexLogin(method)));
   const feed = useRef<HTMLDivElement>(null);
@@ -267,15 +268,17 @@ export default function App() {
     if (!model && provider?.models[0]) setModel(provider.models[0]);
   }, [model, provider?.models]);
   useEffect(() => {
-    if (view === 'settings') {
-      void api.codexStatus().then(setCodex).catch(report);
-      for (const engine of ['kimi', 'minimax'] as const)
+    if (authPanel || view === 'settings' || view === 'providers') {
+      if (!authPanel || authPanel === 'codex') void api.codexStatus().then(setCodex).catch(report);
+      for (const engine of ['kimi', 'minimax'] as const) {
+        if (authPanel && authPanel !== engine) continue;
         void api
           .nativeStatus(engine)
           .then((state) => setNativeAccounts((previous) => ({ ...previous, [engine]: state })))
           .catch(report);
+      }
     }
-  }, [view, api]);
+  }, [view, api, authPanel]);
   useEffect(() => {
     const el = feed.current;
     if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 300)
@@ -400,6 +403,285 @@ export default function App() {
   ] as const;
   const statusLabel = (s: string) =>
     ({ running: '运行中', completed: '已完成', interrupted: '已停止', failed: '失败' })[s] ?? s;
+  const renderAccounts = (only?: 'codex' | NativeEngine) => (
+    <>
+      {(!only || only === 'codex') && (
+        <section className="settings-card">
+          <div className="settings-card-title">
+            <Mark small />
+            <div>
+              <h3>OpenAI / ChatGPT 登录</h3>
+              <p>使用独立的 Codex 配置目录，不改写你已有的 Codex 配置。</p>
+            </div>
+          </div>
+          <div className="account-status">
+            <AuthBadge
+              connected={codex ? !!codex.account : undefined}
+              pending={authPending}
+              error={!!codex?.error}
+            />
+            {codex
+              ? codex.account || (codex.available ? 'Codex 可用，尚未登录' : 'Codex 未就绪')
+              : '正在检查账号状态…'}
+            {codex?.plan && <small>{codex.plan}</small>}
+            {codex?.error && <small>{codex.error}</small>}
+          </div>
+          <div className="row">
+            <button
+              className="primary"
+              disabled={authPending || !!codex?.account}
+              onClick={() => startLogin('browser')}
+            >
+              ChatGPT 浏览器登录
+              <ArrowRight size={15} />
+            </button>
+            <button
+              className="secondary"
+              disabled={authPending || !!codex?.account}
+              onClick={() => startLogin('device')}
+            >
+              设备码登录
+            </button>
+            <button
+              className="secondary"
+              onClick={() => perform(async () => setCodex(await api.codexStatus()))}
+            >
+              <RefreshCw size={14} />
+              刷新状态
+            </button>
+            {codex?.account && !authPending && (
+              <button
+                className="text-button danger"
+                onClick={() =>
+                  perform(async () => {
+                    await api.codexLogout();
+                    setCodex(await api.codexStatus());
+                  })
+                }
+              >
+                退出登录
+              </button>
+            )}
+          </div>
+          {codex?.login && (
+            <div className={'auth-progress ' + codex.login.phase} aria-live="polite">
+              {codex.login.phase === 'starting' && (
+                <p>
+                  <Spinner /> 正在创建授权请求…
+                </p>
+              )}
+              {codex.login.phase === 'checking' && (
+                <p>
+                  <Spinner /> 正在确认账号与授权结果…
+                </p>
+              )}
+              {codex.login.phase === 'waiting' && (
+                <>
+                  <strong>
+                    {codex.login.method === 'device' ? '输入设备码完成授权' : '等待浏览器授权完成'}
+                  </strong>
+                  <p>
+                    {codex.login.method === 'device'
+                      ? '打开官方授权页面，登录你的 ChatGPT 账号并输入以下一次性设备码。'
+                      : '在系统浏览器中登录 ChatGPT 并完成授权；同舟会自动更新状态。若浏览器回调失败，可以取消后改用设备码登录。'}
+                  </p>
+                  {codex.login.userCode && (
+                    <div className="device-code-row">
+                      <code aria-label="设备授权码">{codex.login.userCode}</code>
+                      <button
+                        className="secondary"
+                        onClick={() =>
+                          perform(async () => {
+                            await api.codexLoginCopyCode();
+                            setNotice('设备码已复制');
+                          })
+                        }
+                      >
+                        复制设备码
+                      </button>
+                    </div>
+                  )}
+                  {codex.login.method === 'device' && (
+                    <p>设备码登录需要在 ChatGPT 安全设置或工作区权限中启用。</p>
+                  )}
+                  {codex.login.error && <p role="alert">{codex.login.error}</p>}
+                  {codex.login.method === 'browser' && (
+                    <div className="auth-recovery">
+                      <p>
+                        如果网页出现 Route Error / Invalid content
+                        type，表示授权网页收到了异常响应。可以重新发起，或改用设备码；旧页面重试不会创建新的授权。
+                      </p>
+                      <div className="row">
+                        <button
+                          className="secondary"
+                          disabled={busy}
+                          onClick={() => perform(() => api.codexLoginRetry('device'))}
+                        >
+                          改用设备码登录
+                        </button>
+                        <button
+                          className="text-button"
+                          disabled={busy}
+                          onClick={() => perform(() => api.codexLoginRetry('browser'))}
+                        >
+                          重新发起浏览器授权
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  <div className="row">
+                    <button className="primary" onClick={() => perform(() => api.codexLoginOpen())}>
+                      打开授权页面
+                    </button>
+                    <button
+                      className="text-button"
+                      onClick={() => perform(() => api.codexLoginCancel())}
+                    >
+                      取消授权
+                    </button>
+                  </div>
+                </>
+              )}
+              {codex.login.phase === 'success' && (
+                <p>
+                  <CheckCircle2 size={16} /> 授权成功，已连接 {codex.account}
+                  。模型列表将自动更新。
+                </p>
+              )}
+              {codex.login.phase === 'error' && (
+                <p role="alert">授权失败：{codex.login.error}。可重新授权或切换登录方式。</p>
+              )}
+              {codex.login.phase === 'cancelled' && <p>已取消本次授权，可以重新选择登录方式。</p>}
+            </div>
+          )}
+          <p className="footnote">
+            这两种方式均使用 ChatGPT 账号授权给内置 Codex，成功后选择“OpenAI · ChatGPT”连接。API Key
+            连接仍需单独配置。
+          </p>
+        </section>
+      )}
+      {(['kimi', 'minimax'] as const)
+        .filter((engine) => !only || engine === only)
+        .map((engine) => {
+          const state = nativeAccounts[engine];
+          const pending = !!state && ['starting', 'waiting', 'checking'].includes(state.phase);
+          const label = engine === 'kimi' ? 'Kimi Code' : 'MiniMax Code';
+          return (
+            <section className="settings-card" key={engine} aria-label={`${label} 账号`}>
+              <div className="settings-card-title">
+                <Globe2 size={23} />
+                <div>
+                  <h3>{label} 账号授权</h3>
+                  <p>登录后可在同一会话中切换模型，也可分配给子 Agent。</p>
+                </div>
+              </div>
+              <div className="account-status">
+                <AuthBadge
+                  connected={state?.authenticated}
+                  pending={pending}
+                  error={!!state?.error}
+                />
+                {state ? (state.authenticated ? '账号已授权' : '尚未登录') : '正在检查账号状态…'}
+              </div>
+              <div className="row">
+                <select
+                  aria-label={`${label} 账号地区`}
+                  disabled={pending || state?.authenticated}
+                  value={nativeRegions[engine]}
+                  onChange={(e) =>
+                    setNativeRegions((previous) => ({
+                      ...previous,
+                      [engine]: e.target.value as 'cn' | 'global',
+                    }))
+                  }
+                >
+                  <option value="cn">国内账号</option>
+                  <option value="global">国际账号</option>
+                </select>
+                <button
+                  className="primary"
+                  disabled={pending || state?.authenticated}
+                  onClick={() => perform(() => api.nativeLogin(engine, nativeRegions[engine]))}
+                >
+                  登录 {label}
+                  <ArrowRight size={15} />
+                </button>
+                <button
+                  className="secondary"
+                  disabled={pending}
+                  onClick={() => perform(() => api.nativeStatus(engine))}
+                >
+                  <RefreshCw size={14} />
+                  刷新状态
+                </button>
+                {state?.authenticated && !pending && (
+                  <button
+                    className="text-button danger"
+                    onClick={() => perform(() => api.nativeLogout(engine))}
+                  >
+                    退出登录
+                  </button>
+                )}
+              </div>
+              {pending && (
+                <div className="auth-progress waiting" aria-live="polite">
+                  <p>
+                    {state.phase === 'starting'
+                      ? '正在创建授权请求…'
+                      : state.phase === 'checking'
+                        ? '正在验证账号并同步模型…'
+                        : '请在官方授权页面登录账号并确认授权。'}
+                  </p>
+                  {state.userCode && (
+                    <div className="device-code-row">
+                      <code aria-label={`${label} 设备码`}>{state.userCode}</code>
+                      <button
+                        className="secondary"
+                        onClick={() => perform(() => api.nativeCopyCode(engine))}
+                      >
+                        复制设备码
+                      </button>
+                    </div>
+                  )}
+                  <div className="row">
+                    {state.url && (
+                      <button
+                        className="primary"
+                        onClick={() => perform(() => api.nativeOpen(engine))}
+                      >
+                        打开授权页面
+                      </button>
+                    )}
+                    <button
+                      className="text-button"
+                      onClick={() => perform(() => api.nativeCancel(engine))}
+                    >
+                      取消授权
+                    </button>
+                  </div>
+                </div>
+              )}
+              {state?.phase === 'success' && (
+                <div className="auth-progress success">
+                  授权成功，已同步模型列表。请选择“{engine === 'kimi' ? 'Kimi' : 'MiniMax'} ·
+                  账号授权”连接开始聊天。
+                </div>
+              )}
+              {state?.phase === 'cancelled' && <p className="muted">本次授权已取消。</p>}
+              {state?.error && (
+                <div className="auth-progress error" role="alert">
+                  {state.error}
+                </div>
+              )}
+              <p className="footnote">
+                使用内置官方引擎管理登录与续期，凭据保存在同舟独立目录。账号套餐与 API Key
+                分开配置；API / 套餐 Key 可在“模型连接”中添加。
+              </p>
+            </section>
+          );
+        })}
+    </>
+  );
   if (!api)
     return (
       <div className="browser-fallback">
@@ -692,7 +974,9 @@ export default function App() {
                     </div>
                   </div>
                 ) : (
-                  messages.map((m) => <ChatMessage key={m.id} message={m} />)
+                  messages
+                    .filter((m) => project || m.role !== 'tool')
+                    .map((m) => <ChatMessage key={m.id} message={m} />)
                 )}
               </div>
               <div className="composer-wrap">
@@ -976,15 +1260,25 @@ export default function App() {
                         <Globe2 size={23} />
                       )}
                     </div>
-                    <span className="tag">
-                      {p.protocol === 'codex' || p.auth === 'native'
-                        ? '账号授权'
-                        : p.auth === 'none'
-                          ? '无需密钥'
-                          : p.hasSecret
-                            ? '已配置密钥'
-                            : '待配置'}
-                    </span>
+                    {p.protocol === 'codex' ? (
+                      <AuthBadge
+                        connected={codex ? !!codex.account : undefined}
+                        pending={authPending}
+                        error={!!codex?.error}
+                      />
+                    ) : p.protocol === 'kimi' || p.protocol === 'minimax' ? (
+                      <AuthBadge
+                        connected={nativeAccounts[p.protocol]?.authenticated}
+                        pending={['starting', 'waiting', 'checking'].includes(
+                          nativeAccounts[p.protocol]?.phase ?? '',
+                        )}
+                        error={!!nativeAccounts[p.protocol]?.error}
+                      />
+                    ) : (
+                      <span className="tag">
+                        {p.auth === 'none' ? '无需密钥' : p.hasSecret ? '已配置密钥' : '待配置'}
+                      </span>
+                    )}
                     <button
                       className="icon-button"
                       aria-label={'编辑 ' + p.name}
@@ -1211,253 +1505,9 @@ export default function App() {
             <div className="page-heading">
               <div className="eyebrow">BUILT FOR YOU</div>
               <h1>轻装出发，掌控在你。</h1>
-              <p>同舟 0.2.0 · 开源多模型桌面工作台</p>
+              <p>同舟 0.2.1 · 开源多模型桌面工作台</p>
             </div>
-            <section className="settings-card">
-              <div className="settings-card-title">
-                <Mark small />
-                <div>
-                  <h3>OpenAI / ChatGPT 登录</h3>
-                  <p>使用独立的 Codex 配置目录，不改写你已有的 Codex 配置。</p>
-                </div>
-              </div>
-              <div className="account-status">
-                <span className={'live-dot ' + (!codex?.account ? 'gray' : '')} />
-                {codex
-                  ? codex.account || (codex.available ? 'Codex 可用，尚未登录' : 'Codex 未就绪')
-                  : '正在检查账号状态…'}
-                {codex?.plan && <small>{codex.plan}</small>}
-                {codex?.error && <small>{codex.error}</small>}
-              </div>
-              <div className="row">
-                <button
-                  className="primary"
-                  disabled={authPending}
-                  onClick={() => startLogin('browser')}
-                >
-                  ChatGPT 浏览器登录
-                  <ArrowRight size={15} />
-                </button>
-                <button
-                  className="secondary"
-                  disabled={authPending}
-                  onClick={() => startLogin('device')}
-                >
-                  设备码登录
-                </button>
-                <button
-                  className="secondary"
-                  onClick={() => perform(async () => setCodex(await api.codexStatus()))}
-                >
-                  <RefreshCw size={14} />
-                  刷新状态
-                </button>
-                {codex?.account && !authPending && (
-                  <button
-                    className="text-button danger"
-                    onClick={() =>
-                      perform(async () => {
-                        await api.codexLogout();
-                        setCodex(await api.codexStatus());
-                      })
-                    }
-                  >
-                    退出登录
-                  </button>
-                )}
-              </div>
-              {codex?.login && (
-                <div className={'auth-progress ' + codex.login.phase} aria-live="polite">
-                  {codex.login.phase === 'starting' && (
-                    <p>
-                      <Spinner /> 正在创建授权请求…
-                    </p>
-                  )}
-                  {codex.login.phase === 'waiting' && (
-                    <>
-                      <strong>
-                        {codex.login.method === 'device'
-                          ? '输入设备码完成授权'
-                          : '等待浏览器授权完成'}
-                      </strong>
-                      <p>
-                        {codex.login.method === 'device'
-                          ? '打开官方授权页面，登录你的 ChatGPT 账号并输入以下一次性设备码。'
-                          : '在系统浏览器中登录 ChatGPT 并完成授权；同舟会自动更新状态。若浏览器回调失败，可以取消后改用设备码登录。'}
-                      </p>
-                      {codex.login.userCode && (
-                        <div className="device-code-row">
-                          <code aria-label="设备授权码">{codex.login.userCode}</code>
-                          <button
-                            className="secondary"
-                            onClick={() =>
-                              perform(async () => {
-                                await api.codexLoginCopyCode();
-                                setNotice('设备码已复制');
-                              })
-                            }
-                          >
-                            复制设备码
-                          </button>
-                        </div>
-                      )}
-                      {codex.login.method === 'device' && (
-                        <p>设备码登录需要在 ChatGPT 安全设置或工作区权限中启用。</p>
-                      )}
-                      {codex.login.error && <p role="alert">{codex.login.error}</p>}
-                      <div className="row">
-                        <button
-                          className="primary"
-                          onClick={() => perform(() => api.codexLoginOpen())}
-                        >
-                          打开授权页面
-                        </button>
-                        <button
-                          className="text-button"
-                          onClick={() => perform(() => api.codexLoginCancel())}
-                        >
-                          取消授权
-                        </button>
-                      </div>
-                    </>
-                  )}
-                  {codex.login.phase === 'success' && (
-                    <p>
-                      <CheckCircle2 size={16} /> 授权成功，已连接 {codex.account}
-                      。模型列表将自动更新。
-                    </p>
-                  )}
-                  {codex.login.phase === 'error' && (
-                    <p role="alert">授权失败：{codex.login.error}。可重新授权或切换登录方式。</p>
-                  )}
-                  {codex.login.phase === 'cancelled' && (
-                    <p>已取消本次授权，可以重新选择登录方式。</p>
-                  )}
-                </div>
-              )}
-              <p className="footnote">
-                这两种方式均使用 ChatGPT 账号授权给内置 Codex，成功后选择“OpenAI · ChatGPT”连接。API
-                Key 连接仍需单独配置。
-              </p>
-            </section>
-            {(['kimi', 'minimax'] as const).map((engine) => {
-              const state = nativeAccounts[engine];
-              const pending = !!state && ['starting', 'waiting', 'checking'].includes(state.phase);
-              const label = engine === 'kimi' ? 'Kimi Code' : 'MiniMax Code';
-              return (
-                <section className="settings-card" key={engine} aria-label={`${label} 账号`}>
-                  <div className="settings-card-title">
-                    <Globe2 size={23} />
-                    <div>
-                      <h3>{label} 账号授权</h3>
-                      <p>登录后可在同一会话中切换模型，也可分配给子 Agent。</p>
-                    </div>
-                  </div>
-                  <div className="account-status">
-                    <span className={'live-dot ' + (state?.authenticated ? '' : 'gray')} />
-                    {state
-                      ? state.authenticated
-                        ? '账号已授权'
-                        : '尚未登录'
-                      : '正在检查账号状态…'}
-                  </div>
-                  <div className="row">
-                    <select
-                      aria-label={`${label} 账号地区`}
-                      disabled={pending || state?.authenticated}
-                      value={nativeRegions[engine]}
-                      onChange={(e) =>
-                        setNativeRegions((previous) => ({
-                          ...previous,
-                          [engine]: e.target.value as 'cn' | 'global',
-                        }))
-                      }
-                    >
-                      <option value="cn">国内账号</option>
-                      <option value="global">国际账号</option>
-                    </select>
-                    <button
-                      className="primary"
-                      disabled={pending || state?.authenticated}
-                      onClick={() => perform(() => api.nativeLogin(engine, nativeRegions[engine]))}
-                    >
-                      登录 {label}
-                      <ArrowRight size={15} />
-                    </button>
-                    <button
-                      className="secondary"
-                      disabled={pending}
-                      onClick={() => perform(() => api.nativeStatus(engine))}
-                    >
-                      <RefreshCw size={14} />
-                      刷新状态
-                    </button>
-                    {state?.authenticated && !pending && (
-                      <button
-                        className="text-button danger"
-                        onClick={() => perform(() => api.nativeLogout(engine))}
-                      >
-                        退出登录
-                      </button>
-                    )}
-                  </div>
-                  {pending && (
-                    <div className="auth-progress waiting" aria-live="polite">
-                      <p>
-                        {state.phase === 'starting'
-                          ? '正在创建授权请求…'
-                          : state.phase === 'checking'
-                            ? '正在验证账号并同步模型…'
-                            : '请在官方授权页面登录账号并确认授权。'}
-                      </p>
-                      {state.userCode && (
-                        <div className="device-code-row">
-                          <code aria-label={`${label} 设备码`}>{state.userCode}</code>
-                          <button
-                            className="secondary"
-                            onClick={() => perform(() => api.nativeCopyCode(engine))}
-                          >
-                            复制设备码
-                          </button>
-                        </div>
-                      )}
-                      <div className="row">
-                        {state.url && (
-                          <button
-                            className="primary"
-                            onClick={() => perform(() => api.nativeOpen(engine))}
-                          >
-                            打开授权页面
-                          </button>
-                        )}
-                        <button
-                          className="text-button"
-                          onClick={() => perform(() => api.nativeCancel(engine))}
-                        >
-                          取消授权
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  {state?.phase === 'success' && (
-                    <div className="auth-progress success">
-                      授权成功，已同步模型列表。请选择“{engine === 'kimi' ? 'Kimi' : 'MiniMax'} ·
-                      账号授权”连接开始聊天。
-                    </div>
-                  )}
-                  {state?.phase === 'cancelled' && <p className="muted">本次授权已取消。</p>}
-                  {state?.error && (
-                    <div className="auth-progress error" role="alert">
-                      {state.error}
-                    </div>
-                  )}
-                  <p className="footnote">
-                    使用内置官方引擎管理登录与续期，凭据保存在同舟独立目录。账号套餐与 API Key
-                    分开配置；API / 套餐 Key 可在“模型连接”中添加。
-                  </p>
-                </section>
-              );
-            })}
+            {renderAccounts()}
             <section className="settings-card">
               <div className="settings-card-title">
                 <ShieldCheck size={23} />
@@ -1503,6 +1553,16 @@ export default function App() {
             <X size={15} />
           </button>
         </div>
+      )}
+      {authPanel && (
+        <Modal
+          title={`${authPanel === 'codex' ? 'OpenAI / ChatGPT' : authPanel === 'kimi' ? 'Kimi Code' : 'MiniMax Code'} 账号授权`}
+          subtitle="仅管理当前连接的账号；关闭窗口不会取消正在进行的授权。"
+          onClose={() => setAuthPanel(null)}
+          wide
+        >
+          <div className="modal-content account-dialog">{renderAccounts(authPanel)}</div>
+        </Modal>
       )}
       {providerEdit && (
         <Modal
@@ -1580,7 +1640,7 @@ export default function App() {
                   className="text-button"
                   onClick={() => {
                     setProviderEdit(null);
-                    setView('settings');
+                    setAuthPanel(providerEdit.protocol as 'codex' | NativeEngine);
                   }}
                 >
                   前往登录

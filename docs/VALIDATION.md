@@ -71,3 +71,17 @@ Windows 0.2.0 已生成 NSIS 安装包，打包后的原生引擎与普通聊天
 仍未完成：用户账号授权后的真实模型推理、真实套餐额度/续期验证、macOS 实机和远端 GitHub 工作流。ACP 会话/权限执行测试使用协议替身；不得描述为两家真实付费模型已全链路验收。原 0.1.0 安装包/归档保留为历史产物，新安装包位于 release/Tongzhou Setup 0.2.0.exe。
 
 依据：[Kimi ACP 文档](https://www.kimi.com/code/docs/en/kimi-code-cli/reference/kimi-acp.html)、[Kimi 会员接入说明](https://www.kimi.com/en/help/kimi-code/membership-guide)、[MiniMax Code](https://github.com/MiniMax-AI/minimax-code)、[MiniMax Anthropic 兼容接口](https://platform.minimax.cn/docs/api-reference/text-anthropic-api)。同舟使用官方终端认证入口，不复用厂商 OAuth client ID 编写自己的 OAuth 客户端。
+
+## 0.2.1：认证入口与普通聊天
+
+59 项自动化测试通过，类型检查与生产构建通过。覆盖浏览器授权切换设备码前取消旧流程、取消后的晚到通知/账号读取隔离，以及原生会话复用、账号操作后失效和跨模型历史交接。
+
+独立 Electron 界面测试 `node scripts/account-ui-smoke.mjs` 验证 Kimi、MiniMax、OpenAI 管理入口各自只显示一个账号模块，关闭后返回模型连接页；成功标志来自已验证账号状态，离开页面再进入后仍显示。此测试使用账号状态替身，不代表完成真实登录。
+
+在线 OpenAI 测试通过：创建浏览器登录请求，点击“改用设备码登录”，收到真实设备码，导航后保留状态，取消后清除。未完成真实 ChatGPT 账号授权；用户截图的上游 Route Error 根因尚未确定，不能将恢复入口描述为该网页错误已被修复。
+
+使用用户已登录的同舟 Kimi 隔离配置完成两轮简短真实推理，耗时约 11.2 秒和 7.5 秒，第二轮保留上一轮内容，两轮均无内部工具消息。没有改写用户聊天记录。这不是同条件前后性能基准，不据此声称固定提速比例。MiniMax 真实推理、ChatGPT 登录完成与推理、macOS 实机仍待验证。
+
+普通聊天隐藏历史内部工具条，并提示原生引擎直接在正文提问；同模型连续轮次复用引擎进程/会话，减少启动与历史重传开销。
+
+Windows 0.2.1 NSIS 安装包已生成。打包程序从独立目录启动，通过单供应商认证弹窗/成功标志测试和完整桌面回归（普通聊天、项目写入审批、流式输出及重启恢复）。

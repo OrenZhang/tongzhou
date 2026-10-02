@@ -121,6 +121,7 @@ function setup() {
       runtime.snapshot().runs.some((r) => r.config?.protocol === engine && r.status === 'running')
     )
       throw new Error('请先停止该引擎的任务，再切换账号');
+    runtime.invalidateNative(z.enum(['kimi', 'minimax']).parse(engine));
   };
   register('nativeStatus', (raw) => accountFor(raw).read());
   register('nativeLogin', (raw, region) => {
@@ -343,6 +344,13 @@ function setup() {
     )
       throw new Error('请先停止 Codex 任务，再切换登录账号');
     return auth.start(z.enum(['browser', 'device']).parse(method ?? 'browser'));
+  });
+  register('codexLoginRetry', async (method) => {
+    if (
+      runtime.snapshot().runs.some((r) => r.config?.protocol === 'codex' && r.status === 'running')
+    )
+      throw new Error('请先停止 Codex 任务，再重新授权');
+    return auth.restart(z.enum(['browser', 'device']).parse(method));
   });
   register('codexLoginCancel', () => auth.cancel());
   register('codexLoginOpen', () => auth.openPage());

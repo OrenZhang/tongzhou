@@ -308,10 +308,38 @@ describe('ACP conversation execution', () => {
         .every((c) => c.params.modeId === 'plan'),
     ).toBe(true);
     expect(fake.replies.every((r) => r.result.outcome.outcome === 'cancelled')).toBe(true);
+    expect(fake.calls.filter((c) => c.method === 'session/prompt')[1].params.prompt[0].text).toBe(
+      'Continue',
+    );
+    expect(fake.calls.filter((c) => c.method === 'initialize')).toHaveLength(1);
+    expect(fake.calls.filter((c) => c.method === 'session/new')).toHaveLength(1);
+    expect(store.messages(input.sessionId).some((m) => m.role === 'tool')).toBe(false);
+    expect(store.messages(input.sessionId).filter((m) => m.role === 'assistant')).toHaveLength(2);
+  });
+  it('rebuilds an engine segment after account invalidation or intervening history', async () => {
+    const { store, runtime, input } = fixture(false);
+    runtime.start(input);
+    await runtime.waitForIdle();
+    runtime.invalidateNative('kimi');
+    runtime.start({ ...input, prompt: 'After account change' });
+    await runtime.waitForIdle();
+    expect(fake.calls.filter((c) => c.method === 'initialize')).toHaveLength(2);
     expect(
       fake.calls.filter((c) => c.method === 'session/prompt')[1].params.prompt[0].text,
     ).toContain('Native answer');
-    expect(store.messages(input.sessionId).filter((m) => m.role === 'assistant')).toHaveLength(2);
+    store.message({
+      id: 'foreign-message',
+      sessionId: input.sessionId,
+      role: 'assistant',
+      content: 'Other model answer',
+      createdAt: Date.now(),
+    });
+    runtime.start({ ...input, prompt: 'Return to Kimi' });
+    await runtime.waitForIdle();
+    expect(fake.calls.filter((c) => c.method === 'initialize')).toHaveLength(3);
+    expect(
+      fake.calls.filter((c) => c.method === 'session/prompt')[2].params.prompt[0].text,
+    ).toContain('Other model answer');
   });
   it('uses only one-time approval for project actions', async () => {
     const { store, runtime, input } = fixture(true);

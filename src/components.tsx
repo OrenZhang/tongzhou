@@ -1,4 +1,12 @@
-import { X, LoaderCircle, Check, ChevronDown, Terminal, FileCode2 } from 'lucide-react';
+import {
+  X,
+  LoaderCircle,
+  CheckCircle2,
+  Check,
+  ChevronDown,
+  Terminal,
+  FileCode2,
+} from 'lucide-react';
 import {
   cloneElement,
   isValidElement,
@@ -13,6 +21,43 @@ import ReactMarkdown from 'react-markdown';
 import { createPortal } from 'react-dom';
 import remarkGfm from 'remark-gfm';
 import type { Message } from './shared/types';
+export function AuthBadge({
+  connected,
+  pending = false,
+  error = false,
+}: {
+  connected?: boolean;
+  pending?: boolean;
+  error?: boolean;
+}) {
+  const label = pending
+    ? '授权中'
+    : error
+      ? '状态待确认'
+      : connected
+        ? '已授权'
+        : connected === undefined
+          ? '检查中'
+          : '未授权';
+  return (
+    <span
+      role="status"
+      className={
+        'auth-badge ' +
+        (pending ? 'pending' : error ? 'unknown' : connected ? 'connected' : 'disconnected')
+      }
+    >
+      {connected && !pending && !error ? (
+        <CheckCircle2 size={15} />
+      ) : pending || connected === undefined ? (
+        <Spinner />
+      ) : (
+        <span className="live-dot gray" />
+      )}
+      {label}
+    </span>
+  );
+}
 export function Mark({ small = false }: { small?: boolean }) {
   return (
     <span className={'brand-mark ' + (small ? 'small' : '')} aria-hidden="true">

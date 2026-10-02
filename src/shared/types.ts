@@ -125,7 +125,7 @@ export interface CodexAuthState {
   error?: string;
   login?: {
     method: CodexLoginMethod;
-    phase: 'starting' | 'waiting' | 'success' | 'error' | 'cancelled';
+    phase: 'starting' | 'waiting' | 'checking' | 'success' | 'error' | 'cancelled';
     url?: string;
     userCode?: string;
     error?: string;
@@ -182,6 +182,7 @@ export interface TongzhouAPI {
   nativeLogout(engine: NativeEngine): Promise<void>;
   codexStatus(): Promise<CodexAuthState>;
   codexLogin(method: CodexLoginMethod): Promise<CodexAuthState>;
+  codexLoginRetry(method: CodexLoginMethod): Promise<CodexAuthState>;
   codexLoginCancel(): Promise<void>;
   codexLoginOpen(): Promise<void>;
   codexLoginCopyCode(): Promise<void>;

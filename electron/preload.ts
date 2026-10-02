@@ -31,6 +31,7 @@ const api: TongzhouAPI = {
   nativeLogout: (engine) => call('nativeLogout', engine),
   codexStatus: () => call('codexStatus'),
   codexLogin: (method) => call('codexLogin', method),
+  codexLoginRetry: (method) => call('codexLoginRetry', method),
   codexLoginCancel: () => call('codexLoginCancel'),
   codexLoginOpen: () => call('codexLoginOpen'),
   codexLoginCopyCode: () => call('codexLoginCopyCode'),

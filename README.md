@@ -5,7 +5,7 @@
 
 同舟是一个开源桌面 AI 编程工作台。通过 Codex、Kimi Code、MiniMax Code 官方引擎接入账号授权，通过原生 API 适配器接入其他模型，在一个项目和连续会话中分析、编写、验证代码。
 
-**当前版本：0.2.0。** 本版补充 Kimi / MiniMax 账号授权，功能与边界见下方。独立项目，与 OpenAI、CC Switch 无官方从属关系。
+**当前版本：0.2.1。** 本版增加独立认证弹窗、已授权标志和普通聊天会话复用，功能与边界见下方。独立项目，与 OpenAI、CC Switch 无官方从属关系。
 
 ![同舟工作空间](docs/assets/workspace.png)
 

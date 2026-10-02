@@ -156,6 +156,67 @@ describe('managed ChatGPT authorization', () => {
     });
     expect(f.client.request).toHaveBeenCalledWith('account/login/cancel', { loginId: 'device' });
   });
+  it('cancels a browser flow before requesting a fresh device authorization', async () => {
+    const f = fixture();
+    await f.auth.start('browser');
+    await f.auth.restart('device');
+    expect(f.auth.snapshot().login).toMatchObject({
+      method: 'device',
+      phase: 'waiting',
+      userCode: 'TEST-0000',
+    });
+    const calls = f.client.request.mock.calls;
+    const cancelled = calls.findIndex(([m]) => m === 'account/login/cancel');
+    const device = calls.findIndex(
+      ([m, p]) => m === 'account/login/start' && p.type === 'chatgptDeviceCode',
+    );
+    expect(cancelled).toBeLessThan(device);
+  });
+  it('does not resurrect an authorization cancelled while its start request is pending', async () => {
+    const f = fixture();
+    let release!: (v: any) => void;
+    const original = f.client.request.getMockImplementation()!;
+    f.client.request.mockImplementation((m, p) =>
+      m === 'account/login/start'
+        ? new Promise((r) => {
+            release = r;
+          })
+        : original(m, p),
+    );
+    const starting = f.auth.start('browser');
+    await Promise.resolve();
+    await f.auth.cancel();
+    release({ loginId: 'late', authUrl: 'https://auth.openai.com/oauth/authorize' });
+    await starting;
+    expect(f.auth.snapshot().login?.phase).toBe('cancelled');
+    expect(f.open).not.toHaveBeenCalled();
+    expect(f.client.request).toHaveBeenCalledWith('account/login/cancel', { loginId: 'late' });
+  });
+  it('does not publish a late successful verification after cancellation', async () => {
+    const f = fixture();
+    await f.auth.start('device');
+    let release!: (v: any) => void;
+    const original = f.client.request.getMockImplementation()!;
+    f.client.request.mockImplementation((m, p) =>
+      m === 'account/read'
+        ? new Promise((r) => {
+            release = r;
+          })
+        : original(m, p),
+    );
+    f.client.emit('notification', {
+      method: 'account/login/completed',
+      params: { loginId: 'device', success: true },
+    });
+    await Promise.resolve();
+    await f.auth.cancel();
+    release({ account: { type: 'chatgpt', email: 'fixture@example.test' } });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(f.auth.snapshot().login?.phase).toBe('cancelled');
+    expect(f.auth.snapshot().account).toBe('');
+    expect(f.synced).not.toHaveBeenCalled();
+  });
   it('cancels the flow and clears the account on logout', async () => {
     const f = fixture();
     f.setAccount();

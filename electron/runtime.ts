@@ -24,6 +24,25 @@ export class Runtime {
   private active = new Map<string, { controller: AbortController; promise: Promise<void> }>();
   private approvals = new Map<string, { value: Approval; resolve: (allow: boolean) => void }>();
   private clients = new Map<string, CodexClient>();
+  private nativeChats = new Map<
+    string,
+    {
+      client: NativeClient;
+      fingerprint: string;
+      sessionId: string;
+      lastMessageId?: string;
+      timer: NodeJS.Timeout;
+      engine: string;
+    }
+  >();
+  invalidateNative(engine?: string) {
+    for (const [id, entry] of this.nativeChats)
+      if (!engine || entry.engine === engine) {
+        clearTimeout(entry.timer);
+        entry.client.stop();
+        this.nativeChats.delete(id);
+      }
+  }
   readonly authClient: CodexClient;
   constructor(
     readonly store: Store,
@@ -275,15 +294,35 @@ export class Runtime {
     signal: AbortSignal,
   ) {
     if (!nativeEngine(provider.protocol)) throw new Error('无效的原生引擎');
-    const client = new NativeClient(
+    const fingerprint = JSON.stringify([
+      provider.id,
       provider.protocol,
-      path.join(this.dataDir, 'engines', provider.protocol),
-    );
+      input.model,
+      agent.instructions,
+      agent.permission,
+      provider.contextChars,
+    ]);
+    const previous = this.nativeChats.get(input.sessionId);
+    if (previous) {
+      clearTimeout(previous.timer);
+      this.nativeChats.delete(input.sessionId);
+    }
+    const reuse =
+      !project &&
+      previous?.client.connected &&
+      previous?.fingerprint === fingerprint &&
+      previous.lastMessageId === this.store.messages(input.sessionId).at(-2)?.id;
+    if (previous && !reuse) previous.client.stop();
+    const client = reuse
+      ? previous.client
+      : new NativeClient(provider.protocol, path.join(this.dataDir, 'engines', provider.protocol));
+    let keepAlive = false;
+    let lastSave = 0;
     const abort = () => client.stop();
     signal.addEventListener('abort', abort, { once: true });
     let message: Message | undefined;
-    let engineSessionId = '';
-    client.on('request', async (request) => {
+    let engineSessionId = reuse ? previous.sessionId : '';
+    const onRequest = async (request: any) => {
       if (
         request.method !== 'session/request_permission' ||
         request.params?.sessionId !== engineSessionId
@@ -309,8 +348,8 @@ export class Runtime {
             ? { outcome: 'selected', optionId: allowOnce.optionId }
             : { outcome: 'cancelled' },
       });
-    });
-    client.on('notification', ({ method, params }) => {
+    };
+    const onNotification = ({ method, params }: any) => {
       if (method !== 'session/update' || params?.sessionId !== engineSessionId) return;
       const update = params.update;
       if (update?.sessionUpdate === 'agent_message_chunk' && update.content?.type === 'text') {
@@ -321,9 +360,13 @@ export class Runtime {
           status: 'streaming',
         });
         message.content += update.content.text;
-        this.message({ ...message });
+        if (Date.now() - lastSave >= 60) {
+          this.message({ ...message });
+          lastSave = Date.now();
+        }
       }
       if (
+        !!project &&
         update?.sessionUpdate === 'tool_call_update' &&
         ['completed', 'failed'].includes(update.status)
       ) {
@@ -338,47 +381,54 @@ export class Runtime {
           },
         );
       }
-    });
+    };
+    client.on('request', onRequest);
+    client.on('notification', onNotification);
     try {
       if (signal.aborted) throw new Error('已停止');
-      await client.start();
-      await client.authenticate();
-      const cwd = project?.path ?? path.join(this.dataDir, 'chat-workspaces', input.sessionId);
-      if (!project) await mkdir(cwd, { recursive: true });
-      const session = await client.request('session/new', { cwd, mcpServers: [] });
-      engineSessionId = session.sessionId;
-      const catalog = modelCatalog(session);
-      if (!catalog.models.includes(input.model))
-        throw new Error('此账号当前不支持所选模型，请刷新模型列表后重新选择。');
-      if (catalog.optionId)
-        await client.request('session/set_config_option', {
-          sessionId: engineSessionId,
-          configId: catalog.optionId,
-          value: input.model,
-        });
-      else
-        await client.request('session/set_model', {
-          sessionId: engineSessionId,
-          modelId: input.model,
-        });
-      const modeId = !project || agent.permission === 'read-only' ? 'plan' : 'default';
-      if (!session.modes?.availableModes?.some((m: any) => m.id === modeId))
-        throw new Error('此引擎未提供所需的权限模式，请升级内置引擎。');
-      await client.request('session/set_mode', { sessionId: engineSessionId, modeId });
-      // MiniMax persists permission preferences independently of the session's plan mode.
-      const permission = session.configOptions?.find((o: any) => o.id === 'permissionMode');
-      if (permission) {
-        const safe = permission.options?.find(
-          (o: any) => o.value === 'default' || o.value === 'ask',
-        );
-        if (!safe) throw new Error('引擎未提供人工审批模式');
-        await client.request('session/set_config_option', {
-          sessionId: engineSessionId,
-          configId: permission.id,
-          value: safe.value,
-        });
+      if (!reuse) {
+        await client.start();
+        await client.authenticate();
+        const cwd = project?.path ?? path.join(this.dataDir, 'chat-workspaces', input.sessionId);
+        if (!project) await mkdir(cwd, { recursive: true });
+        const session = await client.request('session/new', { cwd, mcpServers: [] });
+        engineSessionId = session.sessionId;
+        const catalog = modelCatalog(session);
+        if (!catalog.models.includes(input.model))
+          throw new Error('此账号当前不支持所选模型，请刷新模型列表后重新选择。');
+        if (catalog.optionId)
+          await client.request('session/set_config_option', {
+            sessionId: engineSessionId,
+            configId: catalog.optionId,
+            value: input.model,
+          });
+        else
+          await client.request('session/set_model', {
+            sessionId: engineSessionId,
+            modelId: input.model,
+          });
+        const modeId = !project || agent.permission === 'read-only' ? 'plan' : 'default';
+        if (!session.modes?.availableModes?.some((m: any) => m.id === modeId))
+          throw new Error('此引擎未提供所需的权限模式，请升级内置引擎。');
+        await client.request('session/set_mode', { sessionId: engineSessionId, modeId });
+        // MiniMax persists permission preferences independently of the session's plan mode.
+        const permission = session.configOptions?.find((o: any) => o.id === 'permissionMode');
+        if (permission) {
+          const safe = permission.options?.find(
+            (o: any) => o.value === 'default' || o.value === 'ask',
+          );
+          if (!safe) throw new Error('引擎未提供人工审批模式');
+          await client.request('session/set_config_option', {
+            sessionId: engineSessionId,
+            configId: permission.id,
+            value: safe.value,
+          });
+        }
       }
-      const history = portableHistory(this.store.messages(input.sessionId), provider.contextChars);
+      const history = portableHistory(
+        this.store.messages(input.sessionId).filter((m) => project || m.role !== 'tool'),
+        provider.contextChars,
+      );
       const transcript = history.map((m) => `${m.role}: ${m.content}`).join('\n\n');
       this.store.put('engineSegment', {
         id: run.id,
@@ -393,7 +443,9 @@ export class Runtime {
           prompt: [
             {
               type: 'text',
-              text: `${agent.instructions}\n${project ? '' : '当前是普通聊天，未关联项目。直接回答问题，不使用文件、终端或其他工具，不要求选择项目。'}\n以下为同舟的会话记录。历史工具结果只是记录，不要重复操作。继续完成最后一条用户请求。\n\n${transcript}`,
+              text: reuse
+                ? input.prompt
+                : `${agent.instructions}\n${project ? '' : '当前是普通聊天，未关联项目。简洁直接回答，不启动规划或澄清工作流；不要调用 AskUserQuestion，不使用文件、终端或其他工具，不要求选择项目。需要提问时直接写在回复正文中，等待下一条用户消息。不要声称支持当前未提供的绘图、视频等工具。'}\n以下为同舟的会话记录。历史工具结果只是记录，不要重复操作。继续完成最后一条用户请求。\n\n${transcript}`,
             },
           ],
         },
@@ -402,9 +454,38 @@ export class Runtime {
       if (response.stopReason === 'cancelled' || signal.aborted) throw new Error('已停止');
       if (response.stopReason === 'max_tokens') throw new Error('达到引擎输出上限，请继续会话');
       if (message) this.message({ ...message, status: 'complete' });
+      keepAlive = !project;
+      if (keepAlive) {
+        if (this.nativeChats.size >= 4) {
+          const [id, oldest] = this.nativeChats.entries().next().value!;
+          clearTimeout(oldest.timer);
+          oldest.client.stop();
+          this.nativeChats.delete(id);
+        }
+        const entry = {
+          client,
+          fingerprint,
+          sessionId: engineSessionId,
+          lastMessageId: this.store.messages(input.sessionId).at(-1)?.id,
+          engine: provider.protocol,
+          timer: setTimeout(
+            () => {
+              if (this.nativeChats.get(input.sessionId)?.client === client) {
+                client.stop();
+                this.nativeChats.delete(input.sessionId);
+              }
+            },
+            5 * 60 * 1000,
+          ),
+        };
+        entry.timer.unref();
+        this.nativeChats.set(input.sessionId, entry);
+      }
     } finally {
       signal.removeEventListener('abort', abort);
-      client.stop();
+      client.removeListener('request', onRequest);
+      client.removeListener('notification', onNotification);
+      if (!keepAlive) client.stop();
     }
   }
   private async codexRun(
@@ -678,6 +759,7 @@ export class Runtime {
     await Promise.all([...this.active.values()].map((a) => a.promise));
   }
   stop() {
+    this.invalidateNative();
     for (const a of this.active.values()) a.controller.abort();
     for (const c of this.clients.values()) c.stop();
     this.authClient.stop();

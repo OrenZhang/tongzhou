@@ -77,6 +77,9 @@ export class NativeClient extends EventEmitter {
   ) {
     super();
   }
+  get connected() {
+    return !!this.child?.stdin.writable && this.child.exitCode === null;
+  }
   async start() {
     this.child = launchEngine(this.kind, this.home, ['acp']);
     let buffer = '';
@@ -119,7 +122,7 @@ export class NativeClient extends EventEmitter {
     this.child.on('exit', () => this.fail(new Error(`${this.kind} 引擎已退出`)));
     return this.request('initialize', {
       protocolVersion: 1,
-      clientInfo: { name: 'tongzhou', version: '0.2.0' },
+      clientInfo: { name: 'tongzhou', version: '0.2.1' },
       clientCapabilities: {
         auth: { terminal: true },
         _meta: { 'terminal-auth': true },

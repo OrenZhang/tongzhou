@@ -97,7 +97,7 @@ Renderer 启用 contextIsolation、sandbox、关闭 Node 集成；preload 仅暴
 
 新增 `kimi` / `minimax` 协议和 `native` 认证模式。主进程通过固定版本官方 CLI 的 login 命令创建授权，通过 ACP `authenticate` 确认状态后 `session/new` 获取模型；URL 与设备码仅存在内存，取消/超时/完成后清除。通过 epoch 忽略过期进程的回调。授权链接仅开放审核过的供应商 HTTPS 域名，不支持界面传入任意 URL。登录目录独立，不读取或迁移系统已有 CLI 凭据。
 
-会话每轮创建新 ACP session，注入同舟的可移植文本历史；模型使用引擎返回的不透明 ID，界面显示名称。无项目和只读 Agent 必须有 plan 模式，否则执行失败；项目任务使用 default/Ask。ACP 权限请求只允许 allow_once，其他交互拒绝。取消结束专属进程树，不重放任务。当前 ACP 用量未映射，界面显示未报告，不能据此推断免费。直接 API 的最大输出和轮次上限不控制原生引擎。
+普通聊天在同一供应商、模型、提示词与权限下复用 ACP session，连续轮次仅发送新消息；切换模型、账号操作、历史被其他引擎续写或连接断开后重新建立 session 并注入可移植文本历史。最多保留 4 个空闲进程，5 分钟后释放。项目任务每轮创建新 ACP session。普通聊天不展示内部工具记录，流式消息按 60ms 间隔写入；模型使用引擎返回的不透明 ID，界面显示名称。无项目和只读 Agent 必须有 plan 模式，否则执行失败；项目任务使用 default/Ask。ACP 权限请求只允许 allow_once，其他交互拒绝。取消结束专属进程树，不重放任务。当前 ACP 用量未映射，界面显示未报告，不能据此推断免费。直接 API 的最大输出和轮次上限不控制原生引擎。
 
 三个官方引擎均随应用分发。Kimi/MiniMax 使用内置 Node 22.23.3，避免 Electron Node ABI 与 MiniMax better-sqlite3 不兼容。打包关闭 npmRebuild，保留 Node 22 构建的 SQLite；开发/CI 安装固定 Node 22 系列。CLI、Node 与其原生依赖解包到 app.asar.unpacked，Mac 安装在目标平台生成对应二进制。
 

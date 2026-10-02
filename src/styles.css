@@ -1964,3 +1964,42 @@ input[type='checkbox'] {
     margin-bottom: 17px;
   }
 }
+
+.auth-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.auth-badge.connected {
+  color: #17664e;
+  background: #e4f5ed;
+  border: 1px solid #a9dac4;
+}
+.auth-badge.disconnected,
+.auth-badge.unknown {
+  color: #677b83;
+  background: #edf1f3;
+}
+.auth-badge.pending {
+  color: #855915;
+  background: #fff3d7;
+}
+.auth-recovery {
+  border-top: 1px solid #dce6e3;
+  margin-top: 16px;
+  padding-top: 10px;
+}
+.account-dialog .settings-card {
+  margin: 0;
+  width: 100%;
+  border: 0;
+  padding: 8px;
+}
+.account-dialog .row {
+  flex-wrap: wrap;
+}

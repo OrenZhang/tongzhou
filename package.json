@@ -1,6 +1,6 @@
 {
   "name": "tongzhou",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "同舟 — 多模型协作，一个工作台。An open-source, local-first agent workspace.",
   "private": true,
   "type": "module",

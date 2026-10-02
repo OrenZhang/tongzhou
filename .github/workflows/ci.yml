@@ -22,6 +22,7 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npm run test:desktop
+      - run: node scripts/account-ui-smoke.mjs
       - run: node scripts/native-smoke.mjs
       - run: npm run dist
         env:
