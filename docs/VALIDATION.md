@@ -1,0 +1,43 @@
+# 0.1.0 验证记录
+
+验证日期：2026-10-02。执行环境：Windows x64、Node.js 22.19.0、Electron 44.5.1、Codex 0.160.0。此记录区分本机已验证行为与尚未执行的跨平台、真实服务验证。
+
+## 自动化验证
+
+| 项目                                | 结果         | 覆盖范围                                                                                                                                  |
+| ----------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm test`                          | 30 项通过    | SQLite 恢复、凭据接口、文件越界与联接、审批与写入冲突、CC Switch 只读导入、四种协议、SSE 分片、用量、工具循环、取消、跨模型历史、团队协作 |
+| `npm run build`                     | 通过         | TypeScript 检查、Vite 前端和 esbuild 主进程生产构建                                                                                       |
+| `npm run test:desktop`              | 通过         | Electron UI、新建连接、编辑 Agent、打开项目、审批写文件、流式输出、实际落盘、用量与重启恢复                                               |
+| 打包程序桌面测试                    | 通过         | 从独立目录启动 `release/win-unpacked/Tongzhou.exe`，重复桌面测试；不依赖开发项目作为当前目录                                              |
+| Codex App Server                    | 握手通过     | 使用随应用分发的引擎完成 initialize、account/read；隔离用户配置，账号为空                                                                 |
+| `npm run dist:win`                  | 通过         | 生成 Windows x64 NSIS 安装包                                                                                                              |
+| `npm audit --audit-level=low`       | 0 个已知漏洞 | 验证当日 npm 审计结果，不代表不存在未知漏洞                                                                                               |
+| `npm ci --ignore-scripts --dry-run` | 通过         | package-lock 与安装计划一致；首次开发安装使用正常 `npm ci`                                                                                |
+
+桌面测试使用新建临时项目和独立 `TONGZHOU_USER_DATA`，不读取既有模型账号。测试的实际文件修改仅写入测试项目。测试报告输出到被 Git 忽略的 `test-results/`，不会将个人运行数据纳入仓库。
+
+额外覆盖：跨供应商切换时将账号相关工具状态转换为历史证据；Gemini 同模型工具签名保留；进程异常退出导致工具结果缺失时不发送孤立调用，不自动重放操作。
+
+## 复现打包程序测试
+
+在 PowerShell 中：
+
+```powershell
+npm ci
+npm test
+npm run dist:win
+$env:TONGZHOU_SMOKE_EXECUTABLE = (Resolve-Path 'release/win-unpacked/Tongzhou.exe').Path
+npm run test:desktop
+Remove-Item Env:TONGZHOU_SMOKE_EXECUTABLE
+```
+
+测试会自动启动、关闭、重启自己的桌面进程。它使用本机 HTTP fixture 返回协议数据，无真实模型费用。内置 Codex 路径缺失会报错，不会静默调用系统 PATH 中的另一个版本。
+
+## 尚未验证与发布边界
+
+- 没有执行真实 ChatGPT OAuth 登录和付费模型推理；真实工具执行的供应商兼容性需要账号和网络条件验证。协议测试使用真实 HTTP/SSE 传输与本机模拟响应。
+- 未在 macOS 实机执行或签名、公证。仓库已配置 macOS 构建与桌面测试工作流，但配置存在不等于测试已通过。
+- Windows 已构建并运行打包应用，未自动安装到用户系统，也未执行卸载流程。安装包未配置维护者代码签名证书。
+- GitHub 远端仓库与工作流尚未发布、触发。本次会话的仓库创建页面被浏览器权限审查拒绝，现有 GitHub 连接器没有创建仓库接口，本地没有可用的 Git 推送凭据。没有绕过访问限制。
+- 独立测试不等于安全审计。直接 API 的命令执行有审批，但不是操作系统沙箱。首版其他范围限制见 README。

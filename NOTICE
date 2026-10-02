@@ -1,0 +1,17 @@
+Tongzhou / 同舟
+Copyright 2026 Tongzhou contributors
+Licensed under the Apache License, Version 2.0.
+
+This project is an independent application and is not affiliated with or endorsed by OpenAI or CC Switch.
+
+Codex: https://github.com/openai/codex
+Copyright OpenAI. Apache License 2.0.
+The application distributes the official @openai/codex package as an unmodified runtime dependency. Its original package files and license notices remain in the distribution.
+
+CC Switch: https://github.com/farion1231/cc-switch
+MIT, Copyright (c) 2025 Jason Young.
+The project is acknowledged as a design reference and compatible configuration source. Tongzhou's read-only importer is independently implemented; no CC Switch source code is copied into this release.
+
+Electron, React, Lucide, remark, react-markdown, Zod, @iarna/toml and other dependencies retain their respective licenses. See package-lock.json and the dependency distributions for the complete inventory and notices.
+
+The Tongzhou sail mark is an original vector asset created for this project.

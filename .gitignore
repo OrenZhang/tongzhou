@@ -1,0 +1,15 @@
+node_modules/
+dist/
+dist-electron/
+release/
+coverage/
+test-results/
+.env*
+*.db
+*.db-shm
+*.db-wal
+*.log
+.DS_Store
+.test-data/
+.codex/
+work/

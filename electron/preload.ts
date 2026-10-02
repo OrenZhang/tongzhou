@@ -1,0 +1,35 @@
+import { contextBridge, ipcRenderer } from 'electron';
+import type { TongzhouAPI } from '../src/shared/types';
+const call = (method: string, ...args: unknown[]) =>
+  ipcRenderer.invoke('tongzhou:' + method, ...args);
+const api: TongzhouAPI = {
+  snapshot: () => call('snapshot'),
+  messages: (id) => call('messages', id),
+  saveProvider: (p) => call('saveProvider', p),
+  deleteProvider: (id) => call('deleteProvider', id),
+  testProvider: (id, model) => call('testProvider', id, model),
+  models: (id) => call('models', id),
+  saveAgent: (a) => call('saveAgent', a),
+  deleteAgent: (id) => call('deleteAgent', id),
+  addProject: () => call('addProject'),
+  createSession: (id) => call('createSession', id),
+  updateSession: (id, p) => call('updateSession', id, p),
+  run: (input) => call('run', input),
+  team: (input, ids) => call('team', input, ids),
+  cancel: (id) => call('cancel', id),
+  approve: (id, allow) => call('approve', id, allow),
+  listFiles: (id, p) => call('listFiles', id, p),
+  readFile: (id, p) => call('readFile', id, p),
+  diff: (id) => call('diff', id),
+  importCCSwitch: () => call('importCCSwitch'),
+  exportSession: (id) => call('exportSession', id),
+  codexStatus: () => call('codexStatus'),
+  codexLogin: () => call('codexLogin'),
+  codexLogout: () => call('codexLogout'),
+  onEvent: (callback) => {
+    const listener = (_event: unknown, payload: any) => callback(payload);
+    ipcRenderer.on('tongzhou:event', listener);
+    return () => ipcRenderer.removeListener('tongzhou:event', listener);
+  },
+};
+contextBridge.exposeInMainWorld('tongzhou', api);

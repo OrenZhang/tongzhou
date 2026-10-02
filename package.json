@@ -1,0 +1,99 @@
+{
+  "name": "tongzhou",
+  "version": "0.1.0",
+  "description": "同舟 — 多模型协作，一个工作台。An open-source, local-first agent workspace.",
+  "private": true,
+  "type": "module",
+  "main": "dist-electron/main.cjs",
+  "author": "Tongzhou contributors",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "node scripts/icon.mjs && tsc --noEmit && vite build && node scripts/build.mjs",
+    "start": "electron .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:desktop": "node scripts/smoke.mjs",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "dist": "npm run build && electron-builder --publish never",
+    "dist:win": "npm run build && electron-builder --win --publish never",
+    "dist:mac": "npm run build && electron-builder --mac --publish never"
+  },
+  "dependencies": {
+    "@iarna/toml": "^2.2.5",
+    "@openai/codex": "0.160.0",
+    "lucide-react": "^0.468.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.1.0",
+    "electron": "44.5.1",
+    "electron-builder": "^26.0.12",
+    "esbuild": "^0.25.12",
+    "playwright": "^1.56.1",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.0",
+    "vitest": "^4.1.11"
+  },
+  "build": {
+    "appId": "org.tongzhou.desktop",
+    "productName": "Tongzhou",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "build/icon.png",
+      "package.json",
+      "LICENSE",
+      "NOTICE"
+    ],
+    "asarUnpack": [
+      "node_modules/@openai/**/*"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    },
+    "mac": {
+      "icon": "build/icon.png",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.developer-tools"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Development"
+    }
+  }
+}

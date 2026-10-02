@@ -1,0 +1,382 @@
+import { describe, expect, it } from 'vitest';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import {
+  complete,
+  headers,
+  portableHistory,
+  requestBody,
+  sse,
+  type CompletionInput,
+} from '../electron/providers';
+import type { Message, Protocol } from '../src/shared/types';
+const message: Message = { id: 'm', sessionId: 's', role: 'user', content: '你好', createdAt: 1 };
+function input(protocol: Protocol, baseUrl = 'http://127.0.0.1:1234/v1'): CompletionInput {
+  return {
+    provider: {
+      id: 'p',
+      name: 'p',
+      protocol,
+      baseUrl,
+      auth: 'none',
+      models: ['test'],
+      maxOutputTokens: 1024,
+      contextChars: 10000,
+    },
+    secret: '',
+    model: 'test',
+    instructions: 'test',
+    messages: [message],
+    tools: [],
+    signal: new AbortController().signal,
+    onDelta: () => {},
+  };
+}
+async function serve(events: string[], fn: (base: string, requests: any[]) => Promise<void>) {
+  const requests: any[] = [];
+  const server = createServer(async (req, res) => {
+    let body = '';
+    for await (const b of req) body += b;
+    requests.push({ path: req.url, body: JSON.parse(body), headers: req.headers });
+    res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+    for (const event of events) {
+      const bytes = Buffer.from(event);
+      for (let i = 0; i < bytes.length; i += 3) res.write(bytes.subarray(i, i + 3));
+    }
+    res.end();
+  });
+  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+  try {
+    await fn(`http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`, requests);
+  } finally {
+    await new Promise<void>((r) => server.close(() => r()));
+  }
+}
+const event = (d: any) => 'data: ' + JSON.stringify(d) + '\n\n';
+describe('streaming protocol adapters', () => {
+  it('handles UTF-8, CRLF and multiline SSE at arbitrary byte boundaries', async () => {
+    const bytes = Buffer.from('event: test\r\ndata: {"text":\r\ndata: "同舟"}\r\n\r\n');
+    const stream = new ReadableStream<Uint8Array>({
+      start(c) {
+        for (const b of bytes) c.enqueue(new Uint8Array([b]));
+        c.close();
+      },
+    });
+    const out = [];
+    for await (const e of sse(stream)) out.push(e);
+    expect(out).toEqual([{ event: 'test', data: '{"text":\n"同舟"}' }]);
+  });
+  it('assembles fragmented Chat Completions tool calls and usage', async () => {
+    await serve(
+      [
+        event({
+          choices: [
+            {
+              delta: {
+                content: '同舟',
+                tool_calls: [
+                  { index: 0, id: 'call_1', function: { name: 'read_file', arguments: '{"pa' } },
+                ],
+              },
+            },
+          ],
+        }),
+        event({
+          choices: [
+            {
+              delta: { tool_calls: [{ index: 0, function: { arguments: 'th":"README.md"}' } }] },
+              finish_reason: 'tool_calls',
+            },
+          ],
+        }),
+        event({ choices: [], usage: { prompt_tokens: 12, completion_tokens: 4 } }),
+        'data: [DONE]\n\n',
+      ],
+      async (base, reqs) => {
+        const deltas: string[] = [];
+        const result = await complete({
+          ...input('openai-chat', base),
+          onDelta: (t) => deltas.push(t),
+        });
+        expect(result).toMatchObject({
+          text: '同舟',
+          inputTokens: 12,
+          outputTokens: 4,
+          toolCalls: [{ id: 'call_1', name: 'read_file', arguments: '{"path":"README.md"}' }],
+        });
+        expect(deltas.join('')).toBe('同舟');
+        expect(reqs[0].path).toBe('/v1/chat/completions');
+        expect(reqs[0].headers.authorization).toBeUndefined();
+      },
+    );
+  });
+  it('parses Responses tool items, deltas and completion', async () => {
+    await serve(
+      [
+        event({ type: 'response.output_text.delta', delta: 'Ready' }),
+        event({
+          type: 'response.output_item.added',
+          item: {
+            id: 'fc_1',
+            type: 'function_call',
+            call_id: 'c',
+            name: 'list_files',
+            arguments: '',
+          },
+        }),
+        event({
+          type: 'response.function_call_arguments.delta',
+          item_id: 'fc_1',
+          delta: '{"path":""}',
+        }),
+        event({
+          type: 'response.completed',
+          response: { usage: { input_tokens: 10, output_tokens: 5 } },
+        }),
+      ],
+      async (base, reqs) => {
+        const result = await complete(input('openai-responses', base));
+        expect(result.toolCalls[0].arguments).toBe('{"path":""}');
+        expect(result.inputTokens).toBe(10);
+        expect(reqs[0].body.store).toBe(false);
+      },
+    );
+  });
+  it('parses Anthropic content blocks and stop status', async () => {
+    await serve(
+      [
+        event({ type: 'message_start', message: { usage: { input_tokens: 7 } } }),
+        event({
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'text_delta', text: 'hello' },
+        }),
+        event({
+          type: 'content_block_start',
+          index: 1,
+          content_block: { type: 'tool_use', id: 't', name: 'list_files' },
+        }),
+        event({
+          type: 'content_block_delta',
+          index: 1,
+          delta: { type: 'input_json_delta', partial_json: '{"path":""}' },
+        }),
+        event({
+          type: 'message_delta',
+          delta: { stop_reason: 'tool_use' },
+          usage: { output_tokens: 3 },
+        }),
+        event({ type: 'message_stop' }),
+      ],
+      async (base) => {
+        const result = await complete(input('anthropic', base));
+        expect(result).toMatchObject({ text: 'hello', inputTokens: 7, outputTokens: 3 });
+        expect(result.toolCalls[0].name).toBe('list_files');
+      },
+    );
+  });
+  it('parses Gemini visible text and function calls', async () => {
+    await serve(
+      [
+        event({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  { text: 'private thought', thought: true },
+                  { text: 'hello' },
+                  { functionCall: { name: 'list_files', args: { path: '' } } },
+                ],
+              },
+              finishReason: 'STOP',
+            },
+          ],
+          usageMetadata: { promptTokenCount: 11, candidatesTokenCount: 4 },
+        }),
+      ],
+      async (base, reqs) => {
+        const result = await complete(input('gemini', base));
+        expect(result.text).toBe('hello');
+        expect(result.toolCalls[0].name).toBe('list_files');
+        expect(reqs[0].path).toContain(':streamGenerateContent?alt=sse');
+      },
+    );
+  });
+  it('fails closed on incomplete streams and malformed tool arguments', async () => {
+    await serve([event({ choices: [{ delta: { content: 'partial' } }] })], async (base) => {
+      await expect(complete(input('openai-chat', base))).rejects.toThrow('中断');
+    });
+    await serve(
+      [
+        event({
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  { index: 0, id: 'x', function: { name: 'write_file', arguments: '{"path"' } },
+                ],
+              },
+              finish_reason: 'tool_calls',
+            },
+          ],
+        }),
+      ],
+      async (base) => {
+        await expect(complete(input('openai-chat', base))).rejects.toThrow('参数不完整');
+      },
+    );
+  });
+  it('never executes truncated tool output even if a done marker is present', async () => {
+    await serve(
+      [event({ choices: [{ delta: {}, finish_reason: 'length' }] }), 'data: [DONE]\n\n'],
+      async (base) => {
+        await expect(complete(input('openai-chat', base))).rejects.toThrow('输出达到上限');
+      },
+    );
+  });
+});
+describe('portable history and protocol mapping', () => {
+  it('carries foreign tool evidence without replaying account-specific calls', () => {
+    const messages: Message[] = [
+      message,
+      {
+        ...message,
+        role: 'assistant',
+        model: 'other',
+        providerId: 'old',
+        content: '',
+        toolCalls: [
+          {
+            id: 'old-call',
+            name: 'read_file',
+            arguments: '{"path":"a"}',
+            signature: 'opaque',
+            signatureModel: 'other',
+          },
+        ],
+      },
+      {
+        ...message,
+        role: 'tool',
+        toolCallId: 'old-call',
+        toolName: 'read_file',
+        content: 'evidence',
+      },
+    ];
+    for (const protocol of [
+      'openai-chat',
+      'openai-responses',
+      'anthropic',
+      'gemini',
+    ] as Protocol[]) {
+      const serialized = JSON.stringify(requestBody({ ...input(protocol), messages }).body);
+      expect(serialized).toContain('evidence');
+      expect(serialized).toContain('read_file');
+      expect(serialized).not.toContain('old-call');
+      expect(serialized).not.toContain('opaque');
+    }
+  });
+  it('normalizes native Codex activity into portable history evidence', () => {
+    const history = portableHistory(
+      [message, { ...message, role: 'tool', toolName: 'command', content: 'build passed' }],
+      10000,
+    );
+    expect(history[1].role).toBe('assistant');
+    expect(history[1].content).toContain('build passed');
+  });
+  it('recovers an interrupted tool batch without sending orphan calls or replaying operations', () => {
+    const messages: Message[] = [
+      message,
+      {
+        ...message,
+        role: 'assistant',
+        content: '',
+        toolCalls: [
+          { id: 'done', name: 'write_file', arguments: '{}' },
+          { id: 'unknown', name: 'run_command', arguments: '{}' },
+        ],
+      },
+      { ...message, role: 'tool', toolCallId: 'done', content: 'file saved' },
+      { ...message, content: 'continue' },
+    ];
+    const body = requestBody({ ...input('openai-chat'), messages }).body as any;
+    expect(body.messages.every((m: any) => !m.tool_calls && m.role !== 'tool')).toBe(true);
+    expect(JSON.stringify(body)).toContain('结果未记录');
+    expect(JSON.stringify(body)).toContain('file saved');
+  });
+  it('retains Gemini tool signatures within the same model and provider', () => {
+    const messages: Message[] = [
+      message,
+      {
+        ...message,
+        role: 'assistant',
+        model: 'test',
+        providerId: 'p',
+        content: '',
+        toolCalls: [
+          {
+            id: 'c',
+            name: 'list_files',
+            arguments: '{}',
+            signature: 'opaque',
+            signatureModel: 'test',
+          },
+        ],
+      },
+      { ...message, role: 'tool', toolCallId: 'c', toolName: 'list_files', content: '[]' },
+    ];
+    expect(JSON.stringify(requestBody({ ...input('gemini'), messages }).body)).toContain('opaque');
+  });
+  it('keeps complete turns and rejects an oversized current turn', () => {
+    const history = [
+      message,
+      {
+        ...message,
+        id: 'a',
+        role: 'assistant' as const,
+        content: 'x'.repeat(500),
+        toolCalls: [{ id: 't', name: 'read_file', arguments: '{}' }],
+      },
+      { ...message, id: 't', role: 'tool' as const, toolCallId: 't', content: 'result' },
+      { ...message, id: 'new', content: 'next' },
+    ];
+    expect(portableHistory(history, 500)).toEqual([history[3]]);
+    expect(() => portableHistory([{ ...message, content: 'x'.repeat(1000) }], 500)).toThrow(
+      '超过上下文',
+    );
+  });
+  it('pairs tool calls and tool responses in all protocols', () => {
+    const messages = [
+      message,
+      {
+        ...message,
+        role: 'assistant' as const,
+        content: '',
+        toolCalls: [{ id: 'c', name: 'read_file', arguments: '{"path":"x"}' }],
+      },
+      {
+        ...message,
+        role: 'tool' as const,
+        toolCallId: 'c',
+        toolName: 'read_file',
+        content: 'value',
+      },
+    ];
+    const response = requestBody({ ...input('openai-responses'), messages }).body as any;
+    expect(response.input.at(-1)).toEqual({
+      type: 'function_call_output',
+      call_id: 'c',
+      output: 'value',
+    });
+    const anthropic = requestBody({ ...input('anthropic'), messages }).body as any;
+    expect(anthropic.messages.at(-1).content[0].tool_use_id).toBe('c');
+    const gemini = requestBody({ ...input('gemini'), messages }).body as any;
+    expect(gemini.contents.at(-1).parts[0].functionResponse.name).toBe('read_file');
+  });
+  it('uses protocol-specific auth headers and rejects missing secrets', () => {
+    const p = input('anthropic').provider;
+    expect(headers({ ...p, auth: 'api-key' }, 'key')['x-api-key']).toBe('key');
+    expect(headers({ ...p, auth: 'bearer' }, 'key').Authorization).toBe('Bearer key');
+    expect(() => headers({ ...p, auth: 'api-key' }, '')).toThrow('保存');
+  });
+});
