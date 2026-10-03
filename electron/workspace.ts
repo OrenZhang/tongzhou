@@ -107,6 +107,29 @@ export interface CommandResult {
   truncated: boolean;
   durationMs: number;
 }
+export const projectShell =
+  process.platform === 'win32'
+    ? 'Windows PowerShell 5.1（不支持 &&；工作目录已设置为项目目录；调用带引号的可执行路径用 &）'
+    : '/bin/sh（工作目录已设置为项目目录）';
+
+function windowsCommand(script: string): string[] {
+  // Parse the supplied script only after configuring UTF-8, including parse-error output.
+  // Encode the user script to preserve Unicode and quotes without PowerShell's CLIXML host mode.
+  const wrapper = `
+$OutputEncoding = [Console]::InputEncoding = [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+$ProgressPreference = 'SilentlyContinue'
+try {
+  & ([ScriptBlock]::Create([Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('${Buffer.from(script, 'utf16le').toString('base64')}'))))
+  $tongzhouCommandSucceeded = $?
+  if ($null -ne $LASTEXITCODE) { exit $LASTEXITCODE }
+  if (-not $tongzhouCommandSucceeded) { exit 1 }
+} catch {
+  [Console]::Error.WriteLine($_.ToString())
+  exit 1
+}
+`;
+  return ['-NoProfile', '-NonInteractive', '-OutputFormat', 'Text', '-Command', wrapper];
+}
 export function commandResult(
   executable: string,
   args: string[],
@@ -318,8 +341,7 @@ export const toolSpecs: ToolSpec[] = [
   },
   {
     name: 'run_command',
-    description:
-      '在项目目录执行 shell 命令，每次必须经过用户审批。Windows 使用 PowerShell，macOS 使用 /bin/sh。',
+    description: `在项目目录执行 shell 命令，每次必须经过用户审批。当前 shell：${projectShell}。`,
     parameters: {
       type: 'object',
       properties: {
@@ -623,7 +645,7 @@ export async function executeTool(
       process.platform === 'win32'
         ? await commandResult(
             'powershell.exe',
-            ['-NoProfile', '-NonInteractive', '-Command', cmd],
+            windowsCommand(cmd),
             root,
             signal,
             timeoutMs,

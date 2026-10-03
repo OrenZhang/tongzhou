@@ -26,6 +26,7 @@ import {
   readOnlyToolSpecs,
   projectInstructions,
   commandResult,
+  projectShell,
 } from './workspace';
 import { NativeClient, nativeEngine, modelCatalog } from './native-engine';
 import { CodexClient } from './codex';
@@ -481,8 +482,7 @@ export class Runtime {
                 '任务开始前已有的工作区改动（请保留）：\n' + baseline.stdout.slice(0, 12000),
               );
           }
-          agent.instructions +=
-            '\n修改项目时保留用户已有未提交更改。先读取当前文件，修改后运行相关验证；文件版本冲突时重新读取，不覆盖他人改动。';
+          agent.instructions += `\n操作系统：${process.platform}。同舟 run_command 使用 ${projectShell}。\n修改项目时保留用户已有未提交更改。先读取当前文件，修改后运行相关验证；文件版本冲突时重新读取，不覆盖他人改动。`;
           const rules = (await projectInstructions(project.path)).filter((f) =>
             /^agents?\.md$/i.test(f.path),
           );

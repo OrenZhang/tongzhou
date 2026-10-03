@@ -60,6 +60,7 @@ try {
       { sessionId, prompt, providerId, model },
     );
     let run;
+    let timedOut = false;
     for (;;) {
       const snapshot = await page.evaluate(() => window.tongzhou.snapshot());
       run = snapshot.runs.find((r) => r.id === runId);
@@ -77,13 +78,21 @@ try {
       if (run && run.status !== 'running') break;
       if (Date.now() - started > 180000) {
         await page.evaluate((id) => window.tongzhou.cancel(id), sessionId);
-        throw new Error('Live model exceeded 3 minute per-task budget');
+        timedOut = true;
+        run = (await page.evaluate(() => window.tongzhou.snapshot())).runs.find(
+          (r) => r.id === runId,
+        );
+        break;
       }
       await new Promise((r) => setTimeout(r, 250));
     }
     const messages = await page.evaluate((id) => window.tongzhou.messages(id), sessionId);
     const events = await page.evaluate((id) => window.tongzhou.runEvents(id), sessionId);
     report.runs.push({
+      runId,
+      sessionId,
+      project: project ? path.basename(project) : null,
+      timedOut,
       status: run.status,
       durationMs: Date.now() - started,
       inputTokens: run.usageReported ? run.inputTokens : null,
@@ -94,6 +103,7 @@ try {
       eventTypes: [...new Set(events.filter((e) => e.runId === runId).map((e) => e.type))],
       error: run.error,
     });
+    if (timedOut) throw new Error('Live model exceeded 3 minute per-task budget');
     assert.equal(run.status, 'completed', run.error);
     return messages
       .filter((m) => m.runId === runId && m.role === 'assistant')
@@ -223,7 +233,14 @@ try {
         files: {
           'math.ts': 'export function sum(a:number,b:number):number { return String(a+b); }',
           'tsconfig.json': JSON.stringify({
-            compilerOptions: { strict: true, skipLibCheck: true, types: [], outDir: 'out' },
+            compilerOptions: {
+              strict: true,
+              skipLibCheck: true,
+              types: [],
+              outDir: 'out',
+              module: 'NodeNext',
+              target: 'ES2022',
+            },
             include: ['*.ts'],
           }),
         },
@@ -261,6 +278,10 @@ try {
         },
       },
     ];
+    const selected = process.env.TONGZHOU_CODING_CASES?.split(',');
+    if (selected && selected.some((id) => !matrix.some((task) => task.id === id)))
+      throw new Error('Unknown coding matrix case');
+    report.caseSelection = selected ?? matrix.map((task) => task.id);
     async function external(dir, code) {
       const imports = code.replace(
         /from '\.\/(.*?)'/g,
@@ -273,15 +294,17 @@ try {
       );
     }
     for (let attempt = 1; attempt <= 3; attempt++)
-      for (const task of matrix) {
+      for (const task of matrix.filter((task) => !selected || selected.includes(task.id))) {
         const dir = path.join(root, task.id + '-' + attempt);
         await mkdir(dir);
         const original = {
           ...task.files,
           'package.json': JSON.stringify({
             type: 'module',
-            scripts: { test: 'node --test', build: `"${node}" "${tsc}" -p .` },
+            scripts: { test: 'node --test', build: 'node build.cjs' },
           }),
+          // Avoid nesting quoted absolute executable paths through npm and cmd on Windows.
+          'build.cjs': `const {spawnSync}=require('node:child_process'); const r=spawnSync(process.execPath,[${JSON.stringify(tsc)},'-p','.'],{stdio:'inherit',windowsHide:true}); if(r.error) throw r.error; process.exit(r.status ?? 1);`,
           'agent.md':
             'Preserve user-notes.txt and existing test expectations. Use the project tools. Run relevant verification. Do not change this file.',
           'user-notes.txt': 'Existing user change must stay exactly.\n',

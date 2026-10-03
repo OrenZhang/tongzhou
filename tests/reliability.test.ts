@@ -27,6 +27,44 @@ async function directory() {
 }
 
 describe('long conversations and concurrent changes', () => {
+  it('returns Unicode shell output and preserves explicit command failure codes', async () => {
+    const root = await directory();
+    const run = (command: string) =>
+      executeTool(
+        'run_command',
+        JSON.stringify({ command }),
+        root,
+        'ask',
+        new AbortController().signal,
+        async () => true,
+      );
+    const script =
+      process.platform === 'win32'
+        ? "Write-Output '同舟：中文与引号 ''完整'''; exit 7"
+        : "printf '%s\\n' '同舟：中文与引号 完整'; exit 7";
+    const result = JSON.parse(await run(script));
+    expect(result.exitCode).toBe(7);
+    expect(result.stdout).toContain('同舟：中文与引号');
+    expect(result.stdout).not.toContain('\ufffd');
+  });
+  it.skipIf(process.platform !== 'win32')(
+    'reports PowerShell parsing failures in readable UTF-8',
+    async () => {
+      const result = JSON.parse(
+        await executeTool(
+          'run_command',
+          JSON.stringify({ command: "Write-Output '中文' && Write-Output '第二条'" }),
+          await directory(),
+          'ask',
+          new AbortController().signal,
+          async () => true,
+        ),
+      );
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain('&&');
+      expect(result.stderr).not.toContain('\ufffd');
+    },
+  );
   it('preflights multi-file edits before approval and reports a partial commit after a later conflict', async () => {
     const root = await directory();
     for (const file of ['a.txt', 'b.txt']) await writeFile(path.join(root, file), 'before');
