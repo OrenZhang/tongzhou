@@ -1246,7 +1246,7 @@ export class Runtime {
       .slice(-50000);
     const controller = new AbortController();
     const teamId = randomUUID();
-    this.add(parent.id, 'user', input.prompt);
+    this.add(parent.id, 'user', input.prompt, { runId: teamId });
     const parentRun: Run = {
       id: teamId,
       sessionId: parent.id,
@@ -1313,7 +1313,7 @@ export class Runtime {
       } catch (e: any) {
         parentRun.status = controller.signal.aborted ? 'interrupted' : 'failed';
         parentRun.error = e.message;
-        this.add(parent.id, 'system', e.message, { status: 'error' });
+        this.add(parent.id, 'system', e.message, { status: 'error', runId: teamId });
       } finally {
         parentRun.endedAt = Date.now();
         this.store.put('run', parentRun);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   Archive,
@@ -51,9 +51,12 @@ import type {
   Snapshot,
 } from './shared/types';
 import { Extensions } from './Extensions';
-import { RunActivity } from './RunActivity';
+import { PendingInputs, useRunEvents } from './RunActivity';
+import { ConversationTurn } from './ConversationTurn';
+import { conversationTurns } from './shared/turns';
+import { InputModePicker, inputModes } from './InputModePicker';
 import { ConnectionsPanel } from './ConnectionsPanel';
-import { AuthBadge, ChatMessage, Field, Mark, Modal, Spinner, ModelPicker } from './components';
+import { AuthBadge, Field, Mark, Modal, Spinner, ModelPicker } from './components';
 const empty: Snapshot = {
   providers: [],
   agents: [],
@@ -213,15 +216,22 @@ export default function App() {
   const startLogin = (method: CodexLoginMethod) =>
     perform(async () => setCodex(await api.codexLogin(method, authProviderId)));
   const feed = useRef<HTMLDivElement>(null);
+  const composerInput = useRef<HTMLTextAreaElement>(null);
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const session = data.sessions.find((s) => s.id === sessionId);
   const project = data.projects.find((p) => p.id === session?.projectId);
   const provider = data.providers.find((p) => p.id === providerId);
   const selectedAgent = data.agents.find((a) => a.id === agentId);
   const running = data.runs.find((r) => r.sessionId === sessionId && r.status === 'running');
+  const activity = useRunEvents(api, sessionId);
+  const turns = useMemo(
+    () => conversationTurns(sessionId, messages, data.runs, activity.events),
+    [sessionId, messages, data.runs, activity.events],
+  );
   const activateSession = (selected: Session) => {
     sessionRef.current = selected.id;
     setSessionId(selected.id);
+    setInputMode('supplement');
     setProviderId(selected.providerId);
     setModel(selected.model);
     setAgentId(data.agents.some((a) => a.id === selected.agentId) ? selected.agentId : '');
@@ -324,12 +334,18 @@ export default function App() {
     setFilePath('');
     setFileView(null);
     setHasEarlier(false);
+    setMessages((old) => old.filter((m) => m.sessionId === sessionId));
     if (sessionId)
       void api
         .messages(sessionId)
         .then((result) => {
           if (sessionRef.current === sessionId) {
-            setMessages(result);
+            setMessages((old) => {
+              const live = old.filter((m) => m.sessionId === sessionId);
+              const merged = new Map(result.map((m) => [m.id, m]));
+              for (const m of live) merged.set(m.id, m);
+              return [...merged.values()];
+            });
             setHasEarlier(result.length === 100);
           }
         })
@@ -362,7 +378,7 @@ export default function App() {
     const el = feed.current;
     if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 300)
       el.scrollTo({ top: el.scrollHeight });
-  }, [messages]);
+  }, [messages, activity.events]);
   useEffect(() => {
     if (!notice) return;
     const t = setTimeout(() => setNotice(''), 7000);
@@ -1012,7 +1028,7 @@ export default function App() {
                   </div>
                 </div>
               )}
-              <div className={'feed ' + (!messages.length ? 'empty-feed' : '')} ref={feed}>
+              <div className={'feed ' + (!turns.length ? 'empty-feed' : '')} ref={feed}>
                 {hasEarlier && (
                   <button
                     className="secondary"
@@ -1036,7 +1052,7 @@ export default function App() {
                     加载更早消息
                   </button>
                 )}
-                {!messages.length ? (
+                {!turns.length ? (
                   <div className="welcome">
                     <div className="eyebrow">
                       <span /> ONE WORKSPACE. MANY MODELS.
@@ -1130,43 +1146,33 @@ export default function App() {
                     </div>
                   </div>
                 ) : (
-                  messages
-                    .filter((m) => project || m.role !== 'tool' || m.visibleTool)
-                    .map((m) => (
-                      <div key={m.id}>
-                        <ChatMessage message={m} />
-                        {m.role !== 'tool' && m.role !== 'system' && m.status !== 'streaming' && (
-                          <div className="message-actions">
-                            <button
-                              onClick={() =>
-                                setDraft(
-                                  (text) =>
-                                    `${text}${text ? '\n\n' : ''}针对历史消息（${m.id}）补充：\n> ${m.content.slice(0, 1500).replace(/\n/g, '\n> ')}\n\n`,
-                                )
-                              }
-                            >
-                              引用补充
-                            </button>
-                            <button
-                              disabled={!!running}
-                              onClick={() =>
-                                perform(async () => {
-                                  const branch = await api.branchSession(sessionId, m.id);
-                                  await refresh();
-                                  activateSession(branch);
-                                })
-                              }
-                            >
-                              从此处新建分支
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    ))
+                  turns.map((turn) => (
+                    <ConversationTurn
+                      key={turn.key}
+                      turn={turn}
+                      showTools={!!project}
+                      branchDisabled={!!running}
+                      onQuote={(message) => {
+                        setDraft(
+                          (text) =>
+                            `${text}${text ? '\n\n' : ''}针对历史消息（${message.id}）补充：\n> ${message.content.slice(0, 1500).replace(/\n/g, '\n> ')}\n\n`,
+                        );
+                        composerInput.current?.focus();
+                      }}
+                      onBranch={(message) =>
+                        void perform(async () => {
+                          const branch = await api.branchSession(sessionId, message.id);
+                          await refresh();
+                          activateSession(branch);
+                        })
+                      }
+                    />
+                  ))
                 )}
               </div>
               <div className="composer-wrap">
-                <RunActivity api={api} sessionId={sessionId} run={running} data={data} />
+                {activity.error && <p role="alert">处理过程加载失败：{activity.error}</p>}
+                <PendingInputs key={sessionId} api={api} sessionId={sessionId} data={data} />
                 {selectedAgent && (
                   <div className="selected-agent-note">
                     <Bot size={16} />
@@ -1187,6 +1193,7 @@ export default function App() {
                 )}
                 <div className={'composer ' + (running ? 'is-running' : '')}>
                   <textarea
+                    ref={composerInput}
                     aria-label="消息"
                     placeholder={
                       project
@@ -1237,7 +1244,7 @@ export default function App() {
                         disabled={!!running}
                       />
                     </div>
-                    <div className="row">
+                    <div className="row composer-actions">
                       <button
                         className="icon-button"
                         title="多 Agent 协作（只读分析）"
@@ -1251,21 +1258,19 @@ export default function App() {
                       </button>
                       {running && (
                         <>
-                          <select
-                            aria-label="补充方式"
+                          <InputModePicker
+                            key={sessionId}
                             value={inputMode}
-                            onChange={(e) => setInputMode(e.target.value as typeof inputMode)}
-                          >
-                            <option value="supplement">补充当前任务</option>
-                            <option value="next">排队下一轮</option>
-                            <option value="restart">停止后继续</option>
-                          </select>
+                            onChange={setInputMode}
+                          />
                           <button
-                            className="primary"
+                            className="send-button"
+                            aria-label="补充"
+                            title={inputModes.find((mode) => mode.value === inputMode)?.label}
                             disabled={busy || !draft.trim()}
                             onClick={() => send()}
                           >
-                            补充
+                            {busy ? <Spinner /> : <ArrowUp size={18} />}
                           </button>
                         </>
                       )}

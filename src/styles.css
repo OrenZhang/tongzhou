@@ -2049,11 +2049,27 @@ input[type='checkbox'] {
   margin: 12px 0;
 }
 .run-activity {
-  margin: 0 12px 12px;
+  margin: 6px 0;
   font-size: 12px;
   color: var(--muted);
-  max-height: 230px;
+}
+.run-phase {
+  margin: 6px 0;
+  font-size: 11px;
+}
+.run-event-list {
+  max-height: 300px;
   overflow: auto;
+}
+.run-activity .tool-message {
+  margin-left: 0;
+}
+.pending-inputs {
+  font-size: 12px;
+  color: var(--muted);
+}
+.pending-inputs:empty {
+  display: none;
 }
 .run-activity summary {
   cursor: pointer;
@@ -2131,12 +2147,82 @@ input[type='checkbox'] {
   font-size: 13px;
 }
 .message-actions {
-  margin: -12px 0 24px 62px;
+  margin: 2px 0 0;
   display: flex;
-  gap: 16px;
-  opacity: 0.55;
-  font-size: 12px;
+  gap: 2px;
+  opacity: 0.65;
 }
-.message-actions:hover {
+.chat-message:hover .message-actions,
+.message-actions:focus-within {
   opacity: 1;
+}
+.message-actions .icon-button {
+  height: 26px;
+  min-width: 26px;
+  padding: 5px;
+}
+.conversation-turn .chat-message {
+  margin: 14px 0 20px;
+}
+.turn-supplement {
+  border-left: 2px solid #c5d9d0;
+  padding: 6px 10px;
+  margin: 12px 0;
+  background: #f8faf9;
+  border-radius: 0 6px 6px 0;
+}
+.turn-supplement > span {
+  font-size: 11px;
+  color: #7b8c83;
+}
+.turn-supplement .markdown p {
+  margin-bottom: 2px;
+}
+.composer-actions {
+  gap: 6px;
+  flex-shrink: 0;
+}
+.input-mode-trigger {
+  color: #277d69;
+  background: #f3f7f5;
+}
+.input-mode-menu {
+  position: fixed;
+  z-index: 120;
+  width: 246px;
+  max-width: calc(100vw - 16px);
+  background: white;
+  border: 1px solid #dce6e1;
+  border-radius: 10px;
+  padding: 5px;
+  box-shadow: 0 6px 28px #244c3724;
+}
+.input-mode-menu > button {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 9px;
+  padding: 9px;
+  border-radius: 6px;
+  color: #637d70;
+  text-align: left;
+}
+.input-mode-menu > button[aria-checked='true'] {
+  background: #eff6f2;
+  color: #277d69;
+}
+.input-mode-menu > button > span {
+  flex: 1;
+}
+.input-mode-menu strong,
+.input-mode-menu small {
+  display: block;
+}
+.input-mode-menu strong {
+  font-size: 12px;
+  font-weight: 500;
+}
+.input-mode-menu small {
+  margin-top: 3px;
+  font-size: 10px;
+  color: #81968a;
 }

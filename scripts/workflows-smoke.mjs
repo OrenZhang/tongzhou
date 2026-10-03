@@ -70,17 +70,74 @@ try {
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
   await page.getByText('处理过程', { exact: true }).click();
   await page.getByText(/公开思考摘要：/).waitFor();
-  await page.getByLabel('补充方式', { exact: true }).selectOption('next');
+  const mode = page.getByRole('button', { name: '补充方式', exact: true });
+  assert.equal(await mode.innerText(), '');
+  assert.ok((await mode.boundingBox()).width <= 34);
+  await mode.click();
+  await page.getByRole('menuitemradio', { name: '补充当前任务', exact: true }).press('ArrowDown');
+  await page.getByRole('menuitemradio', { name: '排队下一轮', exact: true }).press('Enter');
+  assert.equal(await mode.getAttribute('title'), '补充方式：排队下一轮');
   await page.getByLabel('消息', { exact: true }).fill('第二条');
   await page.getByRole('button', { name: '补充', exact: true }).click();
   await page.getByText('已回复：第二条', { exact: true }).waitFor();
   assert.equal(requests.length, 2);
-  checks.push('public reasoning', 'queued input exactly once');
+  await page.getByRole('button', { name: '发送消息', exact: true }).waitFor();
+  assert.equal(await page.locator('.conversation-turn').count(), 2);
+  assert.equal(await page.locator('.conversation-turn .run-activity details').count(), 2);
+  assert.equal(await page.locator('.composer-wrap .run-activity').count(), 0);
+  checks.push(
+    'public reasoning',
+    'queued input exactly once',
+    'historical activity stays inside its turn',
+    'compact keyboard-accessible mode selection',
+  );
+
+  await page.getByLabel('消息', { exact: true }).fill('第三轮任务');
+  await page.getByRole('button', { name: '发送消息', exact: true }).click();
+  await mode.click();
+  await page.getByRole('menuitemradio', { name: '补充当前任务', exact: true }).click();
+  await page.getByLabel('消息', { exact: true }).fill('本轮补充内容');
+  await mode.click();
+  await page.screenshot({ path: 'test-results/turn-input-menu.png' });
+  await page.getByRole('menuitemradio', { name: '补充当前任务', exact: true }).press('Escape');
+  assert.equal(await mode.getAttribute('aria-expanded'), 'false');
+  await page.getByRole('button', { name: '补充', exact: true }).click();
+  await page.getByText('已回复：本轮补充内容', { exact: true }).waitFor();
+  await page.getByRole('button', { name: '发送消息', exact: true }).waitFor();
+  assert.equal(requests.length, 4);
+  assert.equal(await page.locator('.conversation-turn').count(), 3);
+  assert.equal(await page.locator('.chat-message.assistant').count(), 3);
+  const supplemented = page.locator('.conversation-turn').last();
+  assert.equal(await supplemented.locator('.assistant-segment').count(), 2);
+  assert.equal(await supplemented.locator('.turn-supplement').count(), 1);
+  assert.ok((await supplemented.innerText()).includes('本轮补充内容'));
+  assert.equal(
+    await page.getByRole('button', { name: '引用补充', exact: true }).first().innerText(),
+    '',
+  );
+  await page.screenshot({ path: 'test-results/turn-supplement.png' });
+  await page.reload();
+  await page.waitForSelector('.welcome');
+  await page.locator('.session-list > button').first().click();
+  await page.getByText('已回复：本轮补充内容', { exact: true }).waitFor();
+  await page.waitForFunction(
+    () => document.querySelectorAll('.conversation-turn .run-activity details').length === 3,
+  );
+  assert.equal(await page.locator('.chat-message.assistant').count(), 3);
+  checks.push(
+    'supplement stays in the same assistant turn',
+    'activity and turn grouping survive reload',
+  );
   await page.getByRole('button', { name: '引用补充', exact: true }).first().click();
   assert.ok((await page.getByLabel('消息', { exact: true }).inputValue()).includes('第一条'));
   await page.getByLabel('消息', { exact: true }).fill('');
   await page.getByRole('button', { name: '从此处新建分支', exact: true }).first().click();
   await page.getByRole('heading', { name: /分支/ }).waitFor();
+  assert.equal(
+    await page.locator('.run-activity').count(),
+    0,
+    'source activity must not leak into the new branch',
+  );
   const branch = (await page.evaluate(() => window.tongzhou.snapshot())).sessions.find((s) =>
     s.title.includes('分支'),
   );

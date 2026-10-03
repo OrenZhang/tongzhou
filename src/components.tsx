@@ -349,7 +349,7 @@ export function Markdown({ text }: { text: string }) {
     </div>
   );
 }
-export function ChatMessage({ message: m }: { message: Message }) {
+export function ChatMessage({ message: m, footer }: { message: Message; footer?: ReactNode }) {
   const [open, setOpen] = useState(false);
   if (m.role === 'system')
     return (
@@ -410,6 +410,7 @@ export function ChatMessage({ message: m }: { message: Message }) {
             <code>{t.arguments.slice(0, 120)}</code>
           </div>
         ))}
+        {footer}
       </div>
     </article>
   );

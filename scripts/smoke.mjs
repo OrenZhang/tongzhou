@@ -185,6 +185,18 @@ try {
   }
   assert.equal(state.runs[0].status, 'completed');
   assert.equal(state.runs[0].inputTokens, 30);
+  assert.equal(await page.locator('.conversation-turn').count(), 1);
+  assert.equal(
+    await page.locator('.chat-message.assistant').count(),
+    1,
+    'tool iteration must not create another assistant bubble',
+  );
+  assert.equal(await page.locator('.assistant-segment').count(), 2);
+  await page.getByText('处理过程', { exact: true }).click();
+  await page.locator('.run-activity .tool-message > button').click();
+  assert.ok(
+    (await page.locator('.run-activity .tool-message pre').innerText()).includes('hello.txt'),
+  );
   await page.screenshot({ path: 'test-results/05-conversation.png' });
   await page.getByRole('button', { name: '运行记录', exact: true }).click();
   await page.locator('.table-row').first().waitFor();
@@ -226,6 +238,7 @@ try {
           'streaming',
           'write approval',
           'tool execution',
+          'one assistant turn across tool iterations with expandable evidence',
           'usage',
           'Codex handshake',
           'isolated auth',

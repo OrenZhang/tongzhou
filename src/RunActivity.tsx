@@ -1,73 +1,102 @@
 import { useEffect, useState } from 'react';
-import type { Run, RunEvent, Snapshot, TongzhouAPI } from './shared/types';
+import type { Message, Run, RunEvent, Snapshot, TongzhouAPI } from './shared/types';
+import { ChatMessage } from './components';
 
-export function RunActivity({
-  api,
-  sessionId,
-  run,
-  data,
-}: {
-  api: TongzhouAPI;
-  sessionId: string;
-  run?: Run;
-  data: Snapshot;
-}) {
-  const [events, setEvents] = useState<RunEvent[]>([]);
-  const [now, setNow] = useState(Date.now());
-  const [error, setError] = useState('');
-  const [editing, setEditing] = useState('');
-  const [draft, setDraft] = useState('');
+export function useRunEvents(api: TongzhouAPI, sessionId: string) {
+  const [state, setState] = useState({ sessionId: '', events: [] as RunEvent[], error: '' });
   useEffect(() => {
     let alive = true;
-    setEvents([]);
-    if (!sessionId) return;
+    setState({ sessionId, events: [], error: '' });
+    if (!api || !sessionId) return;
+    // Subscribe before loading history so streaming updates cannot fall into a gap.
+    const off = api.onEvent((e) => {
+      if (alive && e.type === 'run-event' && e.event.sessionId === sessionId)
+        setState((old) => ({
+          sessionId,
+          error: '',
+          events: [...old.events.filter((v) => v.id !== e.event.id), e.event],
+        }));
+    });
     void api
       .runEvents(sessionId)
-      .then((e) => {
-        if (alive)
-          setEvents((old) => {
-            const merged = new Map(e.map((v) => [v.id, v]));
-            for (const v of old) merged.set(v.id, v);
-            return [...merged.values()];
-          });
+      .then((events) => {
+        if (!alive) return;
+        setState((old) => {
+          const merged = new Map(events.map((event) => [event.id, event]));
+          for (const event of old.events) merged.set(event.id, event);
+          return { sessionId, events: [...merged.values()], error: '' };
+        });
       })
-      .catch((e) => alive && setError(String(e)));
-    const off = api.onEvent((e) => {
-      if (e.type === 'run-event' && e.event.sessionId === sessionId)
-        setEvents((old) => [...old.filter((v) => v.id !== e.event.id), e.event]);
-    });
+      .catch((e) => alive && setState((old) => ({ ...old, error: String(e) })));
     return () => {
       alive = false;
       off();
     };
   }, [api, sessionId]);
+  return state.sessionId === sessionId ? state : { sessionId, events: [], error: '' };
+}
+
+export function RunActivity({
+  events,
+  run,
+  tools = [],
+}: {
+  events: RunEvent[];
+  run?: Run;
+  tools?: Message[];
+}) {
+  const [now, setNow] = useState(Date.now());
+  const active = run?.status === 'running';
   useEffect(() => {
-    if (!run) return;
-    const timer = setInterval(() => setNow(Date.now()), 500);
+    if (!active) return;
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
-  }, [run?.id]);
-  const latestRunId = run?.id ?? events.at(-1)?.runId;
-  const relevant = events.filter((e) => e.runId === latestRunId).sort((a, b) => a.seq - b.seq);
-  const phase = relevant.filter((e) => e.type === 'phase').at(-1)?.text ?? '准备请求';
+  }, [active, run?.id]);
+  const phase = events.filter((e) => e.type === 'phase').at(-1)?.text ?? '准备请求';
+  if (!events.length && !tools.length && !active) return null;
   return (
-    <div className="run-activity" aria-live="polite">
-      {run && (
-        <p>
+    <div className="run-activity">
+      {active && run && (
+        <p className="run-phase" role="status">
           <span className="live-dot" /> {phase} ·{' '}
           {Math.max(0, Math.floor((now - run.startedAt) / 1000))} 秒
         </p>
       )}
-      {relevant.length > 0 && (
+      {(events.length > 0 || tools.length > 0) && (
         <details>
           <summary>处理过程</summary>
-          {relevant.map((e) => (
-            <div key={e.id} className="run-event">
-              <small>{new Date(e.time).toLocaleTimeString()}</small>
-              <pre>{e.text}</pre>
-            </div>
-          ))}
+          <div className="run-event-list">
+            {events.map((e) => (
+              <div key={e.id} className="run-event">
+                <small>{new Date(e.time).toLocaleTimeString()}</small>
+                <pre>{e.text}</pre>
+              </div>
+            ))}
+            {tools.map((m) => (
+              <ChatMessage key={m.id} message={m} />
+            ))}
+          </div>
         </details>
       )}
+    </div>
+  );
+}
+
+export function PendingInputs({
+  api,
+  sessionId,
+  data,
+}: {
+  api: TongzhouAPI;
+  sessionId: string;
+  data: Snapshot;
+}) {
+  const [error, setError] = useState('');
+  const [editing, setEditing] = useState('');
+  const [draft, setDraft] = useState('');
+  return (
+    <div className="pending-inputs">
       {(data.pendingInputs ?? [])
         .filter((p) => p.sessionId === sessionId)
         .map((p) => (
