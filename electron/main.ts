@@ -530,6 +530,8 @@ function setup() {
   let diagnosing = false;
   register('computerSelfTest', async () => {
     if (diagnosing) throw new Error('自检正在进行');
+    if (runtime.snapshot().runs.some((r) => r.status === 'running'))
+      throw new Error('有任务正在运行，请等待结束或停止任务后再检测电脑控制。');
     diagnosing = true;
     try {
       const result = await computerDiagnostic(computer);

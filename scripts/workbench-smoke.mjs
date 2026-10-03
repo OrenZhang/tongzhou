@@ -137,6 +137,7 @@ try {
   await ordinaryRow.hover();
   await ordinaryRow.getByRole('button', { name: '删除会话', exact: true }).click();
   assert.ok((await page.getByRole('dialog').innerText()).includes('确认删除“普通会话”'));
+  await capture('delete-confirmation');
   await page.getByRole('dialog').getByRole('button', { name: '取消', exact: true }).click();
   assert.equal(await ordinaryRow.count(), 1);
   const disposable = await page.evaluate(() => window.tongzhou.createSession('project'));

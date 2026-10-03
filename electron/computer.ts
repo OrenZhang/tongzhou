@@ -2,6 +2,7 @@ import { desktopCapturer, systemPreferences } from 'electron';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
+import { setTimeout as delay } from 'node:timers/promises';
 import { z } from 'zod';
 import { command } from './workspace';
 import type { ComputerAdapter } from './extensions';
@@ -224,14 +225,27 @@ export class DesktopComputer implements ComputerAdapter {
         const windows: WindowInfo[] = await this.helper({ action: 'windows' }, signal);
         const window = windows.find((w) => w.id === windowId);
         if (!window) throw new Error('窗口已关闭，请重新列出窗口');
-        const sources = await desktopCapturer.getSources({
-          types: ['window'],
-          thumbnailSize: { width: 1280, height: 960 },
-          fetchWindowIcons: false,
-        });
-        const source = sources.find((s) => s.id.split(':')[1] === windowId);
+        let source: Awaited<ReturnType<typeof desktopCapturer.getSources>>[number] | undefined;
+        // A newly shown window may be enumerated before its first capture frame exists.
+        // Retry only the requested window; never substitute another window or a full screen.
+        for (let attempt = 0; attempt < 3; attempt++) {
+          signal.throwIfAborted();
+          const sources = await desktopCapturer.getSources({
+            types: ['window'],
+            thumbnailSize: { width: 1280, height: 960 },
+            fetchWindowIcons: false,
+          });
+          signal.throwIfAborted();
+          source = sources.find((s) => s.id.split(':')[1] === windowId);
+          if (source && !source.thumbnail.isEmpty()) break;
+          if (attempt < 2) await delay(150 * (attempt + 1), undefined, { signal });
+        }
         if (!source || source.thumbnail.isEmpty())
-          throw new Error('无法截取该窗口，请检查系统屏幕录制权限或窗口状态');
+          throw new Error(
+            process.platform === 'darwin'
+              ? '未获取目标窗口图像。请检查屏幕录制权限，并保持窗口可见后重试。'
+              : '未获取目标窗口图像。请保持窗口可见、退出最小化后重试；受保护窗口可能不允许截图。',
+          );
         const image = source.thumbnail;
         const { width, height } = image.getSize();
         const frameId = randomUUID();

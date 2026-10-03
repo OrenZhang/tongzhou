@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-vi.mock('electron', () => ({ desktopCapturer: {}, systemPreferences: {} }));
+vi.mock('electron', () => ({ desktopCapturer: { getSources: vi.fn() }, systemPreferences: {} }));
+import { desktopCapturer } from 'electron';
 import { actionSchema, mapPoint, DesktopComputer } from '../electron/computer';
 describe('computer tool boundaries', () => {
   it('maps screenshot coordinates to physical window coordinates including negative monitors', () => {
@@ -29,5 +30,46 @@ describe('computer tool boundaries', () => {
       'computer_screenshot',
     ]);
     expect(computer.specs(false)).toHaveLength(7);
+  });
+  it('retries a newly shown window without using another window image', async () => {
+    const computer = new DesktopComputer();
+    vi.spyOn(computer, 'status').mockReturnValue({
+      supported: true,
+      platform: 'win32',
+      screen: 'available',
+      accessibility: true,
+      emergencyShortcut: false,
+    });
+    vi.spyOn(computer as any, 'helper').mockResolvedValue([
+      {
+        id: '123',
+        title: 'Owned fixture',
+        pid: 1,
+        bounds: { x: 0, y: 0, width: 600, height: 300 },
+      },
+    ]);
+    const image = {
+      isEmpty: () => false,
+      getSize: () => ({ width: 600, height: 300 }),
+      toJPEG: () => Buffer.from('target-window'),
+    };
+    const capture = vi.mocked(desktopCapturer.getSources);
+    capture.mockReset();
+    capture.mockResolvedValueOnce([{ id: 'window:999:1', thumbnail: image }] as any);
+    capture.mockResolvedValueOnce([{ id: 'window:123:1', thumbnail: image }] as any);
+    const result = await computer.execute(
+      'computer_screenshot',
+      { windowId: '123' },
+      new AbortController().signal,
+    );
+    expect(capture).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(result.text).window).toBe('Owned fixture');
+    expect(result.images?.[0].data).toBe(Buffer.from('target-window').toString('base64'));
+    capture.mockReset();
+    capture.mockResolvedValue([]);
+    await expect(
+      computer.execute('computer_screenshot', { windowId: '123' }, new AbortController().signal),
+    ).rejects.toThrow('未获取目标窗口图像');
+    expect(capture).toHaveBeenCalledTimes(3);
   });
 });

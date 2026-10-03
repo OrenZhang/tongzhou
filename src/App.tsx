@@ -1841,7 +1841,7 @@ export default function App() {
           <main className="page settings-page">
             <div className="page-heading">
               <h1>设置与关于</h1>
-              <p>同舟 0.5.4 · 开源多模型桌面工作台</p>
+              <p>同舟 0.5.5 · 开源多模型桌面工作台</p>
             </div>
             <Appearance value={appearance} onChange={setAppearance} />
             <section className="settings-card">
@@ -2348,18 +2348,25 @@ export default function App() {
         </Modal>
       )}
       {deleteId && (
-        <Modal title="删除会话" onClose={() => setDeleteId('')}>
-          <p>
-            确认删除“{data.sessions.find((s) => s.id === deleteId)?.title ?? '此会话'}
-            ”？消息、运行记录和内部团队子会话将一并删除，项目文件和共享配置会保留。
-          </p>
-          {data.runs.some((r) => r.sessionId === deleteId && r.status === 'running') && (
-            <p>此会话正在执行，删除会同时停止任务。</p>
-          )}
+        <Modal title="删除会话" onClose={() => setDeleteId('')} compact>
+          <div className="modal-content confirmation-content">
+            <p>
+              确认删除“
+              <strong>{data.sessions.find((s) => s.id === deleteId)?.title ?? '此会话'}</strong>”？
+            </p>
+            <p className="muted">
+              消息、运行记录和内部团队子会话将一并删除。项目文件和共享配置会保留。
+            </p>
+            {data.runs.some((r) => r.sessionId === deleteId && r.status === 'running') && (
+              <p className="danger">此会话正在执行，删除会同时停止任务。</p>
+            )}
+          </div>
           <div className="modal-footer">
-            <button onClick={() => setDeleteId('')}>取消</button>
+            <button className="secondary" onClick={() => setDeleteId('')}>
+              取消
+            </button>
             <button
-              className="primary"
+              className="destructive-button"
               onClick={() =>
                 perform(async () => {
                   await api.deleteSession(deleteId);

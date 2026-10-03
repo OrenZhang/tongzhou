@@ -114,7 +114,7 @@ export class CodexClient extends EventEmitter {
       } catch {}
     });
     await this.request('initialize', {
-      clientInfo: { name: 'tongzhou', title: '同舟 Tongzhou', version: '0.5.4' },
+      clientInfo: { name: 'tongzhou', title: '同舟 Tongzhou', version: '0.5.5' },
       capabilities: { experimentalApi: true },
     });
     this.notify('initialized', {});

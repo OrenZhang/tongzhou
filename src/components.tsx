@@ -75,12 +75,14 @@ export function Modal({
   children,
   onClose,
   wide = false,
+  compact = false,
 }: {
   title: string;
   subtitle?: string;
   children: ReactNode;
   onClose: () => void;
   wide?: boolean;
+  compact?: boolean;
 }) {
   const modal = useRef<HTMLElement>(null);
   const previousFocus = useRef(document.activeElement as HTMLElement | null);
@@ -132,7 +134,7 @@ export function Modal({
     >
       <section
         ref={modal}
-        className={'modal ' + (wide ? 'wide' : '')}
+        className={'modal ' + (wide ? 'wide' : compact ? 'compact' : '')}
         role="dialog"
         aria-modal="true"
         aria-label={title}

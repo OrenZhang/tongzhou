@@ -56,7 +56,7 @@ export function mcpName(id: string, name: string) {
 }
 
 export class PluginConnection {
-  readonly client = new Client({ name: 'tongzhou', version: '0.5.4' }, { capabilities: {} });
+  readonly client = new Client({ name: 'tongzhou', version: '0.5.5' }, { capabilities: {} });
   private secretValues: string[] = [];
   constructor(
     readonly config: PluginConfig,

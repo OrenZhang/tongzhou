@@ -1,16 +1,11 @@
-import { useEffect, useState } from 'react';
-import { Plus, Plug, Monitor, RefreshCw, Trash2, Upload, ShieldCheck, Square } from 'lucide-react';
+import { useState } from 'react';
+import { Plus, Plug, RefreshCw, Trash2, Upload } from 'lucide-react';
 import { Field, Modal, Spinner } from './components';
 import { MultiValueInput } from './MultiValueInput';
 import { OAuthFields, WorkPlugins, workPluginCatalog, PluginAuthStatus } from './WorkPlugins';
 import { errorMessage } from './feedback';
-import type {
-  AgentProfile,
-  ComputerStatus,
-  PluginInput,
-  Snapshot,
-  TongzhouAPI,
-} from './shared/types';
+import { CoreCapabilities } from './CoreCapabilities';
+import type { AgentProfile, PluginInput, Snapshot, TongzhouAPI } from './shared/types';
 
 export function Extensions({
   api,
@@ -26,15 +21,11 @@ export function Extensions({
   const [tab, setTab] = useState<'core' | 'catalog' | 'mcp' | 'skills'>('core');
   const [loginUrl, setLoginUrl] = useState('');
   const [edit, setEdit] = useState<PluginInput | null>(null);
-  const [status, setStatus] = useState<ComputerStatus>();
   const [busy, setBusy] = useState(false);
   const [catalogs, setCatalogs] = useState<Record<string, { name: string; description: string }[]>>(
     {},
   );
   const [notice, setNotice] = useState('');
-  useEffect(() => {
-    api.computerStatus().then(setStatus).catch(report);
-  }, [api]);
   const perform = async (fn: () => Promise<unknown>) => {
     setBusy(true);
     setNotice('');
@@ -91,116 +82,7 @@ export function Extensions({
       {tab === 'catalog' && (
         <WorkPlugins api={api} data={data} refresh={refresh} onCustom={() => setTab('mcp')} />
       )}
-      <div className="core-capabilities" hidden={tab !== 'core'}>
-        <section className="settings-card">
-          <div className="settings-card-title">
-            <Monitor />
-            <div>
-              <h3>电脑控制</h3>
-              <p>查看窗口、截图、点击、输入、快捷键、滚动与拖动。</p>
-            </div>
-          </div>
-          <p>
-            当前平台：
-            {status?.platform === 'win32'
-              ? 'Windows'
-              : status?.platform === 'darwin'
-                ? 'macOS'
-                : (status?.platform ?? '检查中')}{' '}
-            · 屏幕权限：
-            {status?.screen === 'available' ? '无需系统授权' : (status?.screen ?? '检查中')} ·
-            辅助功能：
-            {!status
-              ? '检查中'
-              : status.platform === 'win32'
-                ? '无需系统授权'
-                : status.accessibility
-                  ? '已授权'
-                  : '未授权'}
-          </p>
-          <p>
-            {status?.diagnostic
-              ? `${status.diagnostic.ok ? '✓ 自检通过' : '自检失败'} · ${new Date(status.diagnostic.time).toLocaleString()} · ${status.diagnostic.detail}`
-              : '尚未进行本机功能自检'}
-          </p>
-          <p className="muted">
-            需要支持图片与工具调用的模型，截图会发送给当前选用的服务。每次操作展示审批；窗口变化后需重新截图。快捷停止：
-            {status?.emergencyShortcut
-              ? 'Ctrl / ⌘ + Alt + Esc'
-              : '快捷键未注册，请使用下方“停止全部任务”'}
-            。
-          </p>
-          <div className="row wrap">
-            <button
-              className="secondary"
-              disabled={busy}
-              onClick={() =>
-                perform(async () => {
-                  setStatus(await api.computerPermission());
-                  setNotice(
-                    '系统权限状态已刷新 · ' +
-                      new Date().toLocaleTimeString() +
-                      '；操作效果需通过功能测试确认',
-                  );
-                })
-              }
-            >
-              <ShieldCheck size={16} />
-              检查系统权限
-            </button>
-            <button
-              className="secondary"
-              disabled={busy || !status?.supported}
-              onClick={() =>
-                perform(async () => {
-                  const next = await api.computerSelfTest();
-                  setStatus(next);
-                  setNotice(next.diagnostic?.detail ?? '自检结束');
-                })
-              }
-            >
-              本机功能自检（打开测试窗口）
-            </button>
-            <label className="checkbox-line">
-              <input
-                type="checkbox"
-                checked={data.capabilities?.computer ?? false}
-                onChange={(e) => perform(() => api.setCapability('computer', e.target.checked))}
-              />
-              启用电脑控制
-            </label>
-            <button
-              className="text-button danger"
-              disabled={!data.runs.some((r) => r.status === 'running') || busy}
-              onClick={() =>
-                perform(async () => {
-                  await api.emergencyStop();
-                  setNotice('已请求停止所有运行任务');
-                })
-              }
-            >
-              <Square size={15} />
-              停止全部任务（{data.runs.filter((r) => r.status === 'running').length}）
-            </button>
-          </div>
-        </section>
-        <section className="settings-card">
-          <h3>客户端管理</h3>
-          <p>在会话中查询与管理 Agent、插件、连接和会话。修改沿用操作审批。</p>
-          <label className="checkbox-line">
-            <input
-              type="checkbox"
-              checked={data.capabilities?.management ?? true}
-              onChange={(e) => perform(() => api.setCapability('management', e.target.checked))}
-            />
-            启用客户端管理
-          </label>
-        </section>
-        <section className="settings-card">
-          <h3>项目文件与终端</h3>
-          <p>内置能力 · 关联项目后可用，按项目范围和只读策略执行。</p>
-        </section>
-      </div>
+      {tab === 'core' && <CoreCapabilities api={api} data={data} refresh={refresh} />}
       <div hidden={tab !== 'mcp'}>
         <div className="section-heading">
           <h2>MCP 插件</h2>
