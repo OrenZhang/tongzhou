@@ -12,8 +12,9 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   font-size: 13px;
-  --teal: #176c5b;
-  --teal-light: #e7f2ee;
+  --accent: #4b5e8c;
+  --accent-soft: #edf0f6;
+  --brand: #176c5b;
   --ink: #222831;
   --muted: #667080;
   --border: #e1e5ea;
@@ -22,7 +23,7 @@
   --surface: #ffffff;
   --surface-muted: #f3f5f7;
   --sidebar: #f4f5f7;
-  --accent-hover: #115847;
+  --accent-hover: #3d4e76;
   --danger: #b73b36;
   --danger-soft: #fff1f0;
   --warning: #926017;
@@ -84,15 +85,15 @@ select {
 input:focus,
 textarea:focus,
 select:focus {
-  border-color: var(--teal);
-  box-shadow: 0 0 0 3px #176c5b12;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px #4b5e8c14;
 }
 textarea {
   resize: vertical;
   line-height: 1.7;
 }
 button:focus-visible {
-  outline: 2px solid var(--teal);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 h1,
@@ -109,7 +110,7 @@ svg {
   height: 6px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cdd5d6;
+  background: #d0d5dd;
   border-radius: 5px;
 }
 ::-webkit-scrollbar-track {
@@ -145,7 +146,7 @@ svg {
   height: 29px;
   align-items: center;
   justify-content: center;
-  color: var(--teal);
+  color: var(--brand);
 }
 .brand-mark svg {
   width: 100%;
@@ -212,8 +213,8 @@ svg {
   font-size: 13px;
 }
 .sidebar nav button.active {
-  background: var(--teal-light);
-  color: var(--teal);
+  background: var(--accent-soft);
+  color: var(--accent);
   font-weight: 600;
 }
 .nav-count {
@@ -223,7 +224,7 @@ svg {
   border-radius: 4px;
   padding: 0 5px;
   line-height: 17px;
-  color: var(--teal);
+  color: var(--accent);
   background: #ffffffa8;
 }
 .sidebar-divider {
@@ -320,8 +321,8 @@ svg {
   white-space: nowrap;
 }
 .session-list button.selected {
-  background: var(--teal-light);
-  color: var(--teal);
+  background: var(--accent-soft);
+  color: var(--accent);
   font-weight: 500;
 }
 .session-dot {
@@ -382,8 +383,8 @@ svg {
   color: var(--muted);
 }
 .sidebar-bottom > button.active {
-  color: var(--teal);
-  background: var(--teal-light);
+  color: var(--accent);
+  background: var(--accent-soft);
   border-radius: 6px;
 }
 .main-shell {
@@ -565,10 +566,10 @@ svg {
   display: flex;
   align-items: center;
   gap: 5px;
-  color: var(--teal);
+  color: var(--accent);
   width: fit-content;
   border-radius: 4px;
-  background: var(--teal-light);
+  background: var(--accent-soft);
   padding: 2px 6px;
 }
 .session-permission {
@@ -636,14 +637,14 @@ svg {
 .eyebrow > span {
   width: 5px;
   height: 5px;
-  background: #96b5a4;
+  background: var(--accent);
   border-radius: 50%;
 }
 .welcome-mark {
   width: 44px;
   height: 44px;
   border-radius: 12px;
-  background: var(--teal-light);
+  background: var(--surface-muted);
   border: 0;
   box-shadow: none;
   display: flex;
@@ -679,7 +680,7 @@ svg {
   margin-bottom: 24px;
 }
 .primary {
-  background: var(--teal);
+  background: var(--accent);
   color: #fff;
   padding: 7px 13px;
   border-radius: 7px;
@@ -734,7 +735,7 @@ svg {
   transform: none;
 }
 .prompt-grid > button > svg:first-child {
-  color: var(--teal);
+  color: var(--accent);
   background: none;
   box-sizing: content-box;
   padding: 0;
@@ -744,11 +745,11 @@ svg {
   height: 18px;
 }
 .prompt-grid > button:nth-child(2) > svg:first-child {
-  color: var(--teal);
+  color: var(--accent);
   background: none;
 }
 .prompt-grid > button:nth-child(3) > svg:first-child {
-  color: var(--teal);
+  color: var(--accent);
   background: none;
 }
 .prompt-grid strong {
@@ -792,9 +793,9 @@ svg {
   overflow: hidden;
 }
 .composer:focus-within {
-  border-color: #6ba797;
+  border-color: #8292b2;
   box-shadow:
-    0 0 0 3px #176c5b0a,
+    0 0 0 3px #4b5e8c0d,
     0 2px 8px #1c273008;
 }
 .composer textarea {
@@ -824,7 +825,7 @@ svg {
   align-items: center;
   gap: 10px;
   border: 0;
-  background: var(--teal-light);
+  background: var(--accent-soft);
   border-radius: 9px;
   padding: 6px 10px;
   margin-bottom: 7px;
@@ -1011,7 +1012,7 @@ svg {
 .send-button {
   width: 32px;
   height: 32px;
-  background: var(--teal);
+  background: var(--accent);
   border-radius: 8px;
   color: white;
 }
@@ -1077,8 +1078,8 @@ svg {
   border-bottom: 2px solid transparent;
 }
 .context-tabs > button.active {
-  color: var(--teal);
-  border-bottom-color: var(--teal);
+  color: var(--accent);
+  border-bottom-color: var(--accent);
 }
 .context-tabs > .icon-button {
   margin-left: auto;
@@ -1212,8 +1213,8 @@ svg {
   width: 26px;
   height: 26px;
   border-radius: 8px;
-  background: var(--teal-light);
-  color: var(--teal);
+  background: var(--surface-muted);
+  color: var(--accent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1465,13 +1466,13 @@ svg {
 .agent-avatar {
   width: 34px;
   height: 34px;
-  background: var(--teal-light);
+  background: var(--accent-soft);
   border: 0;
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--teal);
+  color: var(--accent);
 }
 .provider-icon.openai-chat {
   color: var(--muted);
@@ -1542,7 +1543,7 @@ svg {
   white-space: nowrap;
 }
 .card-footer button {
-  color: var(--teal);
+  color: var(--accent);
   font-size: 12px;
   padding: 4px;
   border-radius: 4px;
@@ -1751,7 +1752,7 @@ svg {
   display: flex;
   align-items: center;
   gap: 12px;
-  color: var(--teal);
+  color: var(--accent);
   margin-bottom: 16px;
 }
 .settings-card-title h3 {
@@ -1937,7 +1938,7 @@ svg {
   margin-bottom: 12px;
 }
 input[type='checkbox'] {
-  accent-color: var(--teal);
+  accent-color: var(--accent);
   box-shadow: none;
   width: 16px;
   height: 16px;
@@ -2359,7 +2360,7 @@ input[type='checkbox'] {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 5px;
-  box-shadow: 0 6px 28px #244c3724;
+  box-shadow: 0 6px 28px #25324b24;
 }
 .input-mode-menu > button {
   width: 100%;
@@ -2419,8 +2420,8 @@ kbd {
   font-size: 10px;
 }
 .topbar .icon-button.active {
-  color: var(--teal);
-  background: var(--teal-light);
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 .breadcrumb strong {
   overflow: hidden;
@@ -2450,7 +2451,7 @@ kbd {
 }
 .section-tabs > button.active {
   color: var(--ink);
-  border-bottom-color: var(--teal);
+  border-bottom-color: var(--accent);
   font-weight: 600;
 }
 .tab-count {
@@ -2483,8 +2484,8 @@ kbd {
   background: var(--surface);
 }
 .filter-input:focus-within {
-  border-color: var(--teal);
-  box-shadow: 0 0 0 2px #176c5b0a;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px #4b5e8c0d;
 }
 .filter-input input {
   border: 0;
@@ -2798,13 +2799,13 @@ kbd {
   transition: transform 0.15s;
 }
 .switch-control input:checked + span {
-  background: var(--teal);
+  background: var(--accent);
 }
 .switch-control input:checked + span::after {
   transform: translateX(12px);
 }
 .switch-control input:focus-visible + span {
-  outline: 2px solid var(--teal);
+  outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
 .switch-control input:disabled + span {
@@ -2854,7 +2855,7 @@ kbd {
   gap: 12px;
 }
 .command-results > button[aria-selected='true'] {
-  background: var(--teal-light);
+  background: var(--accent-soft);
 }
 .command-results > button > span {
   flex: 1;
@@ -3067,8 +3068,8 @@ kbd {
 }
 .model-picker-list button:hover,
 .model-picker-list button[aria-pressed='true'] {
-  background: var(--teal-light);
-  color: var(--teal);
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 .process-tool-group,
 .process-tool {

@@ -341,7 +341,7 @@ try {
   const colors = await page.evaluate(() => {
     const styles = getComputedStyle(document.documentElement);
     return Object.fromEntries(
-      ['--muted', '--secondary-text', '--teal', '--canvas'].map((key) => [
+      ['--muted', '--secondary-text', '--accent', '--canvas'].map((key) => [
         key,
         styles.getPropertyValue(key).trim(),
       ]),
@@ -357,7 +357,7 @@ try {
   const contrast = (a, b) =>
     (Math.max(luminance(a), luminance(b)) + 0.05) / (Math.min(luminance(a), luminance(b)) + 0.05);
   assert.ok(contrast(colors['--muted'], colors['--canvas']) >= 4.5);
-  assert.ok(contrast(colors['--teal'], '#ffffff') >= 4.5);
+  assert.ok(contrast(colors['--accent'], '#ffffff') >= 4.5);
   assert.deepEqual(errors, []);
   checks.push(
     'all major screens at 1440×900 and 1000×700 without horizontal overflow',
