@@ -32,7 +32,9 @@ describe('long conversations and concurrent changes', () => {
     const run = (command: string) =>
       executeTool(
         'run_command',
-        JSON.stringify({ command, timeoutMs: 30000 }),
+        // A fresh hosted Windows image can spend over 30 seconds starting its
+        // first Windows PowerShell process. Keep a bound and report the timing.
+        JSON.stringify({ command, timeoutMs: 90000 }),
         root,
         'ask',
         new AbortController().signal,
@@ -43,6 +45,7 @@ describe('long conversations and concurrent changes', () => {
         ? "Write-Output '同舟：中文与引号 ''完整'''; exit 7"
         : "printf '%s\\n' '同舟：中文与引号 完整'; exit 7";
     const result = JSON.parse(await run(script));
+    if (process.env.CI) console.log('Project shell cold-start ms:', result.durationMs);
     expect(result.status, JSON.stringify(result)).toBe('completed');
     expect(result.exitCode).toBe(7);
     expect(result.stdout).toContain('同舟：中文与引号');
@@ -58,7 +61,7 @@ describe('long conversations and concurrent changes', () => {
       ),
     );
     expect(failed.exitCode).toBe(7);
-  }, 60000);
+  }, 180000);
   it.skipIf(process.platform !== 'win32')(
     'reports PowerShell parsing failures in readable UTF-8',
     async () => {

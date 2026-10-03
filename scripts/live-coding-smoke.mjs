@@ -88,11 +88,32 @@ try {
     }
     const messages = await page.evaluate((id) => window.tongzhou.messages(id), sessionId);
     const events = await page.evaluate((id) => window.tongzhou.runEvents(id), sessionId);
+    const commands = messages
+      .filter((m) => m.runId === runId && m.role === 'tool' && m.toolName === 'run_command')
+      .map((m) => {
+        const split = m.content.indexOf('\n');
+        try {
+          const args = JSON.parse(m.content.slice(0, split));
+          const result = JSON.parse(m.content.slice(split + 1));
+          return {
+            command: args.command,
+            exitCode: result.exitCode,
+            status: result.status,
+            durationMs: result.durationMs,
+            typeFailure: /TS2322/.test(result.output),
+            testFailure: /# fail [1-9]|not ok|AssertionError/.test(result.output),
+            testSuccess: /# fail 0/.test(result.output),
+          };
+        } catch {
+          return { status: 'unavailable' };
+        }
+      });
     report.runs.push({
       runId,
       sessionId,
       project: project ? path.basename(project) : null,
       timedOut,
+      commands,
       status: run.status,
       durationMs: Date.now() - started,
       inputTokens: run.usageReported ? run.inputTokens : null,
@@ -323,6 +344,30 @@ try {
           );
           const answer = await run(session.id, task.prompt, dir);
           await task.check(dir, answer);
+          // Judge the workflow by actual tool results, not the model's final narrative.
+          const commands = report.runs.at(-1).commands;
+          if (task.id === 'D04' || task.id === 'D05') {
+            const failure = commands.findIndex(
+              (c) =>
+                c.status === 'completed' &&
+                c.exitCode !== 0 &&
+                (task.id === 'D04' ? c.typeFailure : c.testFailure),
+            );
+            assert.ok(failure >= 0, 'Missing actual failed build/test evidence');
+            assert.ok(
+              commands
+                .slice(failure + 1)
+                .some(
+                  (c) =>
+                    c.status === 'completed' &&
+                    c.exitCode === 0 &&
+                    (task.id === 'D04'
+                      ? /tsc|npm run build|node build.cjs/.test(c.command)
+                      : c.testSuccess),
+                ),
+              'Missing successful verification after the failure',
+            );
+          }
           for (const [name, content] of Object.entries(original)) {
             if (task.id !== 'D01' && /test\.js$/.test(name))
               assert.ok(
