@@ -231,7 +231,16 @@ try {
           '先执行 npm run build 查看类型错误，修复 math.ts 的 sum 实现（两个数字相加返回数字），保持类型约束，再重新构建确认通过。',
         check: async (dir) => {
           await promisify(execFile)(node, [tsc, '-p', dir], { windowsHide: true });
-          assert.ok((await readFile(path.join(dir, 'math.ts'), 'utf8')).includes(':number'));
+          assert.match(await readFile(path.join(dir, 'math.ts'), 'utf8'), /:\s*number/);
+          assert.equal(
+            JSON.parse(await readFile(path.join(dir, 'tsconfig.json'), 'utf8')).compilerOptions
+              .strict,
+            true,
+          );
+          await external(
+            dir,
+            "import {sum} from './math.ts'; assert.equal(sum(2,3),5); assert.equal(sum(-3,1),-2); assert.equal(sum(0,0),0);",
+          );
         },
       },
       {
@@ -291,9 +300,15 @@ try {
           );
           const answer = await run(session.id, task.prompt, dir);
           await task.check(dir, answer);
-          for (const [name, content] of Object.entries(original))
-            if (task.id === 'D01' || /test\.js$|agent.md|user-notes.txt/.test(name))
+          for (const [name, content] of Object.entries(original)) {
+            if (task.id !== 'D01' && /test\.js$/.test(name))
+              assert.ok(
+                (await readFile(path.join(dir, name), 'utf8')).includes(content),
+                'Original test expectations must remain intact: ' + name,
+              );
+            else if (task.id === 'D01' || /agent.md|user-notes.txt/.test(name))
               assert.equal(await readFile(path.join(dir, name), 'utf8'), content);
+          }
           record.passed = true;
         } catch (e) {
           record.error = e.message;

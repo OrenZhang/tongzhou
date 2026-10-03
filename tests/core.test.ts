@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtemp, readFile, rm, mkdir, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, mkdir, symlink, writeFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { Store } from '../electron/store';
@@ -97,7 +97,9 @@ describe('endpoint and workspace boundaries', () => {
     for (const p of ['../outside', 'a/../../outside', 'C:\\outside'])
       await expect(within(root, p, true)).rejects.toThrow();
     await expect(within(root, '.git/config', true)).rejects.toThrow();
-    expect(await within(root, 'src/new.ts', true)).toBe(path.join(root, 'src/new.ts'));
+    expect(await within(root, 'src/new.ts', true)).toBe(
+      path.join(await realpath(root), 'src/new.ts'),
+    );
   });
   it('does not follow symlinks or Windows junctions', async () => {
     const root = await temp();
