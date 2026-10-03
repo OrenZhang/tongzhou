@@ -1,8 +1,8 @@
 import { GitBranch, Quote } from 'lucide-react';
 import type { Message } from './shared/types';
 import type { ConversationTurn as Turn } from './shared/turns';
-import { ChatMessage, Mark, Markdown, Spinner } from './components';
-import { RunActivity } from './RunActivity';
+import { ChatMessage, Mark, Markdown } from './components';
+import { TurnThinking } from './RunActivity';
 
 interface Actions {
   onQuote: (message: Message) => void;
@@ -39,11 +39,7 @@ function MessageActions({
   );
 }
 
-export function ConversationTurn({
-  turn,
-  showTools,
-  ...actions
-}: Actions & { turn: Turn; showTools: boolean }) {
+export function ConversationTurn({ turn, ...actions }: Actions & { turn: Turn }) {
   const first = turn.messages[0];
   const prompt = first?.role === 'user' ? first : undefined;
   const response = prompt ? turn.messages.slice(1) : turn.messages;
@@ -52,7 +48,6 @@ export function ConversationTurn({
   const active = turn.run
     ? turn.run.status === 'running'
     : assistants.some((m) => m.status === 'streaming');
-  const tools = response.filter((m) => m.role === 'tool' && (showTools || m.visibleTool));
   const hasResponse = response.length > 0 || turn.events.length > 0 || active;
   const endpoint = response.at(-1);
   const text = assistants
@@ -86,10 +81,10 @@ export function ConversationTurn({
                   assistant?.createdAt ?? turn.run?.startedAt ?? first?.createdAt ?? 0,
                 ).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
               </time>
-              {active && <Spinner />}
               {status === 'interrupted' && <span>已中断</span>}
               {(status === 'failed' || status === 'error') && <span>未完成</span>}
             </div>
+            <TurnThinking events={turn.events} run={turn.run} active={active} />
             {response.map((m) => {
               if (m.role === 'tool') return null;
               if (m.role === 'system') return <ChatMessage key={m.id} message={m} />;
@@ -107,7 +102,6 @@ export function ConversationTurn({
                 </div>
               ) : null;
             })}
-            <RunActivity events={turn.events} run={turn.run} tools={tools} />
             {!active && endpoint && text && (
               <MessageActions message={{ ...endpoint, content: text }} {...actions} />
             )}

@@ -1150,7 +1150,6 @@ export default function App() {
                     <ConversationTurn
                       key={turn.key}
                       turn={turn}
-                      showTools={!!project}
                       branchDisabled={!!running}
                       onQuote={(message) => {
                         setDraft(
@@ -1171,7 +1170,7 @@ export default function App() {
                 )}
               </div>
               <div className="composer-wrap">
-                {activity.error && <p role="alert">处理过程加载失败：{activity.error}</p>}
+                {activity.error && <p role="alert">思考摘要加载失败：{activity.error}</p>}
                 <PendingInputs key={sessionId} api={api} sessionId={sessionId} data={data} />
                 {selectedAgent && (
                   <div className="selected-agent-note">

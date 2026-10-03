@@ -2048,21 +2048,43 @@ input[type='checkbox'] {
   object-fit: contain;
   margin: 12px 0;
 }
-.run-activity {
-  margin: 6px 0;
+.turn-thinking {
+  margin: 0 0 12px;
   font-size: 12px;
   color: var(--muted);
 }
-.run-phase {
-  margin: 6px 0;
-  font-size: 11px;
+.thinking-toggle,
+.thinking-state {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 26px;
+  padding: 3px 0;
+  color: #84958e;
+  font-size: 12px;
 }
-.run-event-list {
-  max-height: 300px;
+.thinking-toggle {
+  border-radius: 4px;
+}
+.thinking-toggle small,
+.thinking-state small {
+  color: #98a6a0;
+  font-size: 10px;
+}
+.thinking-summary {
+  border-left: 2px solid #e4ebe7;
+  margin: 5px 0 9px 6px;
+  padding: 2px 12px;
+  max-height: 144px;
   overflow: auto;
 }
-.run-activity .tool-message {
-  margin-left: 0;
+.thinking-summary .markdown {
+  font-size: 12px;
+  color: #82938b;
+  line-height: 1.75;
+}
+.thinking-summary .markdown p:last-child {
+  margin-bottom: 0;
 }
 .pending-inputs {
   font-size: 12px;
@@ -2070,22 +2092,6 @@ input[type='checkbox'] {
 }
 .pending-inputs:empty {
   display: none;
-}
-.run-activity summary {
-  cursor: pointer;
-  padding: 7px 0;
-}
-.run-event {
-  padding: 6px 10px;
-  border-left: 2px solid #dce8e3;
-  margin: 4px 0;
-}
-.run-event pre {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  font: inherit;
-  color: #354d47;
-  margin: 3px 0;
 }
 .queued-input {
   display: flex;

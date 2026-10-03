@@ -192,10 +192,20 @@ try {
     'tool iteration must not create another assistant bubble',
   );
   assert.equal(await page.locator('.assistant-segment').count(), 2);
-  await page.getByText('处理过程', { exact: true }).click();
-  await page.locator('.run-activity .tool-message > button').click();
+  await page.getByRole('button', { name: '发送消息', exact: true }).waitFor();
+  assert.equal(await page.getByText('处理过程', { exact: true }).count(), 0);
+  assert.equal(
+    await page.locator('.turn-thinking, .tool-message').count(),
+    0,
+    'do not invent reasoning when the provider sends none',
+  );
+  const storedMessages = await page.evaluate(
+    (id) => window.tongzhou.messages(id),
+    state.runs[0].sessionId,
+  );
   assert.ok(
-    (await page.locator('.run-activity .tool-message pre').innerText()).includes('hello.txt'),
+    storedMessages.some((m) => m.role === 'tool' && m.content.includes('hello.txt')),
+    'hiding logs must preserve tool evidence in history',
   );
   await page.screenshot({ path: 'test-results/05-conversation.png' });
   await page.getByRole('button', { name: '运行记录', exact: true }).click();
@@ -238,7 +248,7 @@ try {
           'streaming',
           'write approval',
           'tool execution',
-          'one assistant turn across tool iterations with expandable evidence',
+          'one assistant turn across tool iterations; hidden logs retain stored evidence',
           'usage',
           'Codex handshake',
           'isolated auth',

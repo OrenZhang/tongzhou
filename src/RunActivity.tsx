@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
-import type { Message, Run, RunEvent, Snapshot, TongzhouAPI } from './shared/types';
-import { ChatMessage } from './components';
+import { useEffect, useId, useState } from 'react';
+import { Brain, ChevronDown } from 'lucide-react';
+import type { Run, RunEvent, Snapshot, TongzhouAPI } from './shared/types';
+import { Markdown, Spinner } from './components';
 
 export function useRunEvents(api: TongzhouAPI, sessionId: string) {
   const [state, setState] = useState({ sessionId: '', events: [] as RunEvent[], error: '' });
@@ -36,48 +37,69 @@ export function useRunEvents(api: TongzhouAPI, sessionId: string) {
   return state.sessionId === sessionId ? state : { sessionId, events: [], error: '' };
 }
 
-export function RunActivity({
+export function TurnThinking({
   events,
   run,
-  tools = [],
+  active,
 }: {
   events: RunEvent[];
   run?: Run;
-  tools?: Message[];
+  active: boolean;
 }) {
   const [now, setNow] = useState(Date.now());
-  const active = run?.status === 'running';
+  const [manual, setManual] = useState<{ phase: string; open: boolean }>();
+  const contentId = useId();
   useEffect(() => {
     if (!active) return;
     setNow(Date.now());
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [active, run?.id]);
-  const phase = events.filter((e) => e.type === 'phase').at(-1)?.text ?? '准备请求';
-  if (!events.length && !tools.length && !active) return null;
-  return (
-    <div className="run-activity">
+  const phase = events.filter((e) => e.type === 'phase').at(-1)?.text ?? '准备上下文';
+  const summaries = events.filter((e) => e.type === 'reasoning' && e.text.trim());
+  const phaseKey = active ? phase : 'finished';
+  const expanded = manual?.phase === phaseKey ? manual.open : active && phase === '思考中';
+  const labels: Record<string, string> = {
+    准备上下文: '准备中',
+    准备工具: '准备中',
+    连接模型: '正在连接',
+    等待模型响应: '等待回复',
+    调用工具: '正在处理',
+  };
+  const label = active ? (labels[phase] ?? phase) : '思考摘要';
+  if (!summaries.length && !active) return null;
+  const heading = (
+    <>
+      {active ? <Spinner /> : <Brain size={14} />}
+      <span role={active ? 'status' : undefined}>{label}</span>
       {active && run && (
-        <p className="run-phase" role="status">
-          <span className="live-dot" /> {phase} ·{' '}
-          {Math.max(0, Math.floor((now - run.startedAt) / 1000))} 秒
-        </p>
+        <small>已用 {Math.max(0, Math.floor((now - run.startedAt) / 1000))} 秒</small>
       )}
-      {(events.length > 0 || tools.length > 0) && (
-        <details>
-          <summary>处理过程</summary>
-          <div className="run-event-list">
-            {events.map((e) => (
-              <div key={e.id} className="run-event">
-                <small>{new Date(e.time).toLocaleTimeString()}</small>
-                <pre>{e.text}</pre>
-              </div>
-            ))}
-            {tools.map((m) => (
-              <ChatMessage key={m.id} message={m} />
+    </>
+  );
+  return (
+    <div className="turn-thinking">
+      {summaries.length ? (
+        <>
+          <button
+            className="thinking-toggle"
+            aria-label="思考摘要"
+            title={expanded ? '收起思考摘要' : '展开思考摘要'}
+            aria-expanded={expanded}
+            aria-controls={contentId}
+            onClick={() => setManual({ phase: phaseKey, open: !expanded })}
+          >
+            {heading}
+            <ChevronDown size={13} className={expanded ? 'rotate' : ''} />
+          </button>
+          <div id={contentId} className="thinking-summary" hidden={!expanded}>
+            {summaries.map((event) => (
+              <Markdown key={event.id} text={event.text} />
             ))}
           </div>
-        </details>
+        </>
+      ) : (
+        <div className="thinking-state">{heading}</div>
       )}
     </div>
   );
