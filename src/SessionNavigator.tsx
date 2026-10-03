@@ -94,52 +94,55 @@ export function SessionNavigator({
         </button>
       </div>
       <div className="project-list">
-        {data.projects.map((project) => {
-          const sessions = data.sessions.filter((s) => s.projectId === project.id && matching(s));
-          if (
-            query &&
-            !sessions.length &&
-            !`${project.name} ${project.path}`.toLowerCase().includes(query.toLowerCase())
-          )
-            return null;
-          const expanded = !!query || !collapsed[project.id];
-          return (
-            <section key={project.id} className="project-group" data-project-id={project.id}>
-              <div className="project-group-heading">
-                <button
-                  className={activeProject === project.id ? 'selected' : ''}
-                  title={project.path}
-                  aria-label={`项目 ${project.name}`}
-                  aria-expanded={expanded}
-                  onClick={() => setCollapsed((old) => ({ ...old, [project.id]: expanded }))}
-                >
-                  {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                  <Folder size={14} />
-                  <span>{project.name}</span>
-                  <small>{sessions.length}</small>
-                </button>
-                <button
-                  className="icon-button"
-                  title="在此项目中新建会话"
-                  aria-label={`在 ${project.name} 中新建会话`}
-                  onClick={() => onNew(project.id)}
-                >
-                  <Plus size={14} />
-                </button>
-              </div>
-              {expanded && (
-                <div className="session-list project-sessions">
-                  {sessions.map(row)}
-                  {!sessions.length && (
-                    <p className="project-empty">
-                      {archived ? '暂无归档会话' : '暂无会话，点击 + 开始'}
-                    </p>
-                  )}
+        {data.projects
+          .filter((p) => !p.removed || archived)
+          .map((project) => {
+            const sessions = data.sessions.filter((s) => s.projectId === project.id && matching(s));
+            if (
+              query &&
+              !sessions.length &&
+              !`${project.name} ${project.path}`.toLowerCase().includes(query.toLowerCase())
+            )
+              return null;
+            const expanded = !!query || !collapsed[project.id];
+            return (
+              <section key={project.id} className="project-group" data-project-id={project.id}>
+                <div className="project-group-heading">
+                  <button
+                    className={activeProject === project.id ? 'selected' : ''}
+                    title={project.path}
+                    aria-label={`项目 ${project.name}`}
+                    aria-expanded={expanded}
+                    onClick={() => setCollapsed((old) => ({ ...old, [project.id]: expanded }))}
+                  >
+                    {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                    <Folder size={14} />
+                    <span>{project.name}</span>
+                    <small>{sessions.length}</small>
+                  </button>
+                  <button
+                    className="icon-button"
+                    disabled={project.removed}
+                    title="在此项目中新建会话"
+                    aria-label={`在 ${project.name} 中新建会话`}
+                    onClick={() => onNew(project.id)}
+                  >
+                    <Plus size={14} />
+                  </button>
                 </div>
-              )}
-            </section>
-          );
-        })}
+                {expanded && (
+                  <div className="session-list project-sessions">
+                    {sessions.map(row)}
+                    {!sessions.length && (
+                      <p className="project-empty">
+                        {archived ? '暂无归档会话' : '暂无会话，点击 + 开始'}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </section>
+            );
+          })}
         {!data.projects.length && (
           <button className="subtle" onClick={onOpenProject}>
             <FolderOpen size={15} />

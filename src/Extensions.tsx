@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Plus, Plug, Monitor, RefreshCw, Trash2, Upload, ShieldCheck, Square } from 'lucide-react';
 import { Field, Modal, Spinner } from './components';
+import { MultiValueInput } from './MultiValueInput';
+import { OAuthFields } from './WorkPlugins';
 import type {
   AgentProfile,
   ComputerStatus,
@@ -366,6 +368,7 @@ export function Extensions({
                   setEdit({
                     ...edit,
                     transport: e.target.value as 'stdio' | 'http',
+                    authMode: e.target.value === 'stdio' ? 'headers' : edit.authMode,
                     secret: '',
                     clearSecret: true,
                   })
@@ -387,12 +390,11 @@ export function Extensions({
                   />
                 </Field>
                 <Field label="启动参数（每行一个）">
-                  <textarea
-                    rows={3}
-                    value={edit.args.join('\n')}
-                    onChange={(e) =>
-                      setEdit({ ...edit, args: e.target.value.split('\n').filter(Boolean) })
-                    }
+                  <MultiValueInput
+                    label="启动参数"
+                    split={false}
+                    value={edit.args}
+                    onChange={(args) => setEdit({ ...edit, args })}
                   />
                 </Field>
               </>
@@ -404,21 +406,39 @@ export function Extensions({
                 />
               </Field>
             )}
-            <Field
-              label={edit.transport === 'stdio' ? '环境变量 JSON' : '请求头 JSON'}
-              hint={
-                edit.hasSecret
-                  ? '已加密保存；留空保留原值。'
-                  : '字符串键值对象，例如 {"Authorization":"Bearer …"}。使用系统加密存储。'
-              }
-            >
-              <textarea
-                autoComplete="off"
-                rows={2}
-                value={edit.secret ?? ''}
-                onChange={(e) => setEdit({ ...edit, secret: e.target.value })}
-              />
-            </Field>
+            {edit.transport === 'http' && <OAuthFields edit={edit} onChange={setEdit} />}
+            {edit.authMode !== 'oauth' && (
+              <Field
+                label={edit.transport === 'stdio' ? '环境变量 JSON' : '请求头 JSON'}
+                hint={
+                  edit.hasSecret
+                    ? '已加密保存；留空保留原值。'
+                    : '字符串键值对象，例如 {"Authorization":"Bearer …"}。使用系统加密存储。'
+                }
+              >
+                <textarea
+                  autoComplete="off"
+                  rows={2}
+                  value={edit.secret ?? ''}
+                  onChange={(e) => setEdit({ ...edit, secret: e.target.value })}
+                />
+              </Field>
+            )}
+            {edit.authMode === 'oauth' && (
+              <button
+                className="secondary"
+                disabled={busy}
+                onClick={() =>
+                  perform(async () => {
+                    await api.savePlugin(edit);
+                    setEdit({ ...edit, clearSecret: false });
+                    await api.loginPlugin(edit.id);
+                  })
+                }
+              >
+                保存并浏览器授权
+              </button>
+            )}
             <label className="checkbox-line">
               <input
                 type="checkbox"

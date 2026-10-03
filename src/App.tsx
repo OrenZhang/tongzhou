@@ -60,6 +60,10 @@ import { SessionNavigator } from './SessionNavigator';
 import { GlobalPermission, SessionPermission } from './PermissionControls';
 import { effectivePermission } from './shared/permissions';
 import { ConnectionsPanel } from './ConnectionsPanel';
+import { Appearance, useAppearance } from './Appearance';
+import { useDraft } from './useDraft';
+import { SessionNotification } from './NotificationControls';
+import { ProjectsPanel } from './ProjectsPanel';
 import { AuthBadge, Field, Mark, Modal, Spinner, ModelPicker } from './components';
 const empty: Snapshot = {
   providers: [],
@@ -171,7 +175,14 @@ const presets = [
     models: [],
   },
 ] as const;
-type View = 'workspace' | 'providers' | 'agents' | 'activity' | 'settings' | 'extensions';
+type View =
+  | 'workspace'
+  | 'providers'
+  | 'agents'
+  | 'activity'
+  | 'settings'
+  | 'extensions'
+  | 'projects';
 export default function App() {
   const [accountStates, setAccountStates] = useState<
     Record<string, { connected: boolean; pending: boolean; error: boolean }>
@@ -227,7 +238,8 @@ export default function App() {
   const [agentId, setAgentId] = useState('');
   const [inputMode, setInputMode] = useState<'supplement' | 'next' | 'restart'>('supplement');
   const [deleteId, setDeleteId] = useState('');
-  const [draft, setDraft] = useState('');
+  const { draft, setDraft, clearDraft } = useDraft(sessionId);
+  const { theme, setTheme } = useAppearance();
   const [query, setQuery] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
@@ -454,7 +466,6 @@ export default function App() {
         model: model || s.model,
         agentId: '',
       });
-      setDraft('');
       await refresh();
     });
   };
@@ -477,7 +488,7 @@ export default function App() {
       if (running) await api.enqueue(input, inputMode);
       else if (team) await api.team(input, teamIds);
       else await api.run(input);
-      setDraft('');
+      clearDraft(sessionId, draft);
       setTeamOpen(false);
       await refresh();
       setTimeout(
@@ -542,6 +553,7 @@ export default function App() {
   };
   const nav = [
     { id: 'workspace', label: '工作空间', icon: MessageSquare },
+    { id: 'projects', label: '项目与工作树', icon: FolderOpen },
     { id: 'providers', label: '连接中心', icon: Network },
     { id: 'agents', label: 'Agent 团队', icon: Users },
     { id: 'extensions', label: '插件与工具', icon: Terminal },
@@ -890,7 +902,7 @@ export default function App() {
             <strong>同舟</strong>
             <span>TONGZHOU</span>
           </div>
-          <span className="version">0.4</span>
+          <span className="version">0.5</span>
         </div>
         <button className="new-chat" onClick={() => newSession()}>
           <Plus size={17} />
@@ -962,6 +974,7 @@ export default function App() {
                     activity: '运行记录',
                     settings: '设置与关于',
                     extensions: '插件与工具',
+                    projects: '项目与工作树',
                   }[view]}
             </strong>
           </div>
@@ -1017,6 +1030,15 @@ export default function App() {
                     >
                       <MoreHorizontal size={18} />
                     </button>
+                    {!session.archived && (
+                      <SessionNotification
+                        session={session}
+                        run={running}
+                        data={data}
+                        api={api}
+                        onError={report}
+                      />
+                    )}
                     <button
                       className="icon-button"
                       aria-label="导出会话"
@@ -1841,11 +1863,19 @@ export default function App() {
             </p>
           </main>
         )}
+        {view === 'projects' && (
+          <ProjectsPanel
+            data={data}
+            api={api}
+            refresh={refresh}
+            onSession={(id) => void newSession(id)}
+          />
+        )}
         {view === 'settings' && (
           <main className="page settings-page">
             <div className="page-heading">
               <h1>设置与关于</h1>
-              <p>同舟 0.4.0 · 开源多模型桌面工作台</p>
+              <p>同舟 0.5.0 · 开源多模型桌面工作台</p>
             </div>
             <section className="settings-card">
               <div className="settings-card-title">
@@ -1861,6 +1891,7 @@ export default function App() {
                 onError={report}
               />
             </section>
+            <Appearance value={theme} onChange={setTheme} />
             <section className="settings-card settings-link">
               <div className="settings-card-title">
                 <Network size={22} />
@@ -2360,6 +2391,7 @@ export default function App() {
               onClick={() =>
                 perform(async () => {
                   await api.deleteSession(deleteId);
+                  clearDraft(deleteId);
                   if (sessionId === deleteId) {
                     setSessionId('');
                     sessionRef.current = '';

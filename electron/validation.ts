@@ -80,6 +80,9 @@ export const agentSchema = z.object({
 });
 export const pluginSchema = z
   .object({
+    authMode: z.enum(['headers', 'oauth']).optional(),
+    oauthClientId: z.string().trim().max(300).optional(),
+    oauthIssuer: z.string().max(2000).optional(),
     id,
     name: z.string().trim().min(1).max(100),
     transport: z.enum(['stdio', 'http']),
@@ -92,6 +95,10 @@ export const pluginSchema = z
     clearSecret: z.boolean().optional(),
   })
   .superRefine((p, ctx) => {
+    if (p.authMode === 'oauth' && p.transport !== 'http')
+      ctx.addIssue({ code: 'custom', message: 'OAuth 仅适用于远程 HTTP 插件' });
+    if (p.oauthClientId && (!p.oauthIssuer || !/^https:\/\//.test(p.oauthIssuer)))
+      ctx.addIssue({ code: 'custom', message: '预注册 Client ID 需要对应的 HTTPS 授权服务地址' });
     if (p.transport === 'stdio' && !p.command.trim())
       ctx.addIssue({ code: 'custom', message: '请输入 MCP 启动命令' });
     if (p.transport === 'http') {

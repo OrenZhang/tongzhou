@@ -12,6 +12,7 @@ export class ClientCommands {
     'listFiles',
     'readFile',
     'diff',
+    'listWorktrees',
     'clientMethods',
   ]);
   private readonly writable = new Set([
@@ -43,6 +44,8 @@ export class ClientCommands {
     'branchSession',
     'installBuiltinPlugin',
     'openModule',
+    'createWorktree',
+    'removeWorktree',
   ]);
   register(name: string, handler: (...args: any[]) => unknown) {
     if (this.readable.has(name) || this.writable.has(name)) this.handlers.set(name, handler);

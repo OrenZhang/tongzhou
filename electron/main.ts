@@ -8,6 +8,7 @@ import {
   clipboard,
   globalShortcut,
   Menu,
+  nativeTheme,
 } from 'electron';
 import { NativeAccount, nativeEngine } from './native-engine';
 import { Accounts } from './accounts';
@@ -15,6 +16,9 @@ import { Connectors } from './connectors';
 import { BrowserProfiles } from './browser-profiles';
 import { Channels } from './channels';
 import { Feishu } from './feishu';
+import { Bots } from './bots';
+import { Worktrees } from './worktrees';
+import { McpAuth, pluginOAuth, pluginAuthIdentity } from './mcp-auth';
 import { initializeAgent } from './project-init';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -60,6 +64,8 @@ let connectors: Connectors;
 let browserProfiles: BrowserProfiles;
 let channels: Channels;
 let feishu: Feishu;
+let bots: Bots;
+let mcpAuth: McpAuth;
 const computer = new DesktopComputer();
 const clientCommands = new ClientCommands();
 let quitting = false;
@@ -107,9 +113,57 @@ function setup() {
     },
   });
   runtime = new Runtime(store, dataDir, emit, computer, clientCommands);
+  mcpAuth = new McpAuth(
+    store,
+    () => runtime.changed(),
+    (url) => shell.openExternal(url),
+  );
+  const worktrees = new Worktrees(store, dataDir, () => runtime.changed());
+  runtime.projectUnavailable = (id) => worktrees.isRemoving(id);
+  register('listWorktrees', (id) => worktrees.list(idSchema.parse(id)));
+  register('createWorktree', (id, branch, ref) =>
+    worktrees.create(idSchema.parse(id), branch, ref),
+  );
+  register('removeWorktree', (id) => worktrees.remove(idSchema.parse(id)));
+  register('openProjectFolder', async (id) => {
+    const p = store.get<Project>('project', idSchema.parse(id));
+    if (p.removed) throw new Error('工作树已移除');
+    const error = await shell.openPath(p.path);
+    if (error) throw new Error('无法打开此项目目录');
+  });
+  const appearance = store
+    .list<{ id: string; theme: 'system' | 'light' | 'dark' }>('preferences')
+    .find((p) => p.id === 'appearance');
+  nativeTheme.themeSource = appearance?.theme ?? 'system';
+  const updateWindowTheme = () =>
+    window?.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#17191e' : '#fafbfc');
+  nativeTheme.on('updated', updateWindowTheme);
+  register('setTheme', (raw) => {
+    const theme = z.enum(['system', 'light', 'dark']).parse(raw);
+    store.put('preferences', { id: 'appearance', theme });
+    nativeTheme.themeSource = theme;
+    updateWindowTheme();
+  });
   connectors = new Connectors(store, () => runtime.changed());
   browserProfiles = new BrowserProfiles(store);
   feishu = new Feishu(store, runtime);
+  bots = new Bots(store, runtime);
+  bots.migrateLegacy();
+  bots.sync();
+  register('saveBot', (b) => bots.save(b));
+  register('deleteBot', (raw) => {
+    const id = idSchema.parse(raw);
+    feishu.cancel(id);
+    bots.remove(id);
+  });
+  register('restartBot', (id) => bots.restart(idSchema.parse(id)));
+  register('onboardBot', (raw, rawName) => {
+    const id = idSchema.parse(raw);
+    if (bots.list().some((b) => b.id === id)) throw new Error('此机器人已存在');
+    return feishu.onboard(id, z.string().min(1).max(100).parse(rawName), (c, secret) =>
+      bots.authorize(c, secret),
+    );
+  });
   channels = new Channels(store, () => {
     runtime.changed();
     feishu.sync();
@@ -144,6 +198,7 @@ function setup() {
     channels.save(c);
     feishu.cancel(c.id);
   });
+  register('testEmail', (id) => channels.testEmail(idSchema.parse(id)));
   register('deleteChannel', (id) => {
     idSchema.parse(id);
     feishu.cancel(id);
@@ -296,17 +351,29 @@ function setup() {
     requireIdle();
     const { secret, clearSecret, ...config } = pluginSchema.parse(raw);
     const previous = store.list<PluginConfig>('plugin').find((p) => p.id === config.id);
+    const identityChanged =
+      !!previous &&
+      (pluginAuthIdentity(previous) !== pluginAuthIdentity(config) ||
+        previous.command !== config.command ||
+        JSON.stringify(previous.args) !== JSON.stringify(config.args));
+    if (identityChanged || clearSecret) mcpAuth.logout(config.id);
     const same =
       previous &&
+      !identityChanged &&
       !secret &&
       !clearSecret &&
       previous.transport === config.transport &&
       previous.command === config.command &&
       previous.url === config.url &&
       JSON.stringify(previous.args) === JSON.stringify(config.args);
-    store.saveSecret('plugin_' + config.id, secret, clearSecret);
+    if (identityChanged) store.saveSecret('plugin_' + config.id, undefined, true);
+    store.saveSecret('plugin_' + config.id, secret, clearSecret || config.authMode === 'oauth');
     store.put('plugin', {
       ...config,
+      oauthStatus:
+        config.authMode === 'oauth' && !identityChanged && !clearSecret
+          ? previous?.oauthStatus
+          : undefined,
       ...(same ? { catalog: previous.catalog, checkedAt: previous.checkedAt } : {}),
     });
     runtime.invalidateNative();
@@ -315,6 +382,7 @@ function setup() {
   register('deletePlugin', (raw) => {
     requireIdle();
     const id = idSchema.parse(raw);
+    mcpAuth.logout(id);
     store.remove('plugin', id);
     store.saveSecret('plugin_' + id, undefined, true);
     for (const a of store.list<AgentProfile>('agent'))
@@ -325,7 +393,7 @@ function setup() {
   register('testPlugin', async (raw) => {
     requireIdle();
     const p = store.get<PluginConfig>('plugin', idSchema.parse(raw));
-    const c = new PluginConnection(p, store.secret('plugin_' + p.id));
+    const c = new PluginConnection(p, store.secret('plugin_' + p.id), pluginOAuth(store, p));
     try {
       const signal = AbortSignal.timeout(30000);
       await c.connect(signal);
@@ -343,6 +411,36 @@ function setup() {
     } finally {
       await c.close();
     }
+  });
+  register('loginPlugin', (raw) => {
+    requireIdle();
+    return mcpAuth.login(idSchema.parse(raw));
+  });
+  register('cancelPluginLogin', (raw) => mcpAuth.cancel(idSchema.parse(raw)));
+  register('logoutPlugin', (raw) => {
+    requireIdle();
+    mcpAuth.logout(idSchema.parse(raw));
+    runtime.invalidateNative();
+  });
+  register('useGithubConnector', (rawPlugin, rawConnector) => {
+    requireIdle();
+    const p = store.get<PluginConfig>('plugin', idSchema.parse(rawPlugin));
+    const c = connectors.list().find((c) => c.id === idSchema.parse(rawConnector));
+    if (
+      p.url !== 'https://api.githubcopilot.com/mcp/' ||
+      p.transport !== 'http' ||
+      p.authMode === 'oauth' ||
+      c?.kind !== 'github' ||
+      new URL(c.baseUrl).origin !== 'https://github.com' ||
+      !c.enabled
+    )
+      throw new Error('仅可将启用的 GitHub 官方站点账号连接到官方 GitHub MCP');
+    const token = store.secret('connector_' + c.id);
+    if (!token) throw new Error('此 GitHub 账号尚未保存访问令牌');
+    store.saveSecret('plugin_' + p.id, JSON.stringify({ Authorization: 'Bearer ' + token }));
+    store.put('plugin', { ...p, catalog: undefined, checkedAt: undefined });
+    runtime.invalidateNative();
+    runtime.changed();
   });
   register('importSkill', async () => {
     requireIdle();
@@ -427,7 +525,15 @@ function setup() {
     emit({
       type: 'navigate',
       view: z
-        .enum(['workspace', 'providers', 'agents', 'activity', 'settings', 'extensions'])
+        .enum([
+          'workspace',
+          'providers',
+          'agents',
+          'activity',
+          'settings',
+          'extensions',
+          'projects',
+        ])
         .parse(view),
     }),
   );
@@ -564,6 +670,8 @@ function setup() {
     return project;
   });
   register('createSession', (id) => {
+    if (id && store.get<Project>('project', idSchema.parse(id)).removed)
+      throw new Error('工作树已移除，不能创建新会话');
     const s = store.createSession(idSchema.nullish().parse(id) ?? null);
     runtime.changed();
     return s;
@@ -699,7 +807,7 @@ async function createWindow() {
     minHeight: 700,
     title: '同舟 Tongzhou',
     icon: path.join(__dirname, '../build/icon.png'),
-    backgroundColor: '#f8f9fb',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#17191e' : '#fafbfc',
     show: false,
     autoHideMenuBar: true,
     webPreferences: {
@@ -768,6 +876,8 @@ else {
     browserProfiles.dispose();
     channels.dispose();
     feishu.dispose();
+    bots.dispose();
+    mcpAuth.dispose();
     runtime.stop();
     void runtime.waitForIdle().finally(() => {
       store.close();

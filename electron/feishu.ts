@@ -46,7 +46,7 @@ export class Feishu {
       this.runtime.changed();
     }
   }
-  async onboard(id: string, name: string) {
+  async onboard(id: string, name: string, authorized?: (channel: Channel, secret: string) => void) {
     this.cancel(id);
     const controller = new AbortController();
     this.pending.set(id, controller);
@@ -59,7 +59,7 @@ export class Feishu {
           method: 'POST',
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
-            'User-Agent': 'Tongzhou/0.4',
+            'User-Agent': 'Tongzhou/0.5',
           },
           body: new URLSearchParams(params),
           redirect: 'error',
@@ -108,8 +108,7 @@ export class Feishu {
           if (result.client_id && result.client_secret) {
             await feishuToken(result.client_id, result.client_secret, domain, controller.signal);
             controller.signal.throwIfAborted();
-            this.store.saveSecret('channel_app_' + id, result.client_secret);
-            this.store.put('channel', {
+            const channel = {
               id,
               name,
               kind: 'feishu',
@@ -123,7 +122,12 @@ export class Feishu {
               inbound: false,
               status: 'authorized',
               checkedAt: Date.now(),
-            } satisfies Channel);
+            } satisfies Channel;
+            if (authorized) authorized(channel, result.client_secret);
+            else {
+              this.store.saveSecret('channel_app_' + id, result.client_secret);
+              this.store.put('channel', channel);
+            }
             this.store.put('authEvent', {
               id: randomUUID(),
               providerId: id,

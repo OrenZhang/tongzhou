@@ -270,7 +270,8 @@ export class Store {
     };
   }
   createSession(projectId: string | null = null, parentId?: string): Session {
-    if (projectId) this.get<Project>('project', projectId);
+    if (projectId && this.get<Project>('project', projectId).removed)
+      throw new Error('工作树已移除，请选择可用项目');
     const provider = this.providers()[0];
     return this.put('session', {
       id: randomUUID(),

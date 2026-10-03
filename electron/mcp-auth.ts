@@ -1,0 +1,313 @@
+import { createServer } from 'node:http';
+import { randomBytes, randomUUID } from 'node:crypto';
+import {
+  auth,
+  type OAuthClientProvider,
+  type OAuthDiscoveryState,
+} from '@modelcontextprotocol/sdk/client/auth.js';
+import type {
+  OAuthTokens,
+  OAuthClientInformationMixed,
+} from '@modelcontextprotocol/sdk/shared/auth.js';
+import type { PluginConfig } from '../src/shared/types';
+import type { Store } from './store';
+export const mcpRedirect = 'http://127.0.0.1:17438/mcp/callback';
+interface Saved {
+  url: string;
+  client?: OAuthClientInformationMixed;
+  tokens?: OAuthTokens;
+  discovery?: OAuthDiscoveryState;
+  verifier?: string;
+  revision: string;
+}
+export function pluginAuthIdentity(p: PluginConfig) {
+  return JSON.stringify([
+    p.transport,
+    p.url,
+    p.authMode ?? 'headers',
+    p.oauthClientId ?? '',
+    p.oauthIssuer ?? '',
+  ]);
+}
+export function secureOAuthUrl(value: string | URL) {
+  const u = new URL(value);
+  if (
+    u.username ||
+    u.password ||
+    !(
+      u.protocol === 'https:' ||
+      (u.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(u.hostname))
+    )
+  )
+    throw new Error('授权服务必须使用 HTTPS 或本机 HTTP');
+  return u;
+}
+const secureUrl = secureOAuthUrl;
+export const oauthFetch: typeof fetch = async (input, init) => {
+  secureUrl(input instanceof Request ? input.url : String(input));
+  return fetch(input, {
+    ...init,
+    redirect: 'error',
+    signal: AbortSignal.any([...(init?.signal ? [init.signal] : []), AbortSignal.timeout(20000)]),
+  });
+};
+export class PluginOAuthProvider implements OAuthClientProvider {
+  readonly redirectUrl = mcpRedirect;
+  private identity: string;
+  private epoch: string;
+  constructor(
+    private store: Store,
+    private config: PluginConfig,
+    private redirect?: (url: URL) => Promise<void>,
+    private nonce?: string,
+    private signal?: AbortSignal,
+  ) {
+    this.identity = pluginAuthIdentity(config);
+    this.epoch = this.generation();
+  }
+  private generation() {
+    return (
+      this.store
+        .list<{ id: string; value: string }>('mcpAuthEpoch')
+        .find((p) => p.id === this.config.id)?.value ?? ''
+    );
+  }
+  private check() {
+    this.signal?.throwIfAborted();
+    const now = this.store.list<PluginConfig>('plugin').find((p) => p.id === this.config.id);
+    if (!now || pluginAuthIdentity(now) !== this.identity || this.generation() !== this.epoch)
+      throw new Error('插件地址或认证配置已变化，请重新授权');
+  }
+  private read(): Saved {
+    this.check();
+    const text = this.store.secret('plugin_oauth_' + this.config.id);
+    const value: Saved = text ? JSON.parse(text) : { url: this.config.url, revision: '' };
+    if (value.url !== this.config.url) throw new Error('授权与插件地址不匹配');
+    return value;
+  }
+  private write(value: Saved) {
+    this.check();
+    this.store.saveSecret('plugin_oauth_' + this.config.id, JSON.stringify(value));
+  }
+  get clientMetadata() {
+    return {
+      client_name: '同舟 Tongzhou',
+      redirect_uris: [mcpRedirect],
+      grant_types: ['authorization_code', 'refresh_token'],
+      response_types: ['code'],
+      token_endpoint_auth_method: 'none' as const,
+    };
+  }
+  state() {
+    if (!this.nonce) throw new Error('请在连接中心点击浏览器授权');
+    return this.nonce;
+  }
+  clientInformation() {
+    const v = this.read();
+    return (
+      v.client ??
+      (this.config.oauthClientId
+        ? { client_id: this.config.oauthClientId, issuer: this.config.oauthIssuer }
+        : undefined)
+    );
+  }
+  saveClientInformation(client: OAuthClientInformationMixed) {
+    this.write({ ...this.read(), client });
+  }
+  tokens() {
+    return this.read().tokens;
+  }
+  saveTokens(tokens: OAuthTokens) {
+    const v = this.read();
+    this.write({
+      ...v,
+      tokens: {
+        ...tokens,
+        refresh_token:
+          tokens.refresh_token ??
+          (tokens.issuer === v.tokens?.issuer ? v.tokens?.refresh_token : undefined),
+      },
+    });
+  }
+  async redirectToAuthorization(url: URL) {
+    this.check();
+    secureUrl(url);
+    if (!this.redirect) throw new Error('插件需要重新授权，请在连接中心操作');
+    await this.redirect(url);
+  }
+  saveCodeVerifier(verifier: string) {
+    this.write({ ...this.read(), verifier });
+  }
+  codeVerifier() {
+    const v = this.read().verifier;
+    if (!v) throw new Error('授权已过期，请重新登录');
+    return v;
+  }
+  saveDiscoveryState(discovery: OAuthDiscoveryState) {
+    secureUrl(discovery.authorizationServerUrl);
+    this.write({ ...this.read(), discovery });
+  }
+  discoveryState() {
+    return this.read().discovery;
+  }
+  invalidateCredentials(scope: 'all' | 'client' | 'tokens' | 'verifier' | 'discovery') {
+    const v = this.read();
+    if (scope === 'all') {
+      this.write({ url: this.config.url, revision: randomUUID() });
+      return;
+    }
+    delete v[scope];
+    this.write(v);
+  }
+  sensitiveValues() {
+    const v = this.read();
+    return [
+      v.tokens?.access_token,
+      v.tokens?.refresh_token,
+      v.client?.client_secret,
+      v.verifier,
+    ].filter((s): s is string => !!s);
+  }
+}
+export function pluginOAuth(store: Store, p: PluginConfig) {
+  return p.authMode === 'oauth' ? new PluginOAuthProvider(store, p) : undefined;
+}
+export class McpAuth {
+  private pending?: { id: string; cancel(): void };
+  constructor(
+    private store: Store,
+    private changed: () => void,
+    private open: (url: string) => Promise<unknown>,
+    private request: typeof auth = auth,
+  ) {}
+  status(id: string, status: PluginConfig['oauthStatus']) {
+    const p = this.store.list<PluginConfig>('plugin').find((p) => p.id === id);
+    if (!p) return;
+    this.store.put('plugin', { ...p, oauthStatus: status });
+    this.store.put('authEvent', {
+      id: randomUUID(),
+      providerId: id,
+      phase: 'mcp-' + status,
+      time: Date.now(),
+    });
+    this.changed();
+  }
+  cancel(id: string) {
+    if (this.pending?.id === id) {
+      this.pending.cancel();
+      this.status(id, 'cancelled');
+    }
+  }
+  logout(id: string) {
+    this.cancel(id);
+    this.store.put('mcpAuthEpoch', { id, value: randomUUID() });
+    this.store.saveSecret('plugin_oauth_' + id, undefined, true);
+    this.status(id, 'none');
+  }
+  async login(id: string) {
+    if (this.pending) throw new Error('请先完成或关闭当前插件授权');
+    const config = this.store.get<PluginConfig>('plugin', id);
+    if (config.transport !== 'http' || config.authMode !== 'oauth')
+      throw new Error('请先将此插件设置为 OAuth 认证');
+    const controller = new AbortController(),
+      nonce = randomBytes(32).toString('base64url');
+    let consumed = false,
+      finished = false;
+    const provider = new PluginOAuthProvider(
+      this.store,
+      config,
+      async (url) => {
+        this.status(id, 'waiting');
+        await this.open(url.href);
+      },
+      nonce,
+      controller.signal,
+    );
+    const requestFetch: typeof fetch = (url, init) =>
+      oauthFetch(url, {
+        ...init,
+        signal: AbortSignal.any([controller.signal, ...(init?.signal ? [init.signal] : [])]),
+      });
+    const server = createServer(async (req, res) => {
+      const u = new URL(req.url ?? '/', mcpRedirect);
+      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('Referrer-Policy', 'no-referrer');
+      if (
+        req.method !== 'GET' ||
+        req.headers.host !== '127.0.0.1:17438' ||
+        u.pathname !== '/mcp/callback' ||
+        u.searchParams.get('state') !== nonce ||
+        consumed ||
+        controller.signal.aborted
+      ) {
+        res.writeHead(400);
+        res.end('无效的授权回调');
+        return;
+      }
+      consumed = true;
+      try {
+        const code = u.searchParams.get('code');
+        if (!code || code.length > 8000 || u.searchParams.has('error'))
+          throw new Error('cancelled');
+        if (
+          (await this.request(provider, {
+            serverUrl: config.url,
+            authorizationCode: code,
+            fetchFn: requestFetch,
+          })) !== 'AUTHORIZED'
+        )
+          throw new Error('not authorized');
+        provider.invalidateCredentials('verifier');
+        this.status(id, 'authorized');
+        res.end('同舟：插件授权已保存，可以关闭此页面。');
+      } catch {
+        if (!controller.signal.aborted) this.status(id, 'error');
+        res.writeHead(400);
+        res.end('授权未完成，请回到同舟检查应用注册信息并重试。');
+      } finally {
+        res.once('finish', close);
+        if (res.writableFinished) close();
+      }
+    });
+    const timer = setTimeout(
+      () => {
+        this.status(id, 'error');
+        close();
+      },
+      5 * 60 * 1000,
+    );
+    timer.unref();
+    const close = () => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      controller.abort();
+      server.closeAllConnections();
+      server.close();
+      if (this.pending?.id === id) this.pending = undefined;
+    };
+    this.pending = { id, cancel: close };
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(17438, '127.0.0.1', resolve);
+      });
+      this.status(id, 'waiting');
+      const result = await this.request(provider, { serverUrl: config.url, fetchFn: requestFetch });
+      if (result === 'AUTHORIZED') {
+        this.status(id, 'authorized');
+        close();
+      }
+    } catch {
+      if (!controller.signal.aborted) this.status(id, 'error');
+      close();
+      throw new Error(
+        '插件授权未完成：请检查网络、回调端口 17438，或填写服务要求的 OAuth Client ID 和授权服务地址。',
+      );
+    }
+  }
+  dispose() {
+    this.pending?.cancel();
+  }
+}

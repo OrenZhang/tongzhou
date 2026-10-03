@@ -36,7 +36,12 @@ import path from 'node:path';
 import { mkdir, rm } from 'node:fs/promises';
 
 export class Runtime {
-  onLifecycle?: (run: Run, event: 'completed' | 'failed' | 'approval', eventId?: string) => void;
+  projectUnavailable?: (id: string) => boolean;
+  onLifecycle?: (
+    run: Run,
+    event: 'completed' | 'failed' | 'interrupted' | 'approval',
+    eventId?: string,
+  ) => void;
   private stopping = false;
   private deleting = new Set<string>();
   private steering = new Map<string, (text: string, messageId: string) => Promise<void>>();
@@ -352,6 +357,9 @@ export class Runtime {
   snapshot(): Snapshot {
     return {
       defaultPermission: this.store.defaultPermission(),
+      bots: this.store
+        .list<any>('bot')
+        .map((b) => ({ ...b, hasSecret: this.store.hasSecret('bot_' + b.id) })),
       connectors: this.store
         .list<any>('connector')
         .map((c) => ({ ...c, hasSecret: this.store.hasSecret('connector_' + c.id) })),
@@ -457,6 +465,8 @@ export class Runtime {
     const project = session.projectId
       ? this.store.get<Project>('project', session.projectId)
       : null;
+    if (project && (project.removed || this.projectUnavailable?.(project.id)))
+      throw new Error('工作树已移除或正在移除，会话历史仍然保留；请在可用项目中创建会话');
     const secret =
       provider.protocol === 'codex' || nativeEngine(provider.protocol)
         ? ''
@@ -596,10 +606,8 @@ export class Runtime {
           );
         if (controller.signal.aborted) throw new Error('已停止');
         run.status = 'completed';
-        this.onLifecycle?.(run, 'completed');
       } catch (e: any) {
         run.status = controller.signal.aborted ? 'interrupted' : 'failed';
-        if (run.status === 'failed') this.onLifecycle?.(run, 'failed');
         run.error = redact(e.message ?? String(e), [secret]);
         for (const m of this.store.messages(session.id))
           if (m.runId === run.id && m.status === 'streaming')
@@ -647,6 +655,7 @@ export class Runtime {
         );
         this.store.put('run', run);
         this.active.delete(session.id);
+        if (run.status !== 'running') this.onLifecycle?.(run, run.status);
         this.reasoning.delete(run.id);
         this.toolOutput.delete(run.id);
         this.progressSaved.delete(run.id + ':tool');
@@ -1410,8 +1419,7 @@ export class Runtime {
         parentRun.endedAt = Date.now();
         this.store.put('run', parentRun);
         this.active.delete(parent.id);
-        if (parentRun.status === 'completed' || parentRun.status === 'failed')
-          this.onLifecycle?.(parentRun, parentRun.status);
+        if (parentRun.status !== 'running') this.onLifecycle?.(parentRun, parentRun.status);
         if (parentRun.status === 'failed')
           for (const p of this.store.list<PendingInput>('pendingInput'))
             if (p.sessionId === parent.id && p.status === 'queued')

@@ -3,12 +3,35 @@ import { z } from 'zod';
 import { Store } from './store';
 import { idSchema } from './validation';
 import { feishuHost, feishuToken } from './feishu';
+import nodemailer from 'nodemailer';
 import type { Channel, Delivery, NotificationRule, Run, Session } from '../src/shared/types';
 
 const configSchema = z.object({
   id: idSchema,
   name: z.string().trim().min(1).max(100),
-  kind: z.enum(['feishu', 'wecom', 'dingtalk']),
+  kind: z.enum(['feishu', 'wecom', 'dingtalk', 'email']),
+  password: z.string().max(4000).optional(),
+  smtp: z
+    .object({
+      host: z
+        .string()
+        .trim()
+        .min(1)
+        .max(253)
+        .regex(/^[a-zA-Z0-9.-]+$/),
+      port: z.number().int().min(1).max(65535),
+      secure: z.boolean(),
+      user: z.string().trim().max(300),
+      from: z.email().max(320),
+      to: z.array(z.email().max(320)).min(1).max(50),
+      subject: z
+        .string()
+        .trim()
+        .min(1)
+        .max(120)
+        .regex(/^[^\r\n]+$/),
+    })
+    .optional(),
   enabled: z.boolean(),
   webhook: z.string().max(3000).optional(),
   signingSecret: z.string().max(1000).optional(),
@@ -27,7 +50,11 @@ const ruleSchema = z.object({
   sessionId: idSchema.nullable(),
   enabled: z.boolean(),
   once: z.boolean(),
-  events: z.array(z.enum(['completed', 'failed', 'approval'])).min(1),
+  events: z.array(z.enum(['completed', 'failed', 'interrupted', 'approval', 'ended'])).min(1),
+  projectId: idSchema.optional(),
+  models: z.array(z.string().trim().min(1).max(200)).max(50).optional(),
+  minDurationSeconds: z.number().min(0).max(604800).optional(),
+  targetRunId: idSchema.optional(),
   template: z.string().min(1).max(1500),
 });
 const hosts = {
@@ -36,6 +63,7 @@ const hosts = {
   dingtalk: ['oapi.dingtalk.com'],
 };
 export function webhookUrl(kind: Channel['kind'], value: string) {
+  if (kind === 'email') throw new Error('邮件请配置 SMTP');
   const u = new URL(value);
   if (
     u.protocol !== 'https:' ||
@@ -69,6 +97,7 @@ export class Channels {
     private store: Store,
     private changed: () => void,
     private transport: typeof fetch = fetch,
+    private mailer: typeof nodemailer.createTransport = nodemailer.createTransport,
   ) {
     for (const d of store.list<Delivery>('delivery'))
       if (d.status === 'sending')
@@ -82,8 +111,28 @@ export class Channels {
     return this.store.list<Channel>('channel');
   }
   save(raw: unknown) {
-    const { webhook, signingSecret, ...c } = configSchema.parse(raw);
+    const { webhook, signingSecret, password, ...c } = configSchema.parse(raw);
     const old = this.list().find((o) => o.id === c.id);
+    if (old && old.kind !== c.kind) throw new Error('请为不同平台创建新的通知目标');
+    if (c.kind === 'email') {
+      if (!c.smtp) throw new Error('请配置 SMTP 服务器和收件人');
+      const identityChanged =
+        old?.smtp?.host !== c.smtp.host ||
+        old?.smtp?.port !== c.smtp.port ||
+        old?.smtp?.secure !== c.smtp.secure ||
+        old?.smtp?.user !== c.smtp.user;
+      if (
+        c.smtp.user &&
+        !password &&
+        (identityChanged || !this.store.hasSecret('channel_mail_' + c.id))
+      )
+        throw new Error('请填写邮箱密码或授权码');
+      this.abort(c.id);
+      this.store.saveSecret('channel_mail_' + c.id, password, !c.smtp.user);
+      this.store.put('channel', { ...c, status: 'configured' });
+      this.changed();
+      return;
+    }
     if (c.mode === 'app') {
       if (
         c.kind !== 'feishu' ||
@@ -118,7 +167,7 @@ export class Channels {
   remove(id: string) {
     this.abort(id);
     this.store.remove('channel', id);
-    for (const prefix of ['channel_url_', 'channel_sign_', 'channel_app_'])
+    for (const prefix of ['channel_url_', 'channel_sign_', 'channel_app_', 'channel_mail_'])
       this.store.saveSecret(prefix + id, undefined, true);
     for (const r of this.store.list<NotificationRule>('notificationRule'))
       if (r.channelId === id) this.store.remove('notificationRule', r.id);
@@ -128,6 +177,12 @@ export class Channels {
     const r = ruleSchema.parse(raw);
     this.store.get('channel', r.channelId);
     if (r.sessionId) this.store.get('session', r.sessionId);
+    if (r.projectId) this.store.get('project', r.projectId);
+    if (r.targetRunId && r.enabled) {
+      const run = this.store.get<Run>('run', r.targetRunId);
+      if (run.status !== 'running' || run.sessionId !== r.sessionId || !r.once)
+        throw new Error('本轮提醒需要仍在运行的会话和一次性规则');
+    }
     if (/\{(?!title\}|status\}|model\}|time\})/.test(r.template))
       throw new Error('模板仅支持 {title}、{status}、{model}、{time}');
     this.store.put('notificationRule', r);
@@ -139,8 +194,13 @@ export class Channels {
     for (const rule of this.store.list<NotificationRule>('notificationRule')) {
       if (
         !rule.enabled ||
-        !rule.events.includes(event) ||
-        (rule.sessionId && rule.sessionId !== session.id)
+        !(rule.events.includes(event) || (event !== 'approval' && rule.events.includes('ended'))) ||
+        (rule.sessionId && rule.sessionId !== session.id) ||
+        (rule.projectId && rule.projectId !== session.projectId) ||
+        (rule.models?.length && !rule.models.includes(run.model)) ||
+        (rule.targetRunId && rule.targetRunId !== run.id) ||
+        (rule.minDurationSeconds &&
+          ((run.endedAt ?? Date.now()) - run.startedAt) / 1000 < rule.minDurationSeconds)
       )
         continue;
       const text = rule.template.replace(
@@ -148,7 +208,13 @@ export class Channels {
         (_, k) =>
           ({
             title: session.title,
-            status: { completed: '完成', failed: '失败', approval: '等待批准' }[event],
+            status: {
+              completed: '完成',
+              failed: '失败',
+              interrupted: '已停止',
+              approval: '等待批准',
+              ended: '轮次结束',
+            }[event],
             model: run.model,
             time: new Date().toLocaleString('zh-CN'),
           })[k as 'title'] ?? '',
@@ -182,13 +248,15 @@ export class Channels {
       .find((d) => d.channelId === id && d.key === key);
     if (prior) return prior;
     let url =
-      c.mode === 'app'
-        ? new URL(
-            feishuHost(c.domain) +
-              '/open-apis/im/v1/messages?receive_id_type=' +
-              (c.receiveIdType ?? 'open_id'),
-          )
-        : webhookUrl(c.kind, this.store.secret('channel_url_' + id));
+      c.kind === 'email'
+        ? undefined
+        : c.mode === 'app'
+          ? new URL(
+              feishuHost(c.domain) +
+                '/open-apis/im/v1/messages?receive_id_type=' +
+                (c.receiveIdType ?? 'open_id'),
+            )
+          : webhookUrl(c.kind, this.store.secret('channel_url_' + id));
     const secret = this.store.secret('channel_sign_' + id);
     const d: Delivery = {
       id: randomUUID(),
@@ -210,6 +278,50 @@ export class Channels {
     this.changed();
     let dispatched = false;
     try {
+      if (c.kind === 'email') {
+        const mail = this.emailTransport(c);
+        const abort = () => mail.close();
+        controller.signal.addEventListener('abort', abort, { once: true });
+        try {
+          controller.signal.throwIfAborted();
+          dispatched = true;
+          const result = await mail.sendMail({
+            from: c.smtp!.from,
+            to: c.smtp!.to,
+            subject: c.smtp!.subject,
+            text,
+            messageId: `<${d.id}@tongzhou.local>`,
+            disableFileAccess: true,
+            disableUrlAccess: true,
+          });
+          if (result.rejected?.length) {
+            d.status = 'failed';
+            throw new Error('平台仅接受了部分收件人；请查看邮箱后再决定是否重发');
+          }
+          if (!result.accepted?.length) {
+            d.status = 'failed';
+            throw new Error('平台未接受邮件收件人');
+          }
+          d.status = 'sent';
+          if (!this.disposed && this.list().some((x) => x.id === id))
+            this.store.put('channel', {
+              ...this.store.get<Channel>('channel', id),
+              status: 'connected',
+              checkedAt: Date.now(),
+            });
+        } catch (error: any) {
+          if (
+            ['EAUTH', 'EENVELOPE', 'EMESSAGE'].includes(error.code) ||
+            (error.responseCode >= 500 && error.responseCode < 600)
+          )
+            d.status = 'failed';
+          throw error;
+        } finally {
+          controller.signal.removeEventListener('abort', abort);
+          mail.close();
+        }
+        return d;
+      }
       const body: any =
         c.mode === 'app'
           ? {
@@ -239,8 +351,8 @@ export class Channels {
       }
       if (secret && c.kind === 'dingtalk') {
         const t = String(Date.now());
-        url.searchParams.set('timestamp', t);
-        url.searchParams.set(
+        url!.searchParams.set('timestamp', t);
+        url!.searchParams.set(
           'sign',
           createHmac('sha256', secret)
             .update(t + '\n' + secret)
@@ -248,7 +360,7 @@ export class Channels {
         );
       }
       dispatched = true;
-      const response = await this.transport(url, {
+      const response = await this.transport(url!, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -292,6 +404,37 @@ export class Channels {
   abort(id: string) {
     for (const d of this.store.list<Delivery>('delivery'))
       if (d.channelId === id || d.sessionId === id) this.controllers.get(d.id)?.abort();
+  }
+  private emailTransport(c: Channel) {
+    if (c.kind !== 'email' || !c.smtp) throw new Error('邮件配置不存在');
+    const s = c.smtp;
+    return this.mailer({
+      host: s.host,
+      port: s.port,
+      secure: s.secure,
+      requireTLS: !s.secure,
+      auth: s.user ? { user: s.user, pass: this.store.secret('channel_mail_' + c.id) } : undefined,
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
+      socketTimeout: 30000,
+      disableFileAccess: true,
+      disableUrlAccess: true,
+      logger: false,
+      debug: false,
+    });
+  }
+  async testEmail(id: string) {
+    const c = this.store.get<Channel>('channel', id);
+    if (!c.enabled) throw new Error('渠道已停用');
+    const mail = this.emailTransport(c);
+    try {
+      await mail.verify();
+      return 'SMTP 连接与认证通过；尚未发送邮件';
+    } catch {
+      throw new Error('SMTP 验证失败，请检查服务器、端口、TLS 和邮箱授权码');
+    } finally {
+      mail.close();
+    }
   }
   dispose() {
     this.disposed = true;

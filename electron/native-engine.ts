@@ -130,7 +130,7 @@ export class NativeClient extends EventEmitter {
     });
     const initialized = await this.request('initialize', {
       protocolVersion: 1,
-      clientInfo: { name: 'tongzhou', version: '0.4.0' },
+      clientInfo: { name: 'tongzhou', version: '0.5.0' },
       clientCapabilities: {
         auth: { terminal: true },
         _meta: { 'terminal-auth': true },

@@ -9,6 +9,7 @@ import type { ToolSpec } from './providers';
 import { Store } from './store';
 import { minimalEnv, within } from './workspace';
 import { redact } from './validation';
+import { pluginOAuth, secureOAuthUrl, type PluginOAuthProvider } from './mcp-auth';
 
 export interface ComputerAdapter {
   fork?(): ComputerAdapter;
@@ -54,15 +55,17 @@ export function mcpName(id: string, name: string) {
 }
 
 export class PluginConnection {
-  readonly client = new Client({ name: 'tongzhou', version: '0.4.0' }, { capabilities: {} });
+  readonly client = new Client({ name: 'tongzhou', version: '0.5.0' }, { capabilities: {} });
   private secretValues: string[] = [];
   constructor(
     readonly config: PluginConfig,
     private secret: string,
+    private oauth?: PluginOAuthProvider,
   ) {}
   async connect(signal: AbortSignal) {
     signal.throwIfAborted();
-    const credentials: Record<string, string> = this.secret ? JSON.parse(this.secret) : {};
+    const credentials: Record<string, string> =
+      !this.oauth && this.secret ? JSON.parse(this.secret) : {};
     this.secretValues = Object.values(credentials);
     const transport =
       this.config.transport === 'stdio'
@@ -73,15 +76,24 @@ export class PluginConnection {
             stderr: 'pipe',
           })
         : new StreamableHTTPClientTransport(new URL(this.config.url), {
+            authProvider: this.oauth,
             requestInit: { headers: credentials },
-            fetch: (url, init) => fetch(url, { ...init, redirect: 'error' }),
+            fetch: (url, init) => {
+              if (this.oauth) secureOAuthUrl(url instanceof Request ? url.url : String(url));
+              return fetch(url, { ...init, redirect: 'error' });
+            },
           });
     if (transport instanceof StdioClientTransport) transport.stderr?.on('data', () => {});
     try {
       await this.client.connect(transport, { signal, timeout: 20000 });
+      if (this.oauth) this.secretValues.push(...this.oauth.sensitiveValues());
     } catch (e) {
       await this.close();
-      throw new Error(redact(String(e), this.secretValues));
+      throw new Error(
+        this.oauth
+          ? '插件连接或授权失败，请在连接中心检查授权状态'
+          : redact(String(e), this.secretValues),
+      );
     }
   }
   async tools(signal: AbortSignal) {
@@ -107,9 +119,14 @@ export class PluginConnection {
           timeout: 120000,
         }),
       );
+      if (this.oauth) this.secretValues.push(...this.oauth.sensitiveValues());
       return { ...result, text: redact(result.text, this.secretValues) };
     } catch (e) {
-      throw new Error(redact(String(e), this.secretValues));
+      throw new Error(
+        this.oauth
+          ? '插件调用或授权失败，请在连接中心检查授权状态'
+          : redact(String(e), this.secretValues),
+      );
     }
   }
   async close() {
@@ -168,12 +185,15 @@ export class ToolScope {
             current.command === config.command &&
             current.url === config.url &&
             current.transport === config.transport &&
+            current.authMode === config.authMode &&
+            current.oauthClientId === config.oauthClientId &&
+            current.oauthIssuer === config.oauthIssuer &&
             JSON.stringify(current.args) === JSON.stringify(config.args) &&
             JSON.stringify(current.readOnlyTools) === JSON.stringify(config.readOnlyTools) &&
             store.secret('plugin_' + id) === capturedSecret
           );
         };
-        const connection = new PluginConnection(config, capturedSecret);
+        const connection = new PluginConnection(config, capturedSecret, pluginOAuth(store, config));
         this.connections.push(connection);
         let connected: Promise<void> | undefined;
         const connect = () => (connected ??= connection.connect(this.signal));

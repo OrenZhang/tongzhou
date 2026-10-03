@@ -16,6 +16,11 @@ Electron, React, Lucide, remark, react-markdown, Zod, @iarna/toml and other depe
 
 The Tongzhou sail mark is an original vector asset created for this project.
 
+Office bot and mail integrations use the unmodified runtime packages:
+@wecom/aibot-node-sdk 1.0.7 (MIT), dingtalk-stream 2.1.6-beta.1 (MIT),
+@larksuiteoapi/node-sdk 1.74.0 (MIT), and nodemailer 10.0.13 (MIT-0).
+Their original license notices remain in the dependency distributions.
+
 Kimi Code: https://github.com/MoonshotAI/kimi-code
 @moonshot-ai/kimi-code 2.1.1, MIT. Copyright Moonshot AI and contributors.
 MiniMax Code: https://github.com/MiniMax-AI/minimax-code

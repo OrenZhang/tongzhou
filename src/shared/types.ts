@@ -49,6 +49,10 @@ export interface AgentProfile {
   computerEnabled?: boolean;
 }
 export interface PluginConfig {
+  authMode?: 'headers' | 'oauth';
+  oauthClientId?: string;
+  oauthIssuer?: string;
+  oauthStatus?: 'none' | 'waiting' | 'authorized' | 'error' | 'cancelled';
   id: string;
   name: string;
   transport: 'stdio' | 'http';
@@ -91,6 +95,8 @@ export interface ComputerStatus {
   emergencyShortcut: boolean;
 }
 export interface Project {
+  sourceProjectId?: string;
+  removed?: boolean;
   id: string;
   name: string;
   path: string;
@@ -102,6 +108,18 @@ export interface ToolCall {
   arguments: string;
   signature?: string;
   signatureModel?: string;
+}
+export interface WorktreeInfo {
+  path: string;
+  branch: string;
+  head: string;
+  main: boolean;
+  managed: boolean;
+  projectId?: string;
+  dirty: boolean;
+  locked: boolean;
+  prunable: boolean;
+  unsharedCommits: boolean;
 }
 export interface Message {
   // Presentation order within a run; protocol content remains unchanged.
@@ -167,6 +185,7 @@ export interface Approval {
   detail: string;
 }
 export interface Snapshot {
+  bots?: BotConfig[];
   defaultPermission?: PermissionMode;
   channelAuth?: { id: string; phase: string; expiresAt?: number }[];
   connectors?: Connector[];
@@ -203,7 +222,14 @@ export interface CodexAuthState {
 export type AppEvent =
   | {
       type: 'navigate';
-      view: 'workspace' | 'providers' | 'agents' | 'activity' | 'settings' | 'extensions';
+      view:
+        | 'workspace'
+        | 'providers'
+        | 'agents'
+        | 'activity'
+        | 'settings'
+        | 'extensions'
+        | 'projects';
     }
   | { type: 'run-event'; event: RunEvent }
   | { type: 'native-auth'; state: NativeAuthState }
@@ -246,6 +272,22 @@ export interface ImportPreview {
   warnings: string[];
 }
 export interface TongzhouAPI {
+  loginPlugin(id: string): Promise<void>;
+  logoutPlugin(id: string): Promise<void>;
+  cancelPluginLogin(id: string): Promise<void>;
+  useGithubConnector(pluginId: string, connectorId: string): Promise<void>;
+  listWorktrees(projectId: string): Promise<WorktreeInfo[]>;
+  createWorktree(projectId: string, branch: string, ref: string): Promise<Project>;
+  removeWorktree(projectId: string): Promise<void>;
+  openProjectFolder(projectId: string): Promise<void>;
+  saveBot(input: BotConfig & { secret?: string }): Promise<void>;
+  deleteBot(id: string): Promise<void>;
+  restartBot(id: string): Promise<void>;
+  onboardBot(
+    id: string,
+    name: string,
+  ): Promise<{ id: string; url: string; image: string; expiresAt: number }>;
+  setTheme(theme: 'system' | 'light' | 'dark'): Promise<void>;
   copyText(text: string): Promise<void>;
   setDefaultPermission(mode: PermissionMode, applyToAll?: boolean): Promise<void>;
   setSessionPermission(sessionId: string, mode: PermissionMode | null): Promise<void>;
@@ -263,7 +305,10 @@ export interface TongzhouAPI {
   cancelConnectorLogin(id: string): Promise<void>;
   openBrowserProfile(id: string): Promise<void>;
   clearBrowserProfile(id: string): Promise<void>;
-  saveChannel(input: Channel & { webhook?: string; signingSecret?: string }): Promise<void>;
+  saveChannel(
+    input: Channel & { webhook?: string; signingSecret?: string; password?: string },
+  ): Promise<void>;
+  testEmail(id: string): Promise<string>;
   deleteChannel(id: string): Promise<void>;
   sendChannel(id: string, text: string, sessionId?: string): Promise<Delivery>;
   saveNotificationRule(rule: NotificationRule): Promise<void>;
@@ -342,10 +387,37 @@ export interface Connector {
   account?: string;
   checkedAt?: number;
 }
-export interface Channel {
+export interface BotConfig {
   id: string;
   name: string;
   kind: 'feishu' | 'wecom' | 'dingtalk';
+  appId: string;
+  domain?: 'feishu' | 'lark';
+  enabled: boolean;
+  allowedSenders: string[];
+  allowedChats: string[];
+  allSessions: boolean;
+  sessionIds: string[];
+  allowExecute: boolean;
+  defaultProjectId?: string;
+  status?: 'disabled' | 'connecting' | 'listening' | 'connected' | 'error';
+  error?: string;
+  lastMessageAt?: number;
+  hasSecret?: boolean;
+}
+export interface Channel {
+  id: string;
+  name: string;
+  kind: 'feishu' | 'wecom' | 'dingtalk' | 'email';
+  smtp?: {
+    host: string;
+    port: number;
+    secure: boolean;
+    user: string;
+    from: string;
+    to: string[];
+    subject: string;
+  };
   enabled: boolean;
   status?: 'configured' | 'authorized' | 'connected';
   mode?: 'webhook' | 'app';
@@ -364,7 +436,11 @@ export interface NotificationRule {
   sessionId: string | null;
   enabled: boolean;
   once: boolean;
-  events: ('completed' | 'failed' | 'approval')[];
+  events: ('completed' | 'failed' | 'interrupted' | 'approval' | 'ended')[];
+  projectId?: string;
+  models?: string[];
+  minDurationSeconds?: number;
+  targetRunId?: string;
   template: string;
 }
 export interface Delivery {

@@ -333,7 +333,7 @@ export async function complete(input: CompletionInput): Promise<Completion> {
       ...headers(input.provider, secret),
       ...(go
         ? {
-            'User-Agent': 'Tongzhou/0.4',
+            'User-Agent': 'Tongzhou/0.5',
             'x-opencode-session': input.messages.at(-1)?.sessionId ?? 'connection-test',
           }
         : {}),

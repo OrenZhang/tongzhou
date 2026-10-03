@@ -3,6 +3,19 @@ import type { TongzhouAPI } from '../src/shared/types';
 const call = (method: string, ...args: unknown[]) =>
   ipcRenderer.invoke('tongzhou:' + method, ...args);
 const api: TongzhouAPI = {
+  loginPlugin: (id) => call('loginPlugin', id),
+  logoutPlugin: (id) => call('logoutPlugin', id),
+  cancelPluginLogin: (id) => call('cancelPluginLogin', id),
+  useGithubConnector: (p, c) => call('useGithubConnector', p, c),
+  listWorktrees: (id) => call('listWorktrees', id),
+  createWorktree: (id, branch, ref) => call('createWorktree', id, branch, ref),
+  removeWorktree: (id) => call('removeWorktree', id),
+  openProjectFolder: (id) => call('openProjectFolder', id),
+  saveBot: (b) => call('saveBot', b),
+  deleteBot: (id) => call('deleteBot', id),
+  restartBot: (id) => call('restartBot', id),
+  onboardBot: (id, name) => call('onboardBot', id, name),
+  setTheme: (theme) => call('setTheme', theme),
   copyText: (text) => call('copyText', text),
   setDefaultPermission: (mode, all) => call('setDefaultPermission', mode, all),
   setSessionPermission: (id, mode) => call('setSessionPermission', id, mode),
@@ -18,6 +31,7 @@ const api: TongzhouAPI = {
   openBrowserProfile: (id) => call('openBrowserProfile', id),
   clearBrowserProfile: (id) => call('clearBrowserProfile', id),
   saveChannel: (c) => call('saveChannel', c),
+  testEmail: (id) => call('testEmail', id),
   deleteChannel: (id) => call('deleteChannel', id),
   sendChannel: (id, text, sessionId) => call('sendChannel', id, text, sessionId),
   saveNotificationRule: (rule) => call('saveNotificationRule', rule),

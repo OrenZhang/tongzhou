@@ -106,7 +106,7 @@ export class Connectors {
         headers: {
           Authorization: 'Bearer ' + secret,
           Accept: 'application/json',
-          'User-Agent': 'Tongzhou/0.4',
+          'User-Agent': 'Tongzhou/0.5',
         },
         signal: AbortSignal.any([signal, AbortSignal.timeout(20000)]),
         redirect: 'error',
@@ -187,7 +187,7 @@ export class Connectors {
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent': 'Tongzhou/0.4',
+          'User-Agent': 'Tongzhou/0.5',
         },
         body: new URLSearchParams(params),
         redirect: 'error',

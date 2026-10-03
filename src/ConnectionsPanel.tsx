@@ -1,6 +1,9 @@
 import { useState, type ReactNode } from 'react';
 import { Modal } from './components';
-import { Globe2, Network, Radio, History } from 'lucide-react';
+import { EmailFields, RuleConditions, defaultSmtp } from './NotificationControls';
+import { BotsPanel } from './BotsPanel';
+import { WorkPlugins } from './WorkPlugins';
+import { Globe2, Network, Radio, History, Bot } from 'lucide-react';
 import type { Channel, Connector, NotificationRule, Snapshot, TongzhouAPI } from './shared/types';
 
 export function ConnectionsPanel({
@@ -14,10 +17,10 @@ export function ConnectionsPanel({
   refresh: () => Promise<void>;
   children?: ReactNode;
 }) {
-  const [tab, setTab] = useState<'models' | 'accounts' | 'channels' | 'records'>('models');
+  const [tab, setTab] = useState<'models' | 'accounts' | 'channels' | 'bots' | 'records'>('models');
   const [connector, setConnector] = useState<(Connector & { secret?: string }) | null>(null);
   const [channel, setChannel] = useState<
-    (Channel & { webhook?: string; signingSecret?: string }) | null
+    (Channel & { webhook?: string; signingSecret?: string; password?: string }) | null
   >(null);
   const [rule, setRule] = useState<NotificationRule | null>(null);
   const [notice, setNotice] = useState('');
@@ -60,7 +63,7 @@ export function ConnectionsPanel({
   return (
     <section className="connections-extra">
       <nav className="section-tabs connection-tabs" aria-label="连接分类">
-        {(['models', 'accounts', 'channels', 'records'] as const).map((name, i) => (
+        {(['models', 'accounts', 'channels', 'bots', 'records'] as const).map((name, i) => (
           <button
             className={tab === name ? 'active' : ''}
             aria-pressed={tab === name}
@@ -68,10 +71,10 @@ export function ConnectionsPanel({
             onClick={() => setTab(name)}
           >
             {(() => {
-              const Icon = [Network, Globe2, Radio, History][i];
+              const Icon = [Network, Globe2, Radio, Bot, History][i];
               return <Icon size={15} />;
             })()}
-            {['模型与订阅', '服务与浏览器', '渠道通知', '认证与发送记录'][i]}
+            {['模型与订阅', '服务与浏览器', '渠道通知', '机器人', '认证与发送记录'][i]}
           </button>
         ))}
       </nav>
@@ -81,8 +84,13 @@ export function ConnectionsPanel({
         </p>
       )}
       {tab === 'models' && children}
+      {tab === 'bots' && <BotsPanel data={data} api={api} refresh={refresh} />}
       {tab === 'accounts' && (
         <>
+          <WorkPlugins data={data} api={api} refresh={refresh} />
+          <div className="section-heading">
+            <h2>服务账号与独立浏览器</h2>
+          </div>
           <p>代码托管账号与模型订阅分别管理。独立浏览器保存本站登录态，不读取系统浏览器 Cookie。</p>
           <div className="row">
             {(['github', 'gitlab', 'browser'] as const).map((kind) => (
@@ -328,7 +336,7 @@ export function ConnectionsPanel({
             <div className="connection-form">
               <h3>飞书扫码授权</h3>
               {data.channelAuth?.find((a) => a.id === qr.id)?.phase === 'success' ? (
-                <p>✓ 应用授权已验证。可以发送测试消息，或绑定会话以接收消息。</p>
+                <p>✓ 应用授权已验证。可以发送测试消息。</p>
               ) : (
                 <>
                   <img width={256} height={256} src={qr.image} alt="飞书官方应用授权二维码" />
@@ -355,20 +363,21 @@ export function ConnectionsPanel({
             </div>
           )}
           <div className="row">
-            {(['feishu', 'wecom', 'dingtalk'] as const).map((kind, i) => (
+            {(['feishu', 'wecom', 'dingtalk', 'email'] as const).map((kind, i) => (
               <button
                 className="secondary"
                 key={kind}
                 onClick={() =>
                   setChannel({
                     id: crypto.randomUUID(),
-                    name: ['飞书', '企业微信', '钉钉'][i],
+                    name: ['飞书', '企业微信', '钉钉', '邮件'][i],
                     kind,
                     enabled: true,
+                    smtp: kind === 'email' ? defaultSmtp : undefined,
                   })
                 }
               >
-                添加 {['飞书', '企业微信', '钉钉'][i]}
+                添加 {['飞书', '企业微信', '钉钉', '邮件'][i]}
               </button>
             ))}
           </div>
@@ -406,6 +415,14 @@ export function ConnectionsPanel({
                   >
                     发送消息 / 测试
                   </button>
+                  {c.kind === 'email' && (
+                    <button
+                      disabled={!!busy || !c.enabled}
+                      onClick={() => void act(c.id, () => api.testEmail(c.id))}
+                    >
+                      验证 SMTP
+                    </button>
+                  )}
                   <button
                     onClick={() =>
                       setRule({
@@ -451,7 +468,7 @@ export function ConnectionsPanel({
                 }}
               >
                 <h3>配置 {channel.name}</h3>
-                <p>飞书支持扫码应用和 Webhook；企业微信、钉钉目前使用官方群机器人 Webhook。</p>
+                <p>通知目标只负责发送消息。远程查看和管理会话请使用“机器人”模块。</p>
                 <label>
                   名称
                   <input
@@ -460,7 +477,10 @@ export function ConnectionsPanel({
                     onChange={(e) => setChannel({ ...channel, name: e.target.value })}
                   />
                 </label>
-                {channel.mode !== 'app' && (
+                {channel.kind === 'email' && (
+                  <EmailFields channel={channel} onChange={setChannel} />
+                )}
+                {channel.kind !== 'email' && channel.mode !== 'app' && (
                   <label>
                     Webhook（留空保留）
                     <input
@@ -471,7 +491,7 @@ export function ConnectionsPanel({
                     />
                   </label>
                 )}
-                {channel.mode !== 'app' && channel.kind !== 'wecom' && (
+                {channel.kind !== 'email' && channel.mode !== 'app' && channel.kind !== 'wecom' && (
                   <label>
                     签名密钥（修改时填写）
                     <input
@@ -507,53 +527,7 @@ export function ConnectionsPanel({
                         onChange={(e) => setChannel({ ...channel, receiveId: e.target.value })}
                       />
                     </label>
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={channel.inbound ?? false}
-                        onChange={(e) => setChannel({ ...channel, inbound: e.target.checked })}
-                      />
-                      接收渠道消息到会话
-                    </label>
-                    {channel.inbound && (
-                      <>
-                        <label>
-                          绑定会话
-                          <select
-                            aria-label="绑定会话"
-                            value={channel.sessionId ?? ''}
-                            onChange={(e) =>
-                              setChannel({ ...channel, sessionId: e.target.value || undefined })
-                            }
-                          >
-                            <option value="">请选择会话</option>
-                            {data.sessions
-                              .filter((s) => !s.archived && !s.parentId)
-                              .map((s) => (
-                                <option key={s.id} value={s.id}>
-                                  {s.title}
-                                </option>
-                              ))}
-                          </select>
-                        </label>
-                        <label>
-                          发送人 open_id 白名单（逗号分隔）
-                          <input
-                            value={channel.allowedSenders?.join(',') ?? ''}
-                            onChange={(e) =>
-                              setChannel({
-                                ...channel,
-                                allowedSenders: e.target.value
-                                  .split(',')
-                                  .map((x) => x.trim())
-                                  .filter(Boolean),
-                              })
-                            }
-                          />
-                        </label>
-                        <p>只有白名单内用户的文本消息会进入绑定会话；机器人消息不会触发回复。</p>
-                      </>
-                    )}
+                    <p>机器人入站操作已移至独立的“机器人”页面。</p>
                   </>
                 )}
                 <div className="row">
@@ -635,24 +609,27 @@ export function ConnectionsPanel({
                   </select>
                 </label>
                 <div className="row">
-                  {(['completed', 'failed', 'approval'] as const).map((event, i) => (
-                    <label key={event}>
-                      <input
-                        type="checkbox"
-                        checked={rule.events.includes(event)}
-                        onChange={(e) =>
-                          setRule({
-                            ...rule,
-                            events: e.target.checked
-                              ? [...rule.events, event]
-                              : rule.events.filter((x) => x !== event),
-                          })
-                        }
-                      />
-                      {['完成', '失败', '等待批准'][i]}
-                    </label>
-                  ))}
+                  {(['ended', 'completed', 'failed', 'interrupted', 'approval'] as const).map(
+                    (event, i) => (
+                      <label key={event}>
+                        <input
+                          type="checkbox"
+                          checked={rule.events.includes(event)}
+                          onChange={(e) =>
+                            setRule({
+                              ...rule,
+                              events: e.target.checked
+                                ? [...rule.events, event]
+                                : rule.events.filter((x) => x !== event),
+                            })
+                          }
+                        />
+                        {['轮次结束', '完成', '失败', '停止', '等待批准'][i]}
+                      </label>
+                    ),
+                  )}
                 </div>
+                <RuleConditions rule={rule} data={data} onChange={setRule} />
                 <label>
                   <input
                     type="checkbox"
@@ -703,7 +680,13 @@ export function ConnectionsPanel({
                   {r.events
                     .map(
                       (event) =>
-                        ({ completed: '完成', failed: '失败', approval: '等待批准' })[event],
+                        ({
+                          completed: '完成',
+                          failed: '失败',
+                          interrupted: '停止',
+                          approval: '等待批准',
+                          ended: '轮次结束',
+                        })[event],
                     )
                     .join('、')}
                 </p>

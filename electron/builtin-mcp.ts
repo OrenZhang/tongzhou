@@ -4,7 +4,7 @@ import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprot
 import { z } from 'zod';
 
 const server = new Server(
-  { name: 'tongzhou-web', version: '0.4.0' },
+  { name: 'tongzhou-web', version: '0.5.0' },
   { capabilities: { tools: {} } },
 );
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
@@ -36,7 +36,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req, extra) => {
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password)
     throw new Error('仅支持无凭据的 HTTP(S) 地址');
   const response = await fetch(url, {
-    headers: { 'User-Agent': 'Tongzhou/0.4', Accept: 'text/html,text/plain,application/json' },
+    headers: { 'User-Agent': 'Tongzhou/0.5', Accept: 'text/html,text/plain,application/json' },
     signal: AbortSignal.any([extra.signal, AbortSignal.timeout(20000)]),
     redirect: 'error',
   });

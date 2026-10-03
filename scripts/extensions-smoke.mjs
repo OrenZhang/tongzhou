@@ -84,7 +84,8 @@ try {
   await page.getByRole('button', { name: '添加 MCP', exact: true }).click();
   await page.getByLabel('插件名称', { exact: true }).fill('测试笔记插件');
   await page.getByLabel('启动命令', { exact: true }).fill(process.execPath);
-  await page.getByLabel('启动参数（每行一个）', { exact: true }).fill(mcp);
+  await page.getByLabel('启动参数', { exact: true }).fill(mcp);
+  await page.keyboard.press('Enter');
   await page.getByRole('button', { name: '保存并检查连接', exact: true }).click();
   await page.getByRole('dialog').getByText('read_note', { exact: true }).waitFor();
   await page.getByRole('button', { name: '保存插件', exact: true }).click();
