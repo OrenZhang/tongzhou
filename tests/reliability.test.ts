@@ -46,6 +46,17 @@ describe('long conversations and concurrent changes', () => {
     expect(result.exitCode).toBe(7);
     expect(result.stdout).toContain('同舟：中文与引号');
     expect(result.stdout).not.toContain('\ufffd');
+    const node = JSON.parse(await run('node --version'));
+    expect(node.exitCode).toBe(0);
+    expect(node.stdout.trim()).toMatch(/^v\d+\./);
+    const failed = JSON.parse(
+      await run(
+        process.platform === 'win32'
+          ? "node -e 'process.exit(7)'; Write-Output 'after failure'"
+          : "node -e 'process.exit(7)'",
+      ),
+    );
+    expect(failed.exitCode).toBe(7);
   });
   it.skipIf(process.platform !== 'win32')(
     'reports PowerShell parsing failures in readable UTF-8',

@@ -26,33 +26,56 @@ const project = path.join(root, '项目 with spaces');
 await mkdir(project);
 await writeFile(path.join(project, 'source.js'), '// SEARCH_MARKER\n');
 let toolResult = '';
+let commandResult = '';
 const server = createServer(async (req, res) => {
   let raw = '';
   for await (const b of req) raw += b;
   const body = JSON.parse(raw),
     result = body.messages.find((m) => m.role === 'tool');
   if (result) toolResult = result.content;
-  const reply = result
+  const command = body.messages.find((m) => m.role === 'tool' && m.tool_call_id === 'command');
+  if (command) commandResult = command.content;
+  const reply = command
     ? { choices: [{ delta: { content: '检查结束' }, finish_reason: 'stop' }] }
-    : {
-        choices: [
-          {
-            delta: {
-              tool_calls: [
-                {
-                  index: 0,
-                  id: 'search',
-                  function: {
-                    name: 'search_files',
-                    arguments: JSON.stringify({ query: 'SEARCH_MARKER' }),
+    : result
+      ? {
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: 'command',
+                    function: {
+                      name: 'run_command',
+                      arguments: JSON.stringify({ command: 'node --version' }),
+                    },
                   },
-                },
-              ],
+                ],
+              },
+              finish_reason: 'tool_calls',
             },
-            finish_reason: 'tool_calls',
-          },
-        ],
-      };
+          ],
+        }
+      : {
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: 'search',
+                    function: {
+                      name: 'search_files',
+                      arguments: JSON.stringify({ query: 'SEARCH_MARKER' }),
+                    },
+                  },
+                ],
+              },
+              finish_reason: 'tool_calls',
+            },
+          ],
+        };
   res.writeHead(200, { 'Content-Type': 'text/event-stream' });
   res.end('data: ' + JSON.stringify(reply) + '\n\ndata: [DONE]\n\n');
 });
@@ -115,7 +138,10 @@ try {
   );
   let run;
   for (let i = 0; i < 200; i++) {
-    run = (await page.evaluate(() => window.tongzhou.snapshot())).runs.find((r) => r.id === runId);
+    const snapshot = await page.evaluate(() => window.tongzhou.snapshot());
+    for (const approval of snapshot.approvals.filter((a) => a.sessionId === s.id))
+      await page.evaluate((id) => window.tongzhou.approve(id, true), approval.id);
+    run = snapshot.runs.find((r) => r.id === runId);
     if (run?.status !== 'running') break;
     await new Promise((r) => setTimeout(r, 100));
   }
@@ -123,6 +149,9 @@ try {
   assert.ok(toolResult.includes('SEARCH_MARKER'));
   assert.ok(toolResult.includes('source.js'));
   checks.push('packaged ripgrep in Chinese project path');
+  assert.equal(JSON.parse(commandResult).exitCode, 0);
+  assert.match(JSON.parse(commandResult).stdout.trim(), /^v\d+\./);
+  checks.push('project Node command returns actual output and exit code');
   await page.evaluate(() =>
     window.tongzhou.saveConnector({
       id: 'browser-fixture',

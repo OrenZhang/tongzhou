@@ -112,6 +112,25 @@ export const projectShell =
     ? 'Windows PowerShell 5.1（不支持 &&；工作目录已设置为项目目录；调用带引号的可执行路径用 &）'
     : '/bin/sh（工作目录已设置为项目目录）';
 
+function projectCommandEnv() {
+  const env = minimalEnv();
+  const require = createRequire(path.join(process.cwd(), 'package.json'));
+  const nodeRoot = path
+    .dirname(require.resolve('node/package.json', { paths: [__dirname, process.cwd()] }))
+    .replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep);
+  const ownBin = path.join(path.dirname(nodeRoot), '.bin');
+  const key = Object.keys(env).find((k) => k.toUpperCase() === 'PATH') ?? 'PATH';
+  const normalize = (p: string) =>
+    process.platform === 'win32' ? path.resolve(p).toLowerCase() : path.resolve(p);
+  // npm injects this app's .bin in development. Its node.ps1 targets a placeholder
+  // file on Windows, and must not shadow the user's working Node installation.
+  const parts = (env[key] ?? '')
+    .split(path.delimiter)
+    .filter((p) => p && normalize(p) !== normalize(ownBin));
+  env[key] = [...parts, path.join(nodeRoot, 'bin')].join(path.delimiter);
+  return env;
+}
+
 function windowsCommand(script: string): string[] {
   // Parse the supplied script only after configuring UTF-8, including parse-error output.
   // Encode the user script to preserve Unicode and quotes without PowerShell's CLIXML host mode.
@@ -137,6 +156,7 @@ export function commandResult(
   signal: AbortSignal,
   timeout = 120000,
   onOutput?: (text: string) => void,
+  env: NodeJS.ProcessEnv = minimalEnv(),
 ): Promise<CommandResult> {
   return new Promise((resolve, reject) => {
     const commandId = randomUUID(),
@@ -147,7 +167,7 @@ export function commandResult(
     }
     const child = spawn(executable, args, {
       cwd,
-      env: minimalEnv(),
+      env,
       windowsHide: true,
       shell: false,
       detached: process.platform !== 'win32',
@@ -650,8 +670,17 @@ export async function executeTool(
             signal,
             timeoutMs,
             onOutput,
+            projectCommandEnv(),
           )
-        : await commandResult('/bin/sh', ['-c', cmd], root, signal, timeoutMs, onOutput);
+        : await commandResult(
+            '/bin/sh',
+            ['-c', cmd],
+            root,
+            signal,
+            timeoutMs,
+            onOutput,
+            projectCommandEnv(),
+          );
     return JSON.stringify(result);
   }
   throw new Error('未知工具：' + name);
