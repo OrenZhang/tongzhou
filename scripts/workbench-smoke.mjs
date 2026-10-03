@@ -295,7 +295,40 @@ try {
     .locator('.work-plugins')
     .getByRole('button', { name: '配置插件', exact: true })
     .click();
-  await dialog.getByLabel('认证方式', { exact: true }).selectOption('oauth');
+  assert.equal(await dialog.getByLabel('认证来源', { exact: true }).inputValue(), 'saved');
+  assert.equal(await dialog.getByLabel('GitHub 账号', { exact: true }).inputValue(), connector.id);
+  assert.equal(await dialog.getByText('高级：自定义 GitHub OAuth 应用').count(), 0);
+  await capture('github-saved-auth');
+  await dialog.getByRole('button', { name: '保存连接', exact: true }).click();
+  await dialog.waitFor({ state: 'hidden' });
+  const githubPlugin = await page.evaluate(async () =>
+    (await window.tongzhou.snapshot()).plugins.find((p) => p.name === 'GitHub 仓库工具'),
+  );
+  assert.ok(githubPlugin.hasSecret);
+  assert.ok(!JSON.stringify(githubPlugin).includes('fixture-github-token'));
+  await page
+    .locator('.work-plugins')
+    .getByRole('button', { name: '管理连接', exact: true })
+    .click();
+  assert.equal(await dialog.getByLabel('认证来源', { exact: true }).inputValue(), 'token');
+  await dialog.getByText('✓ 凭据已保存', { exact: true }).waitFor();
+  await dialog.getByLabel('认证来源', { exact: true }).selectOption('oauth');
+  await dialog.getByLabel('认证来源', { exact: true }).selectOption('token');
+  await dialog.getByRole('button', { name: '保存连接', exact: true }).click();
+  await dialog.waitFor({ state: 'hidden' });
+  assert.ok(
+    await page.evaluate(
+      async (id) => (await window.tongzhou.snapshot()).plugins.find((p) => p.id === id).hasSecret,
+      githubPlugin.id,
+    ),
+    'switching away from advanced settings must preserve a saved token',
+  );
+  await page
+    .locator('.work-plugins')
+    .getByRole('button', { name: '管理连接', exact: true })
+    .click();
+  await dialog.getByLabel('认证来源', { exact: true }).selectOption('oauth');
+  await dialog.getByText('高级：自定义 GitHub OAuth 应用', { exact: true }).click();
   await dialog.getByRole('button', { name: '浏览器授权', exact: true }).click();
   await dialog
     .getByRole('alert')

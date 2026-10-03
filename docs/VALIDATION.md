@@ -1,8 +1,20 @@
-# 验证记录：0.5.3 开发预览
+# 验证记录：0.5.4 开发预览
 
 日期：2026-10-03。环境：Windows x64、Node 22.23.3、Electron 44.5.1。所有项目修改与测试均在独立测试目录内执行；测试账号使用同舟自身已有的 Kimi 授权副本，不读取其他客户端凭据。原始数据库、认证材料和截图保存在忽略的本地目录，仓库仅保存合成夹具和脱敏结论。
 
 ## 自动化与桌面
+
+### 0.5.4 认证入口与富文本（2026-10-03）
+
+GitHub 仓库插件默认显示已保存账号/访问令牌，复用凭据在主进程中完成，快照不包含令牌。自定义 OAuth 信息折叠到高级入口；账号凭据复用为保存时复制，不声明自动同步。普通模式不展示 Client ID / Secret；仅保存凭据不显示连接验证成功。手动授权和文档链接通过限制为 HTTP(S) 的主进程接口打开。
+
+154 项单元测试 / 18 个文件与构建通过。`test:markdown` 在实际 Electron 中检查 Python、JavaScript、TypeScript、JSON、SQL、Bash、C++ 高亮；未知语言原文、代码精确复制与换行；表格、任务列表、脚注、KaTeX 公式及字体加载。Mermaid 验证流程、时序、ER、类、状态、甘特、饼图、思维导图，包含源码切换、缩放/展开、深浅色、流式残缺到完整的更新及语法失败回退。回归还检查外链协议、HTML、图表配置注入、外部图片不自动请求和大代码保留。`test:workbench` 检查 GitHub 凭据复用及高级入口；`test:turns` 验证已有分段/工具/流式处理不退化。
+
+渲染全部在本机完成：图表库动态导入，代码高亮 Worker 处理并设超时。超过 100,000 字符的单个代码块保留完整文本而跳过高亮；图表超过 50,000 字符/300 条边或无法解析时回退源码。这些仅为渲染资源保护，不是模型或会话上下文上限。图表不接受会覆盖宿主安全策略的 Mermaid 初始化指令/frontmatter，SVG 经净化后在图片上下文显示，不运行脚本或链接；远程图片提供手动打开链接。当前不支持 PlantUML/Graphviz 图形渲染。
+
+实现依据：[React Markdown](https://github.com/remarkjs/react-markdown)、[Lowlight](https://github.com/wooorm/lowlight)、[Mermaid 本地渲染](https://mermaid.js.org/config/usage.html)、[GitHub MCP 认证](https://github.com/github/github-mcp-server/blob/main/docs/host-integration.md)。本轮使用合成账号和消息，不代表第三方真人 OAuth 或 macOS 实机验收。
+
+Windows 0.5.4 解包桌面程序已通过 `test:markdown`、`test:workbench`、`test:desktop`。源码版 `test:turns` 通过，额外验证在高级 OAuth 与令牌选项之间切换后保留原有凭据。未重建 NSIS 安装程序，未执行 macOS 实机验收。
 
 ### 0.5.3 内置工作目录能力与外观（2026-10-03）
 

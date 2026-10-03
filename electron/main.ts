@@ -559,6 +559,12 @@ function setup() {
     runtime.changed();
   });
   register('copyText', (text) => clipboard.writeText(z.string().max(2000000).parse(text)));
+  register('openExternalLink', async (value) => {
+    const url = new URL(z.string().max(8192).parse(value));
+    if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password)
+      throw new Error('只支持打开 HTTP 或 HTTPS 网页链接');
+    await shell.openExternal(url.href);
+  });
   register('clientMethods', () => clientCommands.describe());
   register('openModule', (view) =>
     emit({

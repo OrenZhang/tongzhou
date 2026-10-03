@@ -5,7 +5,7 @@
 
 同舟是一个开源桌面 AI 工作台。你可以直接聊天，也可以打开项目让模型读代码、修改文件和运行测试。连接、模型、会话和工具在同一个工作空间管理，普通聊天无需选择项目或 Agent。
 
-**0.5.3 开发预览版**：新增石墨、雾蓝、暖砂三套风格，独立选择明暗模式、字体与聊天字号；Git 工作树保留为 Agent 内置能力，移除独立管理页面，隔离目录中的会话归入原项目。工作插件在“插件与工具”管理，MCP 与服务认证使用系统代理。方案与官方产品对照见 [工作台补齐计划](docs/WORKBENCH_EXPANSION.md)，测试范围见 [验证记录](docs/VALIDATION.md)。Mac 实机和第三方真人账号仍需分别验收。项目独立开发，不包含 Codex 桌面产品的专有插件。
+**0.5.4 开发预览版**：聊天支持代码语法高亮、复制与换行、Mermaid 图表、数学公式及 GFM 排版，适配浅色/深色主题。GitHub 仓库工具优先保存或复用认证，自定义 OAuth 应用收进高级配置。工作树保持 Agent 内置能力，无独立配置入口。测试范围见 [验证记录](docs/VALIDATION.md)，工作台方案见 [补齐计划](docs/WORKBENCH_EXPANSION.md)。Mac 实机和第三方真人账号仍需分别验收。项目独立开发，不包含 Codex 桌面产品的专有插件。
 
 ## 功能
 
@@ -15,9 +15,27 @@
 - **模型与订阅**：ChatGPT 浏览器 / 设备授权、Kimi Code、MiniMax Code；OpenAI Chat Completions / Responses、Anthropic、Gemini 和无认证本地接口；OpenCode Go 订阅预设。模型从服务获取并可搜索选择，目录缺失时仍可自定义。
 - **连接中心**：模型与订阅、服务与浏览器、渠道通知、机器人、认证与发送记录五个入口。认证界面只显示所选服务；同服务多账号隔离凭据和运行目录。
 - **服务与浏览器**：GitHub 设备授权 / 访问令牌、GitLab OAuth PKCE / 访问令牌及自建域名；项目可绑定账号，克隆 HTTPS 仓库、快进拉取、推送当前分支提交。凭据按目标仓库在 Git 网络操作期间使用，不写入 remote 或 Git 配置；访问范围由仓库授权决定。独立浏览器 Profile 保存站点登录态，并可清理 Cookie 等数据。代码托管账号与 AI 模型订阅分别管理。
+- **富文本回复**：CommonMark / GFM 标题、列表、表格、任务清单、脚注；带语言标签的代码语法高亮、复制原文、切换换行，未知语言保留源码。`mermaid` 代码块可绘制流程图、时序图、ER 图、类图、状态图、甘特图、饼图、思维导图等，支持源码、缩放和展开；`$...<p align="center"><img src="docs/assets/logo.svg" width="78" alt="同舟" /></p>
+<h1 align="center">同舟 Tongzhou</h1>
+<p align="center"><strong>多模型协作，一个工作台。</strong><br/>Windows · macOS · Local-first · Apache-2.0</p>
+<p align="center"><a href="https://github.com/OrenZhang/tongzhou">源码</a> · <a href="https://github.com/OrenZhang/tongzhou/actions">构建</a> · <a href="https://github.com/OrenZhang/tongzhou/releases">版本发布</a> · <a href="https://github.com/OrenZhang/tongzhou/issues">问题反馈</a></p>
+
+同舟是一个开源桌面 AI 工作台。你可以直接聊天，也可以打开项目让模型读代码、修改文件和运行测试。连接、模型、会话和工具在同一个工作空间管理，普通聊天无需选择项目或 Agent。
+
+**0.5.4 开发预览版**：聊天支持代码语法高亮、复制与换行、Mermaid 图表、数学公式及 GFM 排版，适配浅色/深色主题。GitHub 仓库工具优先保存或复用认证，自定义 OAuth 应用收进高级配置。工作树保持 Agent 内置能力，无独立配置入口。测试范围见 [验证记录](docs/VALIDATION.md)，工作台方案见 [补齐计划](docs/WORKBENCH_EXPANSION.md)。Mac 实机和第三方真人账号仍需分别验收。项目独立开发，不包含 Codex 桌面产品的专有插件。
+
+## 功能
+
+- **统一工作台界面**：紧凑导航和连接列表，清晰的正文、主要操作与状态层级；普通聊天使用完整阅读区，项目面板可收起。`Ctrl/⌘ K` 搜索会话与功能，`Ctrl/⌘ B` 切换导航；支持连接搜索、运行状态筛选、弹窗键盘操作与面板偏好记忆。设计依据及完整页面盘点见 [界面重构](docs/UI_REDESIGN.md)。
+- **外观与输入**：石墨、雾蓝、暖砂三套内置风格，标志随风格换色；浅色、深色、跟随系统独立选择。现代黑体、系统字体、书籍宋体使用本机字体并自动回退，聊天字号可选 14 / 16 / 18，代码保持等宽。设置实时预览、重启记忆，支持恢复默认。草稿按会话保存；多项收件人、用户 ID 和启动参数可逐项添加、删除，支持多行粘贴。
+- **聊天与连续会话**：空 Agent 默认状态，不自动启动规划；每轮通过“用时”展开按顺序分段的公开思考、阶段回复与工具过程；思考摘要直接展示，连续工具记录合并为紧凑折叠组，没有思考内容时显示实际工作状态，完成后收起过程并突出最终答复。运行中支持补充、排队下一轮、停止后继续，未消费消息可编辑、取消或恢复。支持历史引用、独立分支、归档、恢复和删除；侧栏会话标题悬停或键盘聚焦时显示操作图标，可直接管理其他会话，无需切换当前聊天。
+- **模型与订阅**：ChatGPT 浏览器 / 设备授权、Kimi Code、MiniMax Code；OpenAI Chat Completions / Responses、Anthropic、Gemini 和无认证本地接口；OpenCode Go 订阅预设。模型从服务获取并可搜索选择，目录缺失时仍可自定义。
+- **连接中心**：模型与订阅、服务与浏览器、渠道通知、机器人、认证与发送记录五个入口。认证界面只显示所选服务；同服务多账号隔离凭据和运行目录。
+- **服务与浏览器**：GitHub 设备授权 / 访问令牌、GitLab OAuth PKCE / 访问令牌及自建域名；项目可绑定账号，克隆 HTTPS 仓库、快进拉取、推送当前分支提交。凭据按目标仓库在 Git 网络操作期间使用，不写入 remote 或 Git 配置；访问范围由仓库授权决定。独立浏览器 Profile 保存站点登录态，并可清理 Cookie 等数据。代码托管账号与 AI 模型订阅分别管理。
+  / `$...$` 渲染数学公式。资源随应用打包，本地渲染，外部图片显示点击链接。超大代码仅跳过高亮，不截断内容；图表渲染失败时保留源码。
 - **工作插件**：GitHub、Figma、Notion、Linear 官方 MCP 目录，搜索、配置、启停和工具发现；支持令牌、请求头及浏览器 OAuth。授权使用 PKCE、state 和本机回调，令牌加密保存与刷新。GitHub 官方账号凭据可主动用于 GitHub 官方 MCP；切换插件地址或认证身份会清理旧凭据。
 
-工作插件入口：**插件与工具 → 工作插件**。GitHub 浏览器 OAuth 需要自己的 OAuth App Client ID 与 Client Secret，也可复用连接中心账号或使用访问令牌。Figma 远程 MCP 仅接受服务方认可的客户端，本地实测新客户端注册返回 HTTP 403，未声称同舟已取得远程接入资格；可配置已获准应用，或在 Figma 桌面应用启用 MCP 后选择“桌面服务”。参见 [GitHub 接入要求](https://github.com/github/github-mcp-server/blob/main/docs/host-integration.md)、[Figma 远程接入](https://developers.figma.com/docs/figma-mcp-server/remote-server-installation/) 和 [Figma 桌面接入](https://developers.figma.com/docs/figma-mcp-server/local-server-installation/)。
+工作插件入口：**插件与工具 → 工作插件**。GitHub 默认提供已保存账号与访问令牌；复用会复制账号凭据，账号更新认证后需重新保存以同步。高级浏览器 OAuth 才需要开发者自己的 OAuth App Client ID 与 Client Secret。保存凭据与实际连接成功分别显示。Figma 远程 MCP 仅接受服务方认可的客户端，本地实测新客户端注册返回 HTTP 403，未声称同舟已取得远程接入资格；可配置已获准应用，或在 Figma 桌面应用启用 MCP 后选择“桌面服务”。参见 [GitHub 接入要求](https://github.com/github/github-mcp-server/blob/main/docs/host-integration.md)、[Figma 远程接入](https://developers.figma.com/docs/figma-mcp-server/remote-server-installation/) 和 [Figma 桌面接入](https://developers.figma.com/docs/figma-mcp-server/local-server-installation/)。
 
 - **公共插件**：MCP stdio / Streamable HTTP、Skills、内置网页读取与时间工具、客户端管理、项目工具、电脑控制。全局启停，所有会话和 Agent 继承；按需加载目录与连接，不逐个 Agent 重复勾选。
 - **会话管理客户端**：可以问“有哪些 MCP / Agent”，或要求修改角色、会话、插件开关、连接、渠道规则等。会话工具与界面使用相同的业务接口；修改展示实际操作与参数供批准，凭据只在认证界面输入。

@@ -22,6 +22,7 @@ const api: TongzhouAPI = {
   onboardBot: (id, name) => call('onboardBot', id, name),
   setTheme: (theme) => call('setTheme', theme),
   copyText: (text) => call('copyText', text),
+  openExternalLink: (url) => call('openExternalLink', url),
   setDefaultPermission: (mode, all) => call('setDefaultPermission', mode, all),
   setSessionPermission: (id, mode) => call('setSessionPermission', id, mode),
   openModule: (view) => call('openModule', view),

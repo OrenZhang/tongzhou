@@ -133,7 +133,7 @@ export function ConversationTurn({ turn, ...actions }: Actions & { turn: Turn })
         data-message-id={m.id}
         data-entry-kind="response"
       >
-        <Markdown text={entry.text} />
+        <Markdown text={entry.text} streaming={m.status === 'streaming'} />
       </div>
     );
   };

@@ -17,9 +17,9 @@ import {
   type ReactElement,
   type ReactNode,
 } from 'react';
-import ReactMarkdown from 'react-markdown';
+import { Markdown } from './RichMarkdown';
+export { Markdown } from './RichMarkdown';
 import { createPortal } from 'react-dom';
-import remarkGfm from 'remark-gfm';
 import type { Message } from './shared/types';
 export function AuthBadge({
   connected,
@@ -372,25 +372,6 @@ export function ModelPicker({
     </div>
   );
 }
-export function Markdown({ text }: { text: string }) {
-  return (
-    <div className="markdown">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          img: ({ alt }) => <span>[图片：{alt}]</span>,
-          a: ({ href, children }) => (
-            <span className="link-label" title={href}>
-              {children}
-            </span>
-          ),
-        }}
-      >
-        {text}
-      </ReactMarkdown>
-    </div>
-  );
-}
 export function ChatMessage({ message: m, footer }: { message: Message; footer?: ReactNode }) {
   const [open, setOpen] = useState(false);
   if (m.role === 'system')
@@ -444,7 +425,10 @@ export function ChatMessage({ message: m, footer }: { message: Message; footer?:
           {m.status === 'streaming' && <Spinner />}
           {m.status === 'interrupted' && <span>已中断</span>}
         </div>
-        <Markdown text={m.content || (m.status === 'streaming' ? '正在思考…' : '')} />
+        <Markdown
+          text={m.content || (m.status === 'streaming' ? '正在思考…' : '')}
+          streaming={m.status === 'streaming'}
+        />
         {m.toolCalls?.map((t) => (
           <div className="tool-call" key={t.id}>
             <FileCode2 size={13} />

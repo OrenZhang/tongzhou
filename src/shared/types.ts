@@ -298,6 +298,7 @@ export interface TongzhouAPI {
   ): Promise<{ id: string; url: string; image: string; expiresAt: number }>;
   setTheme(theme: 'system' | 'light' | 'dark'): Promise<void>;
   copyText(text: string): Promise<void>;
+  openExternalLink(url: string): Promise<void>;
   setDefaultPermission(mode: PermissionMode, applyToAll?: boolean): Promise<void>;
   setSessionPermission(sessionId: string, mode: PermissionMode | null): Promise<void>;
   openModule(view: string): Promise<void>;

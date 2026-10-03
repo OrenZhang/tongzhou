@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Search, Plug, Plus, ExternalLink } from 'lucide-react';
 import { Modal } from './components';
+import { MarkdownLink } from './RichMarkdown';
 import { errorMessage } from './feedback';
 import type { PluginConfig, PluginInput, Snapshot, TongzhouAPI } from './shared/types';
 export const figmaDesktopUrl = 'http://127.0.0.1:3845/mcp';
@@ -78,8 +79,10 @@ export function OAuthFields({
         </select>
       </label>
       {edit.authMode === 'oauth' && (
-        <details open={github || undefined}>
-          <summary>{github ? 'GitHub OAuth 应用（必填）' : '使用已注册的 OAuth 应用'}</summary>
+        <details>
+          <summary>
+            {github ? '高级：自定义 GitHub OAuth 应用' : '高级：使用已注册的 OAuth 应用'}
+          </summary>
           <div className="oauth-app-fields">
             <label>
               {github ? 'OAuth App Client ID（必填）' : '预注册 Client ID（可选）'}
@@ -130,9 +133,9 @@ export function OAuthFields({
               http://127.0.0.1:17438/mcp/callback。具体可用权限由服务账号决定。
             </p>
             {github && (
-              <a href="https://github.com/settings/developers" target="_blank" rel="noreferrer">
+              <MarkdownLink href="https://github.com/settings/developers">
                 管理 GitHub OAuth 应用
-              </a>
+              </MarkdownLink>
             )}
           </div>
         </details>
@@ -189,6 +192,14 @@ export function WorkPlugins({
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState('');
   const [source, setSource] = useState('');
+  const [githubMode, setGithubMode] = useState<'saved' | 'token' | 'oauth'>('token');
+  const githubAccounts = (data.connectors ?? []).filter(
+    (c) =>
+      c.kind === 'github' &&
+      c.enabled &&
+      c.hasSecret &&
+      c.baseUrl.replace(/\/$/, '') === 'https://github.com',
+  );
   const [loginUrl, setLoginUrl] = useState('');
   const act = async (fn: () => Promise<unknown>, success = '已保存') => {
     setBusy(true);
@@ -206,6 +217,12 @@ export function WorkPlugins({
   const current = edit ? data.plugins?.find((p) => p.id === edit.id) : undefined;
   const save = async () => {
     if (!edit) return;
+    if (
+      edit.url === workPluginCatalog[0].url &&
+      githubMode === 'saved' &&
+      !githubAccounts.some((c) => c.id === source)
+    )
+      throw new Error('请选择已保存的 GitHub 账号，或切换到访问令牌。');
     await api.savePlugin({
       ...edit,
       secret: token ? JSON.stringify({ Authorization: 'Bearer ' + token }) : undefined,
@@ -224,7 +241,6 @@ export function WorkPlugins({
         : old,
     );
     setToken('');
-    setSource('');
     await refresh();
   };
   return (
@@ -291,6 +307,12 @@ export function WorkPlugins({
                   </span>
                   <a
                     href={p.docs}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      void api
+                        .openExternalLink(p.docs)
+                        .catch((error) => setNotice(errorMessage(error)));
+                    }}
                     target="_blank"
                     rel="noreferrer"
                     aria-label={`${p.name} 官方说明`}
@@ -306,9 +328,24 @@ export function WorkPlugins({
                     onClick={() => {
                       setNotice('');
                       setLoginUrl('');
+                      const mode =
+                        installed?.authMode === 'oauth' && installed.oauthClientId
+                          ? 'oauth'
+                          : installed?.hasSecret
+                            ? 'token'
+                            : githubAccounts.length
+                              ? 'saved'
+                              : 'token';
+                      setGithubMode(mode);
                       setEdit(
                         installed
-                          ? { ...installed, secret: '' }
+                          ? {
+                              ...installed,
+                              secret: '',
+                              ...(p.id === 'github'
+                                ? { authMode: mode === 'oauth' ? 'oauth' : 'headers' }
+                                : {}),
+                            }
                           : {
                               id: crypto.randomUUID(),
                               name: p.name,
@@ -322,7 +359,9 @@ export function WorkPlugins({
                             },
                       );
                       setToken('');
-                      setSource('');
+                      setSource(
+                        p.id === 'github' && mode === 'saved' ? (githubAccounts[0]?.id ?? '') : '',
+                      );
                     }}
                   >
                     {installed ? '管理连接' : '配置插件'}
@@ -424,10 +463,94 @@ export function WorkPlugins({
                 </p>
               </>
             )}
-            <p>{edit.url}</p>
-            {edit.url !== figmaDesktopUrl && <OAuthFields edit={edit} onChange={setEdit} />}
-            {edit.authMode !== 'oauth' && edit.url !== figmaDesktopUrl && (
+            {edit.url === workPluginCatalog[0].url && (
               <>
+                <p>保存或复用 GitHub 认证，供会话中的仓库工具使用。</p>
+                {current?.hasSecret && edit.authMode !== 'oauth' && (
+                  <span className="status-pill">✓ 凭据已保存</span>
+                )}
+                <label>
+                  认证来源
+                  <select
+                    aria-label="认证来源"
+                    value={githubMode}
+                    onChange={(e) => {
+                      const mode = e.target.value as 'saved' | 'token' | 'oauth';
+                      setGithubMode(mode);
+                      setToken('');
+                      setLoginUrl('');
+                      setNotice('');
+                      setSource(mode === 'saved' ? (githubAccounts[0]?.id ?? '') : '');
+                      setEdit({
+                        ...edit,
+                        authMode: mode === 'oauth' ? 'oauth' : 'headers',
+                        oauthIssuer:
+                          mode === 'oauth'
+                            ? edit.oauthIssuer || 'https://github.com/login/oauth'
+                            : current?.oauthIssuer,
+                        oauthClientId:
+                          mode === 'oauth' ? edit.oauthClientId : current?.oauthClientId,
+                      });
+                    }}
+                  >
+                    <option value="saved">已保存的 GitHub 账号</option>
+                    <option value="token">访问令牌</option>
+                    <option value="oauth">自定义 OAuth 应用（高级）</option>
+                  </select>
+                </label>
+                {githubMode === 'saved' && (
+                  <>
+                    <label>
+                      GitHub 账号
+                      <select
+                        aria-label="GitHub 账号"
+                        value={source}
+                        onChange={(e) => setSource(e.target.value)}
+                      >
+                        <option value="">选择已保存的账号</option>
+                        {githubAccounts.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <p>
+                      {githubAccounts.length
+                        ? '保存时将此账号的凭据用于仓库工具，无需重复输入。账号更新认证后，可在这里重新保存以同步。'
+                        : '还没有可用的 GitHub 账号。可在连接中心添加，或选择访问令牌。'}
+                    </p>
+                    <button
+                      type="button"
+                      className="text-button"
+                      onClick={() => {
+                        setEdit(null);
+                        void api.openModule('providers');
+                      }}
+                    >
+                      到连接中心管理账号
+                    </button>
+                  </>
+                )}
+                {githubMode === 'oauth' && (
+                  <p>仅供自行注册 OAuth 应用的开发者使用。普通使用请选择已保存账号或访问令牌。</p>
+                )}
+              </>
+            )}
+            {edit.url !== figmaDesktopUrl &&
+              (edit.url !== workPluginCatalog[0].url || githubMode === 'oauth') && (
+                <OAuthFields
+                  edit={edit}
+                  onChange={(next) => {
+                    setEdit(next);
+                    if (edit.url === workPluginCatalog[0].url && next.authMode !== 'oauth')
+                      setGithubMode('token');
+                  }}
+                />
+              )}
+            {edit.authMode !== 'oauth' &&
+              edit.url !== figmaDesktopUrl &&
+              (edit.url !== workPluginCatalog[0].url || githubMode === 'token') && (
                 <label>
                   访问令牌（留空保留）
                   <input
@@ -439,36 +562,11 @@ export function WorkPlugins({
                       setSource('');
                     }}
                   />
+                  {edit.url === workPluginCatalog[0].url && (
+                    <small>令牌加密保存在本机。请按需授予仓库权限，保存后可检查工具连接。</small>
+                  )}
                 </label>
-                {edit.url === workPluginCatalog[0].url && (
-                  <label>
-                    或使用已保存的 GitHub 账号
-                    <select
-                      value={source}
-                      onChange={(e) => {
-                        setSource(e.target.value);
-                        setToken('');
-                      }}
-                    >
-                      <option value="">单独配置此插件凭据</option>
-                      {(data.connectors ?? [])
-                        .filter(
-                          (c) =>
-                            c.kind === 'github' &&
-                            c.enabled &&
-                            c.hasSecret &&
-                            c.baseUrl.replace(/\/$/, '') === 'https://github.com',
-                        )
-                        .map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                          </option>
-                        ))}
-                    </select>
-                  </label>
-                )}
-              </>
-            )}
+              )}
             {edit.authMode === 'oauth' && (
               <div className="plugin-auth-controls">
                 <PluginAuthStatus plugin={current} />
@@ -492,9 +590,7 @@ export function WorkPlugins({
                   浏览器授权
                 </button>
                 {loginUrl && current?.oauthStatus === 'waiting' && (
-                  <a href={loginUrl} target="_blank" rel="noreferrer">
-                    打开授权页面
-                  </a>
+                  <MarkdownLink href={loginUrl}>打开授权页面</MarkdownLink>
                 )}
                 {['starting', 'waiting'].includes(current?.oauthStatus ?? '') && (
                   <button
