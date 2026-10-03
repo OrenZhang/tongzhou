@@ -1875,7 +1875,7 @@ export default function App() {
           <main className="page settings-page">
             <div className="page-heading">
               <h1>设置与关于</h1>
-              <p>同舟 0.5.0 · 开源多模型桌面工作台</p>
+              <p>同舟 0.5.1 · 开源多模型桌面工作台</p>
             </div>
             <section className="settings-card">
               <div className="settings-card-title">

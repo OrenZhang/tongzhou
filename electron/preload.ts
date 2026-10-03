@@ -3,6 +3,11 @@ import type { TongzhouAPI } from '../src/shared/types';
 const call = (method: string, ...args: unknown[]) =>
   ipcRenderer.invoke('tongzhou:' + method, ...args);
 const api: TongzhouAPI = {
+  gitRepository: (id) => call('gitRepository', id),
+  bindGitAccount: (id, connectorId) => call('bindGitAccount', id, connectorId),
+  syncRepository: (id, action) => call('syncRepository', id, action),
+  cloneRepository: (id, url, directory) => call('cloneRepository', id, url, directory),
+  chooseCloneDirectory: () => call('chooseCloneDirectory'),
   loginPlugin: (id) => call('loginPlugin', id),
   logoutPlugin: (id) => call('logoutPlugin', id),
   cancelPluginLogin: (id) => call('cancelPluginLogin', id),

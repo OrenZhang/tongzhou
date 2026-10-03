@@ -16,6 +16,7 @@ git(['config', 'user.name', 'Fixture']);
 git(['config', 'user.email', 'fixture@example.com']);
 git(['add', '.']);
 git(['commit', '-m', 'initial']);
+git(['remote', 'add', 'origin', 'https://github.com/fixture/repository.git']);
 await build({
   entryPoints: ['electron/store.ts'],
   outfile: path.join(root, 'store.cjs'),
@@ -80,6 +81,7 @@ try {
   checks.push('drafts are isolated per session and survive renderer reload');
   await nav('连接中心');
   await page.getByRole('button', { name: '渠道通知', exact: true }).click();
+  assert.equal(await page.getByRole('button', { name: '飞书扫码接入', exact: true }).count(), 0);
   await page.getByRole('button', { name: '添加 邮件', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('名称', { exact: true }).fill('开发测试邮件');
@@ -116,6 +118,42 @@ try {
     'SMTP recipient chips, encrypted credential snapshot, condition and end-of-turn rule persistence; no message sent',
   );
   await page.getByRole('button', { name: '机器人', exact: true }).click();
+  assert.equal(await page.getByRole('button', { name: '飞书扫码接入', exact: true }).count(), 0);
+  await page.getByRole('button', { name: '飞书机器人', exact: true }).click();
+  await dialog.getByRole('button', { name: /扫码接入/ }).waitFor();
+  await capture('feishu-methods');
+  await dialog.getByRole('button', { name: /手动配置/ }).click();
+  await dialog.getByLabel('App / Client ID', { exact: true }).waitFor();
+  await dialog.getByRole('button', { name: '取消', exact: true }).click();
+  // Stub only onboarding IPC in this isolated test process. Never contact Feishu.
+  await app.evaluate(({ ipcMain }) => {
+    globalThis.feishuSmoke = { calls: 0, cancelled: '' };
+    ipcMain.removeHandler('tongzhou:onboardBot');
+    ipcMain.handle('tongzhou:onboardBot', (_event, id) => {
+      globalThis.feishuSmoke.calls++;
+      if (globalThis.feishuSmoke.calls === 1) throw new Error('合成网络异常，请重试');
+      return {
+        id,
+        image:
+          'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==',
+        expiresAt: Date.now() + 60000,
+      };
+    });
+    ipcMain.removeHandler('tongzhou:cancelChannelLogin');
+    ipcMain.handle('tongzhou:cancelChannelLogin', (_event, id) => {
+      globalThis.feishuSmoke.cancelled = id;
+    });
+  });
+  await page.getByRole('button', { name: '飞书机器人', exact: true }).click();
+  await dialog.getByRole('button', { name: /扫码接入/ }).click();
+  await dialog.getByRole('alert').filter({ hasText: '合成网络异常' }).waitFor();
+  await dialog.getByRole('button', { name: /扫码接入/ }).click();
+  await dialog.getByAltText('飞书机器人授权二维码').waitFor();
+  await dialog.getByRole('button', { name: '关闭', exact: true }).click();
+  assert.ok(await app.evaluate(() => globalThis.feishuSmoke.cancelled));
+  checks.push(
+    'Feishu QR and manual setup are inside Add Feishu Bot; inline error/retry and QR cancellation work without contacting Feishu',
+  );
   await page.getByRole('button', { name: '企业微信机器人', exact: true }).click();
   await dialog.getByLabel('名称', { exact: true }).fill('企微测试机器人');
   await dialog.getByLabel('Bot ID', { exact: true }).fill('fixture-bot');
@@ -133,6 +171,19 @@ try {
     'bot credentials and read-only disabled defaults remain separate from notification targets',
   );
   await page.getByRole('button', { name: '服务与浏览器', exact: true }).click();
+  await page.getByRole('button', { name: '添加 GitHub', exact: true }).click();
+  await dialog.getByLabel('名称', { exact: true }).fill('仓库测试账号');
+  await dialog
+    .getByLabel('访问令牌（留空保留已存令牌）', { exact: true })
+    .fill('fixture-github-token');
+  await capture('github-account');
+  await dialog.getByRole('button', { name: '保存', exact: true }).click();
+  await dialog.waitFor({ state: 'hidden' });
+  const connector = await page.evaluate(async () =>
+    (await window.tongzhou.snapshot()).connectors.find((c) => c.kind === 'github'),
+  );
+  assert.ok(connector.hasSecret);
+  assert.ok(!JSON.stringify(connector).includes('fixture-github-token'));
   await page.getByLabel('搜索工作插件', { exact: true }).fill('Figma');
   assert.equal(await page.locator('.work-plugins .provider-card').count(), 1);
   await page
@@ -153,6 +204,30 @@ try {
     'official work plugin search and OAuth configuration without attempting external login',
   );
   await nav('项目与工作树');
+  await page.getByRole('button', { name: '克隆仓库', exact: true }).click();
+  await dialog.getByLabel('代码托管账号', { exact: true }).selectOption(connector.id);
+  await dialog
+    .getByLabel('HTTPS 仓库地址', { exact: true })
+    .fill('https://github.com/fixture/repository.git');
+  await capture('clone-repository');
+  await dialog.getByRole('button', { name: '关闭', exact: true }).click();
+  await page.getByRole('button', { name: '同步代码', exact: true }).click();
+  await dialog.getByText('https://github.com/fixture/repository.git', { exact: true }).waitFor();
+  await dialog.getByLabel('代码托管账号', { exact: true }).selectOption(connector.id);
+  await dialog.getByRole('button', { name: '保存项目账号', exact: true }).click();
+  await dialog.getByText('已保存项目账号', { exact: true }).waitFor();
+  await capture('sync-repository');
+  await dialog.getByRole('button', { name: '关闭', exact: true }).click();
+  assert.equal(
+    await page.evaluate(
+      async () =>
+        (await window.tongzhou.snapshot()).projects.find((p) => p.id === 'project').gitConnectorId,
+    ),
+    connector.id,
+  );
+  checks.push(
+    'GitHub repository credential UI and project account binding; clone/sync forms without external Git operations',
+  );
   await page.getByRole('button', { name: '新建工作树', exact: true }).click();
   await dialog.getByLabel('新分支名称', { exact: true }).fill('feature/ui-test');
   await dialog.getByRole('button', { name: '创建工作树', exact: true }).click();

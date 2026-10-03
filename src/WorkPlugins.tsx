@@ -5,9 +5,9 @@ import type { PluginInput, Snapshot, TongzhouAPI } from './shared/types';
 export const workPluginCatalog = [
   {
     id: 'github',
-    name: 'GitHub',
-    category: '代码协作',
-    description: '搜索仓库、查看代码、处理 Issue 和 Pull Request。',
+    name: 'GitHub 仓库工具',
+    category: '可选 MCP',
+    description: '在会话中搜索仓库、查看代码、处理 Issue 和 Pull Request。可复用上方 GitHub 账号。',
     url: 'https://api.githubcopilot.com/mcp/',
     authMode: 'headers' as const,
     docs: 'https://github.com/github/github-mcp-server/blob/main/docs/host-integration.md',
@@ -145,8 +145,8 @@ export function WorkPlugins({
     <section className="work-plugins">
       <div className="collection-toolbar">
         <div>
-          <h2>工作插件</h2>
-          <p>官方 MCP 服务。配置一次，启用后可在会话中调用。</p>
+          <h2>可选工作插件</h2>
+          <p>按需添加设计、文档与协作工具，启用后可在会话中调用。</p>
         </div>
         <div className="search-box">
           <Search size={14} />

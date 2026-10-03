@@ -3289,3 +3289,26 @@ kbd {
 .rule-conditions .connection-form {
   padding: 8px 0;
 }
+.setup-methods {
+  display: grid;
+  gap: 10px;
+}
+.setup-method {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 14px;
+  padding: 18px;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.setup-method span {
+  display: grid;
+  gap: 5px;
+}
+.setup-method small {
+  color: var(--muted);
+  font-weight: normal;
+  line-height: 1.6;
+}

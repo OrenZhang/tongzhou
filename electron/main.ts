@@ -18,6 +18,7 @@ import { Channels } from './channels';
 import { Feishu } from './feishu';
 import { Bots } from './bots';
 import { Worktrees } from './worktrees';
+import { GitRepositories } from './git-repositories';
 import { McpAuth, pluginOAuth, pluginAuthIdentity } from './mcp-auth';
 import { initializeAgent } from './project-init';
 import path from 'node:path';
@@ -145,6 +146,24 @@ function setup() {
     updateWindowTheme();
   });
   connectors = new Connectors(store, () => runtime.changed());
+  const repositories = new GitRepositories(store, dataDir, () => runtime.changed());
+  register('gitRepository', (id) => repositories.info(idSchema.parse(id)));
+  register('bindGitAccount', (id, connectorId) =>
+    repositories.bind(idSchema.parse(id), z.string().parse(connectorId)),
+  );
+  register('syncRepository', (id, action) =>
+    repositories.sync(idSchema.parse(id), z.enum(['pull', 'push']).parse(action)),
+  );
+  register('cloneRepository', (id, url, directory) =>
+    repositories.clone(idSchema.parse(id), url, directory),
+  );
+  register('chooseCloneDirectory', async () => {
+    const result = await dialog.showOpenDialog(window!, {
+      title: '选择克隆到的父目录',
+      properties: ['openDirectory', 'createDirectory'],
+    });
+    return result.canceled ? null : result.filePaths[0];
+  });
   browserProfiles = new BrowserProfiles(store);
   feishu = new Feishu(store, runtime);
   bots = new Bots(store, runtime);

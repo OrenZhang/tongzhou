@@ -95,12 +95,19 @@ export interface ComputerStatus {
   emergencyShortcut: boolean;
 }
 export interface Project {
+  gitConnectorId?: string;
   sourceProjectId?: string;
   removed?: boolean;
   id: string;
   name: string;
   path: string;
   createdAt: number;
+}
+export interface GitRepositoryInfo {
+  branch: string;
+  remote: string;
+  connectorId: string;
+  dirty: boolean;
 }
 export interface ToolCall {
   id: string;
@@ -272,6 +279,11 @@ export interface ImportPreview {
   warnings: string[];
 }
 export interface TongzhouAPI {
+  gitRepository(projectId: string): Promise<GitRepositoryInfo>;
+  bindGitAccount(projectId: string, connectorId: string): Promise<void>;
+  syncRepository(projectId: string, action: 'pull' | 'push'): Promise<string>;
+  cloneRepository(connectorId: string, url: string, directory: string): Promise<Project>;
+  chooseCloneDirectory(): Promise<string | null>;
   loginPlugin(id: string): Promise<void>;
   logoutPlugin(id: string): Promise<void>;
   cancelPluginLogin(id: string): Promise<void>;

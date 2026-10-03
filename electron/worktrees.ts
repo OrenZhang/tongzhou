@@ -179,6 +179,7 @@ export class Worktrees {
         path: await realpath(target),
         createdAt: Date.now(),
         sourceProjectId: source.id,
+        gitConnectorId: original.gitConnectorId,
       };
       this.store.put('worktree', { id, sourceProjectId: source.id, path: p.path, base, branch });
       this.store.put('project', p);

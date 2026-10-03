@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FolderOpen, GitBranch, Plus, RefreshCw } from 'lucide-react';
 import { Modal } from './components';
+import { RepositoryDialog } from './RepositoryDialogs';
 import type { Project, Snapshot, TongzhouAPI, WorktreeInfo } from './shared/types';
 export function ProjectsPanel({
   data,
@@ -15,6 +16,7 @@ export function ProjectsPanel({
 }) {
   const [rows, setRows] = useState<Record<string, WorktreeInfo[]>>({}),
     [errors, setErrors] = useState<Record<string, string>>({});
+  const [repository, setRepository] = useState<Project | 'clone' | null>(null);
   const [busy, setBusy] = useState(false),
     [notice, setNotice] = useState(''),
     [create, setCreate] = useState<Project | null>(null),
@@ -50,14 +52,20 @@ export function ProjectsPanel({
       </div>
       <div className="collection-toolbar">
         <span>项目目录和 Git 工作副本</span>
-        <button
-          className="primary"
-          disabled={busy}
-          onClick={() => void act(() => api.addProject())}
-        >
-          <Plus size={15} />
-          添加项目
-        </button>
+        <div className="row">
+          <button className="secondary" disabled={busy} onClick={() => setRepository('clone')}>
+            <GitBranch size={15} />
+            克隆仓库
+          </button>
+          <button
+            className="primary"
+            disabled={busy}
+            onClick={() => void act(() => api.addProject())}
+          >
+            <Plus size={15} />
+            添加项目
+          </button>
+        </div>
       </div>
       {notice && (
         <p className="info-strip" role="status">
@@ -93,6 +101,10 @@ export function ProjectsPanel({
               </div>
             </div>
             <div className="row">
+              <button className="secondary" disabled={busy} onClick={() => setRepository(p)}>
+                <RefreshCw size={14} />
+                同步代码
+              </button>
               <button
                 className="secondary"
                 disabled={busy}
@@ -139,6 +151,17 @@ export function ProjectsPanel({
                   </small>
                 </div>
                 <div className="row">
+                  {w.projectId && !w.main && !w.prunable && (
+                    <button
+                      disabled={busy}
+                      onClick={() => {
+                        const project = data.projects.find((p) => p.id === w.projectId);
+                        if (project) setRepository(project);
+                      }}
+                    >
+                      同步代码
+                    </button>
+                  )}
                   {w.projectId && !w.prunable && (
                     <button disabled={busy} onClick={() => onSession(w.projectId!)}>
                       进入会话
@@ -164,6 +187,15 @@ export function ProjectsPanel({
           <h3>从一个本地项目开始</h3>
           <p>添加已有文件夹即可聊天和修改代码；Git 仓库还可创建独立工作树。</p>
         </div>
+      )}
+      {repository && (
+        <RepositoryDialog
+          project={repository === 'clone' ? undefined : repository}
+          data={data}
+          api={api}
+          refresh={refresh}
+          onClose={() => setRepository(null)}
+        />
       )}
       {create && (
         <Modal title="新建 Git 工作树" onClose={() => setCreate(null)}>

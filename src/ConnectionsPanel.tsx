@@ -33,12 +33,6 @@ export function ConnectionsPanel({
     code: string;
     expiresAt: number;
   } | null>(null);
-  const [qr, setQr] = useState<{
-    id: string;
-    url: string;
-    image: string;
-    expiresAt: number;
-  } | null>(null);
   const act = async (key: string, fn: () => Promise<unknown>, success = '已保存') => {
     setBusy(key);
     setNotice('');
@@ -87,20 +81,26 @@ export function ConnectionsPanel({
       {tab === 'bots' && <BotsPanel data={data} api={api} refresh={refresh} />}
       {tab === 'accounts' && (
         <>
-          <WorkPlugins data={data} api={api} refresh={refresh} />
-          <div className="section-heading">
-            <h2>服务账号与独立浏览器</h2>
+          <div className="collection-toolbar">
+            <div>
+              <h2>代码托管账号与浏览器</h2>
+              <p>连接 GitHub、GitLab，用于克隆仓库、拉取和推送代码。项目可分别选择账号。</p>
+            </div>
+            <button className="secondary" onClick={() => void api.openModule('projects')}>
+              项目与工作树
+            </button>
           </div>
-          <p>代码托管账号与模型订阅分别管理。独立浏览器保存本站登录态，不读取系统浏览器 Cookie。</p>
           <div className="row">
             {(['github', 'gitlab', 'browser'] as const).map((kind) => (
               <button
                 className="secondary"
                 key={kind}
-                onClick={() =>
+                onClick={() => {
+                  setNotice('');
                   setConnector({
                     id: crypto.randomUUID(),
-                    name: kind === 'browser' ? '浏览器账号' : kind,
+                    name:
+                      kind === 'browser' ? '浏览器账号' : kind === 'github' ? 'GitHub' : 'GitLab',
                     kind,
                     enabled: true,
                     baseUrl:
@@ -109,10 +109,10 @@ export function ConnectionsPanel({
                         : kind === 'gitlab'
                           ? 'https://gitlab.com'
                           : 'https://',
-                  })
-                }
+                  });
+                }}
               >
-                添加 {kind === 'browser' ? '浏览器账号' : kind}
+                添加 {kind === 'browser' ? '浏览器账号' : kind === 'github' ? 'GitHub' : 'GitLab'}
               </button>
             ))}
           </div>
@@ -135,7 +135,13 @@ export function ConnectionsPanel({
                 </div>
                 <p>{c.baseUrl}</p>
                 <div className="row service-card-actions">
-                  <button className="secondary" onClick={() => setConnector({ ...c, secret: '' })}>
+                  <button
+                    className="secondary"
+                    onClick={() => {
+                      setNotice('');
+                      setConnector({ ...c, secret: '' });
+                    }}
+                  >
                     管理
                   </button>
                   <button
@@ -206,7 +212,14 @@ export function ConnectionsPanel({
             </div>
           )}
           {connector && (
-            <Modal title="配置服务账号" onClose={() => setConnector(null)}>
+            <Modal
+              title={
+                connector.kind === 'browser'
+                  ? '配置浏览器账号'
+                  : `${connector.kind === 'github' ? 'GitHub' : 'GitLab'} 账号认证`
+              }
+              onClose={() => setConnector(null)}
+            >
               <form
                 className="connection-form"
                 onSubmit={(e) => {
@@ -217,7 +230,16 @@ export function ConnectionsPanel({
                   });
                 }}
               >
-                <h3>配置 {connector.kind}</h3>
+                {notice && (
+                  <p role="status" className="info-strip">
+                    {notice}
+                  </p>
+                )}
+                {connector.kind !== 'browser' && (
+                  <p>
+                    授权用于仓库读写。保存后可在「项目与工作树」克隆仓库，或绑定现有项目进行拉取和推送。
+                  </p>
+                )}
                 <label>
                   名称
                   <input
@@ -247,23 +269,56 @@ export function ConnectionsPanel({
                   </label>
                 )}
                 {connector.kind !== 'browser' && (
-                  <label>
-                    OAuth App Client ID
-                    <input
-                      value={connector.clientId ?? ''}
-                      onChange={(e) => setConnector({ ...connector, clientId: e.target.value })}
-                    />
-                  </label>
+                  <details>
+                    <summary>
+                      {connector.kind === 'github'
+                        ? '使用 GitHub 设备授权'
+                        : '使用 GitLab 浏览器授权'}
+                    </summary>
+                    <label>
+                      OAuth App Client ID
+                      <input
+                        value={connector.clientId ?? ''}
+                        onChange={(e) => setConnector({ ...connector, clientId: e.target.value })}
+                      />
+                    </label>
+                  </details>
                 )}
-                <p>
-                  GitHub 账号验证不代表 Copilot 模型权益。GitLab 支持访问令牌与 PKCE
-                  浏览器授权。使用 OAuth 时注册公共应用，回调地址设为
-                  http://127.0.0.1:17437/connector/callback。
-                </p>
+                {connector.kind === 'github' && (
+                  <p>
+                    访问令牌需授权目标仓库；推送需 Contents 读写权限。使用设备授权时填写已启用
+                    Device Flow 的 OAuth App Client ID，保存后点击「设备授权」。
+                  </p>
+                )}
+                {connector.kind === 'gitlab' && (
+                  <p>
+                    访问令牌需具备 read_repository / write_repository 和 read_user 权限。OAuth
+                    公共应用的回调地址：http://127.0.0.1:17437/connector/callback。
+                  </p>
+                )}
+                {connector.kind === 'browser' && (
+                  <p>独立浏览器保存本站登录态，不读取系统浏览器 Cookie。</p>
+                )}
                 <div className="row">
                   <button className="primary" disabled={!!busy}>
                     保存
                   </button>
+                  {connector.kind !== 'browser' && (
+                    <button
+                      type="button"
+                      disabled={!!busy}
+                      onClick={() =>
+                        void act('connector-test', async () => {
+                          await api.saveConnector(connector);
+                          const result = await api.testConnector(connector.id);
+                          setConnector(null);
+                          return result;
+                        })
+                      }
+                    >
+                      保存并验证
+                    </button>
+                  )}
                   <button type="button" onClick={() => setConnector(null)}>
                     取消
                   </button>
@@ -307,6 +362,7 @@ export function ConnectionsPanel({
               </button>
             </div>
           )}
+          <WorkPlugins data={data} api={api} refresh={refresh} />
         </>
       )}
       {tab === 'channels' && (
@@ -316,52 +372,7 @@ export function ConnectionsPanel({
               <h2>通知渠道</h2>
               <p>把完成、失败或等待批准的状态发送到指定群或个人。</p>
             </div>
-            <button
-              className="primary"
-              disabled={!!busy}
-              onClick={() =>
-                void act(
-                  'feishu-qr',
-                  async () => {
-                    setQr(await api.onboardFeishu(crypto.randomUUID(), '飞书扫码账号'));
-                  },
-                  '请使用飞书扫描二维码，创建并授权机器人',
-                )
-              }
-            >
-              飞书扫码接入
-            </button>
           </div>
-          {qr && (
-            <div className="connection-form">
-              <h3>飞书扫码授权</h3>
-              {data.channelAuth?.find((a) => a.id === qr.id)?.phase === 'success' ? (
-                <p>✓ 应用授权已验证。可以发送测试消息。</p>
-              ) : (
-                <>
-                  <img width={256} height={256} src={qr.image} alt="飞书官方应用授权二维码" />
-                  <p>
-                    到期：{new Date(qr.expiresAt).toLocaleTimeString()} · 状态：
-                    {data.channelAuth?.find((a) => a.id === qr.id)?.phase ?? '等待扫码'}
-                  </p>
-                </>
-              )}
-              <button
-                onClick={() =>
-                  void act(
-                    qr.id,
-                    async () => {
-                      await api.cancelChannelLogin(qr.id);
-                      setQr(null);
-                    },
-                    '已关闭授权',
-                  )
-                }
-              >
-                关闭
-              </button>
-            </div>
-          )}
           <div className="row">
             {(['feishu', 'wecom', 'dingtalk', 'email'] as const).map((kind, i) => (
               <button

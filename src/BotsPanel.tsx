@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bot, Plus, RefreshCw } from 'lucide-react';
+import { Bot, Plus, RefreshCw, QrCode, KeyRound } from 'lucide-react';
 import { Modal } from './components';
 import { MultiValueInput } from './MultiValueInput';
 import type { BotConfig, Snapshot, TongzhouAPI } from './shared/types';
@@ -25,6 +25,21 @@ export function BotsPanel({
     [notice, setNotice] = useState(''),
     [armed, setArmed] = useState('');
   const [qr, setQr] = useState<{ id: string; image: string; expiresAt: number } | null>(null);
+  const [feishuSetup, setFeishuSetup] = useState(false);
+  const [setupError, setSetupError] = useState('');
+  const startQr = async () => {
+    setBusy(true);
+    setSetupError('');
+    try {
+      setQr(await api.onboardBot(crypto.randomUUID(), '飞书机器人'));
+      setFeishuSetup(false);
+      await refresh();
+    } catch (e) {
+      setSetupError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
   const act = async (fn: () => Promise<unknown>, success = '已保存') => {
     setBusy(true);
     setNotice('');
@@ -58,18 +73,6 @@ export function BotsPanel({
           <h2>会话机器人</h2>
           <p>在办公聊天中查看进度、切换会话，按需发起任务。同舟运行时保持连接。</p>
         </div>
-        <button
-          className="secondary"
-          disabled={busy}
-          onClick={() =>
-            void act(
-              async () => setQr(await api.onboardBot(crypto.randomUUID(), '飞书机器人')),
-              '请用飞书扫码授权',
-            )
-          }
-        >
-          飞书扫码接入
-        </button>
       </div>
       {notice && (
         <p role="status" className="info-strip">
@@ -78,7 +81,17 @@ export function BotsPanel({
       )}
       <div className="row">
         {(['feishu', 'wecom', 'dingtalk'] as const).map((kind) => (
-          <button className="secondary" key={kind} onClick={() => create(kind)}>
+          <button
+            className="secondary"
+            key={kind}
+            disabled={busy}
+            onClick={() => {
+              if (kind === 'feishu') {
+                setSetupError('');
+                setFeishuSetup(true);
+              } else create(kind);
+            }}
+          >
             <Plus size={14} />
             {labels[kind]}机器人
           </button>
@@ -155,11 +168,51 @@ export function BotsPanel({
           ID。不会开放公网回调端口。
         </p>
       </details>
+      {feishuSetup && (
+        <Modal
+          title="添加飞书机器人"
+          onClose={() => {
+            if (!busy) setFeishuSetup(false);
+          }}
+        >
+          <div className="modal-content connection-form">
+            <p>选择接入方式，授权后设置可访问的会话与允许用户。</p>
+            {setupError && (
+              <p role="alert" className="info-strip">
+                {setupError}
+              </p>
+            )}
+            <div className="setup-methods">
+              <button className="setup-method" disabled={busy} onClick={() => void startQr()}>
+                <QrCode size={22} />
+                <span>
+                  <strong>{busy ? '正在获取二维码…' : '扫码接入'}</strong>
+                  <small>使用飞书扫描二维码，创建并授权机器人。</small>
+                </span>
+              </button>
+              <button
+                className="setup-method"
+                disabled={busy}
+                onClick={() => {
+                  setFeishuSetup(false);
+                  create('feishu');
+                }}
+              >
+                <KeyRound size={22} />
+                <span>
+                  <strong>手动配置</strong>
+                  <small>已有飞书或 Lark 应用，填写 App ID 和应用密钥。</small>
+                </span>
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
       {qr && (
         <Modal
           title="飞书机器人扫码授权"
           onClose={() => {
-            void api.cancelChannelLogin(qr.id);
+            void api.cancelChannelLogin(qr.id).catch((e) => setNotice(String(e)));
             setQr(null);
           }}
         >

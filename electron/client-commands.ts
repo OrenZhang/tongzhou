@@ -13,6 +13,7 @@ export class ClientCommands {
     'readFile',
     'diff',
     'listWorktrees',
+    'gitRepository',
     'clientMethods',
   ]);
   private readonly writable = new Set([
@@ -46,6 +47,9 @@ export class ClientCommands {
     'openModule',
     'createWorktree',
     'removeWorktree',
+    'bindGitAccount',
+    'cloneRepository',
+    'syncRepository',
   ]);
   register(name: string, handler: (...args: any[]) => unknown) {
     if (this.readable.has(name) || this.writable.has(name)) this.handlers.set(name, handler);
@@ -87,6 +91,14 @@ export class ClientCommands {
         openModule: ['providers'],
         initializeAgent: ['projectId'],
         branchSession: ['sessionId', 'messageId'],
+        gitRepository: ['projectId'],
+        bindGitAccount: ['projectId', 'connectorId'],
+        cloneRepository: [
+          'connectorId',
+          'https://github.com/owner/repository.git',
+          'absolute/new-directory',
+        ],
+        syncRepository: ['projectId', 'pull'],
       },
       notes:
         '先用 snapshot 查询真实 ID。save* 使用 snapshot 中完整对象及修改字段；delete* 传 ID。账号凭据只在 UI 输入。规则保存后适用其 scope；主动发送必须有用户要求的收件渠道和内容。',

@@ -196,7 +196,7 @@ try {
   checks.push('history quote and independent branch', 'archive deletion');
   await page.getByRole('button', { name: /^连接中心/ }).click();
   await page.getByRole('button', { name: '服务与浏览器', exact: true }).click();
-  await page.getByRole('button', { name: '添加 github', exact: true }).click();
+  await page.getByRole('button', { name: '添加 GitHub', exact: true }).click();
   const form = page.locator('.connection-form');
   await form.getByLabel('名称', { exact: true }).fill('测试 GitHub');
   await form.getByLabel('访问令牌', { exact: false }).fill('fixture-token');
