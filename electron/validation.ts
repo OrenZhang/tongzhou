@@ -83,6 +83,8 @@ export const pluginSchema = z
     authMode: z.enum(['headers', 'oauth']).optional(),
     oauthClientId: z.string().trim().max(300).optional(),
     oauthIssuer: z.string().max(2000).optional(),
+    oauthClientSecret: z.string().max(10000).optional(),
+    clearOAuthClientSecret: z.boolean().optional(),
     id,
     name: z.string().trim().min(1).max(100),
     transport: z.enum(['stdio', 'http']),

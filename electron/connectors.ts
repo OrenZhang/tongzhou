@@ -5,6 +5,7 @@ import { Store } from './store';
 import { idSchema } from './validation';
 import type { Connector } from '../src/shared/types';
 import { gitlabLogin } from './oauth-pkce';
+import { serviceFetch } from './service-network';
 
 const schema = z.object({
   id: idSchema,
@@ -102,7 +103,7 @@ export class Connectors {
           : root.origin + '/api/v3/user'
         : root.origin + '/api/v4/user';
     const request = () =>
-      fetch(url, {
+      serviceFetch(url, {
         headers: {
           Authorization: 'Bearer ' + secret,
           Accept: 'application/json',
@@ -114,7 +115,7 @@ export class Connectors {
     let response = await request();
     const refresh = this.store.secret('connector_refresh_' + id);
     if (response.status === 401 && !token && c.kind === 'gitlab' && refresh && c.clientId) {
-      const refreshed = await fetch(root.origin + '/oauth/token', {
+      const refreshed = await serviceFetch(root.origin + '/oauth/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
@@ -182,7 +183,7 @@ export class Connectors {
     this.pending.set(id, controller);
     const root = serviceUrl(c.baseUrl).origin;
     const request = async (endpoint: string, params: Record<string, string>) => {
-      const r = await fetch(root + endpoint, {
+      const r = await serviceFetch(root + endpoint, {
         method: 'POST',
         headers: {
           Accept: 'application/json',

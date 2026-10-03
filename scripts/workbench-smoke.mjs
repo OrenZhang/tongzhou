@@ -79,6 +79,81 @@ try {
   await page.locator(`[data-session-id="${sessions[1].id}"]`).click();
   assert.equal(await page.locator('.composer textarea').inputValue(), '项目会话草稿');
   checks.push('drafts are isolated per session and survive renderer reload');
+  const ordinaryRow = page
+    .locator('.session-row')
+    .filter({ has: page.locator(`[data-session-id="${sessions[0].id}"]`) });
+  const projectRow = page
+    .locator('.session-row')
+    .filter({ has: page.locator(`[data-session-id="${sessions[1].id}"]`) });
+  await page.locator('.composer textarea').focus();
+  await page.locator('.conversation-header').hover();
+  assert.equal(
+    await ordinaryRow.locator('.session-actions').evaluate((el) => getComputedStyle(el).opacity),
+    '0',
+  );
+  assert.equal(
+    await projectRow.locator('.session-actions').evaluate((el) => getComputedStyle(el).opacity),
+    '0',
+  );
+  assert.equal(
+    await page
+      .locator('.conversation-header')
+      .getByRole('button', { name: /归档会话|删除会话|恢复会话/ })
+      .count(),
+    0,
+  );
+  await ordinaryRow.hover();
+  assert.equal(
+    await ordinaryRow.locator('.session-actions').evaluate((el) => getComputedStyle(el).opacity),
+    '1',
+  );
+  await capture('session-hover');
+  await page.locator('.conversation-header').hover();
+  assert.equal(
+    await ordinaryRow.locator('.session-actions').evaluate((el) => getComputedStyle(el).opacity),
+    '0',
+  );
+  await ordinaryRow.locator('.session-title').focus();
+  await page.keyboard.press('Tab');
+  assert.equal(
+    await ordinaryRow
+      .getByRole('button', { name: '归档会话', exact: true })
+      .evaluate((el) => el === document.activeElement),
+    true,
+  );
+  assert.equal(
+    await ordinaryRow.locator('.session-actions').evaluate((el) => getComputedStyle(el).opacity),
+    '1',
+  );
+  await page.keyboard.press('Enter');
+  await ordinaryRow.waitFor({ state: 'detached' });
+  assert.equal(await page.locator('.conversation-header h2').innerText(), '项目任务');
+  assert.equal(await page.locator('.composer textarea').inputValue(), '项目会话草稿');
+  await page.getByRole('button', { name: '切换归档会话', exact: true }).click();
+  await ordinaryRow.hover();
+  await ordinaryRow.getByRole('button', { name: '恢复会话', exact: true }).click();
+  await ordinaryRow.waitFor({ state: 'detached' });
+  await page.getByRole('button', { name: '切换归档会话', exact: true }).click();
+  await ordinaryRow.hover();
+  await ordinaryRow.getByRole('button', { name: '删除会话', exact: true }).click();
+  assert.ok((await page.getByRole('dialog').innerText()).includes('确认删除“普通会话”'));
+  await page.getByRole('dialog').getByRole('button', { name: '取消', exact: true }).click();
+  assert.equal(await ordinaryRow.count(), 1);
+  const disposable = await page.evaluate(() => window.tongzhou.createSession('project'));
+  const disposableRow = page
+    .locator('.session-row')
+    .filter({ has: page.locator(`[data-session-id="${disposable.id}"]`) });
+  await disposableRow.hover();
+  await disposableRow.getByRole('button', { name: '删除会话', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: '确认删除', exact: true }).click();
+  await disposableRow.waitFor({ state: 'detached' });
+  assert.equal(await page.locator('.conversation-header h2').innerText(), '项目任务');
+  assert.equal(await page.locator('.composer textarea').inputValue(), '项目会话草稿');
+  checks.push(
+    'session actions reveal on hover or keyboard focus',
+    'archive and restore from the sidebar preserve the current conversation',
+    'delete names the target and supports cancel and inactive project sessions',
+  );
   await nav('连接中心');
   await page.getByRole('button', { name: '渠道通知', exact: true }).click();
   assert.equal(await page.getByRole('button', { name: '飞书扫码接入', exact: true }).count(), 0);
@@ -184,6 +259,9 @@ try {
   );
   assert.ok(connector.hasSecret);
   assert.ok(!JSON.stringify(connector).includes('fixture-github-token'));
+  assert.equal(await page.locator('.work-plugins').count(), 0);
+  await nav('插件与工具');
+  await page.getByRole('button', { name: /^工作插件/ }).click();
   await page.getByLabel('搜索工作插件', { exact: true }).fill('Figma');
   assert.equal(await page.locator('.work-plugins .provider-card').count(), 1);
   await page
@@ -199,9 +277,36 @@ try {
   );
   assert.equal(plugin.url, 'https://mcp.figma.com/mcp');
   assert.equal(plugin.enabled, false);
+  await page
+    .locator('.work-plugins')
+    .getByRole('button', { name: '管理连接', exact: true })
+    .click();
+  await dialog
+    .getByLabel('Figma 连接方式', { exact: true })
+    .selectOption('http://127.0.0.1:3845/mcp');
+  assert.equal(await dialog.getByRole('button', { name: '浏览器授权', exact: true }).count(), 0);
+  await dialog.getByText(/在 Figma 桌面应用打开文件/).waitFor();
+  await dialog
+    .getByLabel('Figma 连接方式', { exact: true })
+    .selectOption('https://mcp.figma.com/mcp');
+  await dialog.getByRole('button', { name: '关闭', exact: true }).click();
+  await page.getByLabel('搜索工作插件', { exact: true }).fill('GitHub');
+  await page
+    .locator('.work-plugins')
+    .getByRole('button', { name: '配置插件', exact: true })
+    .click();
+  await dialog.getByLabel('认证方式', { exact: true }).selectOption('oauth');
+  await dialog.getByRole('button', { name: '浏览器授权', exact: true }).click();
+  await dialog
+    .getByRole('alert')
+    .filter({ hasText: /GitHub 浏览器授权需要/ })
+    .waitFor();
+  assert.ok(!(await dialog.innerText()).includes('Error invoking remote method'));
+  await capture('github-oauth-requirements');
+  await dialog.getByRole('button', { name: '关闭', exact: true }).click();
   await page.getByLabel('搜索工作插件', { exact: true }).fill('');
   checks.push(
-    'official work plugin search and OAuth configuration without attempting external login',
+    'work plugin catalog is under Plugins; Figma desktop alternative and inline GitHub registration requirements without external login',
   );
   await nav('项目与工作树');
   await page.getByRole('button', { name: '克隆仓库', exact: true }).click();
@@ -275,7 +380,9 @@ try {
         if (theme === 'dark') {
           const button =
             label === '服务与浏览器'
-              ? page.locator('.work-plugins').getByRole('button', { name: '管理连接', exact: true })
+              ? page
+                  .locator('.service-connections')
+                  .getByRole('button', { name: '管理', exact: true })
               : label === '渠道通知'
                 ? page
                     .locator('.channel-connections')

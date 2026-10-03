@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { Plus, Plug, Monitor, RefreshCw, Trash2, Upload, ShieldCheck, Square } from 'lucide-react';
 import { Field, Modal, Spinner } from './components';
 import { MultiValueInput } from './MultiValueInput';
-import { OAuthFields } from './WorkPlugins';
+import { OAuthFields, WorkPlugins, workPluginCatalog, PluginAuthStatus } from './WorkPlugins';
+import { errorMessage } from './feedback';
 import type {
   AgentProfile,
   ComputerStatus,
@@ -22,7 +23,8 @@ export function Extensions({
   refresh: () => Promise<void>;
   report: (e: unknown) => void;
 }) {
-  const [tab, setTab] = useState<'core' | 'mcp' | 'skills'>('core');
+  const [tab, setTab] = useState<'core' | 'catalog' | 'mcp' | 'skills'>('core');
+  const [loginUrl, setLoginUrl] = useState('');
   const [edit, setEdit] = useState<PluginInput | null>(null);
   const [status, setStatus] = useState<ComputerStatus>();
   const [busy, setBusy] = useState(false);
@@ -35,11 +37,12 @@ export function Extensions({
   }, [api]);
   const perform = async (fn: () => Promise<unknown>) => {
     setBusy(true);
+    setNotice('');
     try {
       await fn();
       await refresh();
     } catch (e) {
-      report(e);
+      setNotice(errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -60,24 +63,34 @@ export function Extensions({
         <p>管理公共工具，统一启停能力，所有会话和 Agent 自动继承。切换模型不会切换你的会话记录。</p>
       </div>
       <nav className="section-tabs" aria-label="工具分类">
-        {(['core', 'mcp', 'skills'] as const).map((value, i) => (
+        {(['core', 'catalog', 'mcp', 'skills'] as const).map((value, i) => (
           <button
             key={value}
             aria-pressed={tab === value}
             className={tab === value ? 'active' : ''}
             onClick={() => setTab(value)}
           >
-            {['核心能力', 'MCP 插件', 'Skills'][i]}
+            {['核心能力', '工作插件', 'MCP 插件', 'Skills'][i]}
             <span className="tab-count">
               {value === 'core'
                 ? 3
-                : value === 'mcp'
-                  ? (data.plugins ?? []).length
-                  : (data.skills ?? []).length}
+                : value === 'catalog'
+                  ? workPluginCatalog.length
+                  : value === 'mcp'
+                    ? (data.plugins ?? []).length
+                    : (data.skills ?? []).length}
             </span>
           </button>
         ))}
       </nav>
+      {notice && !edit && tab !== 'mcp' && (
+        <p role="status" className="info-strip">
+          {notice}
+        </p>
+      )}
+      {tab === 'catalog' && (
+        <WorkPlugins api={api} data={data} refresh={refresh} onCustom={() => setTab('mcp')} />
+      )}
       <div className="core-capabilities" hidden={tab !== 'core'}>
         <section className="settings-card">
           <div className="settings-card-title">
@@ -269,6 +282,7 @@ export function Extensions({
                   className="text-button"
                   onClick={() => {
                     setNotice('');
+                    setLoginUrl('');
                     setEdit({ ...p, secret: '' });
                   }}
                 >
@@ -425,19 +439,54 @@ export function Extensions({
               </Field>
             )}
             {edit.authMode === 'oauth' && (
-              <button
-                className="secondary"
-                disabled={busy}
-                onClick={() =>
-                  perform(async () => {
-                    await api.savePlugin(edit);
-                    setEdit({ ...edit, clearSecret: false });
-                    await api.loginPlugin(edit.id);
-                  })
-                }
-              >
-                保存并浏览器授权
-              </button>
+              <>
+                <PluginAuthStatus plugin={data.plugins?.find((p) => p.id === edit.id)} />
+                <button
+                  className="secondary"
+                  disabled={busy}
+                  onClick={() =>
+                    perform(async () => {
+                      await api.savePlugin(edit);
+                      setEdit({
+                        ...edit,
+                        clearSecret: false,
+                        oauthClientSecret: '',
+                        clearOAuthClientSecret: false,
+                      });
+                      const result = await api.loginPlugin(edit.id);
+                      setLoginUrl(result.url ?? '');
+                      setNotice(
+                        result.url
+                          ? result.browserOpened
+                            ? '已打开浏览器，请完成授权。'
+                            : '系统浏览器未打开，请点击下方链接继续授权。'
+                          : '授权已更新。',
+                      );
+                    })
+                  }
+                >
+                  保存并浏览器授权
+                </button>
+                {loginUrl && (
+                  <a href={loginUrl} target="_blank" rel="noreferrer">
+                    打开授权页面
+                  </a>
+                )}
+                {['starting', 'waiting'].includes(
+                  data.plugins?.find((p) => p.id === edit.id)?.oauthStatus ?? '',
+                ) && (
+                  <button
+                    onClick={() =>
+                      perform(async () => {
+                        await api.cancelPluginLogin(edit.id);
+                        setLoginUrl('');
+                      })
+                    }
+                  >
+                    取消授权
+                  </button>
+                )}
+              </>
             )}
             <label className="checkbox-line">
               <input

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
-  Archive,
   ArrowDownToLine,
   ArrowRight,
   ArrowUp,
@@ -935,6 +934,10 @@ export default function App() {
           onOpenProject={openProject}
           onNew={(id) => void newSession(id)}
           onSelect={activateSession}
+          onToggleArchive={(target) =>
+            void perform(() => api.updateSession(target.id, { archived: !target.archived }))
+          }
+          onDelete={(target) => setDeleteId(target.id)}
         />
         <div className="sidebar-bottom">
           <div className="local-status">
@@ -1052,25 +1055,6 @@ export default function App() {
                     >
                       <ArrowDownToLine size={16} />
                     </button>
-                    <button
-                      className="icon-button"
-                      aria-label={session.archived ? '恢复会话' : '归档会话'}
-                      title={session.archived ? '恢复' : '归档'}
-                      onClick={() =>
-                        perform(() => api.updateSession(sessionId, { archived: !session.archived }))
-                      }
-                    >
-                      <Archive size={16} />
-                    </button>
-                    {session.archived && (
-                      <button
-                        className="icon-button danger"
-                        aria-label="删除会话"
-                        onClick={() => setDeleteId(session.id)}
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    )}
                   </div>
                 </div>
               )}
@@ -1875,7 +1859,7 @@ export default function App() {
           <main className="page settings-page">
             <div className="page-heading">
               <h1>设置与关于</h1>
-              <p>同舟 0.5.1 · 开源多模型桌面工作台</p>
+              <p>同舟 0.5.2 · 开源多模型桌面工作台</p>
             </div>
             <section className="settings-card">
               <div className="settings-card-title">
@@ -2383,7 +2367,13 @@ export default function App() {
       )}
       {deleteId && (
         <Modal title="删除会话" onClose={() => setDeleteId('')}>
-          <p>删除此会话的消息、运行记录和内部团队子会话。项目文件和共享配置会保留。</p>
+          <p>
+            确认删除“{data.sessions.find((s) => s.id === deleteId)?.title ?? '此会话'}
+            ”？消息、运行记录和内部团队子会话将一并删除，项目文件和共享配置会保留。
+          </p>
+          {data.runs.some((r) => r.sessionId === deleteId && r.status === 'running') && (
+            <p>此会话正在执行，删除会同时停止任务。</p>
+          )}
           <div className="modal-footer">
             <button onClick={() => setDeleteId('')}>取消</button>
             <button

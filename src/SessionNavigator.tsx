@@ -1,5 +1,15 @@
 import { useEffect, useState } from 'react';
-import { Archive, ChevronDown, ChevronRight, Folder, FolderOpen, Plus, Search } from 'lucide-react';
+import {
+  Archive,
+  ArchiveRestore,
+  ChevronDown,
+  ChevronRight,
+  Folder,
+  FolderOpen,
+  Plus,
+  Search,
+  Trash2,
+} from 'lucide-react';
 import type { Session, Snapshot } from './shared/types';
 
 export function SessionNavigator({
@@ -13,6 +23,8 @@ export function SessionNavigator({
   onOpenProject,
   onNew,
   onSelect,
+  onToggleArchive,
+  onDelete,
 }: {
   data: Snapshot;
   sessionId: string;
@@ -24,6 +36,8 @@ export function SessionNavigator({
   onOpenProject(): void;
   onNew(projectId: string): void;
   onSelect(session: Session): void;
+  onToggleArchive(session: Session): void;
+  onDelete(session: Session): void;
 }) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const activeProject = data.sessions.find((s) => s.id === sessionId)?.projectId;
@@ -39,32 +53,52 @@ export function SessionNavigator({
         .includes(query.toLowerCase())
     );
   };
-  const row = (s: Session) => (
-    <button
-      key={s.id}
-      className={sessionId === s.id && workspace ? 'selected' : ''}
-      data-session-id={s.id}
-      data-project-id={s.projectId ?? ''}
-      title={
-        s.projectId
-          ? `${s.title}\n项目：${data.projects.find((p) => p.id === s.projectId)?.path ?? s.projectId}`
-          : s.title
-      }
-      onClick={() => onSelect(s)}
-    >
-      <span
-        className={
-          'session-dot ' +
-          (data.runs.some((r) => r.sessionId === s.id && r.status === 'running') ? 'live' : '')
-        }
-      />
-      {s.projectId && <Folder size={12} aria-label="项目会话" />}
-      <span>
-        {s.parentId ? '↳ ' : ''}
-        {s.title}
-      </span>
-    </button>
-  );
+  const row = (s: Session) => {
+    const running = data.runs.some((r) => r.sessionId === s.id && r.status === 'running');
+    return (
+      <div
+        key={s.id}
+        className={'session-row' + (sessionId === s.id && workspace ? ' selected' : '')}
+      >
+        <button
+          className="session-title"
+          data-session-id={s.id}
+          data-project-id={s.projectId ?? ''}
+          title={
+            s.projectId
+              ? `${s.title}\n项目：${data.projects.find((p) => p.id === s.projectId)?.path ?? s.projectId}`
+              : s.title
+          }
+          onClick={() => onSelect(s)}
+        >
+          <span className={'session-dot ' + (running ? 'live' : '')} />
+          {s.projectId && <Folder size={12} aria-label="项目会话" />}
+          <span>
+            {s.parentId ? '↳ ' : ''}
+            {s.title}
+          </span>
+        </button>
+        <div className="session-actions">
+          <button
+            aria-label={s.archived ? '恢复会话' : '归档会话'}
+            title={running ? '停止任务后可归档' : s.archived ? '恢复会话' : '归档会话'}
+            disabled={running}
+            onClick={() => onToggleArchive(s)}
+          >
+            {s.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
+          </button>
+          <button
+            aria-label="删除会话"
+            title="删除会话"
+            className="session-delete"
+            onClick={() => onDelete(s)}
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+      </div>
+    );
+  };
   return (
     <div className="sidebar-history">
       <div className="section-label">

@@ -138,7 +138,7 @@ export class ClientCommands {
             typeof value === 'object' &&
             Object.entries(value).some(
               ([key, child]) =>
-                (/^(secret|password|cookies?|authorization|accessToken|refreshToken|signingSecret|webhook)$/i.test(
+                (/^(secret|oauthClientSecret|password|cookies?|authorization|accessToken|refreshToken|signingSecret|webhook)$/i.test(
                   key,
                 ) &&
                   !!child) ||

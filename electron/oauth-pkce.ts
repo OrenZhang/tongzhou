@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import { createHash, randomBytes } from 'node:crypto';
+import { serviceFetch } from './service-network';
 
 export const gitlabRedirect = 'http://127.0.0.1:17437/connector/callback';
 /** Public OAuth client: no shared app secret is embedded in the desktop binary. */
@@ -31,7 +32,7 @@ export async function gitlabLogin(
     try {
       const code = url.searchParams.get('code');
       if (!code || url.searchParams.has('error')) throw new Error('Authorization cancelled');
-      const response = await fetch(origin + '/oauth/token', {
+      const response = await serviceFetch(origin + '/oauth/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({

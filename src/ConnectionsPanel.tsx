@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Modal } from './components';
 import { EmailFields, RuleConditions, defaultSmtp } from './NotificationControls';
 import { BotsPanel } from './BotsPanel';
-import { WorkPlugins } from './WorkPlugins';
+import { errorMessage } from './feedback';
 import { Globe2, Network, Radio, History, Bot } from 'lucide-react';
 import type { Channel, Connector, NotificationRule, Snapshot, TongzhouAPI } from './shared/types';
 
@@ -41,7 +41,7 @@ export function ConnectionsPanel({
       setNotice(typeof result === 'string' ? result : success);
       await refresh();
     } catch (e) {
-      setNotice(String(e));
+      setNotice(errorMessage(e));
     } finally {
       setBusy('');
     }
@@ -362,7 +362,6 @@ export function ConnectionsPanel({
               </button>
             </div>
           )}
-          <WorkPlugins data={data} api={api} refresh={refresh} />
         </>
       )}
       {tab === 'channels' && (

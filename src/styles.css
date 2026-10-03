@@ -306,7 +306,20 @@ svg {
   overflow: auto;
   min-height: 40px;
 }
-.session-list button {
+.session-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border-radius: 7px;
+  margin-bottom: 1px;
+}
+.session-row:hover,
+.session-row:focus-within {
+  background: var(--surface-muted);
+}
+.session-title {
+  flex: 1;
+  min-width: 0;
   width: 100%;
   justify-content: flex-start;
   gap: 9px;
@@ -315,18 +328,54 @@ svg {
   border-radius: 7px;
   font-size: 12px;
   color: var(--secondary-text);
-  margin-bottom: 1px;
   min-height: 32px;
 }
-.session-list button > span:last-child {
+.session-title > span:last-child {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.session-list button.selected {
+.session-row.selected {
   background: var(--accent-soft);
   color: var(--accent);
   font-weight: 500;
+}
+.session-row .session-title {
+  color: inherit;
+  background: transparent;
+}
+.session-actions {
+  display: flex;
+  gap: 1px;
+  padding-right: 3px;
+  opacity: 0;
+  pointer-events: none;
+}
+.session-row:hover .session-actions,
+.session-row:focus-within .session-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+.session-actions button {
+  width: 25px;
+  height: 26px;
+  padding: 0;
+  border-radius: 5px;
+  color: var(--muted);
+}
+.session-actions button:hover {
+  background: var(--surface);
+  color: var(--ink);
+}
+.session-actions .session-delete:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+@media (hover: none) {
+  .session-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 .session-dot {
   width: 5px;
@@ -555,7 +604,7 @@ svg {
   padding-left: 5px;
   border-left: 1px solid var(--border);
 }
-.project-sessions button {
+.project-sessions .session-title {
   font-size: 12px;
   padding: 6px 7px;
   gap: 6px;
@@ -3311,4 +3360,18 @@ kbd {
   color: var(--muted);
   font-weight: normal;
   line-height: 1.6;
+}
+.plugin-auth-controls {
+  display: grid;
+  gap: 10px;
+}
+.oauth-app-fields {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+.plugin-auth-controls > button,
+.plugin-auth-controls > a {
+  justify-self: start;
+  white-space: nowrap;
 }

@@ -9,6 +9,7 @@ import {
   globalShortcut,
   Menu,
   nativeTheme,
+  session,
 } from 'electron';
 import { NativeAccount, nativeEngine } from './native-engine';
 import { Accounts } from './accounts';
@@ -20,6 +21,7 @@ import { Bots } from './bots';
 import { Worktrees } from './worktrees';
 import { GitRepositories } from './git-repositories';
 import { McpAuth, pluginOAuth, pluginAuthIdentity } from './mcp-auth';
+import { setServiceTransport } from './service-network';
 import { initializeAgent } from './project-init';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -98,6 +100,13 @@ function register(name: string, handler: (...args: any[]) => any) {
   });
 }
 function setup() {
+  const serviceSession = session.fromPartition('tongzhou-service-network');
+  setServiceTransport((input, init) =>
+    serviceSession.fetch(input instanceof URL ? input.href : input, {
+      ...init,
+      bypassCustomProtocolHandlers: true,
+    }),
+  );
   const dataDir = app.getPath('userData');
   store = new Store(path.join(dataDir, 'tongzhou.db'), {
     encrypt(value) {
@@ -368,19 +377,27 @@ function setup() {
   });
   register('savePlugin', (raw) => {
     requireIdle();
-    const { secret, clearSecret, ...config } = pluginSchema.parse(raw);
+    const { secret, clearSecret, oauthClientSecret, clearOAuthClientSecret, ...config } =
+      pluginSchema.parse(raw);
     const previous = store.list<PluginConfig>('plugin').find((p) => p.id === config.id);
     const identityChanged =
       !!previous &&
       (pluginAuthIdentity(previous) !== pluginAuthIdentity(config) ||
         previous.command !== config.command ||
         JSON.stringify(previous.args) !== JSON.stringify(config.args));
-    if (identityChanged || clearSecret) mcpAuth.logout(config.id);
+    const clientSecretChanged = !!oauthClientSecret || !!clearOAuthClientSecret;
+    if (identityChanged || clearSecret || clientSecretChanged) mcpAuth.logout(config.id);
+    store.saveSecret(
+      'plugin_oauth_client_' + config.id,
+      config.authMode === 'oauth' ? oauthClientSecret : undefined,
+      identityChanged || clearOAuthClientSecret || config.authMode !== 'oauth',
+    );
     const same =
       previous &&
       !identityChanged &&
       !secret &&
       !clearSecret &&
+      !clientSecretChanged &&
       previous.transport === config.transport &&
       previous.command === config.command &&
       previous.url === config.url &&
@@ -390,9 +407,11 @@ function setup() {
     store.put('plugin', {
       ...config,
       oauthStatus:
-        config.authMode === 'oauth' && !identityChanged && !clearSecret
+        config.authMode === 'oauth' && !identityChanged && !clearSecret && !clientSecretChanged
           ? previous?.oauthStatus
           : undefined,
+      oauthError:
+        !identityChanged && !clearSecret && !clientSecretChanged ? previous?.oauthError : undefined,
       ...(same ? { catalog: previous.catalog, checkedAt: previous.checkedAt } : {}),
     });
     runtime.invalidateNative();
@@ -404,6 +423,7 @@ function setup() {
     mcpAuth.logout(id);
     store.remove('plugin', id);
     store.saveSecret('plugin_' + id, undefined, true);
+    store.saveSecret('plugin_oauth_client_' + id, undefined, true);
     for (const a of store.list<AgentProfile>('agent'))
       store.put('agent', { ...a, pluginIds: a.pluginIds?.filter((p) => p !== id) });
     runtime.invalidateNative();

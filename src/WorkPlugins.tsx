@@ -1,13 +1,16 @@
 import { useState } from 'react';
 import { Search, Plug, Plus, ExternalLink } from 'lucide-react';
 import { Modal } from './components';
-import type { PluginInput, Snapshot, TongzhouAPI } from './shared/types';
+import { errorMessage } from './feedback';
+import type { PluginConfig, PluginInput, Snapshot, TongzhouAPI } from './shared/types';
+export const figmaDesktopUrl = 'http://127.0.0.1:3845/mcp';
 export const workPluginCatalog = [
   {
     id: 'github',
     name: 'GitHub 仓库工具',
     category: '可选 MCP',
-    description: '在会话中搜索仓库、查看代码、处理 Issue 和 Pull Request。可复用上方 GitHub 账号。',
+    description:
+      '在会话中搜索仓库、查看代码、处理 Issue 和 Pull Request。可复用连接中心的 GitHub 账号。',
     url: 'https://api.githubcopilot.com/mcp/',
     authMode: 'headers' as const,
     docs: 'https://github.com/github/github-mcp-server/blob/main/docs/host-integration.md',
@@ -47,6 +50,12 @@ export function OAuthFields({
   edit: PluginInput;
   onChange: (p: PluginInput) => void;
 }) {
+  const github = edit.url === workPluginCatalog[0].url;
+  const issuer = github
+    ? 'https://github.com/login/oauth'
+    : edit.url === 'https://mcp.figma.com/mcp'
+      ? 'https://api.figma.com'
+      : '';
   return (
     <>
       <label>
@@ -58,6 +67,7 @@ export function OAuthFields({
             onChange({
               ...edit,
               authMode: e.target.value as 'headers' | 'oauth',
+              oauthIssuer: edit.oauthIssuer || (e.target.value === 'oauth' ? issuer : ''),
               secret: '',
               clearSecret: true,
             })
@@ -68,16 +78,42 @@ export function OAuthFields({
         </select>
       </label>
       {edit.authMode === 'oauth' && (
-        <details>
-          <summary>高级 OAuth 设置</summary>
-          <div className="connection-form">
+        <details open={github || undefined}>
+          <summary>{github ? 'GitHub OAuth 应用（必填）' : '使用已注册的 OAuth 应用'}</summary>
+          <div className="oauth-app-fields">
             <label>
-              预注册 Client ID（可选）
+              {github ? 'OAuth App Client ID（必填）' : '预注册 Client ID（可选）'}
               <input
                 value={edit.oauthClientId ?? ''}
-                onChange={(e) => onChange({ ...edit, oauthClientId: e.target.value })}
+                onChange={(e) =>
+                  onChange({
+                    ...edit,
+                    oauthClientId: e.target.value,
+                    oauthIssuer: edit.oauthIssuer || issuer,
+                  })
+                }
               />
             </label>
+            <label>
+              Client Secret（留空保留）
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={edit.oauthClientSecret ?? ''}
+                onChange={(e) => onChange({ ...edit, oauthClientSecret: e.target.value })}
+              />
+            </label>
+            {edit.hasOAuthClientSecret && <small>应用密钥已加密保存。</small>}
+            {edit.hasOAuthClientSecret && (
+              <label className="checkbox-line">
+                <input
+                  type="checkbox"
+                  checked={!!edit.clearOAuthClientSecret}
+                  onChange={(e) => onChange({ ...edit, clearOAuthClientSecret: e.target.checked })}
+                />
+                清除已保存的应用密钥
+              </label>
+            )}
             <label>
               对应授权服务地址（Issuer）
               <input
@@ -88,23 +124,64 @@ export function OAuthFields({
               />
             </label>
             <p>
-              支持动态注册的服务可留空。需要自行注册时使用回调地址
+              {github
+                ? 'GitHub 不支持自动注册应用。填写自己的 OAuth App 信息，或切换到访问令牌 / 已保存账号。应用回调地址：'
+                : '服务允许动态注册时可留空；需要预注册时使用回调地址：'}
               http://127.0.0.1:17438/mcp/callback。具体可用权限由服务账号决定。
             </p>
+            {github && (
+              <a href="https://github.com/settings/developers" target="_blank" rel="noreferrer">
+                管理 GitHub OAuth 应用
+              </a>
+            )}
           </div>
         </details>
       )}
     </>
   );
 }
+export function PluginAuthStatus({ plugin }: { plugin?: PluginConfig }) {
+  return (
+    <div>
+      <span
+        className={
+          'status-pill ' +
+          (plugin?.oauthStatus === 'authorized'
+            ? 'completed'
+            : plugin?.oauthStatus === 'error'
+              ? 'failed'
+              : '')
+        }
+      >
+        {
+          {
+            authorized: '✓ 已授权',
+            starting: '正在连接授权服务',
+            waiting: '等待浏览器授权',
+            error: '授权未完成',
+            cancelled: '已取消',
+            none: '尚未授权',
+          }[plugin?.oauthStatus ?? 'none']
+        }
+      </span>
+      {plugin?.oauthError && (
+        <p role="alert" className="info-strip">
+          {plugin.oauthError}
+        </p>
+      )}
+    </div>
+  );
+}
 export function WorkPlugins({
   data,
   api,
   refresh,
+  onCustom,
 }: {
   data: Snapshot;
   api: TongzhouAPI;
   refresh: () => Promise<void>;
+  onCustom: () => void;
 }) {
   const [query, setQuery] = useState(''),
     [edit, setEdit] = useState<PluginInput | null>(null),
@@ -112,15 +189,16 @@ export function WorkPlugins({
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState('');
   const [source, setSource] = useState('');
+  const [loginUrl, setLoginUrl] = useState('');
   const act = async (fn: () => Promise<unknown>, success = '已保存') => {
     setBusy(true);
     setNotice('');
     try {
-      await fn();
+      const result = await fn();
       await refresh();
-      setNotice(success);
+      setNotice(typeof result === 'string' ? result : success);
     } catch (e) {
-      setNotice(String(e));
+      setNotice(errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -132,10 +210,18 @@ export function WorkPlugins({
       ...edit,
       secret: token ? JSON.stringify({ Authorization: 'Bearer ' + token }) : undefined,
     });
-    if (source && edit.url === workPluginCatalog[0].url)
+    if (source && edit.authMode !== 'oauth' && edit.url === workPluginCatalog[0].url)
       await api.useGithubConnector(edit.id, source);
     setEdit((old) =>
-      old?.id === edit.id ? { ...old, clearSecret: false, secret: undefined } : old,
+      old?.id === edit.id
+        ? {
+            ...old,
+            clearSecret: false,
+            secret: undefined,
+            oauthClientSecret: '',
+            clearOAuthClientSecret: false,
+          }
+        : old,
     );
     setToken('');
     setSource('');
@@ -145,7 +231,7 @@ export function WorkPlugins({
     <section className="work-plugins">
       <div className="collection-toolbar">
         <div>
-          <h2>可选工作插件</h2>
+          <h2>工作插件</h2>
           <p>按需添加设计、文档与协作工具，启用后可在会话中调用。</p>
         </div>
         <div className="search-box">
@@ -158,7 +244,7 @@ export function WorkPlugins({
           />
         </div>
       </div>
-      {notice && (
+      {notice && !edit && (
         <p role="status" className="info-strip">
           {notice}
         </p>
@@ -169,7 +255,11 @@ export function WorkPlugins({
             (p.name + p.category + p.description).toLowerCase().includes(query.toLowerCase()),
           )
           .map((p) => {
-            const installed = data.plugins?.find((c) => c.transport === 'http' && c.url === p.url);
+            const installed = data.plugins?.find(
+              (c) =>
+                c.transport === 'http' &&
+                (c.url === p.url || (p.id === 'figma' && c.url === figmaDesktopUrl)),
+            );
             return (
               <article className="provider-card" key={p.id}>
                 <div className="service-card-heading row">
@@ -181,11 +271,21 @@ export function WorkPlugins({
                 <div className="row">
                   <span className="muted">
                     {installed
-                      ? installed.oauthStatus === 'authorized'
-                        ? '✓ 已授权'
-                        : installed.hasSecret
-                          ? '凭据已保存'
-                          : '待认证'
+                      ? installed.oauthStatus === 'error'
+                        ? '授权未完成'
+                        : installed.oauthStatus === 'starting'
+                          ? '正在连接授权服务'
+                          : installed.oauthStatus === 'waiting'
+                            ? '等待浏览器授权'
+                            : installed.url === figmaDesktopUrl
+                              ? installed.catalog
+                                ? '✓ 已连接'
+                                : '待连接桌面服务'
+                              : installed.oauthStatus === 'authorized'
+                                ? '✓ 已授权'
+                                : installed.hasSecret
+                                  ? '凭据已保存'
+                                  : '待认证'
                       : '未配置'}
                     {installed ? ' · ' + (installed.enabled ? '已启用' : '已停用') : ''}
                   </span>
@@ -204,6 +304,8 @@ export function WorkPlugins({
                     className="secondary"
                     disabled={busy}
                     onClick={() => {
+                      setNotice('');
+                      setLoginUrl('');
                       setEdit(
                         installed
                           ? { ...installed, secret: '' }
@@ -242,7 +344,7 @@ export function WorkPlugins({
                         onClick={() =>
                           void act(async () => {
                             const tools = await api.testPlugin(installed.id);
-                            setNotice(`✓ ${p.name} 连接成功，共 ${tools.length} 个工具`);
+                            return `✓ ${p.name} 连接成功，共 ${tools.length} 个工具`;
                           }, '连接检查已完成')
                         }
                       >
@@ -268,7 +370,7 @@ export function WorkPlugins({
             );
           })}
       </div>
-      <button className="text-button" onClick={() => void api.openModule('extensions')}>
+      <button className="text-button" onClick={onCustom}>
         <Plus size={14} />
         配置其他 MCP 服务或本机插件
       </button>
@@ -284,9 +386,47 @@ export function WorkPlugins({
               });
             }}
           >
+            {notice && notice !== current?.oauthError && (
+              <p role="status" className="info-strip">
+                {notice}
+              </p>
+            )}
+            {(edit.url === 'https://mcp.figma.com/mcp' || edit.url === figmaDesktopUrl) && (
+              <>
+                <label>
+                  Figma 连接方式
+                  <select
+                    aria-label="Figma 连接方式"
+                    value={edit.url}
+                    onChange={(e) => {
+                      setEdit({
+                        ...edit,
+                        url: e.target.value,
+                        authMode: e.target.value === figmaDesktopUrl ? 'headers' : 'oauth',
+                        clearSecret: true,
+                        oauthClientId: '',
+                        oauthIssuer: '',
+                        oauthClientSecret: '',
+                      });
+                      setToken('');
+                      setLoginUrl('');
+                      setNotice('');
+                    }}
+                  >
+                    <option value="https://mcp.figma.com/mcp">远程服务 · 浏览器授权</option>
+                    <option value={figmaDesktopUrl}>桌面服务 · 本机连接</option>
+                  </select>
+                </label>
+                <p>
+                  {edit.url === figmaDesktopUrl
+                    ? '在 Figma 桌面应用打开文件，进入 Dev Mode 并启用 MCP Server，然后点击「保存并检查」。无需在同舟登录。'
+                    : 'Figma 远程 MCP 要求服务方认可的客户端。注册被拒绝时可配置已获准的 OAuth 应用，或选择桌面服务。'}
+                </p>
+              </>
+            )}
             <p>{edit.url}</p>
-            <OAuthFields edit={edit} onChange={setEdit} />
-            {edit.authMode !== 'oauth' && (
+            {edit.url !== figmaDesktopUrl && <OAuthFields edit={edit} onChange={setEdit} />}
+            {edit.authMode !== 'oauth' && edit.url !== figmaDesktopUrl && (
               <>
                 <label>
                   访问令牌（留空保留）
@@ -330,36 +470,33 @@ export function WorkPlugins({
               </>
             )}
             {edit.authMode === 'oauth' && (
-              <div className="row">
-                <span
-                  className={
-                    'status-pill ' + (current?.oauthStatus === 'authorized' ? 'completed' : '')
-                  }
-                >
-                  {
-                    {
-                      authorized: '✓ 已授权',
-                      waiting: '等待浏览器授权',
-                      error: '授权未完成',
-                      cancelled: '已取消',
-                      none: '尚未授权',
-                    }[current?.oauthStatus ?? 'none']
-                  }
-                </span>
+              <div className="plugin-auth-controls">
+                <PluginAuthStatus plugin={current} />
                 <button
                   type="button"
                   className="secondary"
-                  disabled={busy || current?.oauthStatus === 'waiting'}
+                  disabled={busy || ['starting', 'waiting'].includes(current?.oauthStatus ?? '')}
                   onClick={() =>
                     void act(async () => {
                       await save();
-                      await api.loginPlugin(edit.id);
-                    }, '已打开官方授权流程')
+                      const result = await api.loginPlugin(edit.id);
+                      setLoginUrl(result.url ?? '');
+                      return result.url
+                        ? result.browserOpened
+                          ? '已打开浏览器，请完成授权。'
+                          : '系统浏览器未打开，请点击「打开授权页面」继续。'
+                        : '授权已更新。';
+                    }, '授权状态已更新，请在下方查看。')
                   }
                 >
                   浏览器授权
                 </button>
-                {current?.oauthStatus === 'waiting' && (
+                {loginUrl && current?.oauthStatus === 'waiting' && (
+                  <a href={loginUrl} target="_blank" rel="noreferrer">
+                    打开授权页面
+                  </a>
+                )}
+                {['starting', 'waiting'].includes(current?.oauthStatus ?? '') && (
                   <button
                     type="button"
                     onClick={() => void act(() => api.cancelPluginLogin(edit.id), '已取消授权')}

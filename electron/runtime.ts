@@ -374,7 +374,11 @@ export class Runtime {
         .filter((p) => ['queued', 'paused', 'dispatching'].includes(p.status)),
       plugins: this.store
         .list<any>('plugin')
-        .map((p) => ({ ...p, hasSecret: this.store.hasSecret('plugin_' + p.id) })),
+        .map((p) => ({
+          ...p,
+          hasSecret: this.store.hasSecret('plugin_' + p.id),
+          hasOAuthClientSecret: this.store.hasSecret('plugin_oauth_client_' + p.id),
+        })),
       skills: this.store.list('skill'),
       providers: this.store.providers(),
       agents: this.store.list('agent'),

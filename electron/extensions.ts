@@ -10,6 +10,7 @@ import { Store } from './store';
 import { minimalEnv, within } from './workspace';
 import { redact } from './validation';
 import { pluginOAuth, secureOAuthUrl, type PluginOAuthProvider } from './mcp-auth';
+import { serviceFetch } from './service-network';
 
 export interface ComputerAdapter {
   fork?(): ComputerAdapter;
@@ -55,7 +56,7 @@ export function mcpName(id: string, name: string) {
 }
 
 export class PluginConnection {
-  readonly client = new Client({ name: 'tongzhou', version: '0.5.1' }, { capabilities: {} });
+  readonly client = new Client({ name: 'tongzhou', version: '0.5.2' }, { capabilities: {} });
   private secretValues: string[] = [];
   constructor(
     readonly config: PluginConfig,
@@ -80,7 +81,7 @@ export class PluginConnection {
             requestInit: { headers: credentials },
             fetch: (url, init) => {
               if (this.oauth) secureOAuthUrl(url instanceof Request ? url.url : String(url));
-              return fetch(url, { ...init, redirect: 'error' });
+              return serviceFetch(url, { ...init, redirect: 'error' });
             },
           });
     if (transport instanceof StdioClientTransport) transport.stderr?.on('data', () => {});
@@ -91,7 +92,7 @@ export class PluginConnection {
       await this.close();
       throw new Error(
         this.oauth
-          ? '插件连接或授权失败，请在连接中心检查授权状态'
+          ? '插件连接或授权失败，请在插件与工具中检查授权状态'
           : redact(String(e), this.secretValues),
       );
     }
@@ -124,7 +125,7 @@ export class PluginConnection {
     } catch (e) {
       throw new Error(
         this.oauth
-          ? '插件调用或授权失败，请在连接中心检查授权状态'
+          ? '插件调用或授权失败，请在插件与工具中检查授权状态'
           : redact(String(e), this.secretValues),
       );
     }

@@ -43,7 +43,13 @@ await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const env = { ...process.env, TONGZHOU_USER_DATA: path.join(root, 'profile') };
 delete env.ELECTRON_RUN_AS_NODE;
 delete env.TONGZHOU_DEV_URL;
-const app = await electron.launch({ args: ['.'], env, timeout: 45000 });
+const executablePath = process.env.TONGZHOU_SMOKE_EXECUTABLE;
+const app = await electron.launch({
+  executablePath,
+  args: executablePath ? [] : ['.'],
+  env,
+  timeout: 45000,
+});
 const checks = [];
 try {
   const page = await app.firstWindow();
@@ -69,6 +75,13 @@ try {
   await page.getByLabel('消息', { exact: true }).fill('第一条');
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
   await page.getByText(/公开思考摘要：/).waitFor();
+  assert.equal(
+    await page
+      .locator('.session-row.selected')
+      .getByRole('button', { name: '归档会话', exact: true })
+      .isDisabled(),
+    true,
+  );
   assert.equal(await page.getByText('处理过程', { exact: true }).count(), 0);
   const firstThinking = page
     .locator('.conversation-turn')
@@ -149,7 +162,7 @@ try {
   await page.screenshot({ path: 'test-results/turn-supplement.png' });
   await page.reload();
   await page.waitForSelector('.welcome');
-  await page.locator('.session-list > button').first().click();
+  await page.locator('.session-list .session-title').first().click();
   await page.getByText('已回复：本轮补充内容', { exact: true }).waitFor();
   await page.waitForFunction(
     () => document.querySelectorAll('.conversation-turn .process-toggle').length === 3,
@@ -185,8 +198,14 @@ try {
   const branch = (await page.evaluate(() => window.tongzhou.snapshot())).sessions.find((s) =>
     s.title.includes('分支'),
   );
-  await page.getByRole('button', { name: '归档会话', exact: true }).click();
-  await page.getByRole('button', { name: '删除会话', exact: true }).click();
+  const branchRow = page
+    .locator('.session-row')
+    .filter({ has: page.locator(`[data-session-id="${branch.id}"]`) });
+  await branchRow.hover();
+  await branchRow.getByRole('button', { name: '归档会话', exact: true }).click();
+  await page.getByRole('button', { name: '切换归档会话', exact: true }).click();
+  await branchRow.hover();
+  await branchRow.getByRole('button', { name: '删除会话', exact: true }).click();
   await page.getByRole('button', { name: '确认删除', exact: true }).click();
   await page.waitForFunction(
     async (id) => !(await window.tongzhou.snapshot()).sessions.some((s) => s.id === id),
