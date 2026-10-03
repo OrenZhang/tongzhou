@@ -71,8 +71,8 @@ try {
     await page.getByRole('heading', { name: provider, exact: true }).waitFor();
   }
   await page.getByRole('button', { name: '设置与关于', exact: true }).click();
-  assert.equal(await page.locator('.auth-badge.connected').count(), 2);
-  await page.getByRole('button', { name: /^连接中心/ }).click();
+  assert.equal(await page.locator('.auth-badge.connected').count(), 0);
+  await page.getByRole('button', { name: '打开连接中心', exact: true }).click();
   assert.equal(await page.locator('.auth-badge.connected').count(), 2);
   console.log(
     'Account UI smoke passed: single-provider dialogs, verified badges, return navigation. States are fixtures.',

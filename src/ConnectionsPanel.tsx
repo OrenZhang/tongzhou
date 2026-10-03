@@ -1,4 +1,6 @@
 import { useState, type ReactNode } from 'react';
+import { Modal } from './components';
+import { Globe2, Network, Radio, History } from 'lucide-react';
 import type { Channel, Connector, NotificationRule, Snapshot, TongzhouAPI } from './shared/types';
 
 export function ConnectionsPanel({
@@ -57,17 +59,22 @@ export function ConnectionsPanel({
   };
   return (
     <section className="connections-extra">
-      <div className="row connection-tabs">
+      <nav className="section-tabs connection-tabs" aria-label="连接分类">
         {(['models', 'accounts', 'channels', 'records'] as const).map((name, i) => (
           <button
-            className={tab === name ? 'primary' : 'secondary'}
+            className={tab === name ? 'active' : ''}
+            aria-pressed={tab === name}
             key={name}
             onClick={() => setTab(name)}
           >
+            {(() => {
+              const Icon = [Network, Globe2, Radio, History][i];
+              return <Icon size={15} />;
+            })()}
             {['模型与订阅', '服务与浏览器', '渠道通知', '认证与发送记录'][i]}
           </button>
         ))}
-      </div>
+      </nav>
       {notice && (
         <p role="status" className="info-strip">
           {notice}
@@ -101,16 +108,16 @@ export function ConnectionsPanel({
               </button>
             ))}
           </div>
-          <div className="provider-grid">
+          <div className="provider-grid service-connections">
             {(data.connectors ?? []).map((c) => (
               <article className="provider-card" key={c.id}>
-                <div className="row">
+                <div className="row service-card-heading">
                   <h3>{c.name}</h3>
                   <span className="tag">
                     {!c.enabled
                       ? '已停用'
                       : c.status === 'connected'
-                        ? '✓ 已验证 ' + c.account
+                        ? '✓ 已验证' + (c.account ? ' · ' + c.account : '')
                         : c.kind === 'browser'
                           ? '独立登录态'
                           : c.status === 'error'
@@ -119,8 +126,10 @@ export function ConnectionsPanel({
                   </span>
                 </div>
                 <p>{c.baseUrl}</p>
-                <div className="row">
-                  <button onClick={() => setConnector({ ...c, secret: '' })}>管理</button>
+                <div className="row service-card-actions">
+                  <button className="secondary" onClick={() => setConnector({ ...c, secret: '' })}>
+                    管理
+                  </button>
                   <button
                     disabled={!!busy}
                     onClick={() =>
@@ -164,81 +173,95 @@ export function ConnectionsPanel({
                     </button>
                   )}
                   <button
+                    className="text-button danger"
                     onClick={() =>
                       destructive('clear-' + c.id, () => api.clearBrowserProfile(c.id))
                     }
                   >
                     {armed === 'clear-' + c.id ? '确认清除登录态' : '清除登录态'}
                   </button>
-                  <button onClick={() => destructive(c.id, () => api.deleteConnector(c.id))}>
+                  <button
+                    className="text-button danger"
+                    onClick={() => destructive(c.id, () => api.deleteConnector(c.id))}
+                  >
                     {armed === c.id ? '确认删除账号及登录态' : '删除'}
                   </button>
                 </div>
               </article>
             ))}
           </div>
+          {!(data.connectors ?? []).length && !connector && (
+            <div className="empty-state compact">
+              <Globe2 size={28} />
+              <h3>连接你的服务账号</h3>
+              <p>添加代码托管服务或独立浏览器账号，登录态分别保存。</p>
+            </div>
+          )}
           {connector && (
-            <form
-              className="connection-form"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void act('connector-save', async () => {
-                  await api.saveConnector(connector);
-                  setConnector(null);
-                });
-              }}
-            >
-              <h3>配置 {connector.kind}</h3>
-              <label>
-                名称
-                <input
-                  required
-                  value={connector.name}
-                  onChange={(e) => setConnector({ ...connector, name: e.target.value })}
-                />
-              </label>
-              <label>
-                站点地址
-                <input
-                  required
-                  type="url"
-                  value={connector.baseUrl}
-                  onChange={(e) => setConnector({ ...connector, baseUrl: e.target.value })}
-                />
-              </label>
-              {connector.kind !== 'browser' && (
+            <Modal title="配置服务账号" onClose={() => setConnector(null)}>
+              <form
+                className="connection-form"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void act('connector-save', async () => {
+                    await api.saveConnector(connector);
+                    setConnector(null);
+                  });
+                }}
+              >
+                <h3>配置 {connector.kind}</h3>
                 <label>
-                  访问令牌（留空保留已存令牌）
+                  名称
                   <input
-                    type="password"
-                    autoComplete="off"
-                    value={connector.secret ?? ''}
-                    onChange={(e) => setConnector({ ...connector, secret: e.target.value })}
+                    required
+                    value={connector.name}
+                    onChange={(e) => setConnector({ ...connector, name: e.target.value })}
                   />
                 </label>
-              )}
-              {connector.kind !== 'browser' && (
                 <label>
-                  OAuth App Client ID
+                  站点地址
                   <input
-                    value={connector.clientId ?? ''}
-                    onChange={(e) => setConnector({ ...connector, clientId: e.target.value })}
+                    required
+                    type="url"
+                    value={connector.baseUrl}
+                    onChange={(e) => setConnector({ ...connector, baseUrl: e.target.value })}
                   />
                 </label>
-              )}
-              <p>
-                GitHub 账号验证不代表 Copilot 模型权益。GitLab 支持访问令牌与 PKCE 浏览器授权。使用
-                OAuth 时注册公共应用，回调地址设为 http://127.0.0.1:17437/connector/callback。
-              </p>
-              <div className="row">
-                <button className="primary" disabled={!!busy}>
-                  保存
-                </button>
-                <button type="button" onClick={() => setConnector(null)}>
-                  取消
-                </button>
-              </div>
-            </form>
+                {connector.kind !== 'browser' && (
+                  <label>
+                    访问令牌（留空保留已存令牌）
+                    <input
+                      type="password"
+                      autoComplete="off"
+                      value={connector.secret ?? ''}
+                      onChange={(e) => setConnector({ ...connector, secret: e.target.value })}
+                    />
+                  </label>
+                )}
+                {connector.kind !== 'browser' && (
+                  <label>
+                    OAuth App Client ID
+                    <input
+                      value={connector.clientId ?? ''}
+                      onChange={(e) => setConnector({ ...connector, clientId: e.target.value })}
+                    />
+                  </label>
+                )}
+                <p>
+                  GitHub 账号验证不代表 Copilot 模型权益。GitLab 支持访问令牌与 PKCE
+                  浏览器授权。使用 OAuth 时注册公共应用，回调地址设为
+                  http://127.0.0.1:17437/connector/callback。
+                </p>
+                <div className="row">
+                  <button className="primary" disabled={!!busy}>
+                    保存
+                  </button>
+                  <button type="button" onClick={() => setConnector(null)}>
+                    取消
+                  </button>
+                </div>
+              </form>
+            </Modal>
           )}
           {login && (
             <div className="connection-form">
@@ -280,21 +303,27 @@ export function ConnectionsPanel({
       )}
       {tab === 'channels' && (
         <>
-          <button
-            className="primary"
-            disabled={!!busy}
-            onClick={() =>
-              void act(
-                'feishu-qr',
-                async () => {
-                  setQr(await api.onboardFeishu(crypto.randomUUID(), '飞书扫码账号'));
-                },
-                '请使用飞书扫描二维码，创建并授权机器人',
-              )
-            }
-          >
-            飞书扫码接入
-          </button>
+          <div className="collection-toolbar channel-intro">
+            <div>
+              <h2>通知渠道</h2>
+              <p>把完成、失败或等待批准的状态发送到指定群或个人。</p>
+            </div>
+            <button
+              className="primary"
+              disabled={!!busy}
+              onClick={() =>
+                void act(
+                  'feishu-qr',
+                  async () => {
+                    setQr(await api.onboardFeishu(crypto.randomUUID(), '飞书扫码账号'));
+                  },
+                  '请使用飞书扫描二维码，创建并授权机器人',
+                )
+              }
+            >
+              飞书扫码接入
+            </button>
+          </div>
           {qr && (
             <div className="connection-form">
               <h3>飞书扫码授权</h3>
@@ -325,9 +354,6 @@ export function ConnectionsPanel({
               </button>
             </div>
           )}
-          <p>
-            把任务完成、失败或等待批准发送到指定群。通知规则可绑定当前会话或全部会话；应用关闭时不会发送。
-          </p>
           <div className="row">
             {(['feishu', 'wecom', 'dingtalk'] as const).map((kind, i) => (
               <button
@@ -346,11 +372,12 @@ export function ConnectionsPanel({
               </button>
             ))}
           </div>
-          <div className="provider-grid">
+          <div className="provider-grid channel-connections">
             {(data.channels ?? []).map((c) => (
               <article className="provider-card" key={c.id}>
-                <h3>
-                  {c.name}{' '}
+                <div className="service-card-heading row">
+                  <Radio size={18} />
+                  <h3>{c.name}</h3>
                   <span className="tag">
                     {!c.enabled
                       ? '已停用'
@@ -360,9 +387,11 @@ export function ConnectionsPanel({
                           ? '✓ 应用授权已验证'
                           : '待发送验证'}
                   </span>
-                </h3>
-                <div className="row">
-                  <button onClick={() => setChannel({ ...c })}>管理</button>
+                </div>
+                <div className="row service-card-actions">
+                  <button className="secondary" onClick={() => setChannel({ ...c })}>
+                    管理
+                  </button>
                   <button
                     disabled={!!busy}
                     onClick={() =>
@@ -392,267 +421,312 @@ export function ConnectionsPanel({
                   >
                     添加通知规则
                   </button>
-                  <button onClick={() => destructive(c.id, () => api.deleteChannel(c.id))}>
+                  <button
+                    className="text-button danger"
+                    onClick={() => destructive(c.id, () => api.deleteChannel(c.id))}
+                  >
                     {armed === c.id ? '确认删除' : '删除'}
                   </button>
                 </div>
               </article>
             ))}
           </div>
+          {!(data.channels ?? []).length && !channel && (
+            <div className="empty-state compact">
+              <Radio size={28} />
+              <h3>让会话进展及时送达</h3>
+              <p>接入飞书、企业微信或钉钉，再为会话配置通知规则。</p>
+            </div>
+          )}
           {channel && (
-            <form
-              className="connection-form"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void act('channel-save', async () => {
-                  await api.saveChannel(channel);
-                  setChannel(null);
-                });
-              }}
-            >
-              <h3>配置 {channel.name}</h3>
-              <p>飞书支持扫码应用和 Webhook；企业微信、钉钉目前使用官方群机器人 Webhook。</p>
-              <label>
-                名称
-                <input
-                  required
-                  value={channel.name}
-                  onChange={(e) => setChannel({ ...channel, name: e.target.value })}
-                />
-              </label>
-              {channel.mode !== 'app' && (
+            <Modal title="配置通知渠道" onClose={() => setChannel(null)}>
+              <form
+                className="connection-form"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void act('channel-save', async () => {
+                    await api.saveChannel(channel);
+                    setChannel(null);
+                  });
+                }}
+              >
+                <h3>配置 {channel.name}</h3>
+                <p>飞书支持扫码应用和 Webhook；企业微信、钉钉目前使用官方群机器人 Webhook。</p>
                 <label>
-                  Webhook（留空保留）
+                  名称
                   <input
-                    type="password"
-                    autoComplete="off"
-                    value={channel.webhook ?? ''}
-                    onChange={(e) => setChannel({ ...channel, webhook: e.target.value })}
+                    required
+                    value={channel.name}
+                    onChange={(e) => setChannel({ ...channel, name: e.target.value })}
                   />
                 </label>
-              )}
-              {channel.mode !== 'app' && channel.kind !== 'wecom' && (
-                <label>
-                  签名密钥（修改时填写）
-                  <input
-                    type="password"
-                    autoComplete="off"
-                    value={channel.signingSecret ?? ''}
-                    onChange={(e) => setChannel({ ...channel, signingSecret: e.target.value })}
-                  />
-                </label>
-              )}
-              {channel.mode === 'app' && (
-                <>
+                {channel.mode !== 'app' && (
                   <label>
-                    收件人类型
-                    <select
-                      aria-label="收件人类型"
-                      value={channel.receiveIdType ?? 'open_id'}
-                      onChange={(e) =>
-                        setChannel({
-                          ...channel,
-                          receiveIdType: e.target.value as 'open_id' | 'chat_id',
-                        })
-                      }
-                    >
-                      <option value="open_id">个人 open_id</option>
-                      <option value="chat_id">群 chat_id</option>
-                    </select>
-                  </label>
-                  <label>
-                    收件人 / 群 ID
+                    Webhook（留空保留）
                     <input
-                      value={channel.receiveId ?? ''}
-                      onChange={(e) => setChannel({ ...channel, receiveId: e.target.value })}
+                      type="password"
+                      autoComplete="off"
+                      value={channel.webhook ?? ''}
+                      onChange={(e) => setChannel({ ...channel, webhook: e.target.value })}
                     />
                   </label>
+                )}
+                {channel.mode !== 'app' && channel.kind !== 'wecom' && (
                   <label>
+                    签名密钥（修改时填写）
                     <input
-                      type="checkbox"
-                      checked={channel.inbound ?? false}
-                      onChange={(e) => setChannel({ ...channel, inbound: e.target.checked })}
+                      type="password"
+                      autoComplete="off"
+                      value={channel.signingSecret ?? ''}
+                      onChange={(e) => setChannel({ ...channel, signingSecret: e.target.value })}
                     />
-                    接收渠道消息到会话
                   </label>
-                  {channel.inbound && (
-                    <>
-                      <label>
-                        绑定会话
-                        <select
-                          aria-label="绑定会话"
-                          value={channel.sessionId ?? ''}
-                          onChange={(e) =>
-                            setChannel({ ...channel, sessionId: e.target.value || undefined })
-                          }
-                        >
-                          <option value="">请选择会话</option>
-                          {data.sessions
-                            .filter((s) => !s.archived && !s.parentId)
-                            .map((s) => (
-                              <option key={s.id} value={s.id}>
-                                {s.title}
-                              </option>
-                            ))}
-                        </select>
-                      </label>
-                      <label>
-                        发送人 open_id 白名单（逗号分隔）
-                        <input
-                          value={channel.allowedSenders?.join(',') ?? ''}
-                          onChange={(e) =>
-                            setChannel({
-                              ...channel,
-                              allowedSenders: e.target.value
-                                .split(',')
-                                .map((x) => x.trim())
-                                .filter(Boolean),
-                            })
-                          }
-                        />
-                      </label>
-                      <p>只有白名单内用户的文本消息会进入绑定会话；机器人消息不会触发回复。</p>
-                    </>
-                  )}
-                </>
-              )}
-              <div className="row">
-                <button className="primary" disabled={!!busy}>
-                  保存
-                </button>
-                <button type="button" onClick={() => setChannel(null)}>
-                  取消
-                </button>
-              </div>
-            </form>
+                )}
+                {channel.mode === 'app' && (
+                  <>
+                    <label>
+                      收件人类型
+                      <select
+                        aria-label="收件人类型"
+                        value={channel.receiveIdType ?? 'open_id'}
+                        onChange={(e) =>
+                          setChannel({
+                            ...channel,
+                            receiveIdType: e.target.value as 'open_id' | 'chat_id',
+                          })
+                        }
+                      >
+                        <option value="open_id">个人 open_id</option>
+                        <option value="chat_id">群 chat_id</option>
+                      </select>
+                    </label>
+                    <label>
+                      收件人 / 群 ID
+                      <input
+                        value={channel.receiveId ?? ''}
+                        onChange={(e) => setChannel({ ...channel, receiveId: e.target.value })}
+                      />
+                    </label>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={channel.inbound ?? false}
+                        onChange={(e) => setChannel({ ...channel, inbound: e.target.checked })}
+                      />
+                      接收渠道消息到会话
+                    </label>
+                    {channel.inbound && (
+                      <>
+                        <label>
+                          绑定会话
+                          <select
+                            aria-label="绑定会话"
+                            value={channel.sessionId ?? ''}
+                            onChange={(e) =>
+                              setChannel({ ...channel, sessionId: e.target.value || undefined })
+                            }
+                          >
+                            <option value="">请选择会话</option>
+                            {data.sessions
+                              .filter((s) => !s.archived && !s.parentId)
+                              .map((s) => (
+                                <option key={s.id} value={s.id}>
+                                  {s.title}
+                                </option>
+                              ))}
+                          </select>
+                        </label>
+                        <label>
+                          发送人 open_id 白名单（逗号分隔）
+                          <input
+                            value={channel.allowedSenders?.join(',') ?? ''}
+                            onChange={(e) =>
+                              setChannel({
+                                ...channel,
+                                allowedSenders: e.target.value
+                                  .split(',')
+                                  .map((x) => x.trim())
+                                  .filter(Boolean),
+                              })
+                            }
+                          />
+                        </label>
+                        <p>只有白名单内用户的文本消息会进入绑定会话；机器人消息不会触发回复。</p>
+                      </>
+                    )}
+                  </>
+                )}
+                <div className="row">
+                  <button className="primary" disabled={!!busy}>
+                    保存
+                  </button>
+                  <button type="button" onClick={() => setChannel(null)}>
+                    取消
+                  </button>
+                </div>
+              </form>
+            </Modal>
           )}
           {send && (
-            <form
-              className="connection-form"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void act(
-                  'send',
-                  async () => {
-                    const result = await api.sendChannel(send.id, send.text);
-                    if (result.status !== 'sent') throw new Error(result.error ?? '未确认发送');
-                    setSend(null);
-                  },
-                  '✓ 平台已确认发送',
-                );
-              }}
-            >
-              <label>
-                将发送到 {data.channels?.find((c) => c.id === send.id)?.name}
-                <textarea
-                  required
-                  maxLength={4000}
-                  value={send.text}
-                  onChange={(e) => setSend({ ...send, text: e.target.value })}
-                />
-              </label>
-              <div className="row">
-                <button className="primary" disabled={!!busy}>
-                  发送此消息
-                </button>
-                <button type="button" onClick={() => setSend(null)}>
-                  取消
-                </button>
-              </div>
-            </form>
+            <Modal title="发送渠道消息" onClose={() => setSend(null)}>
+              <form
+                className="connection-form"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void act(
+                    'send',
+                    async () => {
+                      const result = await api.sendChannel(send.id, send.text);
+                      if (result.status !== 'sent') throw new Error(result.error ?? '未确认发送');
+                      setSend(null);
+                    },
+                    '✓ 平台已确认发送',
+                  );
+                }}
+              >
+                <label>
+                  将发送到 {data.channels?.find((c) => c.id === send.id)?.name}
+                  <textarea
+                    required
+                    maxLength={4000}
+                    value={send.text}
+                    onChange={(e) => setSend({ ...send, text: e.target.value })}
+                  />
+                </label>
+                <div className="row">
+                  <button className="primary" disabled={!!busy}>
+                    发送此消息
+                  </button>
+                  <button type="button" onClick={() => setSend(null)}>
+                    取消
+                  </button>
+                </div>
+              </form>
+            </Modal>
           )}
           {rule && (
-            <form
-              className="connection-form"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void act('rule-save', async () => {
-                  await api.saveNotificationRule(rule);
-                  setRule(null);
-                });
-              }}
-            >
-              <h3>通知规则</h3>
-              <label>
-                会话范围
-                <select
-                  aria-label="会话范围"
-                  value={rule.sessionId ?? ''}
-                  onChange={(e) => setRule({ ...rule, sessionId: e.target.value || null })}
-                >
-                  <option value="">全部会话</option>
-                  {data.sessions
-                    .filter((s) => !s.parentId && !s.archived)
-                    .map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.title}
-                      </option>
-                    ))}
-                </select>
-              </label>
-              <div className="row">
-                {(['completed', 'failed', 'approval'] as const).map((event, i) => (
-                  <label key={event}>
-                    <input
-                      type="checkbox"
-                      checked={rule.events.includes(event)}
-                      onChange={(e) =>
-                        setRule({
-                          ...rule,
-                          events: e.target.checked
-                            ? [...rule.events, event]
-                            : rule.events.filter((x) => x !== event),
-                        })
-                      }
-                    />
-                    {['完成', '失败', '等待批准'][i]}
-                  </label>
-                ))}
-              </div>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={rule.once}
-                  onChange={(e) => setRule({ ...rule, once: e.target.checked })}
-                />
-                只发送一次
-              </label>
-              <label>
-                模板
-                <textarea
-                  value={rule.template}
-                  onChange={(e) => setRule({ ...rule, template: e.target.value })}
-                />
-              </label>
-              <p>可用字段：{'{title} {status} {model} {time}'}，默认不发送聊天正文或文件内容。</p>
-              <div className="row">
-                <button className="primary" disabled={!!busy || !rule.events.length}>
-                  保存规则
-                </button>
-                <button type="button" onClick={() => setRule(null)}>
-                  取消
-                </button>
-              </div>
-            </form>
+            <Modal title="通知规则" onClose={() => setRule(null)}>
+              <form
+                className="connection-form"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void act('rule-save', async () => {
+                    await api.saveNotificationRule(rule);
+                    setRule(null);
+                  });
+                }}
+              >
+                <h3>通知规则</h3>
+                <label>
+                  会话范围
+                  <select
+                    aria-label="会话范围"
+                    value={rule.sessionId ?? ''}
+                    onChange={(e) => setRule({ ...rule, sessionId: e.target.value || null })}
+                  >
+                    <option value="">全部会话</option>
+                    {data.sessions
+                      .filter((s) => !s.parentId && !s.archived)
+                      .map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.title}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <div className="row">
+                  {(['completed', 'failed', 'approval'] as const).map((event, i) => (
+                    <label key={event}>
+                      <input
+                        type="checkbox"
+                        checked={rule.events.includes(event)}
+                        onChange={(e) =>
+                          setRule({
+                            ...rule,
+                            events: e.target.checked
+                              ? [...rule.events, event]
+                              : rule.events.filter((x) => x !== event),
+                          })
+                        }
+                      />
+                      {['完成', '失败', '等待批准'][i]}
+                    </label>
+                  ))}
+                </div>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={rule.once}
+                    onChange={(e) => setRule({ ...rule, once: e.target.checked })}
+                  />
+                  只发送一次
+                </label>
+                <label>
+                  模板
+                  <textarea
+                    value={rule.template}
+                    onChange={(e) => setRule({ ...rule, template: e.target.value })}
+                  />
+                </label>
+                <p>可用字段：{'{title} {status} {model} {time}'}，默认不发送聊天正文或文件内容。</p>
+                <div className="row">
+                  <button className="primary" disabled={!!busy || !rule.events.length}>
+                    保存规则
+                  </button>
+                  <button type="button" onClick={() => setRule(null)}>
+                    取消
+                  </button>
+                </div>
+              </form>
+            </Modal>
+          )}
+          <div className="rule-heading">
+            <h2>
+              通知规则 <span className="tag">{data.notificationRules?.length ?? 0}</span>
+            </h2>
+            <p>按会话选择触发条件；应用关闭时不会发送。</p>
+          </div>
+          {!(data.notificationRules ?? []).length && (
+            <p className="empty-record">暂无通知规则，在渠道中选择“添加通知规则”即可开始。</p>
           )}
           {(data.notificationRules ?? []).map((r) => (
-            <div className="connection-record" key={r.id}>
-              <span>
-                {data.channels?.find((c) => c.id === r.channelId)?.name} ·{' '}
-                {r.sessionId ? data.sessions.find((s) => s.id === r.sessionId)?.title : '全部会话'}{' '}
-                · {r.once ? '仅一次' : '持续'} · {r.enabled ? '启用' : '停用'}
+            <div className="connection-record notification-rule" key={r.id}>
+              <div className="rule-detail">
+                <strong>
+                  {data.channels?.find((c) => c.id === r.channelId)?.name ?? '已删除渠道'}
+                </strong>
+                <p>
+                  {r.sessionId
+                    ? (data.sessions.find((s) => s.id === r.sessionId)?.title ?? '已删除会话')
+                    : '全部会话'}{' '}
+                  · {r.once ? '仅一次' : '持续'} ·{' '}
+                  {r.events
+                    .map(
+                      (event) =>
+                        ({ completed: '完成', failed: '失败', approval: '等待批准' })[event],
+                    )
+                    .join('、')}
+                </p>
+              </div>
+              <span className={'status-pill ' + (r.enabled ? 'completed' : '')}>
+                {r.enabled ? '启用' : '停用'}
               </span>
-              <button onClick={() => setRule(r)}>编辑</button>
-              <button
-                onClick={() =>
-                  void act(r.id, () => api.saveNotificationRule({ ...r, enabled: !r.enabled }))
-                }
-              >
-                切换启停
-              </button>
-              <button onClick={() => void act(r.id, () => api.deleteNotificationRule(r.id))}>
-                删除规则
-              </button>
+              <div className="row">
+                <button onClick={() => setRule(r)}>编辑</button>
+                <button
+                  onClick={() =>
+                    void act(r.id, () => api.saveNotificationRule({ ...r, enabled: !r.enabled }))
+                  }
+                >
+                  切换启停
+                </button>
+                <button
+                  className="text-button danger"
+                  onClick={() => void act(r.id, () => api.deleteNotificationRule(r.id))}
+                >
+                  删除规则
+                </button>
+              </div>
             </div>
           ))}
         </>
@@ -673,7 +747,9 @@ export function ConnectionsPanel({
                 · {e.phase}
               </div>
             ))}
-          <h3>发送记录</h3>
+          {!(data.authEvents ?? []).length && <p className="empty-record">暂无认证记录</p>}
+          <h3 className="record-heading">发送记录</h3>
+          {!(data.deliveries ?? []).length && <p className="empty-record">暂无发送记录</p>}
           {(data.deliveries ?? []).map((d) => (
             <div className="connection-record" key={d.id}>
               {new Date(d.time).toLocaleString()} ·{' '}

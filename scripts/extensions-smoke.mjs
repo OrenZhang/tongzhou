@@ -80,6 +80,7 @@ try {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [skill] });
   }, skill);
   await page.getByRole('button', { name: '插件与工具', exact: true }).click();
+  await page.getByRole('button', { name: /^MCP 插件/ }).click();
   await page.getByRole('button', { name: '添加 MCP', exact: true }).click();
   await page.getByLabel('插件名称', { exact: true }).fill('测试笔记插件');
   await page.getByLabel('启动命令', { exact: true }).fill(process.execPath);
@@ -87,6 +88,7 @@ try {
   await page.getByRole('button', { name: '保存并检查连接', exact: true }).click();
   await page.getByRole('dialog').getByText('read_note', { exact: true }).waitFor();
   await page.getByRole('button', { name: '保存插件', exact: true }).click();
+  await page.getByRole('button', { name: /^Skills/ }).click();
   await page.getByRole('button', { name: '导入 Skill 文件夹', exact: true }).click();
   await page.getByRole('heading', { name: 'sample-skill', exact: true }).waitFor();
   assert.equal((await page.evaluate(() => window.tongzhou.snapshot())).agents.length, 0);

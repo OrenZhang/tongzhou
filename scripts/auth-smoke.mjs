@@ -21,7 +21,9 @@ try {
   await app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows().forEach((w) => w.setIgnoreMouseEvents(true)),
   );
-  await page.getByRole('button', { name: '设置与关于', exact: true }).click();
+  await page.getByRole('button', { name: /^连接中心/ }).click();
+  await page.getByRole('button', { name: '编辑 OpenAI · ChatGPT', exact: true }).click();
+  await page.getByRole('button', { name: '前往登录', exact: true }).click();
   await page.getByText('Codex 可用，尚未登录', { exact: false }).waitFor();
   await page.getByRole('button', { name: 'ChatGPT 浏览器登录', exact: true }).click();
   await page.getByText('等待浏览器授权完成', { exact: true }).waitFor({ timeout: 65000 });
@@ -33,8 +35,11 @@ try {
   await page.getByLabel('设备授权码', { exact: true }).waitFor({ timeout: 65000 });
   assert.ok((await page.getByLabel('设备授权码', { exact: true }).innerText()).length > 0);
   await page.getByRole('button', { name: '打开授权页面', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: '关闭', exact: true }).click();
   await page.getByRole('button', { name: '工作空间', exact: true }).click();
-  await page.getByRole('button', { name: '设置与关于', exact: true }).click();
+  await page.getByRole('button', { name: /^连接中心/ }).click();
+  await page.getByRole('button', { name: '编辑 OpenAI · ChatGPT', exact: true }).click();
+  await page.getByRole('button', { name: '前往登录', exact: true }).click();
   await page.getByLabel('设备授权码', { exact: true }).waitFor();
   await page.getByRole('button', { name: '取消授权', exact: true }).click();
   await page.getByText('已取消本次授权，可以重新选择登录方式。', { exact: true }).waitFor();

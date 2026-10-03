@@ -82,14 +82,56 @@ export function Modal({
   onClose: () => void;
   wide?: boolean;
 }) {
+  const modal = useRef<HTMLElement>(null);
+  const previousFocus = useRef(document.activeElement as HTMLElement | null);
+  useEffect(() => {
+    if (!modal.current?.contains(document.activeElement))
+      modal.current
+        ?.querySelector<HTMLElement>(
+          'input:not([disabled]), textarea:not([disabled]), button:not([disabled])',
+        )
+        ?.focus();
+    return () => {
+      if (previousFocus.current?.isConnected) previousFocus.current.focus();
+    };
+  }, []);
   return (
     <div
       className="modal-backdrop"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          e.stopPropagation();
+          onClose();
+        }
+        if (e.key !== 'Tab') return;
+        // Include the model picker portal while it belongs to this dialog.
+        const containers = [modal.current, document.querySelector('.model-picker-panel')].filter(
+          Boolean,
+        );
+        const controls = containers
+          .flatMap((container) => [
+            ...container!.querySelectorAll<HTMLElement>(
+              'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]',
+            ),
+          ])
+          .filter((element) => element.tabIndex >= 0 && element.getClientRects().length > 0);
+        const first = controls[0],
+          last = controls.at(-1);
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last?.focus();
+        }
+        if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first?.focus();
+        }
+      }}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <section
+        ref={modal}
         className={'modal ' + (wide ? 'wide' : '')}
         role="dialog"
         aria-modal="true"

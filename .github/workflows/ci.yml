@@ -27,6 +27,7 @@ jobs:
       - run: npm run test:bridge
       - run: npm run test:workflows
       - run: npm run test:turns
+      - run: npm run test:ui
       - run: node scripts/native-smoke.mjs
       - run: npm run dist
         env:

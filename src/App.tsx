@@ -51,6 +51,7 @@ import type {
   Snapshot,
 } from './shared/types';
 import { Extensions } from './Extensions';
+import { CommandPalette } from './CommandPalette';
 import { PendingInputs, useRunEvents } from './RunActivity';
 import { ConversationTurn } from './ConversationTurn';
 import { conversationTurns } from './shared/turns';
@@ -178,6 +179,41 @@ export default function App() {
   const api = window.tongzhou;
   const [data, setData] = useState<Snapshot>(empty);
   const [view, setView] = useState<View>('workspace');
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () => localStorage.getItem('tongzhou-sidebar') !== 'closed',
+  );
+  const [contextOpen, setContextOpen] = useState(
+    () => localStorage.getItem('tongzhou-context') !== 'closed',
+  );
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [providerQuery, setProviderQuery] = useState('');
+  const [runQuery, setRunQuery] = useState('');
+  const [runFilter, setRunFilter] = useState('all');
+  useEffect(() => {
+    localStorage.setItem('tongzhou-sidebar', sidebarOpen ? 'open' : 'closed');
+  }, [sidebarOpen]);
+  useEffect(() => {
+    localStorage.setItem('tongzhou-context', contextOpen ? 'open' : 'closed');
+  }, [contextOpen]);
+  useEffect(() => {
+    const shortcuts = (e: KeyboardEvent) => {
+      if (e.isComposing || !(e.ctrlKey || e.metaKey)) return;
+      if (e.key.toLowerCase() === 'k' && !document.querySelector('.modal-backdrop')) {
+        e.preventDefault();
+        setPaletteOpen(true);
+      }
+      if (
+        e.key.toLowerCase() === 'b' &&
+        !document.querySelector('.modal-backdrop') &&
+        !(e.target instanceof Element && e.target.closest('input,textarea,[contenteditable=true]'))
+      ) {
+        e.preventDefault();
+        setSidebarOpen((open) => !open);
+      }
+    };
+    window.addEventListener('keydown', shortcuts);
+    return () => window.removeEventListener('keydown', shortcuts);
+  }, []);
   const [authProviderId, setAuthProviderId] = useState<string | undefined>();
   const authProviderRef = useRef<string | undefined>(undefined);
   authProviderRef.current = authProviderId;
@@ -221,6 +257,12 @@ export default function App() {
   const feed = useRef<HTMLDivElement>(null);
   const composerInput = useRef<HTMLTextAreaElement>(null);
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    const input = composerInput.current;
+    if (!input) return;
+    input.style.height = 'auto';
+    input.style.height = `${Math.min(200, input.scrollHeight)}px`;
+  }, [draft, view]);
   const session = data.sessions.find((s) => s.id === sessionId);
   const project = data.projects.find((p) => p.id === session?.projectId);
   const provider = data.providers.find((p) => p.id === providerId);
@@ -840,8 +882,8 @@ export default function App() {
       </div>
     );
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
+    <div className={`app-shell ${sidebarOpen ? '' : 'sidebar-collapsed'}`} data-view={view}>
+      <aside className="sidebar" aria-label="主导航" inert={!sidebarOpen}>
         <div className="brand">
           <Mark />
           <div>
@@ -858,6 +900,8 @@ export default function App() {
           {nav.map((n) => (
             <button
               key={n.id}
+              aria-label={n.label}
+              aria-current={view === n.id ? 'page' : undefined}
               className={view === n.id ? 'active' : ''}
               onClick={() => setView(n.id)}
             >
@@ -898,7 +942,15 @@ export default function App() {
       <div className="main-shell">
         <header className="topbar">
           <div className="breadcrumb">
-            <LayoutPanelLeft size={17} />
+            <button
+              className="icon-button"
+              aria-label={sidebarOpen ? '收起导航' : '展开导航'}
+              title="切换导航（Ctrl / ⌘ B）"
+              aria-expanded={sidebarOpen}
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+            >
+              <LayoutPanelLeft size={17} />
+            </button>
             <span>同舟</span>
             <ChevronRight size={13} />
             <strong>
@@ -914,15 +966,34 @@ export default function App() {
             </strong>
           </div>
           <div className="topbar-right">
+            <button
+              className="quick-search-trigger"
+              aria-label="搜索与快捷操作"
+              onClick={() => setPaletteOpen(true)}
+            >
+              <Search size={15} />
+              <span>搜索与快捷操作</span>
+              <kbd>{navigator.platform.includes('Mac') ? '⌘ K' : 'Ctrl K'}</kbd>
+            </button>
+            {view === 'workspace' && project && (
+              <button
+                className={'icon-button ' + (contextOpen ? 'active' : '')}
+                aria-label={contextOpen ? '收起项目面板' : '展开项目面板'}
+                aria-expanded={contextOpen}
+                title="项目文件与变更"
+                onClick={() => setContextOpen(!contextOpen)}
+              >
+                <FolderOpen size={17} />
+              </button>
+            )}
             <span className="local-badge">
               <ShieldCheck size={13} />
               本地存储
             </span>
-            <span className="avatar">T</span>
           </div>
         </header>
         {view === 'workspace' && (
-          <div className="workspace-layout">
+          <div className={`workspace-layout ${project && contextOpen ? 'has-context' : ''}`}>
             <main className="conversation">
               {session && (
                 <div className="conversation-header">
@@ -1025,37 +1096,25 @@ export default function App() {
                 )}
                 {!turns.length ? (
                   <div className="welcome">
-                    <div className="eyebrow">
-                      <span /> ONE WORKSPACE. MANY MODELS.
-                    </div>
                     <div className="welcome-mark">
                       <Mark />
                     </div>
-                    <h1>
-                      让想法，<span>同舟而行。</span>
-                    </h1>
+                    <h1>{project ? '从这个项目，开始。' : '今天，一起做点什么？'}</h1>
                     <p>
-                      连接你喜欢的模型，让不同的 Agent 并肩协作。
-                      <br />
-                      随时开始聊天，也可以打开项目一起创作。
+                      {project
+                        ? '读代码、改功能、验证结果，同一个会话里完成。'
+                        : '随时聊天、解决问题，或打开项目一起创作。'}
                     </p>
                     <div className="welcome-actions">
-                      {!session && (
-                        <button className="primary" onClick={() => newSession()}>
-                          <MessageSquare size={16} />
-                          开始聊天
-                          <ArrowRight size={15} />
-                        </button>
-                      )}
                       {!project && (
                         <button className="secondary" onClick={openProject}>
                           <FolderOpen size={16} />
-                          打开项目，开始创作
+                          打开项目
                           <ArrowRight size={15} />
                         </button>
                       )}
                       <button className="text-button" onClick={() => setView('providers')}>
-                        配置连接中心
+                        连接模型
                         <ArrowRight size={14} />
                       </button>
                     </div>
@@ -1100,6 +1159,7 @@ export default function App() {
                           key={p.title}
                           onClick={() => {
                             setDraft(p.text);
+                            composerInput.current?.focus();
                           }}
                         >
                           <p.icon size={20} />
@@ -1111,7 +1171,7 @@ export default function App() {
                     </div>
                     <div className="welcome-foot">
                       <Layers3 size={14} />
-                      {data.providers.length} 个连接中心<span>·</span>
+                      {data.providers.length} 个连接<span>·</span>
                       <Bot size={14} />
                       {data.agents.length} 个 Agent<span>·</span>上下文随任务同行
                     </div>
@@ -1305,143 +1365,154 @@ export default function App() {
                 )}
               </div>
             </main>
-            <aside className="context-panel">
-              <div className="context-title">
-                <span>项目上下文</span>
-                <FolderOpen size={16} />
-              </div>
-              <div className="context-tabs">
-                {project && (
+            {project && contextOpen && (
+              <aside className="context-panel" aria-label="项目上下文">
+                <div className="context-title">
+                  <span>项目上下文</span>
                   <button
-                    title="生成项目 agent.md，已有说明不会覆盖"
+                    className="icon-button"
+                    aria-label="关闭项目面板"
+                    onClick={() => setContextOpen(false)}
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+                <div className="context-tabs">
+                  {project && (
+                    <button
+                      title="生成项目 agent.md，已有说明不会覆盖"
+                      onClick={() =>
+                        perform(async () => {
+                          const result = await api.initializeAgent(project.id);
+                          setNotice(
+                            result.created
+                              ? '已生成 ' + result.path
+                              : '已有项目说明，未覆盖：' + result.path,
+                          );
+                          setEntries(await api.listFiles(project.id, filePath));
+                        })
+                      }
+                    >
+                      初始化说明
+                    </button>
+                  )}
+                  <button
+                    className={contextTab === 'files' ? 'active' : ''}
+                    onClick={() => setContextTab('files')}
+                  >
+                    文件
+                  </button>
+                  <button
+                    className={contextTab === 'diff' ? 'active' : ''}
+                    onClick={() => setContextTab('diff')}
+                  >
+                    Git 变更
+                  </button>
+                  <button
+                    aria-label="刷新文件"
+                    className="icon-button"
                     onClick={() =>
                       perform(async () => {
-                        const result = await api.initializeAgent(project.id);
-                        setNotice(
-                          result.created
-                            ? '已生成 ' + result.path
-                            : '已有项目说明，未覆盖：' + result.path,
-                        );
-                        setEntries(await api.listFiles(project.id, filePath));
+                        if (project) {
+                          if (contextTab === 'files')
+                            setEntries(await api.listFiles(project.id, filePath));
+                          else setDiff(await api.diff(project.id));
+                        }
                       })
                     }
                   >
-                    初始化说明
-                  </button>
-                )}
-                <button
-                  className={contextTab === 'files' ? 'active' : ''}
-                  onClick={() => setContextTab('files')}
-                >
-                  文件
-                </button>
-                <button
-                  className={contextTab === 'diff' ? 'active' : ''}
-                  onClick={() => setContextTab('diff')}
-                >
-                  Git 变更
-                </button>
-                <button
-                  aria-label="刷新文件"
-                  className="icon-button"
-                  onClick={() =>
-                    perform(async () => {
-                      if (project) {
-                        if (contextTab === 'files')
-                          setEntries(await api.listFiles(project.id, filePath));
-                        else setDiff(await api.diff(project.id));
-                      }
-                    })
-                  }
-                >
-                  <RefreshCw size={13} />
-                </button>
-              </div>
-              {!project ? (
-                <div className="context-empty">
-                  <Folder size={32} />
-                  <p>普通聊天</p>
-                  <span>
-                    直接发送消息即可，无需选择文件夹。
-                    <br />
-                    需要操作文件时，可以另开项目会话。
-                  </span>
-                  <button onClick={openProject}>
-                    选择文件夹
-                    <Plus size={13} />
+                    <RefreshCw size={13} />
                   </button>
                 </div>
-              ) : contextTab === 'diff' ? (
-                <pre className="diff-view">{diff || '暂无变更'}</pre>
-              ) : (
-                <>
-                  <div className="file-breadcrumb">
-                    <button onClick={() => setFilePath('')}>{project.name}</button>
-                    {filePath && (
-                      <>
-                        <span>/ {filePath}</span>
+                {!project ? (
+                  <div className="context-empty">
+                    <Folder size={32} />
+                    <p>普通聊天</p>
+                    <span>
+                      直接发送消息即可，无需选择文件夹。
+                      <br />
+                      需要操作文件时，可以另开项目会话。
+                    </span>
+                    <button onClick={openProject}>
+                      选择文件夹
+                      <Plus size={13} />
+                    </button>
+                  </div>
+                ) : contextTab === 'diff' ? (
+                  <pre className="diff-view">{diff || '暂无变更'}</pre>
+                ) : (
+                  <>
+                    <div className="file-breadcrumb">
+                      <button onClick={() => setFilePath('')}>{project.name}</button>
+                      {filePath && (
+                        <>
+                          <span>/ {filePath}</span>
+                          <button
+                            aria-label="上一级目录"
+                            onClick={() =>
+                              setFilePath(filePath.split(/[\\/]/).slice(0, -1).join('/'))
+                            }
+                          >
+                            ↑
+                          </button>
+                        </>
+                      )}
+                    </div>
+                    <div className="file-list">
+                      {entries.map((f) => (
                         <button
-                          aria-label="上一级目录"
+                          key={f.path}
                           onClick={() =>
-                            setFilePath(filePath.split(/[\\/]/).slice(0, -1).join('/'))
+                            f.directory
+                              ? setFilePath(f.path)
+                              : perform(async () =>
+                                  setFileView({
+                                    path: f.path,
+                                    content: await api.readFile(project.id, f.path),
+                                  }),
+                                )
                           }
                         >
-                          ↑
+                          {f.directory ? <Folder size={14} /> : <FileCode2 size={14} />}
+                          <span>{f.name}</span>
+                          {f.directory && <ChevronRight size={12} />}
                         </button>
-                      </>
-                    )}
-                  </div>
-                  <div className="file-list">
-                    {entries.map((f) => (
-                      <button
-                        key={f.path}
-                        onClick={() =>
-                          f.directory
-                            ? setFilePath(f.path)
-                            : perform(async () =>
-                                setFileView({
-                                  path: f.path,
-                                  content: await api.readFile(project.id, f.path),
-                                }),
-                              )
-                        }
-                      >
-                        {f.directory ? <Folder size={14} /> : <FileCode2 size={14} />}
-                        <span>{f.name}</span>
-                        {f.directory && <ChevronRight size={12} />}
-                      </button>
-                    ))}
-                    {!entries.length && <p className="muted">此目录为空</p>}
-                  </div>
-                </>
-              )}
-              <div className="context-bottom">
-                <div>
-                  <span className="mini-icon">
-                    <Bot size={17} />
-                  </span>
-                  <div>
-                    <strong>为每项任务，选择合适的伙伴</strong>
-                    <p>自定义模型、角色与执行权限</p>
-                  </div>
-                </div>
-                <button onClick={() => setView('agents')}>
-                  管理 Agent 团队
-                  <ArrowRight size={14} />
-                </button>
-              </div>
-            </aside>
+                      ))}
+                      {!entries.length && <p className="muted">此目录为空</p>}
+                    </div>
+                  </>
+                )}
+              </aside>
+            )}
           </div>
         )}
         {view === 'providers' && (
           <main className="page">
             <div className="page-heading">
-              <div className="eyebrow">CONNECTIONS</div>
               <div className="page-title-row">
                 <div>
-                  <h1>所有连接，统一管理。</h1>
+                  <h1>连接中心</h1>
                   <p>模型、订阅、代码托管账号、浏览器和通知渠道。</p>
                 </div>
+              </div>
+            </div>
+            <ConnectionsPanel api={api} data={data} refresh={refresh}>
+              <div className="info-strip">
+                <ShieldCheck size={17} />
+                <span>
+                  API 密钥通过操作系统加密保存。每次运行使用独立配置，切换连接不会覆盖已有会话。
+                </span>
+              </div>
+              <div className="collection-toolbar">
+                <label className="filter-input">
+                  <Search size={15} />
+                  <input
+                    aria-label="搜索模型连接"
+                    placeholder="搜索名称、协议或地址"
+                    value={providerQuery}
+                    onChange={(e) => setProviderQuery(e.target.value)}
+                  />
+                </label>
                 <div className="row">
                   <button
                     className="secondary"
@@ -1454,77 +1525,76 @@ export default function App() {
                     <Plus size={16} />
                     添加连接
                   </button>
-                </div>
+                </div>{' '}
               </div>
-            </div>
-            <ConnectionsPanel api={api} data={data} refresh={refresh}>
-              <div className="info-strip">
-                <ShieldCheck size={17} />
-                <span>
-                  API 密钥通过操作系统加密保存。每次运行使用独立配置，切换连接不会覆盖已有会话。
-                </span>
-              </div>
-              <div className="provider-grid">
-                {data.providers.map((p) => (
-                  <article className="provider-card" key={p.id}>
-                    <div className="card-top">
-                      <div className={'provider-icon ' + p.protocol}>
+              <div className="provider-grid model-connections">
+                {data.providers
+                  .filter((p) =>
+                    `${p.name} ${p.protocol} ${p.baseUrl}`
+                      .toLowerCase()
+                      .includes(providerQuery.toLowerCase()),
+                  )
+                  .map((p) => (
+                    <article className="provider-card" key={p.id}>
+                      <div className="card-top">
+                        <div className={'provider-icon ' + p.protocol}>
+                          {p.protocol === 'codex' ? (
+                            <Mark small />
+                          ) : p.auth === 'none' ? (
+                            <Terminal size={23} />
+                          ) : (
+                            <Globe2 size={23} />
+                          )}
+                        </div>
                         {p.protocol === 'codex' ? (
-                          <Mark small />
-                        ) : p.auth === 'none' ? (
-                          <Terminal size={23} />
+                          <AuthBadge
+                            connected={accountStates[p.id]?.connected}
+                            pending={accountStates[p.id]?.pending}
+                            error={accountStates[p.id]?.error}
+                          />
+                        ) : p.protocol === 'kimi' || p.protocol === 'minimax' ? (
+                          <AuthBadge
+                            connected={accountStates[p.id]?.connected}
+                            pending={accountStates[p.id]?.pending}
+                            error={accountStates[p.id]?.error}
+                          />
                         ) : (
-                          <Globe2 size={23} />
+                          <span className="tag">
+                            {p.auth === 'none' ? '无需密钥' : p.hasSecret ? '已配置密钥' : '待配置'}
+                          </span>
                         )}
+                        <button
+                          className="icon-button"
+                          aria-label={'编辑 ' + p.name}
+                          onClick={() => setProviderEdit({ ...p, secret: '' })}
+                        >
+                          <SlidersHorizontal size={17} />
+                        </button>
                       </div>
-                      {p.protocol === 'codex' ? (
-                        <AuthBadge
-                          connected={accountStates[p.id]?.connected}
-                          pending={accountStates[p.id]?.pending}
-                          error={accountStates[p.id]?.error}
-                        />
-                      ) : p.protocol === 'kimi' || p.protocol === 'minimax' ? (
-                        <AuthBadge
-                          connected={accountStates[p.id]?.connected}
-                          pending={accountStates[p.id]?.pending}
-                          error={accountStates[p.id]?.error}
-                        />
-                      ) : (
-                        <span className="tag">
-                          {p.auth === 'none' ? '无需密钥' : p.hasSecret ? '已配置密钥' : '待配置'}
+                      <h3>{p.name}</h3>
+                      <p>{protocolLabels[p.protocol]}</p>
+                      <div className="provider-endpoint">
+                        {p.baseUrl || protocolLabels[p.protocol] + ' · 官方账号'}
+                      </div>
+                      <div className="card-footer">
+                        <span>
+                          <Layers3 size={13} />
+                          {p.models.length ? `${p.models.length} 个模型` : '登录或获取模型列表'}
                         </span>
-                      )}
-                      <button
-                        className="icon-button"
-                        aria-label={'编辑 ' + p.name}
-                        onClick={() => setProviderEdit({ ...p, secret: '' })}
-                      >
-                        <SlidersHorizontal size={17} />
-                      </button>
-                    </div>
-                    <h3>{p.name}</h3>
-                    <p>{protocolLabels[p.protocol]}</p>
-                    <div className="provider-endpoint">
-                      {p.baseUrl || protocolLabels[p.protocol] + ' · 官方账号'}
-                    </div>
-                    <div className="card-footer">
-                      <span>
-                        <Layers3 size={13} />
-                        {p.models.length ? `${p.models.length} 个模型` : '登录或获取模型列表'}
-                      </span>
-                      <button onClick={() => setProviderEdit({ ...p, secret: '' })}>
-                        管理
-                        <ArrowRight size={13} />
-                      </button>
-                    </div>
-                  </article>
-                ))}
-                <button className="add-card" onClick={editNewProvider}>
-                  <Plus size={24} />
-                  <strong>连接下一个模型</strong>
-                  <span>兼容服务 · 国内模型 · 本地推理</span>
-                </button>
+                        <button onClick={() => setProviderEdit({ ...p, secret: '' })}>
+                          管理
+                          <ArrowRight size={13} />
+                        </button>
+                      </div>
+                    </article>
+                  ))}
               </div>
+              {providerQuery &&
+                !data.providers.some((p) =>
+                  `${p.name} ${p.protocol} ${p.baseUrl}`
+                    .toLowerCase()
+                    .includes(providerQuery.toLowerCase()),
+                ) && <p className="empty-record">没有匹配的连接，试试其他关键词。</p>}
               <div className="section-note">
                 <Network size={19} />
                 <div>
@@ -1544,10 +1614,9 @@ export default function App() {
         {view === 'agents' && (
           <main className="page">
             <div className="page-heading">
-              <div className="eyebrow">YOUR CREW</div>
               <div className="page-title-row">
                 <div>
-                  <h1>各有所长，一起向前。</h1>
+                  <h1>Agent 团队</h1>
                   <p>按需启用专属角色，普通聊天无需选择 Agent。</p>
                 </div>
                 <button
@@ -1572,7 +1641,11 @@ export default function App() {
             </div>
             <div className="agent-grid">
               {!data.agents.length && (
-                <p className="muted">尚未创建 Agent。普通聊天可以直接使用，专属角色按需创建。</p>
+                <div className="empty-state collection-empty">
+                  <Bot size={28} />
+                  <h3>按需创建你的专属角色</h3>
+                  <p>普通聊天无需 Agent。需要固定指令、模型或职责时，再创建一个。</p>
+                </div>
               )}
               {data.agents.map((a, i) => (
                 <article className="agent-card" key={a.id}>
@@ -1643,8 +1716,7 @@ export default function App() {
         {view === 'activity' && (
           <main className="page">
             <div className="page-heading">
-              <div className="eyebrow">OBSERVABILITY</div>
-              <h1>每一步，都有迹可循。</h1>
+              <h1>运行记录</h1>
               <p>查看实际执行状态、模型和服务返回的 Token 用量。</p>
             </div>
             <div className="stats-grid">
@@ -1666,6 +1738,28 @@ export default function App() {
                 </div>
               ))}
             </div>
+            <div className="collection-toolbar">
+              <label className="filter-input">
+                <Search size={15} />
+                <input
+                  aria-label="搜索运行记录"
+                  placeholder="搜索会话、Agent 或模型"
+                  value={runQuery}
+                  onChange={(e) => setRunQuery(e.target.value)}
+                />
+              </label>
+              <select
+                aria-label="筛选运行状态"
+                value={runFilter}
+                onChange={(e) => setRunFilter(e.target.value)}
+              >
+                <option value="all">全部状态</option>
+                <option value="running">运行中</option>
+                <option value="completed">已完成</option>
+                <option value="failed">失败</option>
+                <option value="interrupted">已停止</option>
+              </select>
+            </div>
             <div className="runs-table">
               <div className="table-head">
                 <span>任务 / Agent</span>
@@ -1674,40 +1768,61 @@ export default function App() {
                 <span>时间</span>
                 <span>Tokens</span>
               </div>
-              {data.runs.map((r) => (
-                <button
-                  className="table-row"
-                  key={r.id}
-                  onClick={() => {
-                    const selected = data.sessions.find((s) => s.id === r.sessionId);
-                    if (selected) activateSession(selected);
-                  }}
-                >
-                  <span>
-                    <strong>
-                      {data.sessions.find((s) => s.id === r.sessionId)?.title ?? '会话'}
-                    </strong>
-                    <small>{r.agentName}</small>
-                  </span>
-                  <span>{r.model}</span>
-                  <span>
-                    <i className={'status-pill ' + r.status}>{statusLabel(r.status)}</i>
-                  </span>
-                  <span>
-                    {new Date(r.startedAt).toLocaleString('zh-CN', {
-                      month: '2-digit',
-                      day: '2-digit',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </span>
-                  <span>
-                    {r.usageReported || r.inputTokens + r.outputTokens > 0
-                      ? r.inputTokens + r.outputTokens
-                      : '未上报'}
-                  </span>
-                </button>
-              ))}
+              {data.runs
+                .filter(
+                  (r) =>
+                    (runFilter === 'all' || r.status === runFilter) &&
+                    `${data.sessions.find((s) => s.id === r.sessionId)?.title ?? ''} ${r.agentName} ${r.model}`
+                      .toLowerCase()
+                      .includes(runQuery.toLowerCase()),
+                )
+                .map((r) => (
+                  <button
+                    className="table-row"
+                    key={r.id}
+                    onClick={() => {
+                      const selected = data.sessions.find((s) => s.id === r.sessionId);
+                      if (selected) activateSession(selected);
+                    }}
+                  >
+                    <span>
+                      <strong>
+                        {data.sessions.find((s) => s.id === r.sessionId)?.title ?? '会话'}
+                      </strong>
+                      <small>{r.agentName}</small>
+                    </span>
+                    <span>{r.model}</span>
+                    <span>
+                      <i className={'status-pill ' + r.status}>{statusLabel(r.status)}</i>
+                    </span>
+                    <span>
+                      {new Date(r.startedAt).toLocaleString('zh-CN', {
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </span>
+                    <span>
+                      {r.usageReported || r.inputTokens + r.outputTokens > 0
+                        ? r.inputTokens + r.outputTokens
+                        : '未上报'}
+                    </span>
+                  </button>
+                ))}
+              {data.runs.length > 0 &&
+                !data.runs.some(
+                  (r) =>
+                    (runFilter === 'all' || r.status === runFilter) &&
+                    `${data.sessions.find((s) => s.id === r.sessionId)?.title ?? ''} ${r.agentName} ${r.model}`
+                      .toLowerCase()
+                      .includes(runQuery.toLowerCase()),
+                ) && (
+                  <div className="empty-state compact">
+                    <Search size={24} />
+                    <p>没有符合条件的运行记录</p>
+                  </div>
+                )}
               {!data.runs.length && (
                 <div className="empty-state">
                   <Activity size={32} />
@@ -1729,8 +1844,7 @@ export default function App() {
         {view === 'settings' && (
           <main className="page settings-page">
             <div className="page-heading">
-              <div className="eyebrow">BUILT FOR YOU</div>
-              <h1>轻装出发，掌控在你。</h1>
+              <h1>设置与关于</h1>
               <p>同舟 0.4.0 · 开源多模型桌面工作台</p>
             </div>
             <section className="settings-card">
@@ -1747,7 +1861,18 @@ export default function App() {
                 onError={report}
               />
             </section>
-            {renderAccounts()}
+            <section className="settings-card settings-link">
+              <div className="settings-card-title">
+                <Network size={22} />
+                <div>
+                  <h3>账号与连接</h3>
+                  <p>模型订阅、服务账号和通知渠道统一在连接中心管理。</p>
+                </div>
+              </div>
+              <button className="secondary" onClick={() => setView('providers')}>
+                打开连接中心 <ArrowRight size={14} />
+              </button>
+            </section>
             <section className="settings-card">
               <div className="settings-card-title">
                 <ShieldCheck size={23} />
@@ -1786,6 +1911,50 @@ export default function App() {
           </main>
         )}
       </div>
+      {paletteOpen && (
+        <CommandPalette
+          onClose={() => setPaletteOpen(false)}
+          actions={[
+            {
+              id: 'new',
+              title: '开启新会话',
+              detail: '普通聊天 · 无需项目',
+              icon: Plus,
+              run: () => void newSession(),
+            },
+            {
+              id: 'project',
+              title: '打开项目',
+              detail: '选择本地项目文件夹',
+              icon: FolderOpen,
+              run: () => void openProject(),
+            },
+            ...nav.map((n) => ({
+              id: n.id,
+              title: n.label,
+              detail: '功能页面',
+              icon: n.icon,
+              run: () => setView(n.id),
+            })),
+            {
+              id: 'settings',
+              title: '设置与关于',
+              detail: '权限与本地数据',
+              icon: Settings2,
+              run: () => setView('settings'),
+            },
+            ...data.sessions
+              .filter((s) => !s.archived)
+              .map((s) => ({
+                id: s.id,
+                title: s.title,
+                detail: data.projects.find((p) => p.id === s.projectId)?.name ?? '普通会话',
+                icon: s.projectId ? Folder : MessageSquare,
+                run: () => activateSession(s),
+              })),
+          ]}
+        />
+      )}
       {notice && (
         <div className="toast" role="status">
           <span>{notice}</span>
@@ -1810,7 +1979,7 @@ export default function App() {
       {providerEdit && (
         <Modal
           title={
-            data.providers.some((p) => p.id === providerEdit.id) ? '管理连接中心' : '添加连接中心'
+            data.providers.some((p) => p.id === providerEdit.id) ? '管理模型连接' : '添加模型连接'
           }
           subtitle="选择服务与认证方式，保存后即可获取并选择模型。"
           onClose={() => !busy && setProviderEdit(null)}

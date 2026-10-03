@@ -4,6 +4,16 @@
 
 ## 自动化与桌面
 
+### 工作台整体界面重构（2026-10-03）
+
+本地 `npm test` 131 项 / 14 个文件、类型检查、生产构建与格式检查通过；`test:desktop`、`test:auth`、`test:extensions`、`test:workflows`、`test:turns`、`test:native` 通过。账号测试使用合成状态；原生引擎测试只做初始化和匿名登录状态判定，没有发起真实模型推理或渠道消息。
+
+新增 `test:ui`，用独立合成数据验证快捷搜索、连接筛选、运行状态筛选、普通聊天无空项目栏、导航与项目面板关闭/重载记忆，以及弹窗 Escape、Tab 焦点循环和关闭后焦点恢复。桌面窗口覆盖 1440×900 与 1000×700，输出 28 张功能页截图，检查页面、会话与弹窗无横向溢出，并检查 15px 聊天正文、辅助文字/主按钮颜色的 4.5:1 对比度和渲染器无异常。截图已人工复查，隐藏的次级页签仍有交互回归。
+
+渠道通知和服务账号重新分组后再次通过 `test:workflows`。新界面测试已加入 Windows/macOS CI；当前记录为本机 Windows 结果，不代替 Mac 实机交互或第三方真人授权。设计原则和功能盘点见 [界面重构](UI_REDESIGN.md)。
+
+Windows 解包测试版已更新，实际 `Tongzhou.exe` 的 `test:ui` 和 `test:desktop` 均通过，包括 MCP 列表开关保存启用/停用状态。GitHub 运行时下载超时后，使用本地已安装的同版本 Electron 44.5.1 打包（`--config.electronDist=node_modules/electron/dist`），没有更改项目的默认打包配置。本次未重建 NSIS 安装程序。
+
 ### 无本地历史上限、自动整理与紧凑工具组（2026-10-03）
 
 本地 `npm test` 131 项 / 14 个文件、类型检查、生产构建、格式检查，以及 `test:desktop`、`test:workflows`、`test:turns`、`test:extensions` 通过。新连接默认 `contextChars: 0`（不设本地上限）；既有连接保留原配置，编辑页可切换自动整理并保存阈值。配置界面验证了两种模式切换、保存与回显。

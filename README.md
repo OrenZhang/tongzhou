@@ -9,6 +9,7 @@
 
 ## 功能
 
+- **统一工作台界面**：紧凑导航和连接列表，清晰的正文、主要操作与状态层级；普通聊天使用完整阅读区，项目面板可收起。`Ctrl/⌘ K` 搜索会话与功能，`Ctrl/⌘ B` 切换导航；支持连接搜索、运行状态筛选、弹窗键盘操作与面板偏好记忆。设计依据及完整页面盘点见 [界面重构](docs/UI_REDESIGN.md)。
 - **聊天与连续会话**：空 Agent 默认状态，不自动启动规划；每轮通过“用时”展开按顺序分段的公开思考、阶段回复与工具过程；思考摘要直接展示，连续工具记录合并为紧凑折叠组，没有思考内容时显示实际工作状态，完成后收起过程并突出最终答复。运行中支持补充、排队下一轮、停止后继续，未消费消息可编辑、取消或恢复。支持历史引用、独立分支、归档、恢复和删除。
 - **模型与订阅**：ChatGPT 浏览器 / 设备授权、Kimi Code、MiniMax Code；OpenAI Chat Completions / Responses、Anthropic、Gemini 和无认证本地接口；OpenCode Go 订阅预设。模型从服务获取并可搜索选择，目录缺失时仍可自定义。
 - **连接中心**：模型与订阅、服务与浏览器、渠道通知、认证与发送记录四个入口。认证界面只显示所选服务；同服务多账号隔离凭据和运行目录。
@@ -81,6 +82,8 @@ npm run test:auth
 npm run test:extensions
 npm run test:bridge
 npm run test:workflows
+npm run test:turns
+npm run test:ui
 npm run test:native
 npm run dist:win
 # 在 macOS 上执行

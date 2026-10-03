@@ -122,7 +122,10 @@ try {
   await page.getByLabel('名称', { exact: true }).fill('代码审查');
   await page.getByLabel('执行权限', { exact: true }).selectOption('read-only');
   await page.getByLabel('角色指令', { exact: true }).fill('只读检查代码，给出证据。');
-  await page.getByLabel('连接中心', { exact: true }).selectOption(provider.id);
+  await page
+    .getByRole('dialog', { name: '配置 Agent', exact: true })
+    .getByLabel('连接中心', { exact: true })
+    .selectOption(provider.id);
   await page.getByRole('button', { name: 'Agent 模型', exact: true }).click();
   await page.getByLabel('搜索模型', { exact: true }).fill('reviewer');
   await page.getByLabel('搜索模型', { exact: true }).press('Enter');
@@ -226,7 +229,7 @@ try {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [project] });
   }, project);
   await page.getByRole('button', { name: '工作空间', exact: true }).click();
-  await page.getByRole('button', { name: '打开项目，开始创作', exact: true }).click();
+  await page.locator('.welcome').getByRole('button', { name: '打开项目', exact: true }).click();
   await page.getByLabel('消息', { exact: true }).waitFor();
   await page.evaluate(async (p) => window.tongzhou.saveProvider({ ...p, models: [] }), provider);
   await page.getByLabel('当前连接', { exact: true }).selectOption(provider.id);

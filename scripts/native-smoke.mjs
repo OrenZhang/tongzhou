@@ -28,12 +28,15 @@ try {
   await app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows().forEach((w) => w.setIgnoreMouseEvents(true)),
   );
-  await page.getByRole('button', { name: '设置与关于', exact: true }).click();
+  await page.getByRole('button', { name: /^连接中心/ }).click();
   const checks = [];
   for (const [engine, label] of [
     ['kimi', 'Kimi Code'],
     ['minimax', 'MiniMax Code'],
   ]) {
+    const providerName = engine === 'kimi' ? 'Kimi · 账号授权' : 'MiniMax · 账号授权';
+    await page.getByRole('button', { name: `编辑 ${providerName}`, exact: true }).click();
+    await page.getByRole('button', { name: '前往登录', exact: true }).click();
     const card = page.getByRole('region', { name: `${label} 账号`, exact: true });
     await card
       .locator('.account-status')
@@ -43,22 +46,31 @@ try {
     assert.equal(state.authenticated, false);
     assert.equal(state.error, undefined);
     checks.push(`${engine} real ACP initialization and anonymous status`);
-    if (!live) continue;
+    if (!live) {
+      await page.getByRole('dialog').getByRole('button', { name: '关闭', exact: true }).click();
+      continue;
+    }
     await card.getByRole('button', { name: `登录 ${label}`, exact: true }).click();
     await card.getByLabel(`${label} 设备码`, { exact: true }).waitFor({ timeout: 65000 });
     assert.ok(await card.getByLabel(`${label} 设备码`, { exact: true }).innerText());
     await card.getByRole('button', { name: '打开授权页面', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: '关闭', exact: true }).click();
     await page.getByRole('button', { name: '工作空间', exact: true }).click();
-    await page.getByRole('button', { name: '设置与关于', exact: true }).click();
+    await page.getByRole('button', { name: /^连接中心/ }).click();
+    await page.getByRole('button', { name: `编辑 ${providerName}`, exact: true }).click();
+    await page.getByRole('button', { name: '前往登录', exact: true }).click();
     await card.getByLabel(`${label} 设备码`, { exact: true }).waitFor();
     await card.getByRole('button', { name: '取消授权', exact: true }).click();
     await card.getByText('本次授权已取消。', { exact: true }).waitFor();
     assert.equal(await card.getByLabel(`${label} 设备码`, { exact: true }).count(), 0);
     checks.push(`${engine} real device request, UI, navigation persistence and cancellation`);
+    await page.getByRole('dialog').getByRole('button', { name: '关闭', exact: true }).click();
   }
   const snapshot = await page.evaluate(() => window.tongzhou.snapshot());
   for (const engine of ['kimi', 'minimax'])
     assert.equal(snapshot.providers.find((p) => p.id === `${engine}-account`).auth, 'native');
+  await page.getByRole('button', { name: '编辑 Kimi · 账号授权', exact: true }).click();
+  await page.getByRole('button', { name: '前往登录', exact: true }).click();
   await page.getByRole('region', { name: 'Kimi Code 账号', exact: true }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: 'test-results/10-native-auth.png' });
   await writeFile(

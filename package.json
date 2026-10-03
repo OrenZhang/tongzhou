@@ -27,6 +27,7 @@
     "test:bridge": "node scripts/bridge-smoke.mjs",
     "test:workflows": "node scripts/workflows-smoke.mjs",
     "test:turns": "node scripts/turn-process-smoke.mjs",
+    "test:ui": "node scripts/ui-smoke.mjs",
     "test:auth": "node scripts/account-ui-smoke.mjs",
     "test:native": "node scripts/native-smoke.mjs",
     "test:computer": "node scripts/computer-smoke.mjs",
