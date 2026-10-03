@@ -332,6 +332,32 @@ try {
         };
         for (const [name, content] of Object.entries(original))
           await writeFile(path.join(dir, name), content);
+        if (task.id === 'D02-D06-D07') {
+          const git = (...args) =>
+            promisify(execFile)('git', args, { cwd: dir, windowsHide: true });
+          await writeFile(path.join(dir, 'user-notes.txt'), 'Baseline note.\n');
+          await git('init', '--quiet');
+          await git('add', '.');
+          await git(
+            '-c',
+            'user.name=Tongzhou test',
+            '-c',
+            'user.email=fixture@example.invalid',
+            '-c',
+            'commit.gpgSign=false',
+            '-c',
+            'core.hooksPath=.git/no-hooks',
+            'commit',
+            '--quiet',
+            '-m',
+            'Synthetic fixture baseline',
+          );
+          await writeFile(path.join(dir, 'user-notes.txt'), original['user-notes.txt']);
+          await writeFile(
+            path.join(dir, 'math.js'),
+            task.files['math.js'] + '\n// Preserve existing user code comment.\n',
+          );
+        }
         const record = { id: task.id, attempt, passed: false };
         try {
           await app.evaluate(({ dialog }, dir) => {
@@ -344,6 +370,21 @@ try {
           );
           const answer = await run(session.id, task.prompt, dir);
           await task.check(dir, answer);
+          if (task.id === 'D02-D06-D07') {
+            assert.ok(
+              (await readFile(path.join(dir, 'math.js'), 'utf8')).includes(
+                '// Preserve existing user code comment.',
+              ),
+            );
+            const before = (await page.evaluate(() => window.tongzhou.snapshot())).runs.find(
+              (r) => r.id === report.runs.at(-1).runId,
+            )?.workspace?.before;
+            assert.ok(
+              before?.includes('math.js') && before?.includes('user-notes.txt'),
+              'Existing Git changes must be captured before model execution',
+            );
+            record.existingGitChangesPreserved = true;
+          }
           // Judge the workflow by actual tool results, not the model's final narrative.
           const commands = report.runs.at(-1).commands;
           if (task.id === 'D04' || task.id === 'D05') {

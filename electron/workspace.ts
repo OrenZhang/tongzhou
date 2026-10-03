@@ -10,6 +10,7 @@ import {
   chmod,
 } from 'node:fs/promises';
 import path from 'node:path';
+import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { StringDecoder } from 'node:string_decoder';
 import { createRequire } from 'node:module';
@@ -127,7 +128,15 @@ function projectCommandEnv() {
   const parts = (env[key] ?? '')
     .split(path.delimiter)
     .filter((p) => p && normalize(p) !== normalize(ownBin));
-  env[key] = [...parts, path.join(nodeRoot, 'bin')].join(path.delimiter);
+  const bundledBin = path.join(nodeRoot, 'bin');
+  // Packaged apps can also be opened from an npm-injected developer terminal.
+  // Prefer an actual user node.exe over extensionless npm/PowerShell shims; use
+  // the bundled runtime only when no native Node executable is on the path.
+  const nativeNodeBin =
+    process.platform === 'win32'
+      ? (parts.find((p) => existsSync(path.join(p, 'node.exe'))) ?? bundledBin)
+      : undefined;
+  env[key] = [...(nativeNodeBin ? [nativeNodeBin] : []), ...parts, bundledBin].join(path.delimiter);
   return env;
 }
 
