@@ -92,6 +92,7 @@ async function fixture() {
   });
   const s = store.createSession();
   return {
+    root,
     store,
     runtime,
     input: {
@@ -104,6 +105,31 @@ async function fixture() {
   };
 }
 describe('locked Codex resume and steer contracts', () => {
+  it('maps a project full-access override to Codex and rebuilds when permission changes', async () => {
+    const f = await fixture();
+    f.store.put('project', {
+      id: 'project',
+      name: 'fixture',
+      path: f.root,
+      createdAt: Date.now(),
+    });
+    const session = f.store.get<any>('session', f.input.sessionId);
+    f.store.put('session', { ...session, projectId: 'project' });
+    f.store.setSessionPermission(session.id, 'full-access');
+    f.runtime.start(f.input);
+    await f.runtime.waitForIdle();
+    expect(fake.calls.find((c) => c.method === 'thread/start').params).toMatchObject({
+      approvalPolicy: 'never',
+      sandbox: 'danger-full-access',
+    });
+    f.store.setSessionPermission(session.id, 'read-only');
+    f.runtime.start({ ...f.input, prompt: 'only read now' });
+    await f.runtime.waitForIdle();
+    expect(fake.calls.filter((c) => c.method === 'thread/start')).toHaveLength(2);
+    expect(fake.calls.filter((c) => c.method === 'thread/start').at(-1).params.sandbox).toBe(
+      'read-only',
+    );
+  });
   it('resumes continuous history but rebuilds after changing model', async () => {
     const f = await fixture();
     f.runtime.start(f.input);

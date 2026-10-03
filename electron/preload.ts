@@ -3,6 +3,9 @@ import type { TongzhouAPI } from '../src/shared/types';
 const call = (method: string, ...args: unknown[]) =>
   ipcRenderer.invoke('tongzhou:' + method, ...args);
 const api: TongzhouAPI = {
+  copyText: (text) => call('copyText', text),
+  setDefaultPermission: (mode, all) => call('setDefaultPermission', mode, all),
+  setSessionPermission: (id, mode) => call('setSessionPermission', id, mode),
   openModule: (view) => call('openModule', view),
   installBuiltinPlugin: () => call('installBuiltinPlugin'),
   onboardFeishu: (id, name) => call('onboardFeishu', id, name),

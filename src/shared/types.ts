@@ -33,6 +33,7 @@ export interface ProviderInput extends Provider {
   secret?: string;
   clearSecret?: boolean;
 }
+export type PermissionMode = 'read-only' | 'ask' | 'full-access';
 export interface AgentProfile {
   id: string;
   name: string;
@@ -40,7 +41,7 @@ export interface AgentProfile {
   instructions: string;
   providerId: string;
   model: string;
-  permission: 'read-only' | 'ask';
+  permission: PermissionMode;
   maxSteps: number;
   pluginIds?: string[];
   skillIds?: string[];
@@ -120,6 +121,7 @@ export interface Message {
   visibleTool?: boolean;
 }
 export interface Session {
+  permission?: PermissionMode;
   id: string;
   projectId: string | null;
   title: string;
@@ -161,6 +163,7 @@ export interface Approval {
   detail: string;
 }
 export interface Snapshot {
+  defaultPermission?: PermissionMode;
   channelAuth?: { id: string; phase: string; expiresAt?: number }[];
   connectors?: Connector[];
   channels?: Channel[];
@@ -239,6 +242,9 @@ export interface ImportPreview {
   warnings: string[];
 }
 export interface TongzhouAPI {
+  copyText(text: string): Promise<void>;
+  setDefaultPermission(mode: PermissionMode, applyToAll?: boolean): Promise<void>;
+  setSessionPermission(sessionId: string, mode: PermissionMode | null): Promise<void>;
   openModule(view: string): Promise<void>;
   installBuiltinPlugin(): Promise<void>;
   onboardFeishu(

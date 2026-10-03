@@ -232,6 +232,9 @@ svg {
   text-overflow: ellipsis;
   text-align: left;
 }
+.project-list .session-dot {
+  flex: 0 0 5px;
+}
 .project-list .subtle {
   color: #8f9b9f;
 }
@@ -454,6 +457,100 @@ svg {
   overflow: auto;
   padding: 22px 38px;
   scroll-behavior: smooth;
+}
+.feed:focus {
+  outline: none;
+}
+.feed .markdown,
+.feed pre,
+.feed .system-message {
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text;
+}
+.sidebar-history {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.sidebar-history .session-list {
+  overflow: visible;
+  min-height: 0;
+}
+.project-group-heading {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.project-group-heading > button:first-child {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 5px;
+  gap: 5px;
+}
+.project-group-heading > .icon-button {
+  width: 26px;
+  min-width: 26px;
+  padding: 4px;
+}
+.project-group-heading small {
+  color: #91a29a;
+  font-size: 10px;
+}
+.project-sessions {
+  margin-left: 17px;
+  padding-left: 4px;
+  border-left: 1px solid #dce5df;
+}
+.project-sessions button {
+  font-size: 11px;
+  padding: 8px;
+  gap: 6px;
+}
+.project-empty {
+  padding: 7px 10px;
+  font-size: 10px;
+  color: #94a49b;
+}
+.conversation-header .project-binding {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #43816c;
+  width: fit-content;
+  border-radius: 4px;
+  background: #eff6f2;
+  padding: 3px 6px;
+}
+.session-permission {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 7px;
+  font-size: 10px;
+  color: #8b9991;
+}
+.session-permission select {
+  font-size: 11px;
+  padding: 4px 7px;
+  border-radius: 5px;
+  background: #f6f8f7;
+}
+.session-permission.full-access select {
+  border-color: #d9bd92;
+  color: #91652a;
+}
+.global-permission {
+  margin: 14px 0;
+  border-top: 1px solid #e7ebe8;
+  border-bottom: 1px solid #e7ebe8;
+  padding-bottom: 14px;
+}
+.global-permission p,
+.global-permission small {
+  font-size: 11px;
+  color: #7b8b82;
+  line-height: 1.8;
 }
 .empty-feed {
   display: flex;

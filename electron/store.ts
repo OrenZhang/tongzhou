@@ -10,6 +10,7 @@ import type {
   ProviderInput,
   Run,
   Session,
+  PermissionMode,
 } from '../src/shared/types';
 
 export interface SecretCodec {
@@ -263,6 +264,25 @@ export class Store {
   capabilities() {
     const state = this.list<any>('capabilityState')[0];
     return { computer: state?.computer === true, management: state?.management !== false };
+  }
+  defaultPermission(): PermissionMode {
+    return this.list<{ mode: PermissionMode }>('permissionSettings')[0]?.mode ?? 'ask';
+  }
+  setSessionPermission(id: string, mode: PermissionMode | null) {
+    this.put('session', { ...this.get<Session>('session', id), permission: mode ?? undefined });
+  }
+  setDefaultPermission(mode: PermissionMode, applyToAll = false) {
+    this.db.exec('BEGIN');
+    try {
+      this.put('permissionSettings', { id: 'global', mode });
+      if (applyToAll)
+        for (const session of this.list<Session>('session'))
+          this.setSessionPermission(session.id, null);
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
   }
   setCapability(name: 'computer' | 'management', enabled: boolean) {
     this.put('capabilityState', { id: 'global', ...this.capabilities(), [name]: enabled });

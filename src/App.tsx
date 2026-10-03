@@ -55,6 +55,9 @@ import { PendingInputs, useRunEvents } from './RunActivity';
 import { ConversationTurn } from './ConversationTurn';
 import { conversationTurns } from './shared/turns';
 import { InputModePicker, inputModes } from './InputModePicker';
+import { SessionNavigator } from './SessionNavigator';
+import { GlobalPermission, SessionPermission } from './PermissionControls';
+import { effectivePermission } from './shared/permissions';
 import { ConnectionsPanel } from './ConnectionsPanel';
 import { AuthBadge, Field, Mark, Modal, Spinner, ModelPicker } from './components';
 const empty: Snapshot = {
@@ -222,6 +225,7 @@ export default function App() {
   const project = data.projects.find((p) => p.id === session?.projectId);
   const provider = data.providers.find((p) => p.id === providerId);
   const selectedAgent = data.agents.find((a) => a.id === agentId);
+  const sessionPermission = effectivePermission(session, data.defaultPermission, selectedAgent);
   const running = data.runs.find((r) => r.sessionId === sessionId && r.status === 'running');
   const activity = useRunEvents(api, sessionId);
   const turns = useMemo(
@@ -376,7 +380,11 @@ export default function App() {
   }, [view, api, authPanel, authProviderId]);
   useEffect(() => {
     const el = feed.current;
-    if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 300)
+    if (
+      el &&
+      window.getSelection()?.isCollapsed !== false &&
+      el.scrollHeight - el.scrollTop - el.clientHeight < 300
+    )
       el.scrollTo({ top: el.scrollHeight });
   }, [messages, activity.events]);
   useEffect(() => {
@@ -860,80 +868,18 @@ export default function App() {
           ))}
         </nav>
         <div className="sidebar-divider" />
-        <div className="section-label">
-          项目空间
-          <button aria-label="打开项目" onClick={openProject}>
-            <Plus size={15} />
-          </button>
-        </div>
-        <div className="project-list">
-          {data.projects.map((p) => (
-            <button
-              key={p.id}
-              className={project?.id === p.id ? 'selected' : ''}
-              title={p.path}
-              onClick={() => newSession(p.id)}
-            >
-              <Folder size={15} />
-              <span>{p.name}</span>
-              <ChevronRight size={13} />
-            </button>
-          ))}
-          {!data.projects.length && (
-            <button className="subtle" onClick={openProject}>
-              <FolderOpen size={15} />
-              添加第一个项目
-            </button>
-          )}
-        </div>
-        <div className="section-label history-label">
-          {archived ? '已归档会话' : '最近会话'}
-          <button
-            aria-label="切换归档会话"
-            title="切换归档会话"
-            onClick={() => setArchived(!archived)}
-          >
-            <Archive size={14} />
-          </button>
-        </div>
-        <div className="search-box">
-          <Search size={13} />
-          <input
-            aria-label="搜索会话"
-            placeholder="搜索会话"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
-        <div className="session-list">
-          {data.sessions
-            .filter(
-              (s) => s.archived === archived && s.title.toLowerCase().includes(query.toLowerCase()),
-            )
-            .map((s) => (
-              <button
-                key={s.id}
-                className={sessionId === s.id && view === 'workspace' ? 'selected' : ''}
-                onClick={() => {
-                  activateSession(s);
-                }}
-              >
-                <span
-                  className={
-                    'session-dot ' +
-                    (data.runs.some((r) => r.sessionId === s.id && r.status === 'running')
-                      ? 'live'
-                      : '')
-                  }
-                />
-                <span>
-                  {s.parentId ? '↳ ' : ''}
-                  {s.title}
-                </span>
-              </button>
-            ))}
-          {!data.sessions.length && <p className="sidebar-empty">想法从这里开始。</p>}
-        </div>
+        <SessionNavigator
+          data={data}
+          sessionId={sessionId}
+          workspace={view === 'workspace'}
+          archived={archived}
+          query={query}
+          onArchive={() => setArchived(!archived)}
+          onQuery={setQuery}
+          onOpenProject={openProject}
+          onNew={(id) => void newSession(id)}
+          onSelect={activateSession}
+        />
         <div className="sidebar-bottom">
           <div className="local-status">
             <span className="live-dot" />
@@ -982,7 +928,14 @@ export default function App() {
                 <div className="conversation-header">
                   <div>
                     <h2>{session.title}</h2>
-                    <span>{project?.path ?? '普通聊天 · 未关联项目'}</span>
+                    {project ? (
+                      <span className="project-binding" title={project.path}>
+                        <Folder size={12} />
+                        项目 · {project.name}
+                      </span>
+                    ) : (
+                      <span>普通聊天 · 未关联项目</span>
+                    )}
                   </div>
                   <div className="row">
                     <button
@@ -1028,7 +981,25 @@ export default function App() {
                   </div>
                 </div>
               )}
-              <div className={'feed ' + (!turns.length ? 'empty-feed' : '')} ref={feed}>
+              <div
+                className={'feed ' + (!turns.length ? 'empty-feed' : '')}
+                ref={feed}
+                tabIndex={0}
+                aria-label="会话内容"
+                onKeyDown={(e) => {
+                  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && !e.altKey) {
+                    const selection = window.getSelection();
+                    if (
+                      selection?.toString() &&
+                      selection.anchorNode &&
+                      feed.current?.contains(selection.anchorNode)
+                    ) {
+                      e.preventDefault();
+                      void api.copyText(selection.toString()).catch(report);
+                    }
+                  }
+                }}
+              >
                 {hasEarlier && (
                   <button
                     className="secondary"
@@ -1151,6 +1122,12 @@ export default function App() {
                       key={turn.key}
                       turn={turn}
                       branchDisabled={!!running}
+                      onCopy={(message) =>
+                        void perform(async () => {
+                          await api.copyText(message.content);
+                          setNotice('已复制');
+                        })
+                      }
                       onQuote={(message) => {
                         setDraft(
                           (text) =>
@@ -1316,6 +1293,16 @@ export default function App() {
                   </span>
                   <span>Enter 发送 · Shift + Enter 换行</span>
                 </div>
+                {session && (
+                  <SessionPermission
+                    session={session}
+                    defaultPermission={data.defaultPermission ?? 'ask'}
+                    effective={sessionPermission}
+                    running={running}
+                    api={api}
+                    onError={report}
+                  />
+                )}
               </div>
             </main>
             <aside className="context-panel">
@@ -1746,6 +1733,20 @@ export default function App() {
               <h1>轻装出发，掌控在你。</h1>
               <p>同舟 0.4.0 · 开源多模型桌面工作台</p>
             </div>
+            <section className="settings-card">
+              <div className="settings-card-title">
+                <ShieldCheck size={23} />
+                <div>
+                  <h3>执行权限</h3>
+                  <p>全局默认，也可为每个会话单独设置。</p>
+                </div>
+              </div>
+              <GlobalPermission
+                value={data.defaultPermission ?? 'ask'}
+                api={api}
+                onError={report}
+              />
+            </section>
             {renderAccounts()}
             <section className="settings-card">
               <div className="settings-card-title">
@@ -1765,7 +1766,7 @@ export default function App() {
               </div>
               <div className="settings-row">
                 <span>直接 API 执行</span>
-                <strong>文件范围检查 + 操作审批</strong>
+                <strong>文件范围检查 + 会话权限</strong>
               </div>
               <div className="settings-row">
                 <span>Codex 执行</span>
@@ -1773,14 +1774,14 @@ export default function App() {
               </div>
               <p className="footnote">
                 直接 API
-                模式的终端命令经你批准后，以当前系统用户权限运行；它不提供操作系统级沙箱。项目内容会发送给所选模型服务。同舟不提供云同步或自动更新；原生引擎的遥测以各自实现为准。
+                模式的终端命令遵循会话权限，以当前系统用户权限运行；它不提供操作系统级沙箱。项目内容会发送给所选模型服务。同舟不提供云同步或自动更新；原生引擎的遥测以各自实现为准。
               </p>
             </section>
             <section className="settings-card about-card">
               <Mark />
               <h3>多模型协作，一个工作台。</h3>
               <p>同舟 Tongzhou · Apache-2.0</p>
-              <span>Built with Codex · Inspired by CC Switch</span>
+              <span>同舟 · 一个工作台，多模型协作</span>
             </section>
           </main>
         )}

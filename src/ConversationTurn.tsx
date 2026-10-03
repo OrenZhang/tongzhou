@@ -1,10 +1,11 @@
-import { GitBranch, Quote } from 'lucide-react';
+import { Copy, GitBranch, Quote } from 'lucide-react';
 import type { Message } from './shared/types';
 import type { ConversationTurn as Turn } from './shared/turns';
 import { ChatMessage, Mark, Markdown } from './components';
 import { TurnThinking } from './RunActivity';
 
 interface Actions {
+  onCopy: (message: Message) => void;
   onQuote: (message: Message) => void;
   onBranch: (message: Message) => void;
   branchDisabled: boolean;
@@ -14,10 +15,19 @@ function MessageActions({
   message,
   onQuote,
   onBranch,
+  onCopy,
   branchDisabled,
 }: Actions & { message: Message }) {
   return (
     <div className="message-actions">
+      <button
+        className="icon-button"
+        aria-label="复制消息"
+        title="复制完整消息"
+        onClick={() => onCopy(message)}
+      >
+        <Copy size={14} />
+      </button>
       <button
         className="icon-button"
         aria-label="引用补充"

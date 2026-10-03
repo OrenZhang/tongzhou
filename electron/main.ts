@@ -7,6 +7,7 @@ import {
   shell,
   clipboard,
   globalShortcut,
+  Menu,
 } from 'electron';
 import { NativeAccount, nativeEngine } from './native-engine';
 import { Accounts } from './accounts';
@@ -177,6 +178,7 @@ function setup() {
       providerId: source.providerId,
       model: source.model,
       agentId: source.agentId,
+      permission: source.permission,
       title: source.title + ' · 分支',
     };
     store.db.exec('BEGIN');
@@ -405,6 +407,21 @@ function setup() {
       if (r.status === 'running') await runtime.cancel(r.sessionId);
   });
   register('snapshot', () => runtime.snapshot());
+  // Privilege changes are renderer-only controls, not model-callable client commands.
+  const permissionSchema = z.enum(['read-only', 'ask', 'full-access']);
+  register('setDefaultPermission', (mode, all) => {
+    const selected = permissionSchema.parse(mode);
+    const applyToAll = z.boolean().parse(all ?? false);
+    // The renderer snapshot can lag a just-saved selection. Applying the current
+    // default must not restore the previous value while clearing overrides.
+    store.setDefaultPermission(applyToAll ? store.defaultPermission() : selected, applyToAll);
+    runtime.changed();
+  });
+  register('setSessionPermission', (id, mode) => {
+    store.setSessionPermission(idSchema.parse(id), permissionSchema.nullable().parse(mode));
+    runtime.changed();
+  });
+  register('copyText', (text) => clipboard.writeText(z.string().max(2000000).parse(text)));
   register('clientMethods', () => clientCommands.describe());
   register('openModule', (view) =>
     emit({
@@ -644,6 +661,23 @@ function setup() {
   });
 }
 async function createWindow() {
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate([
+      ...(process.platform === 'darwin' ? [{ role: 'appMenu' as const }] : []),
+      {
+        label: '编辑',
+        submenu: [
+          { role: 'undo', label: '撤销' },
+          { role: 'redo', label: '重做' },
+          { type: 'separator' },
+          { role: 'cut', label: '剪切' },
+          { role: 'copy', label: '复制' },
+          { role: 'paste', label: '粘贴' },
+          { role: 'selectAll', label: '全选' },
+        ],
+      },
+    ]),
+  );
   window = new BrowserWindow({
     width: 1440,
     height: 940,
@@ -670,6 +704,15 @@ async function createWindow() {
     callback(false),
   );
   window.webContents.on('will-attach-webview', (event) => event.preventDefault());
+  window.webContents.on('context-menu', (_event, params) => {
+    const items: Electron.MenuItemConstructorOptions[] = [];
+    if (params.selectionText) items.push({ label: '复制', role: 'copy' });
+    if (params.isEditable)
+      items.push({ label: '剪切', role: 'cut' }, { label: '粘贴', role: 'paste' });
+    if (!items.length) return;
+    items.push({ type: 'separator' }, { label: '全选', role: 'selectAll' });
+    Menu.buildFromTemplate(items).popup({ window });
+  });
   window.once('ready-to-show', () => window?.show());
   if (process.env.TONGZHOU_DEV_URL) await window.loadURL(process.env.TONGZHOU_DEV_URL);
   else await window.loadFile(page);

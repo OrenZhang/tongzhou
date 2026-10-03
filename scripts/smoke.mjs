@@ -133,6 +133,64 @@ try {
   await page.getByLabel('消息', { exact: true }).fill('你好，不打开项目聊天');
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
   await page.getByText('普通聊天回复：你好，不打开项目聊天', { exact: true }).waitFor();
+  await app.evaluate(async ({ clipboard, ClipboardItem }) => {
+    globalThis.previousCopyClipboard = await Promise.all(
+      (await clipboard.read())
+        .filter((item) => item.types.length > 0)
+        .map(
+          async (item) =>
+            new ClipboardItem(
+              Object.fromEntries(
+                await Promise.all(item.types.map(async (type) => [type, await item.getType(type)])),
+              ),
+            ),
+        ),
+    );
+  });
+  try {
+    const reply = page.getByText('普通聊天回复：你好，不打开项目聊天', { exact: true });
+    await reply.click({ clickCount: 3 });
+    const selection = await page.evaluate(() => window.getSelection().toString());
+    assert.ok(
+      selection.includes('普通聊天回复：你好，不打开项目聊天'),
+      'mouse selection must work',
+    );
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+c' : 'Control+c');
+    await page.waitForTimeout(100);
+    assert.equal(
+      (await app.evaluate(({ clipboard }) => clipboard.readText())).trim(),
+      selection.trim(),
+    );
+    await page
+      .locator('.chat-message.assistant')
+      .getByRole('button', { name: '复制消息', exact: true })
+      .click();
+    await page.getByText('已复制', { exact: true }).waitFor();
+    assert.equal(
+      await app.evaluate(({ clipboard }) => clipboard.readText()),
+      '普通聊天回复：你好，不打开项目聊天',
+    );
+    await app.evaluate(({ Menu }) => {
+      globalThis.restoreCopyMenu = Menu.buildFromTemplate;
+      Menu.buildFromTemplate = (template) => {
+        globalThis.copyContextItems = template.map((item) => item.role);
+        const menu = globalThis.restoreCopyMenu(template);
+        menu.popup = () => {};
+        return menu;
+      };
+    });
+    await reply.click({ clickCount: 3 });
+    await reply.click({ button: 'right' });
+    assert.ok((await app.evaluate(() => globalThis.copyContextItems)).includes('copy'));
+  } finally {
+    await app.evaluate(async ({ clipboard, Menu }) => {
+      if (globalThis.previousCopyClipboard.length)
+        await clipboard.write(globalThis.previousCopyClipboard);
+      else clipboard.clear();
+      delete globalThis.previousCopyClipboard;
+      if (globalThis.restoreCopyMenu) Menu.buildFromTemplate = globalThis.restoreCopyMenu;
+    });
+  }
   const ordinary = await page.evaluate(() => window.tongzhou.snapshot());
   assert.equal(ordinary.projects.length, 0);
   assert.equal(ordinary.sessions[0].projectId, null);
@@ -185,6 +243,35 @@ try {
   }
   assert.equal(state.runs[0].status, 'completed');
   assert.equal(state.runs[0].inputTokens, 30);
+  const projectSessionId = state.runs[0].sessionId;
+  const group = page
+    .locator('.project-group')
+    .filter({ has: page.locator(`[data-session-id="${projectSessionId}"]`) });
+  assert.equal(await group.count(), 1, 'project conversations must be nested under their project');
+  assert.equal(
+    await page.locator(`.ordinary-sessions [data-session-id="${projectSessionId}"]`).count(),
+    0,
+  );
+  assert.ok((await page.locator('.project-binding').innerText()).includes('项目'));
+  const sessionCount = state.sessions.length;
+  const projectToggle = group.getByRole('button', { name: /^项目 / });
+  await projectToggle.click();
+  await page
+    .locator('.project-group-heading')
+    .getByRole('button', { name: /^项目 / })
+    .click();
+  assert.equal(
+    (await page.evaluate(() => window.tongzhou.snapshot())).sessions.length,
+    sessionCount,
+    'opening a project should not create a conversation',
+  );
+  await page.getByLabel('会话权限', { exact: true }).selectOption('full-access');
+  await page.waitForFunction(
+    async (id) =>
+      (await window.tongzhou.snapshot()).sessions.find((s) => s.id === id).permission ===
+      'full-access',
+    projectSessionId,
+  );
   assert.equal(await page.locator('.conversation-turn').count(), 1);
   assert.equal(
     await page.locator('.chat-message.assistant').count(),
@@ -208,6 +295,26 @@ try {
     'hiding logs must preserve tool evidence in history',
   );
   await page.screenshot({ path: 'test-results/05-conversation.png' });
+  await page.getByRole('button', { name: '设置与关于', exact: true }).click();
+  await page.getByLabel('全局默认权限', { exact: true }).selectOption('full-access');
+  await page.waitForFunction(
+    async () => (await window.tongzhou.snapshot()).defaultPermission === 'full-access',
+  );
+  await page.getByRole('button', { name: '应用到全部会话', exact: true }).click();
+  await page.waitForFunction(async () =>
+    (await window.tongzhou.snapshot()).sessions.every((s) => s.permission === undefined),
+  );
+  await page.waitForFunction(
+    () => document.querySelector('#global-permission')?.value === 'full-access',
+  );
+  await page.screenshot({ path: 'test-results/permissions-settings.png' });
+  await page.getByRole('button', { name: '工作空间', exact: true }).click();
+  await page.getByText('当前：完全开放', { exact: true }).waitFor();
+  await page.getByLabel('会话权限', { exact: true }).selectOption('read-only');
+  await page.getByText('当前：只读', { exact: true }).waitFor();
+  await page.getByLabel('会话权限', { exact: true }).selectOption('inherit');
+  await page.getByText('当前：完全开放', { exact: true }).waitFor();
+  await page.screenshot({ path: 'test-results/project-sessions-permissions.png' });
   await page.getByRole('button', { name: '运行记录', exact: true }).click();
   await page.locator('.table-row').first().waitFor();
   await page.screenshot({ path: 'test-results/06-activity.png' });
@@ -227,6 +334,8 @@ try {
   assert.equal(recovered.runs[0].status, 'completed');
   assert.equal(recovered.sessions.length, 3);
   assert.equal(recovered.sessions.filter((s) => s.projectId === null).length, 2);
+  assert.equal(recovered.defaultPermission, 'full-access');
+  assert.ok(recovered.sessions.every((s) => s.permission === undefined));
   assert.deepEqual(recovered.providers.find((p) => p.id === provider.id).models, [
     'fixture-model',
     'fixture-reviewer',
@@ -249,6 +358,9 @@ try {
           'write approval',
           'tool execution',
           'one assistant turn across tool iterations; hidden logs retain stored evidence',
+          'mouse selection, keyboard copy, message copy button and native context menu',
+          'project conversation grouping, binding badge and session permission control',
+          'global permission, apply to all, session override and restart persistence',
           'usage',
           'Codex handshake',
           'isolated auth',

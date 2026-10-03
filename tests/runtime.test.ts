@@ -2,12 +2,13 @@ import { seedAgents } from './fixtures';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { Store } from '../electron/store';
 import { Runtime } from '../electron/runtime';
 import type { ComputerAdapter } from '../electron/extensions';
+import { mcpName } from '../electron/extensions';
 import type { AppEvent, Run } from '../src/shared/types';
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
@@ -76,6 +77,122 @@ const text = (content: string) => ({
   usage: { prompt_tokens: 10, completion_tokens: 4 },
 });
 describe('conversation input and lifecycle changes', () => {
+  it('uses the session override for real writes and freezes approval policy for the active turn', async () => {
+    const f = await fixture((body) =>
+      body.messages.some((m: any) => m.role === 'tool')
+        ? [text('done')]
+        : [
+            {
+              choices: [
+                {
+                  delta: {
+                    tool_calls: [
+                      {
+                        index: 0,
+                        id: 'permission-write',
+                        function: {
+                          name: 'write_file',
+                          arguments: '{"path":"permission.txt","content":"full access wrote this"}',
+                        },
+                      },
+                    ],
+                  },
+                  finish_reason: 'tool_calls',
+                },
+              ],
+            },
+          ],
+    );
+    f.store.setSessionPermission(f.input.sessionId, 'full-access');
+    f.runtime.start(f.input);
+    f.store.setSessionPermission(f.input.sessionId, 'ask');
+    await f.runtime.waitForIdle();
+    expect(await readFile(path.join(f.root, 'permission.txt'), 'utf8')).toBe(
+      'full access wrote this',
+    );
+    expect(f.events.filter((e) => e.type === 'approval')).toHaveLength(0);
+    expect(f.store.list<Run>('run')[0].config?.permission).toBe('full-access');
+  });
+  it('honors a session read-only override over the global full-access default', async () => {
+    const f = await fixture((body) =>
+      body.messages.some((m: any) => m.role === 'tool')
+        ? [text('denied')]
+        : [
+            {
+              choices: [
+                {
+                  delta: {
+                    tool_calls: [
+                      {
+                        index: 0,
+                        id: 'blocked-write',
+                        function: {
+                          name: 'write_file',
+                          arguments: '{"path":"forbidden.txt","content":"must not write"}',
+                        },
+                      },
+                    ],
+                  },
+                  finish_reason: 'tool_calls',
+                },
+              ],
+            },
+          ],
+    );
+    f.store.setDefaultPermission('full-access');
+    f.store.setSessionPermission(f.input.sessionId, 'read-only');
+    f.runtime.start(f.input);
+    await f.runtime.waitForIdle();
+    await expect(readFile(path.join(f.root, 'forbidden.txt'))).rejects.toThrow();
+    expect(f.requests[0].tools.some((t: any) => t.function.name === 'write_file')).toBe(false);
+    expect(f.events.filter((e) => e.type === 'approval')).toHaveLength(0);
+    expect(f.store.list<Run>('run')[0].config?.permission).toBe('read-only');
+  });
+  it('automatically approves enabled plugin calls only for a full-access run', async () => {
+    const name = mcpName('clock-fixture', 'current_time');
+    const f = await fixture((body) =>
+      body.messages.some((m: any) => m.role === 'tool')
+        ? [text('clock complete')]
+        : [
+            {
+              choices: [
+                {
+                  delta: {
+                    tool_calls: [{ index: 0, id: 'clock', function: { name, arguments: '{}' } }],
+                  },
+                  finish_reason: 'tool_calls',
+                },
+              ],
+            },
+          ],
+    );
+    const file = path.join(f.root, 'clock.cjs');
+    await writeFile(
+      file,
+      `const readline=require('node:readline');readline.createInterface({input:process.stdin}).on('line',line=>{const r=JSON.parse(line);if(r.id===undefined)return;let result={};if(r.method==='initialize')result={protocolVersion:'2025-11-25',capabilities:{tools:{}},serverInfo:{name:'clock',version:'1'}};if(r.method==='tools/list')result={tools:[{name:'current_time',inputSchema:{type:'object',properties:{}}}]};if(r.method==='tools/call')result={content:[{type:'text',text:'SYNTHETIC_CLOCK_RESULT'}]};process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:r.id,result})+'\\n');});`,
+    );
+    f.store.put('plugin', {
+      id: 'clock-fixture',
+      name: 'Clock fixture',
+      transport: 'stdio',
+      command: process.execPath,
+      args: [file],
+      url: '',
+      enabled: true,
+      readOnlyTools: ['current_time'],
+      catalog: [{ name: 'current_time', inputSchema: { type: 'object', properties: {} } }],
+    });
+    f.store.setDefaultPermission('full-access');
+    const id = f.runtime.start(f.input);
+    await f.runtime.waitForIdle();
+    expect(
+      f.store
+        .messages(f.input.sessionId)
+        .some((m) => m.role === 'tool' && m.content.includes('SYNTHETIC_CLOCK_RESULT')),
+    ).toBe(true);
+    expect(f.store.get<Run>('run', id).config?.permission).toBe('full-access');
+    expect(f.events.filter((e) => e.type === 'approval')).toHaveLength(0);
+  });
   it('accepts ordinary chat with no Agent and records progress before the first response', async () => {
     const f = await fixture(() => [text('Hello')]);
     const s = f.store.createSession();

@@ -55,6 +55,15 @@ async function main() {
       })),
     });
     assert.ok(thread.thread.id);
+    const unrestricted = await codex.request('thread/start', {
+      cwd: root,
+      model: 'gpt-5.4',
+      approvalPolicy: 'never',
+      sandbox: 'danger-full-access',
+      ephemeral: true,
+      config: { 'features.multi_agent': false },
+    });
+    assert.ok(unrestricted.thread.id, 'bundled Codex must accept the full-access policy');
     if (process.env.TONGZHOU_KIMI_TOOL_SMOKE === '1') {
       const home = process.env.TONGZHOU_KIMI_HOME;
       if (!home)

@@ -480,7 +480,7 @@ export async function executeTool(
   name: string,
   raw: string,
   root: string,
-  permission: 'read-only' | 'ask',
+  permission: 'read-only' | 'ask' | 'full-access',
   signal: AbortSignal,
   approve: (title: string, detail: string) => Promise<boolean>,
   onOutput?: (text: string) => void,
