@@ -30,7 +30,8 @@
     "test:native": "node scripts/native-smoke.mjs",
     "test:computer": "node scripts/computer-smoke.mjs",
     "test:live": "node scripts/live-coding-smoke.mjs",
-    "test:package": "node scripts/package-smoke.mjs"
+    "test:package": "node scripts/package-smoke.mjs",
+    "test:latency": "node scripts/chat-latency-smoke.mjs"
   },
   "dependencies": {
     "@iarna/toml": "^2.2.5",
