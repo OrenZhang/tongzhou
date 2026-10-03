@@ -8,6 +8,8 @@ import { Store } from '../electron/store';
 import { Channels } from '../electron/channels';
 import { Bots } from '../electron/bots';
 import { Worktrees } from '../electron/worktrees';
+import { ClientCommands } from '../electron/client-commands';
+import { ToolScope } from '../electron/extensions';
 const cleanup: (() => any)[] = [];
 afterEach(async () => {
   for (const fn of cleanup.splice(0).reverse()) await fn();
@@ -200,7 +202,23 @@ describe('managed Git worktrees', () => {
     s.put('project', { id: 'root', name: 'repo', path: dir, createdAt: 1 });
     const w = new Worktrees(s, path.join(dir, 'app-data'), () => {});
     await writeFile(path.join(dir, 'tracked.txt'), 'primary dirty');
-    const p = await w.create('root', 'feature/test', 'HEAD');
+    const commands = new ClientCommands();
+    commands.register('createWorktree', (id, branch, ref) => w.create(id, branch, ref));
+    commands.register('listWorktrees', (id) => w.list(id));
+    commands.register('removeWorktree', (id) => w.remove(id));
+    const approve = vi.fn(async () => true);
+    const scope = new ToolScope(new AbortController().signal, approve, () => {});
+    cleanup.push(() => scope.close());
+    commands.attach(scope, false, () => true, 'fixture-session');
+    const created = await scope.call('client_change', {
+      method: 'createWorktree',
+      args: ['root', 'feature/test', 'HEAD'],
+    });
+    expect(created.isError).not.toBe(true);
+    const p = JSON.parse(created.text!);
+    expect(approve).toHaveBeenCalledOnce();
+    const listed = await scope.call('client_query', { method: 'listWorktrees', args: ['root'] });
+    expect(JSON.parse(listed.text!)).toContainEqual(expect.objectContaining({ projectId: p.id }));
     expect(await readFile(path.join(p.path, 'tracked.txt'), 'utf8')).toBe('original');
     expect(await readFile(path.join(dir, 'tracked.txt'), 'utf8')).toBe('primary dirty');
     expect((await w.list('root')).find((x) => x.projectId === p.id)).toMatchObject({
@@ -225,7 +243,8 @@ describe('managed Git worktrees', () => {
     await git(dir, ['init', '--bare', remote]);
     await git(dir, ['remote', 'add', 'origin', remote]);
     await git(p.path, ['push', '-u', 'origin', 'feature/test']);
-    await w.remove(p.id);
+    const removed = await scope.call('client_change', { method: 'removeWorktree', args: [p.id] });
+    expect(removed.isError).not.toBe(true);
     expect(s.get<any>('session', session.id).archived).toBe(true);
     expect(s.get<any>('project', p.id).removed).toBe(true);
     expect(() => s.createSession(p.id)).toThrow('已移除');

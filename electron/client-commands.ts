@@ -92,6 +92,9 @@ export class ClientCommands {
         initializeAgent: ['projectId'],
         branchSession: ['sessionId', 'messageId'],
         gitRepository: ['projectId'],
+        listWorktrees: ['projectId'],
+        createWorktree: ['projectId', 'feature/task-name', 'HEAD'],
+        removeWorktree: ['worktreeProjectId'],
         bindGitAccount: ['projectId', 'connectorId'],
         cloneRepository: [
           'connectorId',
@@ -101,7 +104,7 @@ export class ClientCommands {
         syncRepository: ['projectId', 'pull'],
       },
       notes:
-        '先用 snapshot 查询真实 ID。save* 使用 snapshot 中完整对象及修改字段；delete* 传 ID。账号凭据只在 UI 输入。规则保存后适用其 scope；主动发送必须有用户要求的收件渠道和内容。',
+        '先用 snapshot 查询真实 ID。save* 使用 snapshot 中完整对象及修改字段；delete* 传 ID。Git 工作树是内置执行能力，无需配置或打开页面：任务需要隔离时用 createWorktree，返回目录与项目 ID；用 createSession(projectId) 创建绑定该目录的会话，用 listWorktrees 查看，再按需 removeWorktree。已有会话不能静默改绑目录。账号凭据只在 UI 输入。规则保存后适用其 scope；主动发送必须有用户要求的收件渠道和内容。',
     };
   }
   attach(scope: ToolScope, readOnly: boolean, enabled: () => boolean, sessionId: string) {
@@ -114,7 +117,7 @@ export class ClientCommands {
         {
           name,
           description: approval
-            ? '修改同舟客户端配置。args 是该方法的参数数组。会话和 Agent 可为空。不得传入任何密钥。saveAgent 接收完整角色对象；setCapability 接收能力名称及布尔值；updateSession 接收会话 ID 及补丁。先查询真实 ID 再修改。'
+            ? '执行同舟内置操作，管理会话、Git 工作目录和客户端配置。args 是该方法的参数数组。会话和 Agent 可为空。不得传入任何密钥。saveAgent 接收完整角色对象；setCapability 接收能力名称及布尔值；updateSession 接收会话 ID 及补丁。Git 工作树通过 createWorktree / removeWorktree 操作，无需打开配置页面。先查询真实 ID 再修改。'
             : '查询同舟当前真实状态。snapshot 返回连接、Agent、插件、Skills、会话和运行状态；messages / runEvents 接收会话 ID；readMessage 接收会话 ID、消息 ID、{offset,limit}，分段读取历史原文（默认 2000 字符，上限 8000）；computerStatus 无参数。args 为参数数组。',
           parameters: {
             type: 'object',
@@ -126,7 +129,7 @@ export class ClientCommands {
             additionalProperties: false,
           },
         },
-        approval ? '修改同舟设置' : '查询同舟',
+        approval ? '执行同舟操作' : '查询同舟',
         async (input) => {
           if (!enabled()) throw new Error('客户端管理已停用');
           if (!commands.has(input.method) || !Array.isArray(input.args))

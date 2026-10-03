@@ -6,11 +6,13 @@ import {
   ChevronRight,
   Folder,
   FolderOpen,
+  GitBranch,
   Plus,
   Search,
   Trash2,
 } from 'lucide-react';
 import type { Session, Snapshot } from './shared/types';
+import { projectFamilyId } from './shared/projects';
 
 export function SessionNavigator({
   data,
@@ -40,21 +42,26 @@ export function SessionNavigator({
   onDelete(session: Session): void;
 }) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const activeProject = data.sessions.find((s) => s.id === sessionId)?.projectId;
+  const activeProject = projectFamilyId(
+    data.projects,
+    data.sessions.find((s) => s.id === sessionId)?.projectId,
+  );
   useEffect(() => {
     if (activeProject) setCollapsed((old) => ({ ...old, [activeProject]: false }));
   }, [sessionId, activeProject]);
   const matching = (s: Session) => {
     const project = data.projects.find((p) => p.id === s.projectId);
+    const source = data.projects.find((p) => p.id === projectFamilyId(data.projects, s.projectId));
     return (
       s.archived === archived &&
-      `${s.title} ${project?.name ?? ''} ${project?.path ?? ''}`
+      `${s.title} ${project?.name ?? ''} ${project?.path ?? ''} ${source?.name ?? ''} ${source?.path ?? ''}`
         .toLowerCase()
         .includes(query.toLowerCase())
     );
   };
   const row = (s: Session) => {
     const running = data.runs.some((r) => r.sessionId === s.id && r.status === 'running');
+    const isolated = data.projects.find((p) => p.id === s.projectId)?.sourceProjectId;
     return (
       <div
         key={s.id}
@@ -72,7 +79,12 @@ export function SessionNavigator({
           onClick={() => onSelect(s)}
         >
           <span className={'session-dot ' + (running ? 'live' : '')} />
-          {s.projectId && <Folder size={12} aria-label="项目会话" />}
+          {s.projectId &&
+            (isolated ? (
+              <GitBranch size={12} aria-label="隔离工作目录会话" />
+            ) : (
+              <Folder size={12} aria-label="项目会话" />
+            ))}
           <span>
             {s.parentId ? '↳ ' : ''}
             {s.title}
@@ -129,9 +141,19 @@ export function SessionNavigator({
       </div>
       <div className="project-list">
         {data.projects
-          .filter((p) => !p.removed || archived)
+          .filter(
+            (p) =>
+              projectFamilyId(data.projects, p.id) === p.id &&
+              (!p.removed ||
+                archived ||
+                data.sessions.some(
+                  (s) => projectFamilyId(data.projects, s.projectId) === p.id && matching(s),
+                )),
+          )
           .map((project) => {
-            const sessions = data.sessions.filter((s) => s.projectId === project.id && matching(s));
+            const sessions = data.sessions.filter(
+              (s) => projectFamilyId(data.projects, s.projectId) === project.id && matching(s),
+            );
             if (
               query &&
               !sessions.length &&

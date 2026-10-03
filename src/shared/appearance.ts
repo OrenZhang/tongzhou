@@ -1,0 +1,25 @@
+export type Theme = 'system' | 'light' | 'dark';
+export type AppearanceStyle = 'graphite' | 'blue' | 'sand';
+export type InterfaceFont = 'modern' | 'system' | 'serif';
+export interface AppearancePreferences {
+  theme: Theme;
+  style: AppearanceStyle;
+  font: InterfaceFont;
+  textSize: 14 | 16 | 18;
+}
+export const defaultAppearance: AppearancePreferences = {
+  theme: 'system',
+  style: 'graphite',
+  font: 'modern',
+  textSize: 16,
+};
+export function normalizeAppearance(raw: unknown, legacyTheme?: unknown): AppearancePreferences {
+  const value = raw && typeof raw === 'object' ? (raw as Partial<AppearancePreferences>) : {};
+  const theme = value.theme ?? legacyTheme;
+  return {
+    theme: theme === 'light' || theme === 'dark' ? theme : 'system',
+    style: value.style === 'blue' || value.style === 'sand' ? value.style : 'graphite',
+    font: value.font === 'system' || value.font === 'serif' ? value.font : 'modern',
+    textSize: value.textSize === 14 || value.textSize === 18 ? value.textSize : 16,
+  };
+}

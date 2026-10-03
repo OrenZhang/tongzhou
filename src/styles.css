@@ -3251,38 +3251,6 @@ kbd {
   line-height: 1.7;
   color: var(--muted);
 }
-.project-management {
-  margin-top: 16px;
-}
-.project-management h3 {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.project-path {
-  color: var(--muted);
-  overflow-wrap: anywhere;
-  font-size: 12px;
-  margin-top: 4px;
-}
-.worktree-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px 0;
-  border-top: 1px solid var(--border);
-  margin-top: 12px;
-}
-.worktree-row > div:first-of-type {
-  flex: 1;
-  min-width: 0;
-}
-.worktree-row .tag {
-  margin-left: 8px;
-}
-.worktree-row small {
-  color: var(--muted);
-}
 .work-plugins {
   margin-bottom: 30px;
 }

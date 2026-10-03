@@ -308,48 +308,36 @@ try {
   checks.push(
     'work plugin catalog is under Plugins; Figma desktop alternative and inline GitHub registration requirements without external login',
   );
-  await nav('项目与工作树');
-  await page.getByRole('button', { name: '克隆仓库', exact: true }).click();
-  await dialog.getByLabel('代码托管账号', { exact: true }).selectOption(connector.id);
-  await dialog
-    .getByLabel('HTTPS 仓库地址', { exact: true })
-    .fill('https://github.com/fixture/repository.git');
-  await capture('clone-repository');
-  await dialog.getByRole('button', { name: '关闭', exact: true }).click();
-  await page.getByRole('button', { name: '同步代码', exact: true }).click();
-  await dialog.getByText('https://github.com/fixture/repository.git', { exact: true }).waitFor();
-  await dialog.getByLabel('代码托管账号', { exact: true }).selectOption(connector.id);
-  await dialog.getByRole('button', { name: '保存项目账号', exact: true }).click();
-  await dialog.getByText('已保存项目账号', { exact: true }).waitFor();
-  await capture('sync-repository');
-  await dialog.getByRole('button', { name: '关闭', exact: true }).click();
+  assert.equal(await page.getByRole('button', { name: '项目与工作树', exact: true }).count(), 0);
+  await page.evaluate((id) => window.tongzhou.bindGitAccount('project', id), connector.id);
+  const managed = await page.evaluate(() =>
+    window.tongzhou.createWorktree('project', 'feature/ui-test', 'HEAD'),
+  );
+  const isolated = await page.evaluate((id) => window.tongzhou.createSession(id), managed.id);
+  const grouped = page.locator('.project-group[data-project-id="project"]');
+  await grouped.locator('[data-session-id="' + isolated.id + '"]').click();
   assert.equal(
-    await page.evaluate(
-      async () =>
-        (await window.tongzhou.snapshot()).projects.find((p) => p.id === 'project').gitConnectorId,
-    ),
-    connector.id,
+    await page.locator('.project-group').count(),
+    1,
+    'execution worktrees must not create separate project groups',
   );
-  checks.push(
-    'GitHub repository credential UI and project account binding; clone/sync forms without external Git operations',
-  );
-  await page.getByRole('button', { name: '新建工作树', exact: true }).click();
-  await dialog.getByLabel('新分支名称', { exact: true }).fill('feature/ui-test');
-  await dialog.getByRole('button', { name: '创建工作树', exact: true }).click();
-  await dialog.waitFor({ state: 'hidden' });
-  await page.getByText('feature/ui-test', { exact: true }).waitFor();
-  await capture('worktrees');
-  const managed = await page.evaluate(async () =>
-    (await window.tongzhou.snapshot()).projects.find((p) => p.sourceProjectId),
-  );
-  assert.ok(managed);
-  await page
-    .locator('.worktree-row')
-    .filter({ hasText: 'feature/ui-test' })
-    .getByRole('button', { name: '进入会话', exact: true })
-    .click();
   await page.locator('.project-binding').filter({ hasText: 'feature/ui-test' }).waitFor();
-  checks.push('worktree creation and session binding through the UI');
+  assert.equal(
+    (await page.evaluate(() => window.tongzhou.snapshot())).sessions.find(
+      (s) => s.id === isolated.id,
+    ).projectId,
+    managed.id,
+  );
+  await page.getByLabel('搜索会话', { exact: true }).fill('feature/ui-test');
+  await grouped.locator('[data-session-id="' + isolated.id + '"]').waitFor();
+  await page.getByLabel('搜索会话', { exact: true }).fill('');
+  await capture('agent-worktree-session');
+  await page.evaluate(() => window.tongzhou.openModule('projects'));
+  await page.locator('.conversation-header').waitFor();
+  checks.push(
+    'Git worktree capabilities remain available to agents without a configuration page',
+    'isolated sessions group under their source and keep their actual directory binding',
+  );
   await nav('设置与关于');
   await page.getByRole('button', { name: '深色', exact: true }).click();
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
@@ -403,10 +391,6 @@ try {
           await page.keyboard.press('Escape');
         }
       }
-      await nav('项目与工作树');
-      await page.getByRole('button', { name: '查看工作树', exact: true }).click();
-      await page.getByText('feature/ui-test', { exact: true }).waitFor();
-      await capture(`${width}-${theme}-projects`);
     }
   }
   await nav('设置与关于');
@@ -418,6 +402,17 @@ try {
   checks.push(
     'light/dark persistence, system change response, all new screens at two viewport sizes',
   );
+  await page.evaluate((id) => window.tongzhou.removeWorktree(id), managed.id);
+  await page.getByRole('button', { name: '切换归档会话', exact: true }).click();
+  await grouped.locator('[data-session-id="' + isolated.id + '"]').click();
+  assert.equal(await page.locator('.project-group').count(), 1);
+  assert.equal(
+    (await page.evaluate(() => window.tongzhou.snapshot())).sessions.find(
+      (s) => s.id === isolated.id,
+    ).archived,
+    true,
+  );
+  checks.push('removed execution workspaces keep archived history under the original project');
   assert.deepEqual(errors, []);
   await writeFile(
     'test-results/workbench-report.json',

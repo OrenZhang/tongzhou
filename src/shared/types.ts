@@ -233,14 +233,7 @@ export interface CodexAuthState {
 export type AppEvent =
   | {
       type: 'navigate';
-      view:
-        | 'workspace'
-        | 'providers'
-        | 'agents'
-        | 'activity'
-        | 'settings'
-        | 'extensions'
-        | 'projects';
+      view: 'workspace' | 'providers' | 'agents' | 'activity' | 'settings' | 'extensions';
     }
   | { type: 'run-event'; event: RunEvent }
   | { type: 'native-auth'; state: NativeAuthState }

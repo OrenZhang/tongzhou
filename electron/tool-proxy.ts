@@ -3,7 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { randomUUID } from 'node:crypto';
 const server = new Server(
-  { name: 'tongzhou-tools', version: '0.5.2' },
+  { name: 'tongzhou-tools', version: '0.5.3' },
   { capabilities: { tools: {} } },
 );
 async function request(body: unknown, signal?: AbortSignal) {

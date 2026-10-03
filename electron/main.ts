@@ -573,6 +573,7 @@ function setup() {
           'extensions',
           'projects',
         ])
+        .transform((value) => (value === 'projects' ? ('workspace' as const) : value))
         .parse(view),
     }),
   );

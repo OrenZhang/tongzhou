@@ -62,7 +62,6 @@ import { ConnectionsPanel } from './ConnectionsPanel';
 import { Appearance, useAppearance } from './Appearance';
 import { useDraft } from './useDraft';
 import { SessionNotification } from './NotificationControls';
-import { ProjectsPanel } from './ProjectsPanel';
 import { AuthBadge, Field, Mark, Modal, Spinner, ModelPicker } from './components';
 const empty: Snapshot = {
   providers: [],
@@ -174,14 +173,7 @@ const presets = [
     models: [],
   },
 ] as const;
-type View =
-  | 'workspace'
-  | 'providers'
-  | 'agents'
-  | 'activity'
-  | 'settings'
-  | 'extensions'
-  | 'projects';
+type View = 'workspace' | 'providers' | 'agents' | 'activity' | 'settings' | 'extensions';
 export default function App() {
   const [accountStates, setAccountStates] = useState<
     Record<string, { connected: boolean; pending: boolean; error: boolean }>
@@ -238,7 +230,7 @@ export default function App() {
   const [inputMode, setInputMode] = useState<'supplement' | 'next' | 'restart'>('supplement');
   const [deleteId, setDeleteId] = useState('');
   const { draft, setDraft, clearDraft } = useDraft(sessionId);
-  const { theme, setTheme } = useAppearance();
+  const { appearance, setAppearance } = useAppearance();
   const [query, setQuery] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
@@ -552,7 +544,6 @@ export default function App() {
   };
   const nav = [
     { id: 'workspace', label: '工作空间', icon: MessageSquare },
-    { id: 'projects', label: '项目与工作树', icon: FolderOpen },
     { id: 'providers', label: '连接中心', icon: Network },
     { id: 'agents', label: 'Agent 团队', icon: Users },
     { id: 'extensions', label: '插件与工具', icon: Terminal },
@@ -977,7 +968,6 @@ export default function App() {
                     activity: '运行记录',
                     settings: '设置与关于',
                     extensions: '插件与工具',
-                    projects: '项目与工作树',
                   }[view]}
             </strong>
           </div>
@@ -1847,20 +1837,13 @@ export default function App() {
             </p>
           </main>
         )}
-        {view === 'projects' && (
-          <ProjectsPanel
-            data={data}
-            api={api}
-            refresh={refresh}
-            onSession={(id) => void newSession(id)}
-          />
-        )}
         {view === 'settings' && (
           <main className="page settings-page">
             <div className="page-heading">
               <h1>设置与关于</h1>
-              <p>同舟 0.5.2 · 开源多模型桌面工作台</p>
+              <p>同舟 0.5.3 · 开源多模型桌面工作台</p>
             </div>
+            <Appearance value={appearance} onChange={setAppearance} />
             <section className="settings-card">
               <div className="settings-card-title">
                 <ShieldCheck size={23} />
@@ -1875,7 +1858,6 @@ export default function App() {
                 onError={report}
               />
             </section>
-            <Appearance value={theme} onChange={setTheme} />
             <section className="settings-card settings-link">
               <div className="settings-card-title">
                 <Network size={22} />

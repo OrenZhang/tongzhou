@@ -1,6 +1,6 @@
 {
   "name": "tongzhou",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "同舟 — 多模型协作，一个工作台。An open-source, local-first agent workspace.",
   "private": true,
   "type": "module",
@@ -29,6 +29,7 @@
     "test:turns": "node scripts/turn-process-smoke.mjs",
     "test:ui": "node scripts/ui-smoke.mjs",
     "test:workbench": "node scripts/workbench-smoke.mjs",
+    "test:appearance": "node scripts/appearance-smoke.mjs",
     "test:auth": "node scripts/account-ui-smoke.mjs",
     "test:native": "node scripts/native-smoke.mjs",
     "test:computer": "node scripts/computer-smoke.mjs",

@@ -29,6 +29,7 @@ jobs:
       - run: npm run test:turns
       - run: npm run test:ui
       - run: npm run test:workbench
+      - run: npm run test:appearance
       - run: node scripts/native-smoke.mjs
       - run: npm run dist
         env:

@@ -84,11 +84,8 @@ export function ConnectionsPanel({
           <div className="collection-toolbar">
             <div>
               <h2>代码托管账号与浏览器</h2>
-              <p>连接 GitHub、GitLab，用于克隆仓库、拉取和推送代码。项目可分别选择账号。</p>
+              <p>连接 GitHub、GitLab 后，可在会话中让 Agent 克隆仓库、拉取和推送代码。</p>
             </div>
-            <button className="secondary" onClick={() => void api.openModule('projects')}>
-              项目与工作树
-            </button>
           </div>
           <div className="row">
             {(['github', 'gitlab', 'browser'] as const).map((kind) => (
@@ -237,7 +234,8 @@ export function ConnectionsPanel({
                 )}
                 {connector.kind !== 'browser' && (
                   <p>
-                    授权用于仓库读写。保存后可在「项目与工作树」克隆仓库，或绑定现有项目进行拉取和推送。
+                    授权用于仓库读写。保存后可在会话中让 Agent
+                    使用该账号克隆仓库，或拉取和推送项目代码。
                   </p>
                 )}
                 <label>
