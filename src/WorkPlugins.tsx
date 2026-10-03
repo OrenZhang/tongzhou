@@ -525,7 +525,7 @@ export function WorkPlugins({
                       className="text-button"
                       onClick={() => {
                         setEdit(null);
-                        void api.openModule('providers');
+                        void api.openModule('connections');
                       }}
                     >
                       到连接中心管理账号

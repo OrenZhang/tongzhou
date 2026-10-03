@@ -1,23 +1,21 @@
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { Modal } from './components';
 import { EmailFields, RuleConditions, defaultSmtp } from './NotificationControls';
 import { BotsPanel } from './BotsPanel';
 import { errorMessage } from './feedback';
-import { Globe2, Network, Radio, History, Bot } from 'lucide-react';
+import { Globe2, Radio, History, Bot } from 'lucide-react';
 import type { Channel, Connector, NotificationRule, Snapshot, TongzhouAPI } from './shared/types';
 
 export function ConnectionsPanel({
   api,
   data,
   refresh,
-  children,
 }: {
   api: TongzhouAPI;
   data: Snapshot;
   refresh: () => Promise<void>;
-  children?: ReactNode;
 }) {
-  const [tab, setTab] = useState<'models' | 'accounts' | 'channels' | 'bots' | 'records'>('models');
+  const [tab, setTab] = useState<'accounts' | 'channels' | 'bots' | 'records'>('accounts');
   const [connector, setConnector] = useState<(Connector & { secret?: string }) | null>(null);
   const [channel, setChannel] = useState<
     (Channel & { webhook?: string; signingSecret?: string; password?: string }) | null
@@ -57,7 +55,7 @@ export function ConnectionsPanel({
   return (
     <section className="connections-extra">
       <nav className="section-tabs connection-tabs" aria-label="连接分类">
-        {(['models', 'accounts', 'channels', 'bots', 'records'] as const).map((name, i) => (
+        {(['accounts', 'channels', 'bots', 'records'] as const).map((name, i) => (
           <button
             className={tab === name ? 'active' : ''}
             aria-pressed={tab === name}
@@ -65,10 +63,10 @@ export function ConnectionsPanel({
             onClick={() => setTab(name)}
           >
             {(() => {
-              const Icon = [Network, Globe2, Radio, Bot, History][i];
+              const Icon = [Globe2, Radio, Bot, History][i];
               return <Icon size={15} />;
             })()}
-            {['模型与订阅', '服务与浏览器', '渠道通知', '机器人', '认证与发送记录'][i]}
+            {['服务与浏览器', '渠道通知', '机器人', '认证与发送记录'][i]}
           </button>
         ))}
       </nav>
@@ -77,14 +75,16 @@ export function ConnectionsPanel({
           {notice}
         </p>
       )}
-      {tab === 'models' && children}
       {tab === 'bots' && <BotsPanel data={data} api={api} refresh={refresh} />}
       {tab === 'accounts' && (
         <>
           <div className="collection-toolbar">
             <div>
               <h2>代码托管账号与浏览器</h2>
-              <p>连接 GitHub、GitLab 后，可在会话中让 Agent 克隆仓库、拉取和推送代码。</p>
+              <p>
+                认证只需配置一次。Agent 通过已授权连接使用服务，模型不会收到保存的密码、令牌或
+                Cookie。
+              </p>
             </div>
           </div>
           <div className="row">
@@ -205,7 +205,9 @@ export function ConnectionsPanel({
             <div className="empty-state compact">
               <Globe2 size={28} />
               <h3>连接你的服务账号</h3>
-              <p>添加代码托管服务或独立浏览器账号，登录态分别保存。</p>
+              <p>
+                代码托管账号用于克隆、拉取和推送；浏览器登录态按账号独立保存，可配合电脑控制操作网页。
+              </p>
             </div>
           )}
           {connector && (

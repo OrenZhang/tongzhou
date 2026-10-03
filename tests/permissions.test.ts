@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { Store } from '../electron/store';
-import { ClientCommands } from '../electron/client-commands';
+import { ClientCommands, manual } from '../electron/client-commands';
 import { effectivePermission } from '../src/shared/permissions';
 
 describe('session and global execution permissions', () => {
@@ -39,8 +39,9 @@ describe('session and global execution permissions', () => {
   it('does not expose privilege settings or the clipboard as model-callable management commands', () => {
     const commands = new ClientCommands();
     for (const name of ['setDefaultPermission', 'setSessionPermission', 'copyText'])
-      commands.register(name, () => {});
+      commands.register(name, manual('权限', name, 'settings', '需要用户操作'), () => {});
     expect(commands.describe().change).toEqual([]);
     expect(commands.describe().read).toEqual([]);
+    expect(commands.describe().methods).toHaveLength(3);
   });
 });

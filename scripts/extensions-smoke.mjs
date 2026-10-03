@@ -79,7 +79,7 @@ try {
     BrowserWindow.getAllWindows().forEach((w) => w.setIgnoreMouseEvents(true));
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [skill] });
   }, skill);
-  await page.getByRole('button', { name: '插件与工具', exact: true }).click();
+  await page.getByRole('button', { name: '插件', exact: true }).click();
   await page.getByRole('button', { name: /^MCP 插件/ }).click();
   await page.getByRole('button', { name: '添加 MCP', exact: true }).click();
   await page.getByLabel('插件名称', { exact: true }).fill('测试笔记插件');
@@ -122,7 +122,7 @@ try {
   const before = await page.evaluate(() => window.tongzhou.snapshot());
   const id = before.sessions[0].id;
   await page.getByLabel('当前连接', { exact: true }).selectOption('fixture-b');
-  await page.getByRole('button', { name: '插件与工具', exact: true }).click();
+  await page.getByRole('button', { name: '插件', exact: true }).click();
   await page.getByRole('button', { name: '工作空间', exact: true }).click();
   assert.equal(await page.getByLabel('当前连接', { exact: true }).inputValue(), 'fixture-b');
   await page.getByLabel('消息', { exact: true }).fill('换个供应商继续');

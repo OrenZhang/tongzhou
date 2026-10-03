@@ -7,6 +7,8 @@ import { mkdtemp, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import { NativeClient, modelCatalog } from '../electron/native-engine';
+import { ClientCommands, operation } from '../electron/client-commands';
+import { z } from 'zod';
 async function main() {
   const root = await mkdtemp(path.resolve('test-results/bridge-'));
   const controller = new AbortController();
@@ -24,6 +26,8 @@ async function main() {
     'fixture',
     async () => ({ text: 'Bridge result' }),
   );
+  const commands = new ClientCommands();
+  commands.attach(scope, false, () => true, 'fixture');
   const bridge = await toolBridge(scope, controller.signal);
   const proxy = new Client({ name: 'fixture', version: '1' }, { capabilities: {} });
   const transport = new StdioClientTransport({
@@ -39,6 +43,23 @@ async function main() {
     assert.equal((await proxy.listTools()).tools[0].name, 'read_fixture');
     const output: any = await proxy.callTool({ name: 'read_fixture', arguments: {} });
     assert.equal(output.content[0].text, 'Bridge result');
+    // A new module is registered after the MCP bridge was created: no tool adapter or
+    // bridge restart is necessary because discovery and dispatch use the live registry.
+    commands.register(
+      'bridgeGreeting',
+      operation('新模块', 'query', '查询桥接测试', [z.string()]),
+      (name) => ({ greeting: '你好 ' + name }),
+    );
+    const catalog: any = await proxy.callTool({
+      name: 'client_catalog',
+      arguments: { method: 'bridgeGreeting' },
+    });
+    assert.equal(JSON.parse(catalog.content[0].text).methods[0].name, 'bridgeGreeting');
+    const managed: any = await proxy.callTool({
+      name: 'client_query',
+      arguments: { method: 'bridgeGreeting', args: ['同舟'] },
+    });
+    assert.equal(JSON.parse(managed.content[0].text).greeting, '你好 同舟');
     await codex.start();
     const thread = await codex.request('thread/start', {
       cwd: root,

@@ -231,9 +231,17 @@ export interface CodexAuthState {
   };
 }
 export type AppEvent =
+  | { type: 'appearance'; value: Partial<import('./appearance').AppearancePreferences> }
   | {
       type: 'navigate';
-      view: 'workspace' | 'providers' | 'agents' | 'activity' | 'settings' | 'extensions';
+      view:
+        | 'workspace'
+        | 'providers'
+        | 'agents'
+        | 'activity'
+        | 'settings'
+        | 'connections'
+        | 'extensions';
     }
   | { type: 'run-event'; event: RunEvent }
   | { type: 'native-auth'; state: NativeAuthState }
@@ -276,6 +284,9 @@ export interface ImportPreview {
   warnings: string[];
 }
 export interface TongzhouAPI {
+  clientMethods(): Promise<import('./client-catalog').ClientCatalog>;
+  getAppearance(): Promise<Partial<import('./appearance').AppearancePreferences>>;
+  setAppearance(value: import('./appearance').AppearancePreferences): Promise<void>;
   gitRepository(projectId: string): Promise<GitRepositoryInfo>;
   bindGitAccount(projectId: string, connectorId: string): Promise<void>;
   syncRepository(projectId: string, action: 'pull' | 'push'): Promise<string>;
@@ -313,7 +324,9 @@ export interface TongzhouAPI {
   testConnector(id: string): Promise<string>;
   loginConnector(id: string): Promise<{ url: string; code: string; expiresAt: number }>;
   cancelConnectorLogin(id: string): Promise<void>;
-  openBrowserProfile(id: string): Promise<void>;
+  openBrowserProfile(
+    id: string,
+  ): Promise<{ connectorId: string; opened: boolean; reused: boolean }>;
   clearBrowserProfile(id: string): Promise<void>;
   saveChannel(
     input: Channel & { webhook?: string; signingSecret?: string; password?: string },

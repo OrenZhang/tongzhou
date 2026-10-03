@@ -173,7 +173,14 @@ const presets = [
     models: [],
   },
 ] as const;
-type View = 'workspace' | 'providers' | 'agents' | 'activity' | 'settings' | 'extensions';
+type View =
+  | 'workspace'
+  | 'providers'
+  | 'agents'
+  | 'activity'
+  | 'settings'
+  | 'connections'
+  | 'extensions';
 export default function App() {
   const [accountStates, setAccountStates] = useState<
     Record<string, { connected: boolean; pending: boolean; error: boolean }>
@@ -544,9 +551,9 @@ export default function App() {
   };
   const nav = [
     { id: 'workspace', label: '工作空间', icon: MessageSquare },
-    { id: 'providers', label: '连接中心', icon: Network },
+    { id: 'providers', label: '模型与订阅', icon: Network },
     { id: 'agents', label: 'Agent 团队', icon: Users },
-    { id: 'extensions', label: '插件与工具', icon: Terminal },
+    { id: 'extensions', label: '插件', icon: Terminal },
     { id: 'activity', label: '运行记录', icon: Activity },
   ] as const;
   const selectModel = (connection: string, selectedModel: string) => {
@@ -866,7 +873,7 @@ export default function App() {
               )}
               <p className="footnote">
                 使用内置官方引擎管理登录与续期，凭据保存在同舟独立目录。账号套餐与 API Key
-                分开配置；API / 套餐 Key 可在“连接中心”中添加。
+                分开配置；API / 套餐 Key 可在“模型与订阅”中添加。
               </p>
             </section>
           );
@@ -937,10 +944,10 @@ export default function App() {
           </div>
           <button
             onClick={() => setView('settings')}
-            className={view === 'settings' ? 'active' : ''}
+            className={view === 'settings' || view === 'connections' ? 'active' : ''}
           >
             <Settings2 size={17} />
-            设置与关于
+            设置与优化
             <CircleHelp size={15} />
           </button>
         </div>
@@ -963,11 +970,12 @@ export default function App() {
               {view === 'workspace'
                 ? (project?.name ?? '工作空间')
                 : {
-                    providers: '连接中心',
+                    providers: '模型与订阅',
+                    connections: '连接中心',
                     agents: 'Agent 团队',
                     activity: '运行记录',
-                    settings: '设置与关于',
-                    extensions: '插件与工具',
+                    settings: '设置与优化',
+                    extensions: '插件',
                   }[view]}
             </strong>
           </div>
@@ -1487,12 +1495,12 @@ export default function App() {
             <div className="page-heading">
               <div className="page-title-row">
                 <div>
-                  <h1>连接中心</h1>
-                  <p>模型、订阅、代码托管账号、浏览器和通知渠道。</p>
+                  <h1>模型与订阅</h1>
+                  <p>管理模型服务与订阅账号，选择适合当前任务的模型。</p>
                 </div>
               </div>
             </div>
-            <ConnectionsPanel api={api} data={data} refresh={refresh}>
+            <>
               <div className="info-strip">
                 <ShieldCheck size={17} />
                 <span>
@@ -1601,7 +1609,19 @@ export default function App() {
                   </p>
                 </div>
               </div>
-            </ConnectionsPanel>
+            </>
+          </main>
+        )}
+        {view === 'connections' && (
+          <main className="page settings-page connections-page">
+            <div className="page-heading">
+              <button className="text-button" onClick={() => setView('settings')}>
+                返回设置与优化
+              </button>
+              <h1>连接中心</h1>
+              <p>将服务授权交给同舟保管，让 Agent 使用能力，无需把密码或令牌交给模型。</p>
+            </div>
+            <ConnectionsPanel api={api} data={data} refresh={refresh} />
           </main>
         )}
         {view === 'extensions' && (
@@ -1840,8 +1860,8 @@ export default function App() {
         {view === 'settings' && (
           <main className="page settings-page">
             <div className="page-heading">
-              <h1>设置与关于</h1>
-              <p>同舟 0.5.5 · 开源多模型桌面工作台</p>
+              <h1>设置与优化</h1>
+              <p>同舟 0.5.6 · 开源多模型桌面工作台</p>
             </div>
             <Appearance value={appearance} onChange={setAppearance} />
             <section className="settings-card">
@@ -1862,11 +1882,11 @@ export default function App() {
               <div className="settings-card-title">
                 <Network size={22} />
                 <div>
-                  <h3>账号与连接</h3>
-                  <p>模型订阅、服务账号和通知渠道统一在连接中心管理。</p>
+                  <h3>连接中心</h3>
+                  <p>管理服务认证、浏览器登录态、通知渠道和会话机器人。</p>
                 </div>
               </div>
-              <button className="secondary" onClick={() => setView('providers')}>
+              <button className="secondary" onClick={() => setView('connections')}>
                 打开连接中心 <ArrowRight size={14} />
               </button>
             </section>
@@ -1934,8 +1954,15 @@ export default function App() {
               run: () => setView(n.id),
             })),
             {
+              id: 'connections',
+              title: '连接中心',
+              detail: '设置与优化 · 服务、浏览器、通知和机器人',
+              icon: Network,
+              run: () => setView('connections'),
+            },
+            {
               id: 'settings',
-              title: '设置与关于',
+              title: '设置与优化',
               detail: '权限与本地数据',
               icon: Settings2,
               run: () => setView('settings'),
@@ -2266,7 +2293,7 @@ export default function App() {
               />
             </Field>
             <div className="form-grid">
-              <Field label="连接中心">
+              <Field label="模型连接">
                 <select
                   value={agentEdit.providerId}
                   onChange={(e) =>

@@ -34,7 +34,7 @@ export function applyAppearance(value: AppearancePreferences) {
   document.documentElement.style.setProperty('--chat-font-size', value.textSize + 'px');
 }
 export function useAppearance() {
-  const [appearance, setAppearance] = useState(savedAppearance);
+  const [appearance, setAppearanceState] = useState(savedAppearance);
   useEffect(() => {
     try {
       localStorage.setItem(key, JSON.stringify(appearance));
@@ -49,8 +49,31 @@ export function useAppearance() {
     return () => media.removeEventListener('change', update);
   }, [appearance]);
   useEffect(() => {
-    void window.tongzhou?.setTheme(appearance.theme).catch(() => {});
-  }, [appearance.theme]);
+    let live = true;
+    let received = false;
+    const api = window.tongzhou;
+    const off = api?.onEvent((event) => {
+      if (event.type === 'appearance') {
+        received = true;
+        setAppearanceState((old) => normalizeAppearance({ ...old, ...event.value }));
+      }
+    });
+    void api
+      ?.getAppearance()
+      .then((value) => {
+        if (live && !received)
+          setAppearanceState((old) => normalizeAppearance({ ...old, ...value }));
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+      off?.();
+    };
+  }, []);
+  const setAppearance = (value: AppearancePreferences) => {
+    setAppearanceState(value);
+    void window.tongzhou?.setAppearance(value).catch(() => {});
+  };
   return { appearance, setAppearance };
 }
 const styles = [

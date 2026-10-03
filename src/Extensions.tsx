@@ -50,7 +50,7 @@ export function Extensions({
   return (
     <main className="page extensions-page">
       <div className="page-heading">
-        <h1>插件与工具</h1>
+        <h1>插件</h1>
         <p>管理公共工具，统一启停能力，所有会话和 Agent 自动继承。切换模型不会切换你的会话记录。</p>
       </div>
       <nav className="section-tabs" aria-label="工具分类">

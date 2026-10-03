@@ -1,4 +1,4 @@
-# 同舟 0.4 架构
+# 同舟架构
 
 日期：2026-10-03。实现状态及验证边界见 [实施状态](IMPLEMENTATION_STATUS.md)、[验证记录](VALIDATION.md)。
 
@@ -24,6 +24,8 @@ flowchart LR
 Electron 主进程持有数据库、网络、文件及引擎进程。React 仅经 preload 调用白名单业务方法；主窗口禁用 Node 集成，使用 contextIsolation 和 sandbox。外部网站在独立 BrowserWindow / Session 分区运行，不获得同舟 IPC。
 
 ## 模块
+
+客户端管理通过业务入口的注册元数据自动生成目录与调度：UI 和 Agent 调用同一个处理器，新增模块不维护工具白名单。参数、读写权限与本人操作入口随业务一起声明。详见 [客户端能力注册](CLIENT_CAPABILITIES.md)。模型与订阅是侧栏独立页面；非模型连接使用 settings → connections，插件使用 extensions。
 
 | 文件                                           | 职责                                                           |
 | ---------------------------------------------- | -------------------------------------------------------------- |

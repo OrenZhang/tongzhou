@@ -51,8 +51,15 @@ try {
   await app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()[0].setIgnoreMouseEvents(true),
   );
-  const nav = (label) =>
-    page.locator('.sidebar').getByRole('button', { name: label, exact: true }).click();
+  const nav = async (label) => {
+    if (label === '连接中心') {
+      await page
+        .locator('.sidebar')
+        .getByRole('button', { name: '设置与优化', exact: true })
+        .click();
+      await page.getByRole('button', { name: '打开连接中心', exact: true }).click();
+    } else await page.locator('.sidebar').getByRole('button', { name: label, exact: true }).click();
+  };
   const capture = async (name) => {
     const file = `test-results/workbench-${name}.png`;
     await page.screenshot({ path: file });
@@ -261,7 +268,7 @@ try {
   assert.ok(connector.hasSecret);
   assert.ok(!JSON.stringify(connector).includes('fixture-github-token'));
   assert.equal(await page.locator('.work-plugins').count(), 0);
-  await nav('插件与工具');
+  await nav('插件');
   await page.getByRole('button', { name: /^工作插件/ }).click();
   await page.getByLabel('搜索工作插件', { exact: true }).fill('Figma');
   assert.equal(await page.locator('.work-plugins .provider-card').count(), 1);
@@ -372,7 +379,7 @@ try {
     'Git worktree capabilities remain available to agents without a configuration page',
     'isolated sessions group under their source and keep their actual directory binding',
   );
-  await nav('设置与关于');
+  await nav('设置与优化');
   await page.getByRole('button', { name: '深色', exact: true }).click();
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
   await page.reload();
@@ -387,7 +394,7 @@ try {
       [width, height],
     );
     for (const theme of ['dark', 'light']) {
-      await nav('设置与关于');
+      await nav('设置与优化');
       await page
         .getByRole('button', { name: theme === 'dark' ? '深色' : '浅色', exact: true })
         .click();
@@ -427,7 +434,7 @@ try {
       }
     }
   }
-  await nav('设置与关于');
+  await nav('设置与优化');
   await page.getByRole('button', { name: '跟随系统', exact: true }).click();
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');

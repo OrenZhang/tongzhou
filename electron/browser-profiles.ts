@@ -10,6 +10,22 @@ export class BrowserProfiles {
   private partition(id: string) {
     return 'persist:tongzhou-connector-' + id;
   }
+  async status(id: string) {
+    const c = this.store.get<Connector>('connector', id);
+    const w = this.windows.get(id);
+    const cookies = await session.fromPartition(this.partition(id)).cookies.get({});
+    return {
+      connectorId: id,
+      name: c.name,
+      enabled: c.enabled,
+      open: !!w && !w.isDestroyed(),
+      hasStoredCookies: cookies.length > 0,
+      note: '登录态由独立浏览器管理。Cookie 存在不等于已登录，请在网页确认；不会返回 Cookie 或密码。',
+    };
+  }
+  close(id: string) {
+    this.windows.get(id)?.destroy();
+  }
   async open(id: string) {
     const c = this.store.get<Connector>('connector', id);
     if (!c.enabled) throw new Error('连接器已停用');
@@ -17,7 +33,7 @@ export class BrowserProfiles {
     const previous = this.windows.get(id);
     if (previous && !previous.isDestroyed()) {
       previous.focus();
-      return;
+      return { connectorId: id, reused: true, opened: true };
     }
     const s = session.fromPartition(this.partition(id));
     s.setPermissionRequestHandler((_w, _p, callback) => callback(false));
@@ -55,7 +71,14 @@ export class BrowserProfiles {
       this.windows.delete(id);
       void s.cookies.flushStore();
     });
-    await w.loadURL(url.href);
+    try {
+      await w.loadURL(url.href);
+      return { connectorId: id, reused: false, opened: true };
+    } catch {
+      // A failed hidden/blank window must not masquerade as a successful reused profile.
+      if (!w.isDestroyed()) w.destroy();
+      throw new Error('无法打开此服务的浏览器，请检查连接地址与网络后重试');
+    }
   }
   async clear(id: string) {
     this.windows.get(id)?.destroy();

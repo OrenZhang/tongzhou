@@ -6,7 +6,7 @@ import { feishuHost, feishuToken } from './feishu';
 import nodemailer from 'nodemailer';
 import type { Channel, Delivery, NotificationRule, Run, Session } from '../src/shared/types';
 
-const configSchema = z.object({
+export const channelSchema = z.object({
   id: idSchema,
   name: z.string().trim().min(1).max(100),
   kind: z.enum(['feishu', 'wecom', 'dingtalk', 'email']),
@@ -44,7 +44,7 @@ const configSchema = z.object({
   sessionId: idSchema.optional(),
   allowedSenders: z.array(z.string().min(1).max(150)).max(50).optional(),
 });
-const ruleSchema = z.object({
+export const notificationRuleSchema = z.object({
   id: idSchema,
   channelId: idSchema,
   sessionId: idSchema.nullable(),
@@ -111,7 +111,7 @@ export class Channels {
     return this.store.list<Channel>('channel');
   }
   save(raw: unknown) {
-    const { webhook, signingSecret, password, ...c } = configSchema.parse(raw);
+    const { webhook, signingSecret, password, ...c } = channelSchema.parse(raw);
     const old = this.list().find((o) => o.id === c.id);
     if (old && old.kind !== c.kind) throw new Error('请为不同平台创建新的通知目标');
     if (c.kind === 'email') {
@@ -174,7 +174,7 @@ export class Channels {
     this.changed();
   }
   saveRule(raw: unknown) {
-    const r = ruleSchema.parse(raw);
+    const r = notificationRuleSchema.parse(raw);
     this.store.get('channel', r.channelId);
     if (r.sessionId) this.store.get('session', r.sessionId);
     if (r.projectId) this.store.get('project', r.projectId);

@@ -3,6 +3,9 @@ import type { TongzhouAPI } from '../src/shared/types';
 const call = (method: string, ...args: unknown[]) =>
   ipcRenderer.invoke('tongzhou:' + method, ...args);
 const api: TongzhouAPI = {
+  clientMethods: () => call('clientMethods'),
+  getAppearance: () => call('getAppearance'),
+  setAppearance: (value) => call('setAppearance', value),
   gitRepository: (id) => call('gitRepository', id),
   bindGitAccount: (id, connectorId) => call('bindGitAccount', id, connectorId),
   syncRepository: (id, action) => call('syncRepository', id, action),

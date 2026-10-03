@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Copy, Monitor, Settings2, Terminal, ShieldCheck, Square, ArrowRight } from 'lucide-react';
 import { Spinner } from './components';
 import { errorMessage } from './feedback';
+import { ClientCapabilityCatalog } from './ClientCapabilityCatalog';
 import type { ComputerStatus, Snapshot, TongzhouAPI } from './shared/types';
 
 type Operation = { pending?: string; message?: string; error?: boolean; desired?: boolean };
@@ -266,7 +267,8 @@ export function CoreCapabilities({
         </div>
         <p className="capability-description">
           让 Agent
-          查询会话、Agent、模型连接和插件，也可以按你的要求修改设置。关闭后，你仍然可以手动使用这些页面。
+          查询和操作同舟各模块：会话、模型连接、认证状态、机器人、通知、插件、Skills、项目与外观。
+          新功能注册后自动接入。关闭后，仍可手动使用这些页面。
         </p>
         {example('management')}
         <div className="capability-actions">
@@ -286,6 +288,7 @@ export function CoreCapabilities({
           <span className="capability-note">需要模型支持工具调用；修改遵循会话权限。</span>
         </div>
         {feedback('management')}
+        <ClientCapabilityCatalog api={api} />
       </section>
       <section className="settings-card capability-card" aria-label="项目文件与终端能力">
         <div className="settings-card-title">

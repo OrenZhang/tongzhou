@@ -6,7 +6,7 @@ import type { Runtime } from './runtime';
 import type { BotConfig, Channel, Session, Run } from '../src/shared/types';
 import { connectBot, type BotMessage } from './bot-transports';
 
-const schema = z.object({
+export const botSchema = z.object({
   id: idSchema,
   name: z.string().trim().min(1).max(100),
   kind: z.enum(['feishu', 'wecom', 'dingtalk']),
@@ -36,7 +36,7 @@ export class Bots {
       .map((b) => ({ ...b, hasSecret: this.store.hasSecret('bot_' + b.id) }));
   }
   save(raw: unknown) {
-    const { secret, ...b } = schema.parse(raw);
+    const { secret, ...b } = botSchema.parse(raw);
     const old = this.list().find((x) => x.id === b.id);
     if (
       b.enabled &&

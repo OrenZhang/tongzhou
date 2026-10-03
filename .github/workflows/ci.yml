@@ -30,6 +30,7 @@ jobs:
       - run: npm run test:ui
       - run: npm run test:workbench
       - run: npm run test:capabilities
+      - run: npm run test:management
       - run: npm run test:markdown
       - run: npm run test:appearance
       - run: node scripts/native-smoke.mjs

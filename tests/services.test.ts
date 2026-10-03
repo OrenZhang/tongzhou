@@ -8,7 +8,8 @@ import { Connectors } from '../electron/connectors';
 import { initializeAgent } from '../electron/project-init';
 import { executeTool, fileHash, commandResult } from '../electron/workspace';
 import { ToolScope } from '../electron/extensions';
-import { ClientCommands } from '../electron/client-commands';
+import { ClientCommands, operation } from '../electron/client-commands';
+import { z } from 'zod';
 import { Feishu } from '../electron/feishu';
 import { Runtime } from '../electron/runtime';
 const cleanups: (() => unknown | Promise<unknown>)[] = [];
@@ -282,7 +283,13 @@ describe('project initialization and controlled edits', () => {
   it('allows non-secret provider settings and rejects secret fields in chat management', async () => {
     const commands = new ClientCommands(),
       handler = vi.fn(async () => ({}));
-    commands.register('saveProvider', handler);
+    commands.register(
+      'saveProvider',
+      operation('模型', 'change', '保存连接', [
+        z.object({ maxOutputTokens: z.number().optional() }),
+      ]),
+      handler,
+    );
     const scope = new ToolScope(
       new AbortController().signal,
       async () => true,

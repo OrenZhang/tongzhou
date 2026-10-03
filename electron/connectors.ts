@@ -7,7 +7,7 @@ import type { Connector } from '../src/shared/types';
 import { gitlabLogin } from './oauth-pkce';
 import { serviceFetch } from './service-network';
 
-const schema = z.object({
+export const connectorSchema = z.object({
   id: idSchema,
   name: z.string().trim().min(1).max(100),
   kind: z.enum(['github', 'gitlab', 'browser']),
@@ -35,7 +35,7 @@ export class Connectors {
       .map((c) => ({ ...c, hasSecret: this.store.hasSecret('connector_' + c.id) }));
   }
   save(raw: unknown) {
-    const { secret, clearSecret, ...config } = schema.parse(raw);
+    const { secret, clearSecret, ...config } = connectorSchema.parse(raw);
     const url = serviceUrl(config.baseUrl);
     if (config.kind !== 'browser' && (url.pathname !== '/' || url.search || url.hash))
       throw new Error('服务地址只填写站点根地址');

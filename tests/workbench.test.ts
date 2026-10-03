@@ -8,7 +8,8 @@ import { Store } from '../electron/store';
 import { Channels } from '../electron/channels';
 import { Bots } from '../electron/bots';
 import { Worktrees } from '../electron/worktrees';
-import { ClientCommands } from '../electron/client-commands';
+import { ClientCommands, operation } from '../electron/client-commands';
+import { z } from 'zod';
 import { ToolScope } from '../electron/extensions';
 const cleanup: (() => any)[] = [];
 afterEach(async () => {
@@ -203,9 +204,21 @@ describe('managed Git worktrees', () => {
     const w = new Worktrees(s, path.join(dir, 'app-data'), () => {});
     await writeFile(path.join(dir, 'tracked.txt'), 'primary dirty');
     const commands = new ClientCommands();
-    commands.register('createWorktree', (id, branch, ref) => w.create(id, branch, ref));
-    commands.register('listWorktrees', (id) => w.list(id));
-    commands.register('removeWorktree', (id) => w.remove(id));
+    commands.register(
+      'createWorktree',
+      operation('Git', 'change', '创建工作树', [z.string(), z.string(), z.string()]),
+      (id, branch, ref) => w.create(id, branch, ref),
+    );
+    commands.register(
+      'listWorktrees',
+      operation('Git', 'query', '查看工作树', [z.string()]),
+      (id) => w.list(id),
+    );
+    commands.register(
+      'removeWorktree',
+      operation('Git', 'change', '移除工作树', [z.string()]),
+      (id) => w.remove(id),
+    );
     const approve = vi.fn(async () => true);
     const scope = new ToolScope(new AbortController().signal, approve, () => {});
     cleanup.push(() => scope.close());

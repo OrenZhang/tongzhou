@@ -185,7 +185,15 @@ try {
   await app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows().forEach((w) => w.setIgnoreMouseEvents(true)),
   );
-  const nav = (name) => page.locator('.sidebar').getByRole('button', { name, exact: true }).click();
+  const nav = async (name) => {
+    if (name === '连接中心') {
+      await page
+        .locator('.sidebar')
+        .getByRole('button', { name: '设置与优化', exact: true })
+        .click();
+      await page.getByRole('button', { name: '打开连接中心', exact: true }).click();
+    } else await page.locator('.sidebar').getByRole('button', { name, exact: true }).click();
+  };
   const capture = async (name) => {
     const file = `test-results/ui-${name}.png`;
     await page.screenshot({ path: file, animations: 'disabled' });
@@ -211,9 +219,9 @@ try {
     true,
   );
   await page.keyboard.press('Tab');
-  await page.getByRole('combobox', { name: '搜索操作或会话' }).fill('连接中心');
+  await page.getByRole('combobox', { name: '搜索操作或会话' }).fill('模型与订阅');
   await page.keyboard.press('Enter');
-  await page.getByRole('heading', { name: '连接中心', exact: true }).waitFor();
+  await page.getByRole('heading', { name: '模型与订阅', exact: true }).waitFor();
   checks.push('keyboard command search opens the selected real module');
   await page.getByLabel('搜索模型连接', { exact: true }).fill('does-not-exist');
   await page.getByText('没有匹配的连接，试试其他关键词。', { exact: true }).waitFor();
@@ -291,11 +299,12 @@ try {
     await page.locator('.context-panel').waitFor();
     await page.locator('.turn-final').waitFor();
     await capture(`${width}-project`);
-    await nav('连接中心');
+    await nav('模型与订阅');
     await capture(`${width}-connections`);
     await page.getByRole('button', { name: '添加连接', exact: true }).click();
     await capture(`${width}-connection-editor`);
     await page.keyboard.press('Escape');
+    await nav('连接中心');
     for (const [label, name] of [
       ['服务与浏览器', 'accounts'],
       ['渠道通知', 'channels'],
@@ -306,7 +315,7 @@ try {
     }
     await nav('Agent 团队');
     await capture(`${width}-agents`);
-    await nav('插件与工具');
+    await nav('插件');
     await capture(`${width}-core`);
     await page.getByRole('button', { name: /^MCP 插件/ }).click();
     await capture(`${width}-mcp`);
@@ -314,14 +323,14 @@ try {
     await capture(`${width}-skills`);
     await nav('运行记录');
     await capture(`${width}-activity`);
-    await nav('设置与关于');
+    await nav('设置与优化');
     await capture(`${width}-settings`);
     await page.keyboard.press(shortcut);
     await page.getByRole('combobox', { name: '搜索操作或会话' }).fill('项目');
     await capture(`${width}-commands`);
     await page.keyboard.press('Escape');
   }
-  await nav('插件与工具');
+  await nav('插件');
   await page.getByRole('button', { name: /^MCP 插件/ }).click();
   await page.getByRole('checkbox', { name: '启用 文档检索', exact: true }).click();
   await page.waitForFunction(

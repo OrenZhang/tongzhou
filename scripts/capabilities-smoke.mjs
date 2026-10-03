@@ -23,7 +23,7 @@ try {
     w.setIgnoreMouseEvents(true);
   });
   const navigate = () =>
-    page.locator('.sidebar').getByRole('button', { name: '插件与工具', exact: true }).click();
+    page.locator('.sidebar').getByRole('button', { name: '插件', exact: true }).click();
   await navigate();
   const computer = page.getByRole('region', { name: '电脑控制能力', exact: true });
   const management = page.getByRole('region', { name: '客户端管理能力', exact: true });

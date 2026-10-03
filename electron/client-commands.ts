@@ -1,160 +1,193 @@
+import { z } from 'zod';
 import type { ToolScope } from './extensions';
+import type { ClientCatalog, ClientMethod } from '../src/shared/client-catalog';
 
-/** UI and chat invoke the same validated business handlers, never arbitrary IPC. */
+export type ClientOperation = {
+  module: string;
+  description: string;
+  access: 'query' | 'change' | 'manual';
+  args: z.ZodType<unknown[]>;
+  reason?: string;
+  view?: string;
+  guard?: (args: unknown[], sessionId: string) => void;
+};
+
+/** Declare once beside the business handler. IPC, discovery and chat share this contract. */
+export function operation(
+  module: string,
+  access: 'query' | 'change',
+  description: string,
+  args: [] | [z.ZodType, ...z.ZodType[]] = [],
+  options: Pick<ClientOperation, 'guard'> = {},
+): ClientOperation {
+  return {
+    module,
+    access,
+    description,
+    args: args.length ? z.tuple(args as [z.ZodType, ...z.ZodType[]]) : z.tuple([]),
+    ...options,
+  };
+}
+export function manual(
+  module: string,
+  description: string,
+  view: string,
+  reason: string,
+  args: [] | [z.ZodType, ...z.ZodType[]] = [],
+): ClientOperation {
+  return {
+    module,
+    access: 'manual',
+    description,
+    view,
+    reason,
+    args: args.length ? z.tuple(args as [z.ZodType, ...z.ZodType[]]) : z.tuple([]),
+  };
+}
+
+const credentialKey =
+  /^(secret|oauthClientSecret|password|cookies?|authorization|access_?token|refresh_?token|signingSecret|webhook|clientSecret|api_?key)$/i;
+function containsCredential(value: unknown): boolean {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    Object.entries(value).some(
+      ([key, child]) => (credentialKey.test(key) && !!child) || containsCredential(child),
+    )
+  );
+}
+
 export class ClientCommands {
-  private handlers = new Map<string, (...args: any[]) => unknown>();
-  private readonly readable = new Set([
-    'snapshot',
-    'messages',
-    'readMessage',
-    'runEvents',
-    'computerStatus',
-    'listFiles',
-    'readFile',
-    'diff',
-    'listWorktrees',
-    'gitRepository',
-    'clientMethods',
-  ]);
-  private readonly writable = new Set([
-    'saveAgent',
-    'deleteAgent',
-    'createSession',
-    'updateSession',
-    'deleteSession',
-    'savePlugin',
-    'deletePlugin',
-    'testPlugin',
-    'saveSkill',
-    'deleteSkill',
-    'setCapability',
-    'saveProvider',
-    'deleteProvider',
-    'models',
-    'saveChannel',
-    'deleteChannel',
-    'sendChannel',
-    'saveNotificationRule',
-    'deleteNotificationRule',
-    'saveConnector',
-    'deleteConnector',
-    'testConnector',
-    'openBrowserProfile',
-    'clearBrowserProfile',
-    'initializeAgent',
-    'branchSession',
-    'installBuiltinPlugin',
-    'openModule',
-    'createWorktree',
-    'removeWorktree',
-    'bindGitAccount',
-    'cloneRepository',
-    'syncRepository',
-  ]);
-  register(name: string, handler: (...args: any[]) => unknown) {
-    if (this.readable.has(name) || this.writable.has(name)) this.handlers.set(name, handler);
+  private handlers = new Map<
+    string,
+    { operation: ClientOperation; handler: (...args: any[]) => unknown }
+  >();
+
+  register(name: string, operation: ClientOperation, handler: (...args: any[]) => unknown) {
+    if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(name) || this.handlers.has(name))
+      throw new Error('重复或无效的客户端操作：' + name);
+    if (
+      !operation.module ||
+      !operation.description ||
+      (operation.access === 'manual' && (!operation.reason || !operation.view))
+    )
+      throw new Error('客户端操作缺少模块、说明或手动入口：' + name);
+    this.handlers.set(name, { operation, handler });
   }
-  describe() {
+
+  describe(filter: { module?: string; method?: string } = {}): ClientCatalog {
+    const methods: ClientMethod[] = [...this.handlers]
+      .filter(
+        ([name, { operation: op }]) =>
+          (!filter.module || op.module === filter.module) &&
+          (!filter.method || name === filter.method),
+      )
+      .map(([name, { operation: op }]) => ({
+        name,
+        module: op.module,
+        description: op.description,
+        access: op.access,
+        reason: op.reason,
+        view: op.view,
+        arguments: z.toJSONSchema(op.args, { unrepresentable: 'any' }),
+      }));
     return {
-      read: [...this.readable].filter((name) => this.handlers.has(name)),
-      change: [...this.writable].filter((name) => this.handlers.has(name)),
-      examples: {
-        snapshot: [],
-        messages: ['sessionId'],
-        readMessage: ['sessionId', 'messageId', { offset: 0, limit: 2000 }],
-        setCapability: ['computer', true],
-        updateSession: ['sessionId', { title: '新标题' }],
-        saveAgent: [
-          {
-            id: 'new-agent-id',
-            name: '我的角色',
-            description: '',
-            instructions: '按用户要求工作',
-            providerId: '',
-            model: '',
-            permission: 'ask',
-            maxSteps: 20,
-          },
-        ],
-        sendChannel: ['channelId', '用户要求发送的准确文本', 'sessionId'],
-        saveNotificationRule: [
-          {
-            id: 'rule-id',
-            channelId: 'channelId',
-            sessionId: 'sessionId',
-            enabled: true,
-            once: true,
-            events: ['completed'],
-            template: '{title} {status}',
-          },
-        ],
-        openModule: ['providers'],
-        initializeAgent: ['projectId'],
-        branchSession: ['sessionId', 'messageId'],
-        gitRepository: ['projectId'],
-        listWorktrees: ['projectId'],
-        createWorktree: ['projectId', 'feature/task-name', 'HEAD'],
-        removeWorktree: ['worktreeProjectId'],
-        bindGitAccount: ['projectId', 'connectorId'],
-        cloneRepository: [
-          'connectorId',
-          'https://github.com/owner/repository.git',
-          'absolute/new-directory',
-        ],
-        syncRepository: ['projectId', 'pull'],
-      },
+      modules: [...new Set(methods.map((m) => m.module))],
+      methods,
+      read: methods.filter((m) => m.access === 'query').map((m) => m.name),
+      change: methods.filter((m) => m.access === 'change').map((m) => m.name),
       notes:
-        '先用 snapshot 查询真实 ID。save* 使用 snapshot 中完整对象及修改字段；delete* 传 ID。Git 工作树是内置执行能力，无需配置或打开页面：任务需要隔离时用 createWorktree，返回目录与项目 ID；用 createSession(projectId) 创建绑定该目录的会话，用 listWorktrees 查看，再按需 removeWorktree。已有会话不能静默改绑目录。账号凭据只在 UI 输入。规则保存后适用其 scope；主动发送必须有用户要求的收件渠道和内容。',
+        '先查询能力目录和参数结构，再用 snapshot 查询真实 ID。args 为位置参数数组；save* 使用完整配置对象，凭据只能在界面输入。修改遵循当前会话权限。manual 操作请引导用户到 view 对应页面，不得代替用户审批。发送通知须有用户指定的渠道和内容。',
     };
   }
+
   attach(scope: ToolScope, readOnly: boolean, enabled: () => boolean, sessionId: string) {
-    for (const [name, commands, approval] of [
-      ['client_query', this.readable, false],
-      ['client_change', this.writable, true],
+    scope.add(
+      {
+        name: 'client_catalog',
+        description:
+          '发现同舟所有模块的功能。无参数列出摘要；用 module 筛选模块，用 method 读取某操作的完整位置参数 JSON Schema。新模块注册后自动可见；manual 表示需要用户在对应页面操作。',
+        parameters: {
+          type: 'object',
+          properties: { module: { type: 'string' }, method: { type: 'string' } },
+          additionalProperties: false,
+        },
+      },
+      '查询客户端能力目录',
+      async (input) => {
+        const filter = z
+          .object({ module: z.string().optional(), method: z.string().optional() })
+          .strict()
+          .parse(input);
+        const catalog = this.describe(filter);
+        return {
+          text: JSON.stringify({
+            ...catalog,
+            readOnly,
+            methods: catalog.methods.map(({ arguments: args, ...m }) => ({
+              ...m,
+              available: m.access === 'query' || (m.access === 'change' && !readOnly),
+              ...(filter.method ? { arguments: args } : {}),
+            })),
+          }),
+        };
+      },
+      false,
+      enabled,
+    );
+
+    for (const [name, access, approval] of [
+      ['client_query', 'query', false],
+      ['client_change', 'change', true],
     ] as const) {
       if (readOnly && approval) continue;
       scope.add(
         {
           name,
-          description: approval
-            ? '执行同舟内置操作，管理会话、Git 工作目录和客户端配置。args 是该方法的参数数组。会话和 Agent 可为空。不得传入任何密钥。saveAgent 接收完整角色对象；setCapability 接收能力名称及布尔值；updateSession 接收会话 ID 及补丁。Git 工作树通过 createWorktree / removeWorktree 操作，无需打开配置页面。先查询真实 ID 再修改。'
-            : '查询同舟当前真实状态。snapshot 返回连接、Agent、插件、Skills、会话和运行状态；messages / runEvents 接收会话 ID；readMessage 接收会话 ID、消息 ID、{offset,limit}，分段读取历史原文（默认 2000 字符，上限 8000）；computerStatus 无参数。args 为参数数组。',
+          description:
+            (approval ? '执行' : '查询') +
+            '同舟模块功能。先调用 client_catalog 发现操作及参数；method 是注册名，args 按 arguments 的位置参数顺序传入。不得传入凭据。',
           parameters: {
             type: 'object',
-            properties: {
-              method: { type: 'string', enum: [...commands].filter((m) => this.handlers.has(m)) },
-              args: { type: 'array', items: {} },
-            },
+            properties: { method: { type: 'string' }, args: { type: 'array', items: {} } },
             required: ['method', 'args'],
             additionalProperties: false,
           },
         },
         approval ? '执行同舟操作' : '查询同舟',
         async (input) => {
-          if (!enabled()) throw new Error('客户端管理已停用');
-          if (!commands.has(input.method) || !Array.isArray(input.args))
-            throw new Error('不支持的客户端操作');
-          if (input.method === 'deleteSession' && input.args[0] === sessionId)
-            throw new Error('请通过会话菜单删除当前正在运行的会话，以完成任务收尾');
-          const containsCredential = (value: any): boolean =>
-            value &&
-            typeof value === 'object' &&
-            Object.entries(value).some(
-              ([key, child]) =>
-                (/^(secret|oauthClientSecret|password|cookies?|authorization|accessToken|refreshToken|signingSecret|webhook)$/i.test(
-                  key,
-                ) &&
-                  !!child) ||
-                containsCredential(child),
-            );
-          if (containsCredential(input.args))
+          const call = z
+            .object({ method: z.string(), args: z.array(z.unknown()) })
+            .strict()
+            .parse(input);
+          const entry = this.handlers.get(call.method);
+          if (!entry || entry.operation.access !== access)
+            throw new Error('此操作不可通过当前工具执行，请查询 client_catalog');
+          if (containsCredential(call.args))
             throw new Error('请通过安全配置界面设置凭据，聊天工具不接收凭据');
-          const handler = this.handlers.get(input.method);
-          if (!handler) throw new Error('此客户端操作尚未提供');
-          const value = await handler(...input.args);
-          return { text: JSON.stringify(value ?? { success: true }) };
+          const parsed = entry.operation.args.safeParse(call.args);
+          if (!parsed.success)
+            throw new Error(
+              '参数不符合操作定义：' +
+                parsed.error.issues.map((i) => i.path.join('.') + ': ' + i.message).join('; '),
+            );
+          entry.operation.guard?.(parsed.data, sessionId);
+          const value = await entry.handler(...parsed.data);
+          return {
+            text: JSON.stringify(value ?? { success: true }, function (key, child) {
+              // Status discovery must never relay device codes, login URLs or credential fields.
+              if (
+                credentialKey.test(key) ||
+                /^(userCode|device_code|deviceCode)$/i.test(key) ||
+                (key === 'url' && this && typeof this === 'object' && 'phase' in this)
+              )
+                return undefined;
+              return child;
+            }),
+          };
         },
         approval,
+        enabled,
       );
     }
   }

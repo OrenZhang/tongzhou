@@ -84,7 +84,7 @@ try {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.screenshot({ path: 'test-results/01-workspace.png' });
-  await page.getByRole('button', { name: /^连接中心/ }).click();
+  await page.getByRole('button', { name: /^模型与订阅/ }).click();
   await page.getByRole('button', { name: '添加连接', exact: true }).click();
   assert.equal(await page.getByLabel('历史上下文', { exact: true }).inputValue(), 'unlimited');
   await page.getByLabel('连接名称', { exact: true }).fill('本地测试服务');
@@ -124,7 +124,7 @@ try {
   await page.getByLabel('角色指令', { exact: true }).fill('只读检查代码，给出证据。');
   await page
     .getByRole('dialog', { name: '配置 Agent', exact: true })
-    .getByLabel('连接中心', { exact: true })
+    .getByLabel('模型连接', { exact: true })
     .selectOption(provider.id);
   await page.getByRole('button', { name: 'Agent 模型', exact: true }).click();
   await page.getByLabel('搜索模型', { exact: true }).fill('reviewer');
@@ -317,7 +317,7 @@ try {
     'hiding logs must preserve tool evidence in history',
   );
   await page.screenshot({ path: 'test-results/05-conversation.png' });
-  await page.getByRole('button', { name: '设置与关于', exact: true }).click();
+  await page.getByRole('button', { name: '设置与优化', exact: true }).click();
   await page.getByLabel('全局默认权限', { exact: true }).selectOption('full-access');
   await page.waitForFunction(
     async () => (await window.tongzhou.snapshot()).defaultPermission === 'full-access',
