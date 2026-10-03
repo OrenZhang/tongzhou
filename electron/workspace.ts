@@ -135,7 +135,7 @@ function windowsCommand(script: string): string[] {
   // Parse the supplied script only after configuring UTF-8, including parse-error output.
   // Encode the user script to preserve Unicode and quotes without PowerShell's CLIXML host mode.
   const wrapper = `
-$OutputEncoding = [Console]::InputEncoding = [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+$OutputEncoding = [Console]::InputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $ProgressPreference = 'SilentlyContinue'
 try {
   & ([ScriptBlock]::Create([Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('${Buffer.from(script, 'utf16le').toString('base64')}'))))
@@ -170,6 +170,7 @@ export function commandResult(
       env,
       windowsHide: true,
       shell: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
       detached: process.platform !== 'win32',
     });
     let output = '';

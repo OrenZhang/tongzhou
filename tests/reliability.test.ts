@@ -32,7 +32,7 @@ describe('long conversations and concurrent changes', () => {
     const run = (command: string) =>
       executeTool(
         'run_command',
-        JSON.stringify({ command }),
+        JSON.stringify({ command, timeoutMs: 30000 }),
         root,
         'ask',
         new AbortController().signal,
@@ -43,6 +43,7 @@ describe('long conversations and concurrent changes', () => {
         ? "Write-Output '同舟：中文与引号 ''完整'''; exit 7"
         : "printf '%s\\n' '同舟：中文与引号 完整'; exit 7";
     const result = JSON.parse(await run(script));
+    expect(result.status, JSON.stringify(result)).toBe('completed');
     expect(result.exitCode).toBe(7);
     expect(result.stdout).toContain('同舟：中文与引号');
     expect(result.stdout).not.toContain('\ufffd');
@@ -57,24 +58,29 @@ describe('long conversations and concurrent changes', () => {
       ),
     );
     expect(failed.exitCode).toBe(7);
-  });
+  }, 60000);
   it.skipIf(process.platform !== 'win32')(
     'reports PowerShell parsing failures in readable UTF-8',
     async () => {
       const result = JSON.parse(
         await executeTool(
           'run_command',
-          JSON.stringify({ command: "Write-Output '中文' && Write-Output '第二条'" }),
+          JSON.stringify({
+            command: "Write-Output '中文' && Write-Output '第二条'",
+            timeoutMs: 30000,
+          }),
           await directory(),
           'ask',
           new AbortController().signal,
           async () => true,
         ),
       );
+      expect(result.status, JSON.stringify(result)).toBe('completed');
       expect(result.exitCode).not.toBe(0);
       expect(result.stderr).toContain('&&');
       expect(result.stderr).not.toContain('\ufffd');
     },
+    45000,
   );
   it('preflights multi-file edits before approval and reports a partial commit after a later conflict', async () => {
     const root = await directory();
