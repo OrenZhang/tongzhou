@@ -6,6 +6,7 @@ export class ClientCommands {
   private readonly readable = new Set([
     'snapshot',
     'messages',
+    'readMessage',
     'runEvents',
     'computerStatus',
     'listFiles',
@@ -53,6 +54,7 @@ export class ClientCommands {
       examples: {
         snapshot: [],
         messages: ['sessionId'],
+        readMessage: ['sessionId', 'messageId', { offset: 0, limit: 2000 }],
         setCapability: ['computer', true],
         updateSession: ['sessionId', { title: '新标题' }],
         saveAgent: [
@@ -98,7 +100,7 @@ export class ClientCommands {
           name,
           description: approval
             ? '修改同舟客户端配置。args 是该方法的参数数组。会话和 Agent 可为空。不得传入任何密钥。saveAgent 接收完整角色对象；setCapability 接收能力名称及布尔值；updateSession 接收会话 ID 及补丁。先查询真实 ID 再修改。'
-            : '查询同舟当前真实状态。snapshot 返回连接、Agent、插件、Skills、会话和运行状态；messages / runEvents 接收会话 ID；computerStatus 无参数。args 为参数数组。',
+            : '查询同舟当前真实状态。snapshot 返回连接、Agent、插件、Skills、会话和运行状态；messages / runEvents 接收会话 ID；readMessage 接收会话 ID、消息 ID、{offset,limit}，分段读取历史原文（默认 2000 字符，上限 8000）；computerStatus 无参数。args 为参数数组。',
           parameters: {
             type: 'object',
             properties: {

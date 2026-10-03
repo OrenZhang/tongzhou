@@ -3,6 +3,7 @@ import type { Message } from './shared/types';
 import {
   turnEntries,
   finalTurnEntry,
+  processGroups,
   type TurnEntry,
   type ConversationTurn as Turn,
 } from './shared/turns';
@@ -75,15 +76,6 @@ export function ConversationTurn({ turn, ...actions }: Actions & { turn: Turn })
   const renderEntry = (entry: TurnEntry) => {
     if ('event' in entry) {
       const event = entry.event;
-      const next = entries[entries.indexOf(entry) + 1];
-      if (
-        event.type === 'tool' &&
-        next &&
-        'message' in next &&
-        next.message.role === 'tool' &&
-        next.message.toolName === event.text
-      )
-        return null;
       if (event.type === 'phase') {
         if (active && event === turn.events.filter((e) => e.type === 'phase').at(-1)) return null;
         return (
@@ -94,18 +86,13 @@ export function ConversationTurn({ turn, ...actions }: Actions & { turn: Turn })
       }
       if (event.type === 'reasoning')
         return (
-          <details
-            key={entry.key}
-            className="process-reasoning"
-            data-entry-kind="reasoning"
-            open={active && turn.events.at(-1)?.id === event.id}
-          >
-            <summary>
+          <section key={entry.key} className="process-reasoning" data-entry-kind="reasoning">
+            <div className="process-reasoning-label">
               <Brain size={13} />
               思考摘要
-            </summary>
+            </div>
             <Markdown text={event.text} />
-          </details>
+          </section>
         );
       return (
         <div key={entry.key} className="process-event" data-entry-kind={event.type}>
@@ -187,7 +174,21 @@ export function ConversationTurn({ turn, ...actions }: Actions & { turn: Turn })
                 .filter((e) => 'message' in e && e.message.role === 'user')
                 .map(renderEntry)}
             >
-              {entries.filter((e) => e !== final).map(renderEntry)}
+              {processGroups(entries.filter((e) => e !== final)).map((group) =>
+                group.tools && group.entries.length > 1 ? (
+                  <details key={group.key} className="process-tool-group">
+                    <summary>
+                      <Terminal size={13} />
+                      工具调用 · {group.entries.length} 项
+                      {group.entries.some((e) => 'message' in e && e.message.status === 'error') &&
+                        ' · 有未完成项'}
+                    </summary>
+                    <div className="process-tool-list">{group.entries.map(renderEntry)}</div>
+                  </details>
+                ) : (
+                  group.entries.map(renderEntry)
+                ),
+              )}
               {!active && entries.filter((e) => e !== final).length === 0 && (
                 <div className="process-phase">
                   {turn.events

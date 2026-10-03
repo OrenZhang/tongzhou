@@ -40,7 +40,7 @@ export const providerSchema = z
     models: z.array(z.string().trim().min(1).max(200)).max(200),
     modelLabels: z.record(z.string().max(200), z.string().max(200)).optional(),
     maxOutputTokens: z.number().int().min(256).max(131072),
-    contextChars: z.number().int().min(4000).max(1000000),
+    contextChars: z.union([z.literal(0), z.number().int().min(4000).max(1000000)]),
     secret: z.string().max(16000).optional(),
     clearSecret: z.boolean().optional(),
   })

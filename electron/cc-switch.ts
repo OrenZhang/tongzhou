@@ -78,7 +78,7 @@ export function parseCCSwitch(data: any): ImportPreview {
         auth: 'api-key',
         models: model ? [model] : [],
         maxOutputTokens: 8192,
-        contextChars: 100000,
+        contextChars: 0,
         secret,
       };
       result.providers.push(providerSchema.parse(input));

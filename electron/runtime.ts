@@ -110,7 +110,7 @@ export class Runtime {
         this.progress(
           run,
           'input',
-          `已压缩较早的 ${omitted} 条消息，保留来源摘录及最近完整轮次。历史原文仍可查看。`,
+          `已自动整理 ${omitted} 条较早消息或长工具记录，保留当前请求和最近工具调用。完整原文仍可分段查看。`,
         );
       }
     });
@@ -700,6 +700,7 @@ export class Runtime {
         model: input.model,
         instructions,
         messages: history,
+        historyPrepared: true,
         tools: [
           ...(!project ? [] : agent.permission === 'read-only' ? readOnlyToolSpecs : toolSpecs),
           ...scope.specs,
@@ -1262,7 +1263,10 @@ export class Runtime {
         });
       });
       this.store.put('engineSegment', { id: run.id, threadId, sessionId: input.sessionId });
-      const history = this.history(run, 160000);
+      const history = this.history(
+        run,
+        this.store.get<Provider>('provider', input.providerId).contextChars,
+      );
       const transcript = history
         .map((m) => `${m.role}${m.toolName ? ` (${m.toolName})` : ''}: ${m.content}`)
         .join('\n\n');

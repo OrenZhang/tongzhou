@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   conversationTurns,
+  processGroups,
   turnEntries,
   finalTurnEntry,
   formatDuration,
@@ -42,6 +43,31 @@ const event = (id: string, runId: string, seq: number, sessionId = 'chat'): RunE
 });
 
 describe('conversation turn presentation', () => {
+  it('groups consecutive tools, removes duplicate labels and keeps reasoning boundaries', () => {
+    const t = conversationTurns(
+      'chat',
+      [
+        message('ask', 'user', 'r'),
+        { ...message('tool1', 'tool', 'r'), toolName: 'read_file', sequence: 2 },
+        { ...message('tool2', 'tool', 'r'), toolName: 'list_files', sequence: 4 },
+        { ...message('tool3', 'tool', 'r'), toolName: 'read_file', sequence: 6, status: 'error' },
+      ],
+      [run('r')],
+      [
+        { ...event('start1', 'r', 1), type: 'tool', text: 'read_file' },
+        { ...event('start2', 'r', 3), type: 'tool', text: 'list_files' },
+        event('thinking', 'r', 5),
+      ],
+    )[0];
+    const groups = processGroups(turnEntries(t));
+    expect(groups.map((g) => [g.tools, g.entries.length])).toEqual([
+      [true, 2],
+      [false, 1],
+      [true, 1],
+    ]);
+    expect(groups[0].entries.map((e) => e.key)).toEqual(['tool1', 'tool2']);
+    expect(groups[2].entries[0]).toMatchObject({ message: { status: 'error' } });
+  });
   it('interleaves reasoning and response segments without splitting protocol messages', () => {
     const reply = {
       ...message('reply', 'assistant', 'r1'),

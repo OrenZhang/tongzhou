@@ -217,7 +217,7 @@ function setup() {
         baseUrl: '',
         models: [],
         maxOutputTokens: 8192,
-        contextChars: 160000,
+        contextChars: 0,
       });
   }
   accounts = new Accounts(store, runtime, dataDir, emit, (url) => shell.openExternal(url));
@@ -436,6 +436,20 @@ function setup() {
       .object({ before: idSchema.optional(), limit: z.number().int().min(1).max(500).optional() })
       .parse(raw ?? {});
     return store.messagesPage(idSchema.parse(id), options.before, options.limit);
+  });
+  register('readMessage', (sessionId, messageId, raw) => {
+    const options = z
+      .object({
+        offset: z.number().int().min(0).optional(),
+        limit: z.number().int().min(1).max(8000).optional(),
+      })
+      .parse(raw ?? {});
+    return store.readMessage(
+      idSchema.parse(sessionId),
+      idSchema.parse(messageId),
+      options.offset,
+      options.limit,
+    );
   });
   register('saveProvider', (raw) => {
     const input = providerSchema.parse(raw);

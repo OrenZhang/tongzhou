@@ -27,6 +27,7 @@ export interface Provider {
   modelLabels?: Record<string, string>;
   hasSecret?: boolean;
   maxOutputTokens: number;
+  /** 0 = no local limit; positive = automatic history compaction target. */
   contextChars: number;
 }
 export interface ProviderInput extends Provider {

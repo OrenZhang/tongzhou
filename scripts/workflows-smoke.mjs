@@ -96,7 +96,6 @@ try {
   assert.equal(await page.locator('.process-timeline:visible').count(), 0);
   assert.equal(await page.locator('.run-activity, .composer-wrap .turn-process').count(), 0);
   await firstThinking.click();
-  await page.locator('.conversation-turn').first().locator('.process-reasoning > summary').click();
   await page
     .locator('.conversation-turn')
     .first()
@@ -165,12 +164,6 @@ try {
     .locator('.conversation-turn')
     .last()
     .getByRole('button', { name: '本轮用时与处理过程', exact: true })
-    .click();
-  await page
-    .locator('.conversation-turn')
-    .last()
-    .locator('.process-reasoning > summary')
-    .first()
     .click();
   await page
     .locator('.conversation-turn')

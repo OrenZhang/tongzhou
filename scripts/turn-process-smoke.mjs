@@ -65,6 +65,12 @@ const server = createServer(async (req, res) => {
             id: 'read',
             function: { name: 'read_file', arguments: '{"path":"README.md"}' },
           },
+          { index: 1, id: 'list', function: { name: 'list_files', arguments: '{}' } },
+          {
+            index: 2,
+            id: 'read-again',
+            function: { name: 'read_file', arguments: '{"path":"README.md"}' },
+          },
         ],
       },
       'tool_calls',
@@ -99,7 +105,7 @@ try {
       baseUrl,
       models: ['fixture'],
       maxOutputTokens: 16384,
-      contextChars: 50000,
+      contextChars: 0,
     });
     const project = await window.tongzhou.addProject();
     return window.tongzhou.createSession(project.id);
@@ -117,6 +123,13 @@ try {
   );
   assert.equal(await turn.locator('.process-current').innerText(), '正在回复');
   assert.equal(await turn.locator('.process-reasoning').count(), 2);
+  assert.equal(await turn.getByText('先检查项目环境。', { exact: true }).isVisible(), true);
+  assert.equal(await turn.getByText('接下来读取说明文件。', { exact: true }).isVisible(), true);
+  const toolGroup = turn.locator('.process-tool-group');
+  assert.equal(await toolGroup.count(), 1);
+  assert.equal(await toolGroup.getAttribute('open'), null);
+  assert.match(await toolGroup.locator(':scope > summary').innerText(), /3 项/);
+  assert.equal(await turn.locator('.process-tool:visible').count(), 0);
   assert.equal(await turn.locator('.process-toggle').getAttribute('aria-expanded'), 'true');
   await page.waitForFunction(
     () => !document.querySelector('.process-toggle').textContent.includes('0秒'),
@@ -126,7 +139,15 @@ try {
     .evaluateAll((elements) =>
       elements.map((e) => e.dataset.entryKind).filter((kind) => kind !== 'phase'),
     );
-  assert.deepEqual(ordered, ['reasoning', 'response', 'reasoning', 'tool-result', 'response']);
+  assert.deepEqual(ordered, [
+    'reasoning',
+    'response',
+    'reasoning',
+    'tool-result',
+    'tool-result',
+    'tool-result',
+    'response',
+  ]);
   await page.screenshot({ path: 'test-results/process-segments-live.png' });
   release();
   await turn
@@ -137,6 +158,12 @@ try {
   assert.equal(await turn.locator('.process-current').count(), 0);
   await turn.locator('.process-toggle').click();
   await turn.getByText('文件已检查，继续整理。', { exact: true }).waitFor();
+  assert.equal(await turn.getByText('根据实际文件整理结果。', { exact: true }).isVisible(), true);
+  await toolGroup.locator(':scope > summary').click();
+  assert.equal(await turn.locator('.process-tool:visible').count(), 3);
+  await turn.locator('.process-tool > summary').first().click();
+  await turn.locator('.process-tool > pre').first().waitFor();
+  await toolGroup.locator(':scope > summary').click();
   const duration = await turn.locator('.process-toggle').innerText();
   assert.match(duration, /用时/);
   await page.screenshot({ path: 'test-results/process-segments-expanded.png' });
@@ -149,6 +176,8 @@ try {
   await page.locator('.process-toggle').click();
   assert.equal(await page.locator('.process-reasoning').count(), 3);
   assert.equal(await page.locator('.assistant-segment').count(), 3);
+  assert.equal(await page.getByText('先检查项目环境。', { exact: true }).isVisible(), true);
+  assert.equal(await page.locator('.process-tool-group').getAttribute('open'), null);
   await page.locator('.process-toggle').click();
   await page.getByLabel('消息', { exact: true }).fill('触发截断');
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
@@ -169,6 +198,7 @@ try {
           'interleaved reasoning, interim responses and actual tool result',
           'visible interim response while work continues without new reasoning',
           'one assistant per turn',
+          'reasoning shown without individual disclosure; consecutive tools collapsed together',
           'elapsed process expands and collapses',
           'stable duration and segment history after reload',
           'truncation preserves text and identifies configured output limit',

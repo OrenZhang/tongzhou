@@ -46,7 +46,7 @@ export class Store {
         auth: 'chatgpt',
         models: [],
         maxOutputTokens: 8192,
-        contextChars: 180000,
+        contextChars: 0,
       });
       this.put('provider', {
         id: 'local',
@@ -56,7 +56,7 @@ export class Store {
         auth: 'none',
         models: [],
         maxOutputTokens: 8192,
-        contextChars: 60000,
+        contextChars: 0,
       });
     }
     if (version.value === '1') {
@@ -244,6 +244,30 @@ export class Store {
     )
       .reverse()
       .map((r) => JSON.parse(r.value));
+  }
+  readMessage(sessionId: string, messageId: string, offset = 0, limit = 2000) {
+    this.get<Session>('session', sessionId);
+    const row = this.db
+      .prepare('SELECT value FROM messages WHERE id=? AND session_id=?')
+      .get(messageId, sessionId) as { value: string } | undefined;
+    if (!row) throw new Error('此会话中不存在该消息');
+    const message: Message = JSON.parse(row.value);
+    const start = Math.max(0, Math.min(Math.floor(offset), message.content.length));
+    const end = Math.min(
+      message.content.length,
+      start + Math.max(1, Math.min(Math.floor(limit), 8000)),
+    );
+    return {
+      id: message.id,
+      sessionId,
+      role: message.role,
+      toolName: message.toolName,
+      status: message.status,
+      content: message.content.slice(start, end),
+      offset: start,
+      nextOffset: end < message.content.length ? end : null,
+      totalChars: message.content.length,
+    };
   }
   createSession(projectId: string | null = null, parentId?: string): Session {
     if (projectId) this.get<Project>('project', projectId);

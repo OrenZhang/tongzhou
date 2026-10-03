@@ -457,7 +457,7 @@ export default function App() {
       auth: 'api-key',
       models: [],
       maxOutputTokens: 8192,
-      contextChars: 100000,
+      contextChars: 0,
     });
   const normalizedProvider = () => ({
     ...providerEdit!,
@@ -1988,17 +1988,42 @@ export default function App() {
                   }
                 />
               </Field>
-              <Field label="历史字符预算" hint="按完整轮次保留近期历史；不是精确 Token 计数。">
-                <input
-                  type="number"
-                  min={4000}
-                  max={1000000}
-                  value={providerEdit.contextChars}
+              <Field
+                label="历史上下文"
+                hint="不设本地上限会发送完整文字历史；模型服务仍有实际容量限制。"
+              >
+                <select
+                  value={providerEdit.contextChars === 0 ? 'unlimited' : 'compact'}
                   onChange={(e) =>
-                    setProviderEdit({ ...providerEdit, contextChars: Number(e.target.value) })
+                    setProviderEdit({
+                      ...providerEdit,
+                      contextChars: e.target.value === 'unlimited' ? 0 : 100000,
+                    })
                   }
-                />
+                >
+                  <option value="unlimited">不设本地上限</option>
+                  <option value="compact">自动整理历史</option>
+                </select>
               </Field>
+              {providerEdit.contextChars !== 0 && (
+                <Field
+                  label="自动整理阈值（字符）"
+                  hint="达到阈值时整理较早记录；保留当前请求，完整原文留在本地。不是精确 Token 计数。"
+                >
+                  <input
+                    type="number"
+                    min={4000}
+                    max={1000000}
+                    value={providerEdit.contextChars}
+                    onChange={(e) =>
+                      setProviderEdit({
+                        ...providerEdit,
+                        contextChars: Number(e.target.value) || 4000,
+                      })
+                    }
+                  />
+                </Field>
+              )}
             </div>
           </div>
           <div className="modal-footer">

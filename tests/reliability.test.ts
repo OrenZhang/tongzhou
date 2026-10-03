@@ -1,3 +1,4 @@
+import { historyChars } from '../electron/history';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, writeFile, readFile, rm, mkdir, access } from 'node:fs/promises';
 import path from 'node:path';
@@ -138,7 +139,7 @@ describe('long conversations and concurrent changes', () => {
     expect(summary?.content).toContain('Preserve original constraint');
     expect(summary?.role).toBe('assistant');
     expect(result.at(-1)?.id).toBe('m39');
-    expect(JSON.stringify(result).length).toBeLessThanOrEqual(5000);
+    expect(historyChars(result)).toBeLessThanOrEqual(5000);
     expect(messages[0].content).toContain('Preserve original constraint');
   });
   it('paginates by immutable sequence without duplicate messages after streamed updates', () => {

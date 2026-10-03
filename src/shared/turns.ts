@@ -60,6 +60,35 @@ export function finalTurnEntry(entries: TurnEntry[], active: boolean): TurnEntry
     : undefined;
 }
 
+export interface ProcessGroup {
+  key: string;
+  tools: boolean;
+  entries: TurnEntry[];
+}
+
+export function processGroups(entries: TurnEntry[]): ProcessGroup[] {
+  const visible = entries.filter((entry, i) => {
+    const next = entries[i + 1];
+    // The persisted result already identifies this call; do not show its start label twice.
+    return !(
+      'event' in entry &&
+      entry.event.type === 'tool' &&
+      next &&
+      'message' in next &&
+      next.message.role === 'tool' &&
+      next.message.toolName === entry.event.text
+    );
+  });
+  const groups: ProcessGroup[] = [];
+  for (const entry of visible) {
+    const tools = 'event' in entry ? entry.event.type === 'tool' : entry.message.role === 'tool';
+    const previous = groups.at(-1);
+    if (tools && previous?.tools) previous.entries.push(entry);
+    else groups.push({ key: entry.key, tools, entries: [entry] });
+  }
+  return groups;
+}
+
 export function formatDuration(milliseconds: number): string {
   const seconds = Math.max(0, Math.floor(milliseconds / 1000));
   if (seconds < 60) return `${seconds}秒`;

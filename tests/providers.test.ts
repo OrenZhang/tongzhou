@@ -506,7 +506,7 @@ describe('portable history and protocol mapping', () => {
     ];
     expect(JSON.stringify(requestBody({ ...input('gemini'), messages }).body)).toContain('opaque');
   });
-  it('keeps complete turns and rejects an oversized current turn', () => {
+  it('keeps call/result pairs and sends oversized user input without a local rejection', () => {
     const history = [
       message,
       {
@@ -520,8 +520,8 @@ describe('portable history and protocol mapping', () => {
       { ...message, id: 'new', content: 'next' },
     ];
     expect(portableHistory(history, 500)).toEqual([history[3]]);
-    expect(() => portableHistory([{ ...message, content: 'x'.repeat(1000) }], 500)).toThrow(
-      '超过上下文',
+    expect(portableHistory([{ ...message, content: 'x'.repeat(1000) }], 500)[0].content).toBe(
+      'x'.repeat(1000),
     );
   });
   it('pairs tool calls and tool responses in all protocols', () => {

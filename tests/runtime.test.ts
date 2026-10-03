@@ -77,6 +77,66 @@ const text = (content: string) => ({
   usage: { prompt_tokens: 10, completion_tokens: 4 },
 });
 describe('conversation input and lifecycle changes', () => {
+  it.each([0, 8000])(
+    'continues a long tool loop with history setting %s and preserves originals',
+    async (contextChars) => {
+      let calls = 0;
+      const f = await fixture(() =>
+        ++calls <= 8
+          ? [
+              {
+                choices: [
+                  {
+                    delta: {
+                      tool_calls: [
+                        {
+                          index: 0,
+                          id: 'read-' + calls,
+                          function: { name: 'read_file', arguments: '{"path":"large.txt"}' },
+                        },
+                      ],
+                    },
+                    finish_reason: 'tool_calls',
+                  },
+                ],
+              },
+            ]
+          : [text('completed long task')],
+      );
+      const provider = f.store.providers().find((p) => p.id === 'fixture')!;
+      f.store.saveProvider({ ...provider, contextChars });
+      await writeFile(path.join(f.root, 'large.txt'), 'a'.repeat(18000));
+      f.runtime.start(f.input);
+      await f.runtime.waitForIdle();
+      expect(f.store.list<Run>('run')[0].status).toBe('completed');
+      expect(f.requests).toHaveLength(9);
+      expect(f.store.messages(f.input.sessionId).filter((m) => m.role === 'tool')).toHaveLength(8);
+      expect(
+        f.store
+          .messages(f.input.sessionId)
+          .filter((m) => m.role === 'tool')
+          .every((m) => m.content.includes('a'.repeat(18000))),
+      ).toBe(true);
+      for (const body of f.requests) {
+        const declared = body.messages.flatMap((m: any) =>
+          (m.tool_calls ?? []).map((c: any) => c.id),
+        );
+        const results = body.messages
+          .filter((m: any) => m.role === 'tool')
+          .map((m: any) => m.tool_call_id);
+        expect(results.sort()).toEqual(declared.sort());
+      }
+      if (contextChars === 0) {
+        expect(JSON.stringify(f.requests.at(-1)).length).toBeGreaterThan(100000);
+        expect(f.store.list('contextCheckpoint')).toHaveLength(0);
+      } else {
+        expect(f.store.list('contextCheckpoint')).toHaveLength(1);
+        expect(
+          f.requests.at(-1).messages.some((m: any) => m.content?.includes('工具记录摘录')),
+        ).toBe(true);
+      }
+    },
+  );
   it('persists separate thought/text stages, including rapid transitions within one response', async () => {
     const f = await fixture(() => [
       { choices: [{ delta: { reasoning_content: '第一段思考' } }] },

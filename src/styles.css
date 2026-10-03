@@ -2197,25 +2197,39 @@ input[type='checkbox'] {
   overflow: auto;
 }
 .process-reasoning,
+.process-tool-group,
 .process-tool {
   color: #82938b;
   font-size: 12px;
 }
-.process-reasoning > summary,
+.process-tool-group > summary,
 .process-tool > summary {
   cursor: pointer;
   padding: 3px 0;
 }
-.process-reasoning > summary svg,
+.process-tool-group > summary svg,
 .process-tool > summary svg {
   vertical-align: -2px;
   margin: 0 5px;
+}
+.process-reasoning-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.process-tool-list {
+  margin: 4px 0 4px 12px;
+  padding-left: 10px;
+  border-left: 1px solid #e4ebe7;
+}
+.process-tool-list > * {
+  margin: 2px 0;
 }
 .process-reasoning .markdown {
   font-size: 12px;
   color: #82938b;
   line-height: 1.75;
-  margin: 8px 0 8px 15px;
+  margin: 5px 0 8px;
 }
 .process-tool > pre {
   max-height: 260px;

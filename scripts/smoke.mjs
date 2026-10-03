@@ -86,6 +86,7 @@ try {
   await page.screenshot({ path: 'test-results/01-workspace.png' });
   await page.getByRole('button', { name: /^连接中心/ }).click();
   await page.getByRole('button', { name: '添加连接', exact: true }).click();
+  assert.equal(await page.getByLabel('历史上下文', { exact: true }).inputValue(), 'unlimited');
   await page.getByLabel('连接名称', { exact: true }).fill('本地测试服务');
   await page.getByLabel('API Base URL').fill(`http://127.0.0.1:${server.address().port}/v1`);
   await page.getByLabel('认证方式', { exact: true }).selectOption('none');
@@ -95,6 +96,24 @@ try {
   await page.getByRole('heading', { name: '本地测试服务' }).waitFor();
   const provider = await page.evaluate(async () =>
     (await window.tongzhou.snapshot()).providers.find((p) => p.name === '本地测试服务'),
+  );
+  assert.equal(provider.contextChars, 0);
+  await page.getByRole('button', { name: '编辑 本地测试服务', exact: true }).click();
+  await page.getByLabel('历史上下文', { exact: true }).selectOption('compact');
+  await page.getByLabel('自动整理阈值（字符）', { exact: true }).fill('8000');
+  await page.getByRole('button', { name: '保存连接', exact: true }).click();
+  await page.getByRole('button', { name: '编辑 本地测试服务', exact: true }).click();
+  assert.equal(await page.getByLabel('历史上下文', { exact: true }).inputValue(), 'compact');
+  assert.equal(await page.getByLabel('自动整理阈值（字符）', { exact: true }).inputValue(), '8000');
+  await page.getByLabel('历史上下文', { exact: true }).selectOption('unlimited');
+  assert.equal(await page.getByLabel('自动整理阈值（字符）', { exact: true }).count(), 0);
+  await page.screenshot({ path: 'test-results/history-settings-unlimited.png' });
+  await page.getByRole('button', { name: '保存连接', exact: true }).click();
+  assert.equal(
+    (await page.evaluate(() => window.tongzhou.snapshot())).providers.find(
+      (p) => p.id === provider.id,
+    ).contextChars,
+    0,
   );
   await page.screenshot({ path: 'test-results/02-connections.png' });
   await page.getByRole('button', { name: 'Agent 团队', exact: true }).click();

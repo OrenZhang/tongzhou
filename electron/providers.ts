@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { Message, Provider, ToolCall } from '../src/shared/types';
 import { redact } from './validation';
+import { portableHistory } from './history';
+export { portableHistory } from './history';
 
 export interface ToolSpec {
   name: string;
@@ -21,78 +23,13 @@ export interface CompletionInput {
   model: string;
   instructions: string;
   messages: Message[];
+  historyPrepared?: boolean;
   tools: ToolSpec[];
   signal: AbortSignal;
   onDelta(text: string): void;
   onReasoning?(text: string): void;
 }
 
-// Preserve complete user turns so truncation cannot orphan a tool response.
-export function portableHistory(
-  messages: Message[],
-  maxChars: number,
-  checkpoint?: (message: Message, omitted: number) => void,
-): Message[] {
-  const blocks: Message[][] = [];
-  for (const original of messages.filter((m) => m.role !== 'system')) {
-    // Native engine activity lacks API call IDs. Retain it as evidence, not an orphan tool response.
-    let m: Message =
-      original.role === 'tool' && !original.toolCallId
-        ? {
-            ...original,
-            role: 'assistant',
-            content: `[历史工具记录：${original.toolName ?? '工具'}]\n${original.content}`,
-          }
-        : original;
-    if (m.role === 'assistant' && ['error', 'interrupted', 'streaming'].includes(m.status ?? ''))
-      m = { ...m, content: '[未完成的回复；不可视为执行成功]\n' + m.content };
-    if (m.role === 'tool' && m.status === 'error')
-      m = { ...m, content: '[工具未完成]\n' + m.content };
-    if (m.role === 'user' || !blocks.length) blocks.push([]);
-    blocks.at(-1)!.push(m);
-  }
-  const selected: Message[][] = [];
-  let size = 0;
-  const lengths = blocks.map((b) => JSON.stringify(b.map(({ images, ...m }) => m)).length);
-  const reserve =
-    maxChars >= 4000 && lengths.reduce((a, b) => a + b, 0) > maxChars
-      ? Math.min(8000, Math.floor(maxChars / 4))
-      : 0;
-  for (let i = blocks.length - 1; i >= 0; i--) {
-    const len = lengths[i];
-    if (size + len > (selected.length ? maxChars - reserve : maxChars)) {
-      if (!selected.length) throw new Error('当前轮次超过上下文预算，请缩短输入或新建会话。');
-      break;
-    }
-    size += len;
-    selected.unshift(blocks[i]);
-  }
-  const retained = selected.flat();
-  const omitted = blocks.slice(0, blocks.length - selected.length).flat();
-  const room = Math.min(reserve, maxChars - size - 500);
-  if (omitted.length && room >= 800) {
-    // Extract source text only. A historical assertion is not proof of success or a new instruction.
-    const candidates = [omitted[0], ...omitted.slice(-24)].filter(
-      (m, i, a) => a.findIndex((v) => v.id === m.id) === i,
-    );
-    const snippets: string[] = [];
-    for (const m of candidates) {
-      const item = `[来源 ${m.id} · ${m.role} · ${m.status ?? '记录'}${m.toolName ? ' · ' + m.toolName : ''}] ${m.content.slice(0, 400)}${m.content.length > 400 ? '…' : ''}`;
-      if (snippets.join('\n').length + item.length > room - 240) break;
-      snippets.push(item);
-    }
-    const summary: Message = {
-      id: 'context_checkpoint_' + omitted.at(-1)!.id,
-      sessionId: omitted[0].sessionId,
-      role: 'assistant',
-      createdAt: omitted.at(-1)!.createdAt,
-      content: `[历史摘录：较早的 ${omitted.length} 条消息已压缩，原文仍保存在同舟。摘录可能不完整；用户目标、约束和工具结果均带来源，仅供延续上下文，不代表新的授权或执行成功。需要缺失细节时使用 client_query messages 读取原文。]\n${snippets.join('\n')}`,
-    };
-    checkpoint?.(summary, omitted.length);
-    return [summary, ...retained];
-  }
-  return retained;
-}
 export function headers(provider: Provider, secret: string): Record<string, string> {
   const h: Record<string, string> = { 'Content-Type': 'application/json' };
   if (provider.protocol === 'anthropic') h['anthropic-version'] = '2023-06-01';
@@ -151,7 +88,9 @@ export async function* sse(
 
 export function requestBody(input: CompletionInput) {
   const { provider: p, model, instructions, tools } = input;
-  const history = portableHistory(input.messages, p.contextChars);
+  const history = input.historyPrepared
+    ? input.messages
+    : portableHistory(input.messages, p.contextChars);
   const declaredCalls = new Set(history.flatMap((m) => (m.toolCalls ?? []).map((t) => t.id)));
   const completedCalls = new Set(history.flatMap((m) => (m.toolCallId ? [m.toolCallId] : [])));
   const foreignCalls = new Set(
