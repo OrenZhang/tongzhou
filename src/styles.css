@@ -14,7 +14,7 @@
   font-size: 13px;
   --accent: #4b5e8c;
   --accent-soft: #edf0f6;
-  --brand: #176c5b;
+  --brand: var(--accent);
   --ink: #222831;
   --muted: #667080;
   --border: #e1e5ea;

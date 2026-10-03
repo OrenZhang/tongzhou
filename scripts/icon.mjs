@@ -2,6 +2,7 @@
 import { deflateSync } from 'node:zlib';
 import { mkdir, writeFile } from 'node:fs/promises';
 const samples = 4;
+const background = [75, 94, 140]; // #4b5e8c, shared with the interface accent and SVG logo.
 const polygons = [
   {
     p: [
@@ -17,7 +18,7 @@ const polygons = [
       [24, 28],
       [34, 28],
     ],
-    color: [156, 197, 189],
+    color: background.map((channel) => Math.round(255 * 0.55 + channel * 0.45)),
   },
   {
     p: [
@@ -51,7 +52,7 @@ function render(size) {
           const cx = Math.max(58, Math.min(198, px)),
             cy = Math.max(58, Math.min(198, py));
           if (Math.hypot(px - cx, py - cy) > 58) continue;
-          let color = [35, 125, 107];
+          let color = background;
           for (const poly of polygons)
             if (inside((px - 32) / 4.8, (py - 25) / 4.8, poly.p)) color = poly.color;
           color.forEach((v, i) => (out[i] += v));
