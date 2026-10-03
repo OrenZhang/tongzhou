@@ -413,6 +413,14 @@ export async function complete(input: CompletionInput): Promise<Completion> {
     throw new Error('服务未返回 SSE 流，请检查协议与服务地址。');
   const result: Completion = { text: '', toolCalls: [], inputTokens: 0, outputTokens: 0 };
   const calls = new Map<string, ToolCall>();
+  const outputLimitError = () =>
+    new Error(
+      `模型服务报告单次输出达到上限。本次请求上限：${input.provider.maxOutputTokens.toLocaleString('en-US')} Tokens（${input.provider.name} / ${input.model}）。` +
+        (calls.size
+          ? '本次工具调用未执行，参数可能不完整；此前已完成的操作保留。'
+          : '已收到的正文已保留。') +
+        '可在“连接中心 → 编辑该连接 → 单次最大输出 Tokens”调整后继续；服务或网关也可能另设上限。',
+    );
   const anthropicBlocks = new Map<string, Record<string, any>>();
   let finished = false;
   let finishReason = '';
@@ -486,8 +494,11 @@ export async function complete(input: CompletionInput): Promise<Completion> {
           result.inputTokens = d.response?.usage?.input_tokens ?? 0;
           result.outputTokens = d.response?.usage?.output_tokens ?? 0;
         }
-        if (d.type === 'response.incomplete')
-          throw new Error('模型输出被截断，请提高输出上限后继续。');
+        if (d.type === 'response.incomplete') {
+          const reason = d.response?.incomplete_details?.reason;
+          if (reason === 'max_output_tokens') throw outputLimitError();
+          throw new Error('模型服务未完成此次请求：' + (reason ?? '未提供原因'));
+        }
         break;
       }
       case 'anthropic': {
@@ -554,8 +565,7 @@ export async function complete(input: CompletionInput): Promise<Completion> {
     }
   }
   if (!finished) throw new Error('连接在完成标记前中断；未自动重试，避免重复执行操作。');
-  if (['length', 'max_tokens', 'MAX_TOKENS'].includes(finishReason))
-    throw new Error('模型输出达到上限；工具调用未执行，请增加输出上限。');
+  if (['length', 'max_tokens', 'MAX_TOKENS'].includes(finishReason)) throw outputLimitError();
   if (['content_filter', 'SAFETY', 'RECITATION'].includes(finishReason))
     throw new Error('模型服务未完成此次请求：' + finishReason);
   result.toolCalls = [...calls.values()].map((c) => ({

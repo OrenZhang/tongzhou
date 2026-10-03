@@ -1974,7 +1974,10 @@ export default function App() {
               </Field>
             </details>
             <div className="form-grid">
-              <Field label="单次最大输出 Tokens">
+              <Field
+                label="单次最大输出 Tokens"
+                hint="每次模型请求的输出预算；部分服务会将思考计入预算。服务或网关仍可能另设更低上限。"
+              >
                 <input
                   type="number"
                   min={256}

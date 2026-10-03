@@ -384,10 +384,35 @@ describe('streaming protocol adapters', () => {
     await serve(
       [event({ choices: [{ delta: {}, finish_reason: 'length' }] }), 'data: [DONE]\n\n'],
       async (base) => {
-        await expect(complete(input('openai-chat', base))).rejects.toThrow('输出达到上限');
+        await expect(complete(input('openai-chat', base))).rejects.toThrow('单次输出达到上限');
       },
     );
   });
+  it('identifies the configured limit without claiming a tool was called for text-only truncation', async () => {
+    await serve(
+      [event({ choices: [{ delta: { content: 'partial' }, finish_reason: 'length' }] })],
+      async (base) => {
+        const error = await complete(input('openai-chat', base)).catch((e) => e);
+        expect(error.message).toContain('1,024 Tokens');
+        expect(error.message).toContain('连接中心 → 编辑该连接');
+        expect(error.message).toContain('已收到的正文已保留');
+        expect(error.message).not.toContain('工具调用未执行');
+      },
+    );
+  });
+  it.each(['max_output_tokens', 'content_filter'])(
+    'preserves the Responses incomplete reason %s',
+    async (reason) => {
+      await serve(
+        [event({ type: 'response.incomplete', response: { incomplete_details: { reason } } })],
+        async (base) => {
+          await expect(complete(input('openai-responses', base))).rejects.toThrow(
+            reason === 'max_output_tokens' ? '1,024 Tokens' : 'content_filter',
+          );
+        },
+      );
+    },
+  );
 });
 describe('portable history and protocol mapping', () => {
   it('carries foreign tool evidence without replaying account-specific calls', () => {

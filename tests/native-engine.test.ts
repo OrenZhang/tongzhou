@@ -14,6 +14,7 @@ const fake = vi.hoisted(() => ({
   replies: [] as any[],
   authenticated: false,
   stopReason: 'end_turn',
+  updates: [] as any[],
 }));
 vi.mock('node:child_process', async () => {
   const actual = await vi.importActual<typeof import('node:child_process')>('node:child_process');
@@ -80,16 +81,21 @@ vi.mock('node:child_process', async () => {
           }
           if (msg.method === 'session/prompt') {
             pendingPrompt = msg.id;
-            emit({
-              method: 'session/update',
-              params: {
-                sessionId: activeSession,
-                update: {
-                  sessionUpdate: 'agent_message_chunk',
-                  content: { type: 'text', text: 'Native answer' },
+            for (const update of fake.updates.length
+              ? fake.updates
+              : [
+                  {
+                    sessionUpdate: 'agent_message_chunk',
+                    content: { type: 'text', text: 'Native answer' },
+                  },
+                ])
+              emit({
+                method: 'session/update',
+                params: {
+                  sessionId: activeSession,
+                  update,
                 },
-              },
-            });
+              });
             emit({
               id: 'permission',
               method: 'session/request_permission',
@@ -119,6 +125,7 @@ beforeEach(() => {
   fake.children.length = fake.calls.length = fake.replies.length = 0;
   fake.authenticated = false;
   fake.stopReason = 'end_turn';
+  fake.updates = [];
 });
 afterEach(() => {
   for (const cleanup of cleanups.splice(0)) cleanup();
@@ -267,6 +274,26 @@ describe('official native engine account integration', () => {
 });
 
 describe('ACP conversation execution', () => {
+  it('keeps native reasoning and tool boundaries between response segments', async () => {
+    fake.updates = [
+      { sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: '先检查' } },
+      { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: '检查中。' } },
+      { sessionUpdate: 'tool_call', status: 'in_progress', title: '工具' },
+      { sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: '再总结' } },
+      { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: '已完成。' } },
+    ];
+    const f = fixture(false);
+    f.runtime.start(f.input);
+    await f.runtime.waitForIdle();
+    const message = f.store.messages(f.input.sessionId).find((m) => m.role === 'assistant')!;
+    const thoughts = f.runtime.events(f.input.sessionId).filter((e) => e.type === 'reasoning');
+    expect(message.content).toBe('检查中。已完成。');
+    expect(message.status).toBe('complete');
+    expect(message.segments).toHaveLength(2);
+    expect(thoughts.map((e) => e.text)).toEqual(['先检查', '再总结']);
+    expect(message.segments![0].seq).toBeLessThan(thoughts[1].seq);
+    expect(message.segments![1].seq).toBeGreaterThan(thoughts[1].seq);
+  });
   function fixture(project: boolean) {
     fake.authenticated = true;
     const store = new Store(':memory:', { encrypt: (s) => s, decrypt: (s) => s });

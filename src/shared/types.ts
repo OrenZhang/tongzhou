@@ -103,6 +103,9 @@ export interface ToolCall {
   signatureModel?: string;
 }
 export interface Message {
+  // Presentation order within a run; protocol content remains unchanged.
+  sequence?: number;
+  segments?: { seq: number; start: number; end: number; time: number }[];
   id: string;
   sessionId: string;
   role: 'user' | 'assistant' | 'tool' | 'system';

@@ -77,6 +77,59 @@ const text = (content: string) => ({
   usage: { prompt_tokens: 10, completion_tokens: 4 },
 });
 describe('conversation input and lifecycle changes', () => {
+  it('persists separate thought/text stages, including rapid transitions within one response', async () => {
+    const f = await fixture(() => [
+      { choices: [{ delta: { reasoning_content: '第一段思考' } }] },
+      { choices: [{ delta: { content: '先解释。' } }] },
+      { choices: [{ delta: { reasoning_content: '第二段思考' } }] },
+      text('最终结果。'),
+    ]);
+    f.runtime.start(f.input);
+    await f.runtime.waitForIdle();
+    const thoughts = f.runtime.events(f.input.sessionId).filter((e) => e.type === 'reasoning');
+    const messages = f.store.messages(f.input.sessionId).filter((m) => m.role === 'assistant');
+    expect(thoughts.map((e) => e.text)).toEqual(['第一段思考', '第二段思考']);
+    expect(messages).toHaveLength(1);
+    expect(messages[0].content).toBe('先解释。最终结果。');
+    expect(messages[0].segments).toHaveLength(2);
+    expect(messages[0].segments![0].seq).toBeGreaterThan(thoughts[0].seq);
+    expect(messages[0].segments![0].seq).toBeLessThan(thoughts[1].seq);
+    expect(messages[0].segments![1].seq).toBeGreaterThan(thoughts[1].seq);
+  });
+  it('preserves the throttled text tail on output limits and never executes partial tool arguments', async () => {
+    const f = await fixture(() => [
+      { choices: [{ delta: { content: '已收到正文，' } }] },
+      {
+        choices: [
+          {
+            delta: {
+              content: '保留最后一段。',
+              tool_calls: [
+                {
+                  index: 0,
+                  id: 'truncated',
+                  function: { name: 'write_file', arguments: '{"path":"never.txt"' },
+                },
+              ],
+            },
+            finish_reason: 'length',
+          },
+        ],
+      },
+    ]);
+    f.runtime.start(f.input);
+    await f.runtime.waitForIdle();
+    const state = f.runtime.snapshot();
+    expect(state.runs[0].status).toBe('failed');
+    expect(state.runs[0].error).toContain('1,024 Tokens');
+    expect(state.runs[0].error).toContain('本次工具调用未执行');
+    expect(f.store.messages(f.input.sessionId).find((m) => m.role === 'assistant')?.content).toBe(
+      '已收到正文，保留最后一段。',
+    );
+    await expect(readFile(path.join(f.root, 'never.txt'))).rejects.toThrow();
+    expect(state.approvals).toHaveLength(0);
+    expect(f.requests).toHaveLength(1);
+  });
   it('uses the session override for real writes and freezes approval policy for the active turn', async () => {
     const f = await fixture((body) =>
       body.messages.some((m: any) => m.role === 'tool')

@@ -73,7 +73,7 @@ try {
   const firstThinking = page
     .locator('.conversation-turn')
     .first()
-    .getByRole('button', { name: '思考摘要', exact: true });
+    .getByRole('button', { name: '本轮用时与处理过程', exact: true });
   assert.equal(await firstThinking.getAttribute('aria-expanded'), 'true');
   await page.screenshot({ path: 'test-results/turn-thinking-live.png' });
   await firstThinking.click();
@@ -92,10 +92,11 @@ try {
   assert.equal(requests.length, 2);
   await page.getByRole('button', { name: '发送消息', exact: true }).waitFor();
   assert.equal(await page.locator('.conversation-turn').count(), 2);
-  assert.equal(await page.locator('.conversation-turn .turn-thinking').count(), 2);
-  assert.equal(await page.locator('.thinking-summary:visible').count(), 0);
-  assert.equal(await page.locator('.run-activity, .composer-wrap .turn-thinking').count(), 0);
+  assert.equal(await page.locator('.conversation-turn .turn-process').count(), 2);
+  assert.equal(await page.locator('.process-timeline:visible').count(), 0);
+  assert.equal(await page.locator('.run-activity, .composer-wrap .turn-process').count(), 0);
   await firstThinking.click();
+  await page.locator('.conversation-turn').first().locator('.process-reasoning > summary').click();
   await page
     .locator('.conversation-turn')
     .first()
@@ -108,7 +109,7 @@ try {
       .evaluate((turn) =>
         Boolean(
           turn
-            .querySelector('.turn-thinking')
+            .querySelector('.turn-process')
             .compareDocumentPosition(turn.querySelector('.assistant-segment')) &
             Node.DOCUMENT_POSITION_FOLLOWING,
         ),
@@ -119,7 +120,7 @@ try {
     'public reasoning',
     'queued input exactly once',
     'reasoning precedes the answer and collapses after completion',
-    'process and tool logs are hidden from chat',
+    'elapsed time expands ordered work and collapses after completion',
     'compact keyboard-accessible mode selection',
   );
 
@@ -140,7 +141,7 @@ try {
   assert.equal(await page.locator('.chat-message.assistant').count(), 3);
   const supplemented = page.locator('.conversation-turn').last();
   assert.equal(await supplemented.locator('.assistant-segment').count(), 2);
-  assert.equal(await supplemented.locator('.turn-supplement').count(), 1);
+  assert.equal(await supplemented.locator('.turn-supplement:visible').count(), 1);
   assert.ok((await supplemented.innerText()).includes('本轮补充内容'));
   assert.equal(
     await page.getByRole('button', { name: '引用补充', exact: true }).first().innerText(),
@@ -152,23 +153,30 @@ try {
   await page.locator('.session-list > button').first().click();
   await page.getByText('已回复：本轮补充内容', { exact: true }).waitFor();
   await page.waitForFunction(
-    () => document.querySelectorAll('.conversation-turn .thinking-toggle').length === 3,
+    () => document.querySelectorAll('.conversation-turn .process-toggle').length === 3,
   );
   assert.equal(await page.locator('.chat-message.assistant').count(), 3);
   checks.push(
     'supplement stays in the same assistant turn',
     'reasoning and turn grouping survive reload',
   );
-  assert.equal(await page.locator('.thinking-summary:visible').count(), 0);
+  assert.equal(await page.locator('.process-timeline:visible').count(), 0);
   await page
     .locator('.conversation-turn')
     .last()
-    .getByRole('button', { name: '思考摘要', exact: true })
+    .getByRole('button', { name: '本轮用时与处理过程', exact: true })
+    .click();
+  await page
+    .locator('.conversation-turn')
+    .last()
+    .locator('.process-reasoning > summary')
+    .first()
     .click();
   await page
     .locator('.conversation-turn')
     .last()
     .getByText(/公开思考摘要：/)
+    .first()
     .waitFor();
   await page.screenshot({ path: 'test-results/turn-thinking-history.png' });
   await page.getByRole('button', { name: '引用补充', exact: true }).first().click();
@@ -177,7 +185,7 @@ try {
   await page.getByRole('button', { name: '从此处新建分支', exact: true }).first().click();
   await page.getByRole('heading', { name: /分支/ }).waitFor();
   assert.equal(
-    await page.locator('.turn-thinking').count(),
+    await page.locator('.turn-process').count(),
     0,
     'source activity must not leak into the new branch',
   );

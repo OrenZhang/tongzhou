@@ -8,6 +8,65 @@ export interface ConversationTurn {
   events: RunEvent[];
 }
 
+export type TurnEntry =
+  | { key: string; time: number; seq?: number; message: Message; text: string }
+  | { key: string; time: number; seq?: number; event: RunEvent };
+
+export function turnEntries(turn: ConversationTurn): TurnEntry[] {
+  const entries: TurnEntry[] = [];
+  const response = turn.messages[0]?.role === 'user' ? turn.messages.slice(1) : turn.messages;
+  for (const message of response) {
+    if (message.role === 'system') continue;
+    if (turn.runId && message.role === 'assistant' && message.segments?.length) {
+      for (const segment of message.segments) {
+        const text = message.content.slice(segment.start, segment.end);
+        if (text)
+          entries.push({
+            key: `${message.id}:${segment.seq}`,
+            time: segment.time,
+            seq: segment.seq,
+            message,
+            text,
+          });
+      }
+    } else if (message.content) {
+      entries.push({
+        key: message.id,
+        time: message.createdAt,
+        seq: turn.runId ? message.sequence : undefined,
+        message,
+        text: message.content,
+      });
+    }
+  }
+  for (const event of turn.events) {
+    if (event.type !== 'phase' && event.text.trim())
+      entries.push({ key: event.id, time: event.time, seq: event.seq, event });
+  }
+  // Modern records share one sequence. Legacy records keep their original timestamps.
+  return entries.sort((a, b) =>
+    a.seq !== undefined && b.seq !== undefined ? a.seq - b.seq : a.time - b.time,
+  );
+}
+
+export function finalTurnEntry(entries: TurnEntry[], active: boolean): TurnEntry | undefined {
+  if (active) return;
+  const last = entries.filter((entry) => 'message' in entry).at(-1);
+  return last &&
+    'message' in last &&
+    last.message.role === 'assistant' &&
+    !last.message.toolCalls?.length
+    ? last
+    : undefined;
+}
+
+export function formatDuration(milliseconds: number): string {
+  const seconds = Math.max(0, Math.floor(milliseconds / 1000));
+  if (seconds < 60) return `${seconds}秒`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}分${seconds % 60}秒`;
+  return `${Math.floor(seconds / 3600)}小时${Math.floor((seconds % 3600) / 60)}分${seconds % 60}秒`;
+}
+
 // Keep protocol messages intact. Only their presentation is grouped into a turn.
 export function conversationTurns(
   sessionId: string,

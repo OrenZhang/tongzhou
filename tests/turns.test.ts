@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { conversationTurns } from '../src/shared/turns';
+import {
+  conversationTurns,
+  turnEntries,
+  finalTurnEntry,
+  formatDuration,
+} from '../src/shared/turns';
 import type { Message, Run, RunEvent } from '../src/shared/types';
 
 const message = (
@@ -37,6 +42,48 @@ const event = (id: string, runId: string, seq: number, sessionId = 'chat'): RunE
 });
 
 describe('conversation turn presentation', () => {
+  it('interleaves reasoning and response segments without splitting protocol messages', () => {
+    const reply = {
+      ...message('reply', 'assistant', 'r1'),
+      content: '先说明最后结果',
+      segments: [
+        { seq: 3, start: 0, end: 3, time: 5 },
+        { seq: 8, start: 3, end: 7, time: 5 },
+      ],
+    };
+    const t = conversationTurns(
+      'chat',
+      [message('ask', 'user', 'r1'), reply],
+      [run('r1')],
+      [event('think1', 'r1', 2), event('think2', 'r1', 7)],
+    )[0];
+    const entries = turnEntries(t);
+    expect(entries.map((e) => ('event' in e ? e.event.text : e.text))).toEqual([
+      'think1',
+      '先说明',
+      'think2',
+      '最后结果',
+    ]);
+    expect(finalTurnEntry(entries, true)).toBeUndefined();
+    expect(finalTurnEntry(entries, false)).toBe(entries[3]);
+    expect(reply.content).toBe('先说明最后结果');
+  });
+  it('does not treat commentary before a tool or supplement as a final answer', () => {
+    const t = conversationTurns(
+      'chat',
+      [
+        message('ask', 'user', 'r1'),
+        { ...message('interim', 'assistant', 'r1'), sequence: 2 },
+        { ...message('tool', 'tool', 'r1'), sequence: 3 },
+      ],
+      [run('r1', 'failed')],
+      [],
+    )[0];
+    expect(finalTurnEntry(turnEntries(t), false)).toBeUndefined();
+    expect(formatDuration(1097000)).toBe('18分17秒');
+    expect(formatDuration(3661000)).toBe('1小时1分1秒');
+    expect(formatDuration(-1000)).toBe('0秒');
+  });
   it('keeps tool iterations and mid-run supplements in one turn without changing protocol messages', () => {
     const messages = [
       message('ask', 'user', 'r1'),

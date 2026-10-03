@@ -44,6 +44,49 @@ export class Runtime {
   private reasoning = new Map<string, RunEvent>();
   private toolOutput = new Map<string, RunEvent>();
   private progressSaved = new Map<string, number>();
+  private nextSequence(runId: string) {
+    const seq = (this.eventSequences.get(runId) ?? 0) + 1;
+    this.eventSequences.set(runId, seq);
+    return seq;
+  }
+  private flushProgress(runId: string) {
+    for (const cache of [this.reasoning, this.toolOutput]) {
+      const event = cache.get(runId);
+      if (event) {
+        this.store.put('runEvent', event);
+        this.emit({ type: 'run-event', event });
+        cache.delete(runId);
+      }
+    }
+    this.progressSaved.delete(runId);
+    this.progressSaved.delete(runId + ':tool');
+  }
+  private appendText(message: Message, text: string) {
+    if (!text) return;
+    const start = message.content.length;
+    message.content += text;
+    if (!message.runId) return;
+    message.segments ??= [];
+    const last = message.segments.at(-1);
+    if (last && last.seq === this.eventSequences.get(message.runId))
+      last.end = message.content.length;
+    else
+      message.segments.push({
+        seq: this.nextSequence(message.runId),
+        start,
+        end: message.content.length,
+        time: Date.now(),
+      });
+  }
+  private finishText(message: Message, text: string) {
+    if (text.startsWith(message.content))
+      this.appendText(message, text.slice(message.content.length));
+    else {
+      message.content = '';
+      message.segments = [];
+      this.appendText(message, text);
+    }
+  }
   events(sessionId: string) {
     return this.store
       .list<RunEvent>('runEvent')
@@ -76,6 +119,7 @@ export class Runtime {
     if (!text || this.stopping) return;
     if (type === 'phase') {
       if (run.phase === text) return;
+      this.flushProgress(run.id);
       run.phase = text;
       this.store.put('run', run);
     }
@@ -92,8 +136,7 @@ export class Runtime {
         text: (event.text + (type === 'tool' ? '\n' : '') + text).slice(0, 64000),
       };
     } else {
-      const seq = (this.eventSequences.get(run.id) ?? 0) + 1;
-      this.eventSequences.set(run.id, seq);
+      const seq = this.nextSequence(run.id);
       event = {
         id: randomUUID(),
         sessionId: run.sessionId,
@@ -334,6 +377,10 @@ export class Runtime {
     };
   }
   private message(message: Message) {
+    if (message.runId && message.role !== 'assistant' && message.sequence === undefined) {
+      this.flushProgress(message.runId);
+      message.sequence = this.nextSequence(message.runId);
+    }
     this.store.message(message);
     this.emit({ type: 'message', message });
   }
@@ -664,14 +711,18 @@ export class Runtime {
         },
         onDelta: (text) => {
           this.progress(run, 'phase', '正在回复');
-          message.content += text;
+          this.appendText(message, text);
           if (Date.now() - lastSave > 60) {
             this.message({ ...message });
             lastSave = Date.now();
           }
         },
+      }).catch((error) => {
+        // Preserve the last streamed text and its position even when output is truncated.
+        this.message({ ...message });
+        throw error;
       });
-      message.content = result.text;
+      this.finishText(message, result.text);
       message.toolCalls = result.toolCalls;
       message.anthropicContent = result.anthropicContent;
       message.status = 'complete';
@@ -803,6 +854,13 @@ export class Runtime {
     const onNotification = ({ method, params }: any) => {
       if (method !== 'session/update' || params?.sessionId !== engineSessionId) return;
       const update = params.update;
+      if (
+        ['tool_call', 'tool_call_update'].includes(update?.sessionUpdate) &&
+        !['completed', 'failed'].includes(update?.status)
+      ) {
+        if (message) this.message({ ...message });
+        this.progress(run, 'phase', '调用工具');
+      }
       if (update?.sessionUpdate === 'agent_thought_chunk' && update.content?.type === 'text') {
         this.progress(run, 'phase', '思考中');
         this.progress(run, 'reasoning', update.content.text);
@@ -815,7 +873,7 @@ export class Runtime {
           agent: agent.name,
           status: 'streaming',
         });
-        message.content += update.content.text;
+        this.appendText(message, update.content.text);
         if (Date.now() - lastSave >= 60) {
           this.message({ ...message });
           lastSave = Date.now();
@@ -918,7 +976,10 @@ export class Runtime {
       );
       if (response.stopReason === 'cancelled' || signal.aborted) throw new Error('已停止');
       if (response.stopReason === 'max_tokens') throw new Error('达到引擎输出上限，请继续会话');
-      if (message) this.message({ ...message, status: 'complete' });
+      if (message) {
+        message.status = 'complete';
+        this.message({ ...message });
+      }
       keepAlive = !project;
       if (keepAlive) {
         if (this.nativeChats.size >= 4) {
@@ -950,6 +1011,7 @@ export class Runtime {
         this.nativeChats.set(input.sessionId, entry);
       }
     } finally {
+      if (message) this.message({ ...message });
       signal.removeEventListener('abort', abort);
       client.removeListener('request', onRequest);
       client.removeListener('notification', onNotification);
@@ -1039,6 +1101,12 @@ export class Runtime {
       if (threadId && p?.threadId && p.threadId !== threadId) return;
       if (turnId && p?.turnId && p.turnId !== turnId) return;
       if (method === 'turn/started') turnId = p.turn.id;
+      if (
+        method === 'item/started' &&
+        ['commandExecution', 'fileChange', 'mcpToolCall', 'dynamicToolCall'].includes(p.item?.type)
+      ) {
+        this.progress(run, 'phase', '调用工具');
+      }
       if (method === 'item/reasoning/summaryTextDelta') {
         this.progress(run, 'phase', '思考中');
         this.progress(run, 'reasoning', p.delta ?? '');
@@ -1055,7 +1123,7 @@ export class Runtime {
           });
           items.set(p.itemId, message);
         }
-        message.content += p.delta;
+        this.appendText(message, p.delta);
         this.message({ ...message });
       }
       if (method === 'item/completed') {
@@ -1068,7 +1136,7 @@ export class Runtime {
               model: input.model,
               agent: agent.name,
             });
-          message.content = item.text;
+          this.finishText(message, item.text);
           message.status = 'complete';
           this.message({ ...message });
           items.set(item.id, message);

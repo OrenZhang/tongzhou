@@ -282,7 +282,7 @@ try {
   await page.getByRole('button', { name: '发送消息', exact: true }).waitFor();
   assert.equal(await page.getByText('处理过程', { exact: true }).count(), 0);
   assert.equal(
-    await page.locator('.turn-thinking, .tool-message').count(),
+    await page.locator('.process-reasoning, .tool-message').count(),
     0,
     'do not invent reasoning when the provider sends none',
   );

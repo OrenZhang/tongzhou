@@ -1,8 +1,13 @@
-import { Copy, GitBranch, Quote } from 'lucide-react';
+import { Copy, GitBranch, Quote, Terminal, Brain } from 'lucide-react';
 import type { Message } from './shared/types';
-import type { ConversationTurn as Turn } from './shared/turns';
+import {
+  turnEntries,
+  finalTurnEntry,
+  type TurnEntry,
+  type ConversationTurn as Turn,
+} from './shared/turns';
 import { ChatMessage, Mark, Markdown } from './components';
-import { TurnThinking } from './RunActivity';
+import { TurnProcess } from './RunActivity';
 
 interface Actions {
   onCopy: (message: Message) => void;
@@ -65,6 +70,86 @@ export function ConversationTurn({ turn, ...actions }: Actions & { turn: Turn })
     .filter(Boolean)
     .join('\n\n');
   const status = turn.run?.status ?? assistants.at(-1)?.status;
+  const entries = turnEntries(turn);
+  const final = finalTurnEntry(entries, active);
+  const renderEntry = (entry: TurnEntry) => {
+    if ('event' in entry) {
+      const event = entry.event;
+      const next = entries[entries.indexOf(entry) + 1];
+      if (
+        event.type === 'tool' &&
+        next &&
+        'message' in next &&
+        next.message.role === 'tool' &&
+        next.message.toolName === event.text
+      )
+        return null;
+      if (event.type === 'phase') {
+        if (active && event === turn.events.filter((e) => e.type === 'phase').at(-1)) return null;
+        return (
+          <div key={entry.key} className="process-phase" data-entry-kind="phase">
+            {event.text}
+          </div>
+        );
+      }
+      if (event.type === 'reasoning')
+        return (
+          <details
+            key={entry.key}
+            className="process-reasoning"
+            data-entry-kind="reasoning"
+            open={active && turn.events.at(-1)?.id === event.id}
+          >
+            <summary>
+              <Brain size={13} />
+              思考摘要
+            </summary>
+            <Markdown text={event.text} />
+          </details>
+        );
+      return (
+        <div key={entry.key} className="process-event" data-entry-kind={event.type}>
+          <Terminal size={13} />
+          <span>{event.text}</span>
+        </div>
+      );
+    }
+    const m = entry.message;
+    if (m.role === 'tool')
+      return (
+        <details key={entry.key} className="process-tool" data-entry-kind="tool-result">
+          <summary>
+            <Terminal size={13} />
+            {m.toolName ?? '工具结果'}
+            {m.status === 'error' ? ' · 未完成' : ''}
+          </summary>
+          <pre>{entry.text}</pre>
+        </details>
+      );
+    if (m.role === 'user')
+      return (
+        <aside
+          key={entry.key}
+          className="turn-supplement"
+          data-message-id={m.id}
+          data-entry-kind="supplement"
+        >
+          <span>你补充</span>
+          <Markdown text={entry.text} />
+          <MessageActions message={m} {...actions} />
+        </aside>
+      );
+    return (
+      <div
+        key={entry.key}
+        className="assistant-segment"
+        data-message-id={m.id}
+        data-entry-kind="response"
+      >
+        <Markdown text={entry.text} />
+      </div>
+    );
+  };
   return (
     <section
       className="conversation-turn"
@@ -94,24 +179,30 @@ export function ConversationTurn({ turn, ...actions }: Actions & { turn: Turn })
               {status === 'interrupted' && <span>已中断</span>}
               {(status === 'failed' || status === 'error') && <span>未完成</span>}
             </div>
-            <TurnThinking events={turn.events} run={turn.run} active={active} />
-            {response.map((m) => {
-              if (m.role === 'tool') return null;
-              if (m.role === 'system') return <ChatMessage key={m.id} message={m} />;
-              if (m.role === 'user')
-                return (
-                  <aside key={m.id} className="turn-supplement" data-message-id={m.id}>
-                    <span>你补充</span>
-                    <Markdown text={m.content} />
-                    <MessageActions message={m} {...actions} />
-                  </aside>
-                );
-              return m.content ? (
-                <div key={m.id} className="assistant-segment" data-message-id={m.id}>
-                  <Markdown text={m.content} />
+            <TurnProcess
+              events={turn.events}
+              run={turn.run}
+              active={active}
+              collapsedContent={entries
+                .filter((e) => 'message' in e && e.message.role === 'user')
+                .map(renderEntry)}
+            >
+              {entries.filter((e) => e !== final).map(renderEntry)}
+              {!active && entries.filter((e) => e !== final).length === 0 && (
+                <div className="process-phase">
+                  {turn.events
+                    .filter((e) => e.type === 'phase')
+                    .map((e) => e.text)
+                    .join(' → ')}
                 </div>
-              ) : null;
-            })}
+              )}
+            </TurnProcess>
+            {final && <div className="turn-final">{renderEntry(final)}</div>}
+            {response
+              .filter((m) => m.role === 'system')
+              .map((m) => (
+                <ChatMessage key={m.id} message={m} />
+              ))}
             {!active && endpoint && text && (
               <MessageActions message={{ ...endpoint, content: text }} {...actions} />
             )}

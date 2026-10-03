@@ -1,7 +1,8 @@
-import { useEffect, useId, useState } from 'react';
-import { Brain, ChevronDown } from 'lucide-react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
+import { ChevronDown } from 'lucide-react';
 import type { Run, RunEvent, Snapshot, TongzhouAPI } from './shared/types';
-import { Markdown, Spinner } from './components';
+import { formatDuration } from './shared/turns';
+import { Spinner } from './components';
 
 export function useRunEvents(api: TongzhouAPI, sessionId: string) {
   const [state, setState] = useState({ sessionId: '', events: [] as RunEvent[], error: '' });
@@ -37,14 +38,18 @@ export function useRunEvents(api: TongzhouAPI, sessionId: string) {
   return state.sessionId === sessionId ? state : { sessionId, events: [], error: '' };
 }
 
-export function TurnThinking({
+export function TurnProcess({
   events,
   run,
   active,
+  children,
+  collapsedContent,
 }: {
   events: RunEvent[];
   run?: Run;
   active: boolean;
+  children: ReactNode;
+  collapsedContent?: ReactNode;
 }) {
   const [now, setNow] = useState(Date.now());
   const [manual, setManual] = useState<{ phase: string; open: boolean }>();
@@ -55,53 +60,49 @@ export function TurnThinking({
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [active, run?.id]);
-  const phase = events.filter((e) => e.type === 'phase').at(-1)?.text ?? '准备上下文';
-  const summaries = events.filter((e) => e.type === 'reasoning' && e.text.trim());
-  const phaseKey = active ? phase : 'finished';
-  const expanded = manual?.phase === phaseKey ? manual.open : active && phase === '思考中';
+  const phase = events.filter((e) => e.type === 'phase').at(-1)?.text ?? run?.phase ?? '准备上下文';
+  const phaseKey = active ? 'active' : 'finished';
+  const expanded = manual?.phase === phaseKey ? manual.open : active;
   const labels: Record<string, string> = {
     准备上下文: '准备中',
     准备工具: '准备中',
     连接模型: '正在连接',
     等待模型响应: '等待回复',
-    调用工具: '正在处理',
+    调用工具: '正在执行工具',
   };
-  const label = active ? (labels[phase] ?? phase) : '思考摘要';
-  if (!summaries.length && !active) return null;
-  const heading = (
-    <>
-      {active ? <Spinner /> : <Brain size={14} />}
-      <span role={active ? 'status' : undefined}>{label}</span>
-      {active && run && (
-        <small>已用 {Math.max(0, Math.floor((now - run.startedAt) / 1000))} 秒</small>
-      )}
-    </>
-  );
+  const label = labels[phase] ?? phase;
+  const elapsed = run
+    ? formatDuration((active ? now : (run.endedAt ?? run.startedAt)) - run.startedAt)
+    : undefined;
+  if (!run && !events.length) return <>{children}</>;
   return (
-    <div className="turn-thinking">
-      {summaries.length ? (
-        <>
-          <button
-            className="thinking-toggle"
-            aria-label="思考摘要"
-            title={expanded ? '收起思考摘要' : '展开思考摘要'}
-            aria-expanded={expanded}
-            aria-controls={contentId}
-            onClick={() => setManual({ phase: phaseKey, open: !expanded })}
-          >
-            {heading}
-            <ChevronDown size={13} className={expanded ? 'rotate' : ''} />
-          </button>
-          <div id={contentId} className="thinking-summary" hidden={!expanded}>
-            {summaries.map((event) => (
-              <Markdown key={event.id} text={event.text} />
-            ))}
-          </div>
-        </>
-      ) : (
-        <div className="thinking-state">{heading}</div>
-      )}
-    </div>
+    <>
+      <div className="turn-process">
+        <button
+          className="process-toggle"
+          aria-label="本轮用时与处理过程"
+          title={expanded ? '收起本轮处理过程' : '展开本轮处理过程'}
+          aria-expanded={expanded}
+          aria-controls={contentId}
+          onClick={() => setManual({ phase: phaseKey, open: !expanded })}
+        >
+          {active && !expanded && <Spinner />}
+          <span>{elapsed === undefined ? '本轮过程' : `用时 ${elapsed}`}</span>
+          {active && !expanded && <small>{label}</small>}
+          <ChevronDown size={13} className={expanded ? 'rotate' : ''} />
+        </button>
+        <div id={contentId} className="process-timeline" hidden={!expanded}>
+          {children}
+          {active && (
+            <div className="process-current" role="status">
+              <Spinner />
+              {label}
+            </div>
+          )}
+        </div>
+      </div>
+      {!expanded && collapsedContent}
+    </>
   );
 }
 
