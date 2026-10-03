@@ -7,6 +7,7 @@ import type { ToolScope } from './extensions';
 
 /** Private per-run channel for the stdio MCP adapter; never accepts a new tool catalog. */
 export async function toolBridge(scope: ToolScope, signal: AbortSignal) {
+  const catalog = JSON.stringify(scope.specs);
   const token = randomBytes(32).toString('hex');
   const server = createServer(async (req, res) => {
     const provided = Buffer.from(String(req.headers.authorization ?? ''));
@@ -58,7 +59,7 @@ export async function toolBridge(scope: ToolScope, signal: AbortSignal) {
       res.end(JSON.stringify({ error: String(e) }));
     }
   });
-  server.requestTimeout = 150000;
+  server.requestTimeout = 31 * 60 * 1000;
   server.headersTimeout = 10000;
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
@@ -78,6 +79,11 @@ export async function toolBridge(scope: ToolScope, signal: AbortSignal) {
     .dirname(require.resolve('node/package.json', { paths: [__dirname, process.cwd()] }))
     .replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep);
   return {
+    rebind(next: ToolScope) {
+      if (JSON.stringify(next.specs) !== catalog)
+        throw new Error('工具目录已改变，需要新建引擎会话');
+      scope = next;
+    },
     config: {
       name: 'tongzhou-tools',
       command: path.join(root, 'bin', process.platform === 'win32' ? 'node.exe' : 'node'),

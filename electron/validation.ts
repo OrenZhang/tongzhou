@@ -137,7 +137,7 @@ export const runSchema = z.object({
   prompt: z.string().trim().min(1).max(100000),
   providerId: id,
   model: z.string().trim().min(1).max(200),
-  agentId: id,
+  agentId: id.or(z.literal('')).default(''),
 });
 export const idSchema = id;
 export function redact(value: string, secrets: string[] = []) {

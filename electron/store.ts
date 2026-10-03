@@ -34,7 +34,8 @@ export class Store {
     const version = this.db
       .prepare('SELECT value FROM metadata WHERE key=?')
       .get('schema_version') as { value: string };
-    if (version.value !== '1') throw new Error('此数据库来自更新版本，请升级同舟后打开。');
+    if (!['1', '2'].includes(version.value))
+      throw new Error('此数据库来自更新版本，请升级同舟后打开。');
     if (!this.list<Provider>('provider').length) {
       this.put('provider', {
         id: 'openai-codex',
@@ -57,34 +58,68 @@ export class Store {
         contextChars: 60000,
       });
     }
-    if (!this.list('agent').length)
-      for (const agent of [
-        {
-          id: 'builder',
-          name: '协作助手',
-          description: '分析问题、实现功能并验证结果',
-          instructions:
-            '你是同舟的编程助手。先理解项目和需求，再进行有依据的修改，验证结果。使用中文回复。不要声称执行了未执行的操作。',
-          permission: 'ask',
-        },
-        {
-          id: 'reviewer',
-          name: '代码审查',
-          description: '只读检查，寻找具体问题和改进建议',
-          instructions:
-            '你是只读代码审查员。读取相关文件，关注正确性、安全性和回归风险。给出文件路径、证据和可执行的建议，不修改文件。',
-          permission: 'read-only',
-        },
-        {
-          id: 'architect',
-          name: '架构规划',
-          description: '梳理需求、模块边界与实现步骤',
-          instructions:
-            '你是架构规划师。先阅读现有代码，明确需求和约束，再给出可执行的方案、风险和验证方式。只读，不修改文件。',
-          permission: 'read-only',
-        },
-      ])
-        this.put('agent', { ...agent, providerId: '', model: '', maxSteps: 16 });
+    if (version.value === '1') {
+      if (path !== ':memory:' && this.list('agent').length)
+        this.db.prepare('VACUUM INTO ?').run(path + '.v1-' + Date.now() + '.bak');
+      this.db.exec('BEGIN');
+      try {
+        const seeds = [
+          {
+            id: 'builder',
+            name: '协作助手',
+            description: '分析问题、实现功能并验证结果',
+            instructions:
+              '你是同舟的编程助手。先理解项目和需求，再进行有依据的修改，验证结果。使用中文回复。不要声称执行了未执行的操作。',
+            permission: 'ask',
+          },
+          {
+            id: 'reviewer',
+            name: '代码审查',
+            description: '只读检查，寻找具体问题和改进建议',
+            instructions:
+              '你是只读代码审查员。读取相关文件，关注正确性、安全性和回归风险。给出文件路径、证据和可执行的建议，不修改文件。',
+            permission: 'read-only',
+          },
+          {
+            id: 'architect',
+            name: '架构规划',
+            description: '梳理需求、模块边界与实现步骤',
+            instructions:
+              '你是架构规划师。先阅读现有代码，明确需求和约束，再给出可执行的方案、风险和验证方式。只读，不修改文件。',
+            permission: 'read-only',
+          },
+        ];
+        for (const original of this.list<AgentProfile>('agent')) {
+          const seed = seeds.find((s) => s.id === original.id);
+          if (
+            !seed ||
+            original.name !== seed.name ||
+            original.description !== seed.description ||
+            original.instructions !== seed.instructions ||
+            original.permission !== seed.permission ||
+            original.providerId ||
+            original.model ||
+            original.maxSteps !== 16 ||
+            original.pluginIds?.length ||
+            original.skillIds?.length ||
+            original.computerEnabled
+          )
+            continue;
+          this.put('legacyAgent', original);
+          this.remove('agent', original.id);
+          for (const session of this.list<Session>('session'))
+            if (session.agentId === original.id) this.put('session', { ...session, agentId: '' });
+        }
+        this.db.prepare("UPDATE metadata SET value='2' WHERE key='schema_version'").run();
+        this.db.exec('COMMIT');
+      } catch (error) {
+        this.db.exec('ROLLBACK');
+        throw error;
+      }
+    }
+    for (const item of this.list<any>('pendingInput'))
+      if (['queued', 'dispatching'].includes(item.status))
+        this.put('pendingInput', { ...item, status: 'paused' });
     // An interrupted process must never appear to still be executing after restart.
     for (const run of this.list<Run>('run'))
       if (run.status === 'running')
@@ -181,12 +216,33 @@ export class Store {
     ).map((r) => JSON.parse(r.value));
   }
   message(message: Message): Message {
+    this.get<Session>('session', message.sessionId);
     this.db
       .prepare(
         'INSERT INTO messages(id,session_id,value,seq) VALUES(?,?,?,(SELECT COALESCE(MAX(seq),0)+1 FROM messages)) ON CONFLICT(id) DO UPDATE SET value=excluded.value',
       )
       .run(message.id, message.sessionId, JSON.stringify(message));
     return message;
+  }
+  messagesPage(sessionId: string, before?: string, limit = 100): Message[] {
+    this.get<Session>('session', sessionId);
+    const cursor = before
+      ? (
+          this.db
+            .prepare('SELECT seq FROM messages WHERE id=? AND session_id=?')
+            .get(before, sessionId) as { seq: number } | undefined
+        )?.seq
+      : Number.MAX_SAFE_INTEGER;
+    if (cursor === undefined) throw new Error('历史分页位置不存在');
+    return (
+      this.db
+        .prepare(
+          'SELECT value FROM messages WHERE session_id=? AND seq<? ORDER BY seq DESC LIMIT ?',
+        )
+        .all(sessionId, cursor, Math.max(1, Math.min(limit, 500))) as { value: string }[]
+    )
+      .reverse()
+      .map((r) => JSON.parse(r.value));
   }
   createSession(projectId: string | null = null, parentId?: string): Session {
     if (projectId) this.get<Project>('project', projectId);
@@ -197,12 +253,58 @@ export class Store {
       title: '新会话',
       providerId: provider?.id ?? '',
       model: provider?.models[0] ?? '',
-      agentId: 'builder',
+      agentId: '',
       createdAt: Date.now(),
       updatedAt: Date.now(),
       archived: false,
       ...(parentId ? { parentId } : {}),
     });
+  }
+  capabilities() {
+    const state = this.list<any>('capabilityState')[0];
+    return { computer: state?.computer === true, management: state?.management !== false };
+  }
+  setCapability(name: 'computer' | 'management', enabled: boolean) {
+    this.put('capabilityState', { id: 'global', ...this.capabilities(), [name]: enabled });
+  }
+  deleteSession(id: string) {
+    this.get<Session>('session', id);
+    const ids = new Set([id]);
+    for (let changed = true; changed; ) {
+      changed = false;
+      for (const s of this.list<Session>('session'))
+        if (s.parentId && ids.has(s.parentId) && !ids.has(s.id)) {
+          ids.add(s.id);
+          changed = true;
+        }
+    }
+    this.db.exec('BEGIN');
+    try {
+      for (const target of ids) {
+        this.put('deletedSession', { id: target, deletedAt: Date.now() });
+        this.db.prepare('DELETE FROM messages WHERE session_id=?').run(target);
+        for (const kind of [
+          'run',
+          'runEvent',
+          'pendingInput',
+          'engineSegment',
+          'notificationRule',
+          'delivery',
+          'channelInbox',
+          'contextCheckpoint',
+        ])
+          for (const obj of this.list<any>(kind))
+            if (obj.sessionId === target) this.remove(kind, obj.id);
+        this.remove('session', target);
+      }
+      for (const channel of this.list<any>('channel'))
+        if (ids.has(channel.sessionId))
+          this.put('channel', { ...channel, inbound: false, sessionId: undefined });
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
   }
   close() {
     this.db.close();

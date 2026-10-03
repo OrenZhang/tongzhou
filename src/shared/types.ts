@@ -1,5 +1,6 @@
 export type NativeEngine = 'kimi' | 'minimax';
 export interface NativeAuthState {
+  providerId?: string;
   engine: NativeEngine;
   phase: 'idle' | 'starting' | 'waiting' | 'checking' | 'success' | 'error' | 'cancelled';
   authenticated: boolean;
@@ -55,6 +56,8 @@ export interface PluginConfig {
   enabled: boolean;
   readOnlyTools: string[];
   hasSecret?: boolean;
+  catalog?: { name: string; description: string; inputSchema: Record<string, any> }[];
+  checkedAt?: number;
 }
 export interface PluginInput extends PluginConfig {
   secret?: string;
@@ -78,6 +81,7 @@ export interface ToolOutput {
   isError?: boolean;
 }
 export interface ComputerStatus {
+  diagnostic?: { ok: boolean; time: number; detail: string };
   supported: boolean;
   platform: string;
   screen: string;
@@ -128,6 +132,8 @@ export interface Session {
   archived: boolean;
 }
 export interface Run {
+  usageReported?: boolean;
+  workspace?: { before: string; after?: string };
   id: string;
   sessionId: string;
   providerId: string;
@@ -139,6 +145,7 @@ export interface Run {
   inputTokens: number;
   outputTokens: number;
   error?: string;
+  phase?: string;
   config?: {
     protocol: Protocol;
     baseUrl: string;
@@ -154,6 +161,14 @@ export interface Approval {
   detail: string;
 }
 export interface Snapshot {
+  channelAuth?: { id: string; phase: string; expiresAt?: number }[];
+  connectors?: Connector[];
+  channels?: Channel[];
+  notificationRules?: NotificationRule[];
+  deliveries?: Delivery[];
+  authEvents?: { id: string; providerId: string; phase: string; time: number; error?: string }[];
+  capabilities?: { computer: boolean; management: boolean };
+  pendingInputs?: PendingInput[];
   plugins?: PluginConfig[];
   skills?: SkillRecord[];
   providers: Provider[];
@@ -165,6 +180,7 @@ export interface Snapshot {
 }
 export type CodexLoginMethod = 'browser' | 'device';
 export interface CodexAuthState {
+  providerId?: string;
   available: boolean;
   account: string;
   plan?: string;
@@ -178,6 +194,11 @@ export interface CodexAuthState {
   };
 }
 export type AppEvent =
+  | {
+      type: 'navigate';
+      view: 'workspace' | 'providers' | 'agents' | 'activity' | 'settings' | 'extensions';
+    }
+  | { type: 'run-event'; event: RunEvent }
   | { type: 'native-auth'; state: NativeAuthState }
   | { type: 'codex-auth'; state: CodexAuthState }
   | { type: 'changed' }
@@ -190,6 +211,24 @@ export interface RunInput {
   model: string;
   agentId: string;
 }
+export interface RunEvent {
+  id: string;
+  sessionId: string;
+  runId: string;
+  seq: number;
+  time: number;
+  type: 'phase' | 'reasoning' | 'tool' | 'input';
+  text: string;
+}
+export interface PendingInput {
+  id: string;
+  sessionId: string;
+  input: RunInput;
+  mode: 'supplement' | 'next' | 'restart';
+  status: 'queued' | 'dispatching' | 'applied' | 'cancelled' | 'paused';
+  createdAt: number;
+  runId?: string;
+}
 export interface FileEntry {
   name: string;
   path: string;
@@ -200,6 +239,34 @@ export interface ImportPreview {
   warnings: string[];
 }
 export interface TongzhouAPI {
+  openModule(view: string): Promise<void>;
+  installBuiltinPlugin(): Promise<void>;
+  onboardFeishu(
+    id: string,
+    name: string,
+  ): Promise<{ id: string; url: string; image: string; expiresAt: number }>;
+  cancelChannelLogin(id: string): Promise<void>;
+  saveConnector(input: Connector & { secret?: string; clearSecret?: boolean }): Promise<void>;
+  deleteConnector(id: string): Promise<void>;
+  testConnector(id: string): Promise<string>;
+  loginConnector(id: string): Promise<{ url: string; code: string; expiresAt: number }>;
+  cancelConnectorLogin(id: string): Promise<void>;
+  openBrowserProfile(id: string): Promise<void>;
+  clearBrowserProfile(id: string): Promise<void>;
+  saveChannel(input: Channel & { webhook?: string; signingSecret?: string }): Promise<void>;
+  deleteChannel(id: string): Promise<void>;
+  sendChannel(id: string, text: string, sessionId?: string): Promise<Delivery>;
+  saveNotificationRule(rule: NotificationRule): Promise<void>;
+  deleteNotificationRule(id: string): Promise<void>;
+  initializeAgent(projectId: string): Promise<{ path: string; created: boolean }>;
+  branchSession(sessionId: string, messageId: string): Promise<Session>;
+  setCapability(name: 'computer' | 'management', enabled: boolean): Promise<void>;
+  runEvents(sessionId: string): Promise<RunEvent[]>;
+  enqueue(input: RunInput, mode: PendingInput['mode']): Promise<void>;
+  cancelInput(id: string): Promise<void>;
+  resumeInput(id: string): Promise<void>;
+  editInput(id: string, prompt: string): Promise<void>;
+  deleteSession(id: string): Promise<void>;
   savePlugin(plugin: PluginInput): Promise<void>;
   deletePlugin(id: string): Promise<void>;
   testPlugin(id: string): Promise<{ name: string; description: string }[]>;
@@ -208,9 +275,10 @@ export interface TongzhouAPI {
   deleteSkill(id: string): Promise<void>;
   computerStatus(): Promise<ComputerStatus>;
   computerPermission(): Promise<ComputerStatus>;
+  computerSelfTest(): Promise<ComputerStatus>;
   emergencyStop(): Promise<void>;
   snapshot(): Promise<Snapshot>;
-  messages(sessionId: string): Promise<Message[]>;
+  messages(sessionId: string, options?: { before?: string; limit?: number }): Promise<Message[]>;
   saveProvider(provider: ProviderInput): Promise<Provider>;
   deleteProvider(id: string): Promise<void>;
   testProvider(id: string, model: string): Promise<string>;
@@ -232,20 +300,72 @@ export interface TongzhouAPI {
   diff(projectId: string): Promise<string>;
   importCCSwitch(): Promise<ImportPreview | null>;
   exportSession(id: string): Promise<string | null>;
-  nativeStatus(engine: NativeEngine): Promise<NativeAuthState>;
-  nativeLogin(engine: NativeEngine, region: 'cn' | 'global'): Promise<NativeAuthState>;
-  nativeCancel(engine: NativeEngine): Promise<void>;
-  nativeOpen(engine: NativeEngine): Promise<void>;
-  nativeCopyCode(engine: NativeEngine): Promise<void>;
-  nativeLogout(engine: NativeEngine): Promise<void>;
-  codexStatus(): Promise<CodexAuthState>;
-  codexLogin(method: CodexLoginMethod): Promise<CodexAuthState>;
-  codexLoginRetry(method: CodexLoginMethod): Promise<CodexAuthState>;
-  codexLoginCancel(): Promise<void>;
-  codexLoginOpen(): Promise<void>;
-  codexLoginCopyCode(): Promise<void>;
-  codexLogout(): Promise<void>;
+  nativeStatus(engine: NativeEngine, providerId?: string): Promise<NativeAuthState>;
+  nativeLogin(
+    engine: NativeEngine,
+    region: 'cn' | 'global',
+    providerId?: string,
+  ): Promise<NativeAuthState>;
+  nativeCancel(engine: NativeEngine, providerId?: string): Promise<void>;
+  nativeOpen(engine: NativeEngine, providerId?: string): Promise<void>;
+  nativeCopyCode(engine: NativeEngine, providerId?: string): Promise<void>;
+  nativeLogout(engine: NativeEngine, providerId?: string): Promise<void>;
+  codexStatus(providerId?: string): Promise<CodexAuthState>;
+  codexLogin(method: CodexLoginMethod, providerId?: string): Promise<CodexAuthState>;
+  codexLoginRetry(method: CodexLoginMethod, providerId?: string): Promise<CodexAuthState>;
+  codexLoginCancel(providerId?: string): Promise<void>;
+  codexLoginOpen(providerId?: string): Promise<void>;
+  codexLoginCopyCode(providerId?: string): Promise<void>;
+  codexLogout(providerId?: string): Promise<void>;
   onEvent(callback: (event: AppEvent) => void): () => void;
+}
+
+export interface Connector {
+  id: string;
+  name: string;
+  kind: 'github' | 'gitlab' | 'browser';
+  enabled: boolean;
+  baseUrl: string;
+  clientId?: string;
+  hasSecret?: boolean;
+  status?: 'configured' | 'connected' | 'error';
+  account?: string;
+  checkedAt?: number;
+}
+export interface Channel {
+  id: string;
+  name: string;
+  kind: 'feishu' | 'wecom' | 'dingtalk';
+  enabled: boolean;
+  status?: 'configured' | 'authorized' | 'connected';
+  mode?: 'webhook' | 'app';
+  appId?: string;
+  domain?: 'feishu' | 'lark';
+  receiveId?: string;
+  receiveIdType?: 'chat_id' | 'open_id';
+  inbound?: boolean;
+  sessionId?: string;
+  allowedSenders?: string[];
+  checkedAt?: number;
+}
+export interface NotificationRule {
+  id: string;
+  channelId: string;
+  sessionId: string | null;
+  enabled: boolean;
+  once: boolean;
+  events: ('completed' | 'failed' | 'approval')[];
+  template: string;
+}
+export interface Delivery {
+  id: string;
+  channelId: string;
+  sessionId?: string;
+  ruleId?: string;
+  key: string;
+  time: number;
+  status: 'sending' | 'sent' | 'failed' | 'unknown';
+  error?: string;
 }
 declare global {
   interface Window {

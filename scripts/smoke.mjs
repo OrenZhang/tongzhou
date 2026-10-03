@@ -18,7 +18,7 @@ const server = createServer(async (req, res) => {
   for await (const b of req) raw += b;
   const body = JSON.parse(raw);
   const done = body.messages.some((m) => m.role === 'tool');
-  const data = !body.tools?.length
+  const data = !body.tools?.some((t) => t.function.name === 'write_file')
     ? {
         choices: [
           {
@@ -84,7 +84,7 @@ try {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.screenshot({ path: 'test-results/01-workspace.png' });
-  await page.getByRole('button', { name: /^模型连接/ }).click();
+  await page.getByRole('button', { name: /^连接中心/ }).click();
   await page.getByRole('button', { name: '添加连接', exact: true }).click();
   await page.getByLabel('连接名称', { exact: true }).fill('本地测试服务');
   await page.getByLabel('API Base URL').fill(`http://127.0.0.1:${server.address().port}/v1`);
@@ -98,9 +98,12 @@ try {
   );
   await page.screenshot({ path: 'test-results/02-connections.png' });
   await page.getByRole('button', { name: 'Agent 团队', exact: true }).click();
-  await page.getByRole('button', { name: '编辑 代码审查', exact: true }).click();
+  assert.equal((await page.evaluate(() => window.tongzhou.snapshot())).agents.length, 0);
+  await page.getByRole('button', { name: '创建 Agent', exact: true }).click();
+  await page.getByLabel('名称', { exact: true }).fill('代码审查');
+  await page.getByLabel('执行权限', { exact: true }).selectOption('read-only');
   await page.getByLabel('角色指令', { exact: true }).fill('只读检查代码，给出证据。');
-  await page.getByLabel('模型连接', { exact: true }).selectOption(provider.id);
+  await page.getByLabel('连接中心', { exact: true }).selectOption(provider.id);
   await page.getByRole('button', { name: 'Agent 模型', exact: true }).click();
   await page.getByLabel('搜索模型', { exact: true }).fill('reviewer');
   await page.getByLabel('搜索模型', { exact: true }).press('Enter');
@@ -108,7 +111,8 @@ try {
   await page.locator('.modal').waitFor({ state: 'hidden' });
   assert.equal(
     await page.evaluate(
-      async () => (await window.tongzhou.snapshot()).agents.find((a) => a.id === 'reviewer').model,
+      async () =>
+        (await window.tongzhou.snapshot()).agents.find((a) => a.name === '代码审查').model,
     ),
     'fixture-reviewer',
   );
@@ -173,7 +177,12 @@ try {
   await page.getByRole('button', { name: '批准本次', exact: true }).click();
   await page.getByText('已创建 hello.txt，内容为同舟。验证完成。', { exact: true }).waitFor();
   assert.equal(await readFile(path.join(project, 'hello.txt'), 'utf8'), '同舟');
-  const state = await page.evaluate(() => window.tongzhou.snapshot());
+  let state;
+  for (let attempt = 0; attempt < 200; attempt++) {
+    state = await page.evaluate(() => window.tongzhou.snapshot());
+    if (state.runs[0]?.status !== 'running') break;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
   assert.equal(state.runs[0].status, 'completed');
   assert.equal(state.runs[0].inputTokens, 30);
   await page.screenshot({ path: 'test-results/05-conversation.png' });

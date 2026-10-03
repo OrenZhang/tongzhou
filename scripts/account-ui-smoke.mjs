@@ -33,7 +33,7 @@ try {
       authenticated: engine === 'kimi',
     }));
   });
-  await page.getByRole('button', { name: /^模型连接/ }).click();
+  await page.getByRole('button', { name: /^连接中心/ }).click();
   await page
     .locator('.provider-card')
     .filter({ has: page.getByRole('heading', { name: 'OpenAI · ChatGPT', exact: true }) })
@@ -72,7 +72,7 @@ try {
   }
   await page.getByRole('button', { name: '设置与关于', exact: true }).click();
   assert.equal(await page.locator('.auth-badge.connected').count(), 2);
-  await page.getByRole('button', { name: /^模型连接/ }).click();
+  await page.getByRole('button', { name: /^连接中心/ }).click();
   assert.equal(await page.locator('.auth-badge.connected').count(), 2);
   console.log(
     'Account UI smoke passed: single-provider dialogs, verified badges, return navigation. States are fixtures.',

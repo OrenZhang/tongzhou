@@ -9,60 +9,6 @@ import type {
   TongzhouAPI,
 } from './shared/types';
 
-export function AgentTools({
-  agent,
-  onChange,
-  data,
-}: {
-  agent: AgentProfile;
-  onChange: (a: AgentProfile) => void;
-  data: Snapshot;
-}) {
-  const toggle = (key: 'pluginIds' | 'skillIds', id: string, checked: boolean) =>
-    onChange({
-      ...agent,
-      [key]: checked
-        ? [...new Set([...(agent[key] ?? []), id])]
-        : (agent[key] ?? []).filter((v) => v !== id),
-    });
-  return (
-    <fieldset className="tool-permissions">
-      <legend>工具与 Skills</legend>
-      <label className="checkbox-line">
-        <input
-          type="checkbox"
-          checked={!!agent.computerEnabled}
-          onChange={(e) => onChange({ ...agent, computerEnabled: e.target.checked })}
-        />
-        电脑控制（截图、鼠标、键盘）
-      </label>
-      <p className="muted">
-        只读 Agent 仅可查看窗口和截图。启用的工具在普通聊天中也可使用，每次调用需批准。
-      </p>
-      {(data.plugins ?? []).map((p) => (
-        <label className="checkbox-line" key={p.id}>
-          <input
-            type="checkbox"
-            checked={(agent.pluginIds ?? []).includes(p.id)}
-            onChange={(e) => toggle('pluginIds', p.id, e.target.checked)}
-          />
-          {p.name} · MCP{!p.enabled ? '（已停用）' : ''}
-        </label>
-      ))}
-      {(data.skills ?? []).map((s) => (
-        <label className="checkbox-line" key={s.id}>
-          <input
-            type="checkbox"
-            checked={(agent.skillIds ?? []).includes(s.id)}
-            onChange={(e) => toggle('skillIds', s.id, e.target.checked)}
-          />
-          {s.name} · Skill{!s.enabled ? '（已停用）' : ''}
-        </label>
-      ))}
-    </fieldset>
-  );
-}
-
 export function Extensions({
   api,
   data,
@@ -81,8 +27,6 @@ export function Extensions({
     {},
   );
   const [notice, setNotice] = useState('');
-  const [defaultTools, setDefaultTools] = useState<AgentProfile | null>(null);
-  const builder = data.agents.find((a) => a.id === 'builder');
   useEffect(() => {
     api.computerStatus().then(setStatus).catch(report);
   }, [api]);
@@ -111,7 +55,7 @@ export function Extensions({
       <div className="page-heading">
         <div className="eyebrow">TOOLS & SKILLS</div>
         <h1>让同舟动手完成任务。</h1>
-        <p>管理公共工具，为不同模型和 Agent 分配能力。切换模型不会切换你的会话记录。</p>
+        <p>管理公共工具，统一启停能力，所有会话和 Agent 自动继承。切换模型不会切换你的会话记录。</p>
       </div>
       <section className="settings-card">
         <div className="settings-card-title">
@@ -128,8 +72,21 @@ export function Extensions({
             : status?.platform === 'darwin'
               ? 'macOS'
               : (status?.platform ?? '检查中')}{' '}
-          · 屏幕权限：{status?.screen ?? '检查中'} · 辅助功能：
-          {status?.accessibility ? '可用' : '未授权'}
+          · 屏幕权限：
+          {status?.screen === 'available' ? '无需系统授权' : (status?.screen ?? '检查中')} ·
+          辅助功能：
+          {!status
+            ? '检查中'
+            : status.platform === 'win32'
+              ? '无需系统授权'
+              : status.accessibility
+                ? '已授权'
+                : '未授权'}
+        </p>
+        <p>
+          {status?.diagnostic
+            ? `${status.diagnostic.ok ? '✓ 自检通过' : '自检失败'} · ${new Date(status.diagnostic.time).toLocaleString()} · ${status.diagnostic.detail}`
+            : '尚未进行本机功能自检'}
         </p>
         <p className="muted">
           需要支持图片与工具调用的模型，截图会发送给当前选用的服务。每次操作展示审批；窗口变化后需重新截图。快捷停止：
@@ -141,25 +98,87 @@ export function Extensions({
         <div className="row wrap">
           <button
             className="secondary"
-            onClick={() => perform(async () => setStatus(await api.computerPermission()))}
+            disabled={busy}
+            onClick={() =>
+              perform(async () => {
+                setStatus(await api.computerPermission());
+                setNotice(
+                  '系统权限状态已刷新 · ' +
+                    new Date().toLocaleTimeString() +
+                    '；操作效果需通过功能测试确认',
+                );
+              })
+            }
           >
             <ShieldCheck size={16} />
             检查系统权限
           </button>
           <button
             className="secondary"
-            onClick={() => setDefaultTools(builder ? { ...builder } : null)}
+            disabled={busy || !status?.supported}
+            onClick={() =>
+              perform(async () => {
+                const next = await api.computerSelfTest();
+                setStatus(next);
+                setNotice(next.diagnostic?.detail ?? '自检结束');
+              })
+            }
           >
-            配置默认助手工具
+            本机功能自检（打开测试窗口）
           </button>
-          <button className="text-button danger" onClick={() => perform(() => api.emergencyStop())}>
+          <label className="checkbox-line">
+            <input
+              type="checkbox"
+              checked={data.capabilities?.computer ?? false}
+              onChange={(e) => perform(() => api.setCapability('computer', e.target.checked))}
+            />
+            启用电脑控制
+          </label>
+          <button
+            className="text-button danger"
+            disabled={!data.runs.some((r) => r.status === 'running') || busy}
+            onClick={() =>
+              perform(async () => {
+                await api.emergencyStop();
+                setNotice('已请求停止所有运行任务');
+              })
+            }
+          >
             <Square size={15} />
-            停止全部任务
+            停止全部任务（{data.runs.filter((r) => r.status === 'running').length}）
           </button>
         </div>
       </section>
+      <section className="settings-card">
+        <h3>客户端管理</h3>
+        <p>在会话中查询与管理 Agent、插件、连接和会话。修改沿用操作审批。</p>
+        <label className="checkbox-line">
+          <input
+            type="checkbox"
+            checked={data.capabilities?.management ?? true}
+            onChange={(e) => perform(() => api.setCapability('management', e.target.checked))}
+          />
+          启用客户端管理
+        </label>
+      </section>
+      <section className="settings-card">
+        <h3>项目文件与终端</h3>
+        <p>内置能力 · 关联项目后可用，按项目范围和只读策略执行。</p>
+      </section>
       <div className="section-heading">
         <h2>MCP 插件</h2>
+        <button
+          className="secondary"
+          disabled={busy || data.plugins?.some((p) => p.id === 'tongzhou-web')}
+          onClick={() =>
+            perform(async () => {
+              await api.installBuiltinPlugin();
+              setNotice('已启用内置网页读取与时间工具，无需 API Key；在会话中按需调用');
+            })
+          }
+        >
+          启用内置网页与时间
+        </button>
         <button
           className="primary"
           onClick={() => {
@@ -191,7 +210,9 @@ export function Extensions({
             <h3>{p.name}</h3>
             <p>{p.transport === 'http' ? p.url : [p.command, ...p.args].join(' ')}</p>
             <p className="muted">
-              {catalogs[p.id] ? `已发现 ${catalogs[p.id].length} 个工具` : '点击连接检查工具目录'}
+              {(catalogs[p.id] ?? p.catalog)
+                ? `已发现 ${(catalogs[p.id] ?? p.catalog)!.length} 个工具`
+                : '点击连接检查工具目录'}
             </p>
             <div className="row wrap">
               <button
@@ -223,8 +244,8 @@ export function Extensions({
       </div>
       {!(data.plugins ?? []).length && (
         <p className="muted">
-          添加本机 stdio 或远程 Streamable HTTP 服务。配置后在 Agent
-          中勾选插件，才会向模型提供工具。
+          添加本机 stdio 或远程 Streamable HTTP 服务。插件全局启用后，各会话按需使用，无需在 Agent
+          中重复配置。
         </p>
       )}
       {notice && (
@@ -415,31 +436,6 @@ export function Extensions({
             </button>
             <button className="primary" disabled={busy} onClick={() => perform(() => save())}>
               {busy ? <Spinner /> : null}保存插件
-            </button>
-          </div>
-        </Modal>
-      )}
-      {defaultTools && (
-        <Modal
-          title="默认助手工具"
-          subtitle="普通聊天也使用此配置；其他 Agent 在各自配置页设置。"
-          onClose={() => setDefaultTools(null)}
-        >
-          <div className="modal-content">
-            <AgentTools agent={defaultTools} data={data} onChange={setDefaultTools} />
-          </div>
-          <div className="modal-footer">
-            <button
-              className="primary"
-              disabled={busy}
-              onClick={() =>
-                perform(async () => {
-                  await api.saveAgent(defaultTools);
-                  setDefaultTools(null);
-                })
-              }
-            >
-              保存工具配置
             </button>
           </div>
         </Modal>

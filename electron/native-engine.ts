@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import { EventEmitter } from 'node:events';
 import path from 'node:path';
 import { minimalEnv } from './workspace';
+import { configureNativeTools } from './native-policy';
 import type { NativeAuthState, NativeEngine } from '../src/shared/types';
 
 const definitions = {
@@ -15,6 +16,7 @@ export const nativeEngine = (protocol: string): protocol is NativeEngine =>
 
 export function launchEngine(kind: NativeEngine, home: string, args: string[]) {
   mkdirSync(home, { recursive: true, mode: 0o700 });
+  if (args[0] === 'acp') configureNativeTools(kind, home);
   const require = createRequire(path.join(process.cwd(), 'package.json'));
   const root = path
     .dirname(
@@ -80,8 +82,10 @@ export class NativeClient extends EventEmitter {
   get connected() {
     return !!this.child?.stdin.writable && this.child.exitCode === null;
   }
-  async start() {
+  async start(): Promise<any> {
+    const bootstrap = this.kind === 'minimax' && !existsSync(path.join(this.home, 'config.yaml'));
     this.child = launchEngine(this.kind, this.home, ['acp']);
+    const child = this.child;
     let buffer = '';
     this.child.stdout.setEncoding('utf8');
     this.child.stdout.on('data', (part: string) => {
@@ -118,11 +122,15 @@ export class NativeClient extends EventEmitter {
     });
     // Drain diagnostic output; it can contain private auth details, so do not forward it.
     this.child.stderr.resume();
-    this.child.on('error', () => this.fail(new Error(`${this.kind} 引擎启动失败`)));
-    this.child.on('exit', () => this.fail(new Error(`${this.kind} 引擎已退出`)));
-    return this.request('initialize', {
+    this.child.on('error', () => {
+      if (this.child === child) this.fail(new Error(`${this.kind} 引擎启动失败`));
+    });
+    this.child.on('exit', () => {
+      if (this.child === child) this.fail(new Error(`${this.kind} 引擎已退出`));
+    });
+    const initialized = await this.request('initialize', {
       protocolVersion: 1,
-      clientInfo: { name: 'tongzhou', version: '0.3.0' },
+      clientInfo: { name: 'tongzhou', version: '0.4.0' },
       clientCapabilities: {
         auth: { terminal: true },
         _meta: { 'terminal-auth': true },
@@ -130,6 +138,13 @@ export class NativeClient extends EventEmitter {
         terminal: false,
       },
     });
+    if (bootstrap) {
+      this.stop();
+      if (!existsSync(path.join(this.home, 'config.yaml')))
+        throw new Error('MiniMax 未创建账号配置');
+      return this.start();
+    }
+    return initialized;
   }
   async authenticate() {
     try {

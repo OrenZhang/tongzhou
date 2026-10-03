@@ -2048,3 +2048,95 @@ input[type='checkbox'] {
   object-fit: contain;
   margin: 12px 0;
 }
+.run-activity {
+  margin: 0 12px 12px;
+  font-size: 12px;
+  color: var(--muted);
+  max-height: 230px;
+  overflow: auto;
+}
+.run-activity summary {
+  cursor: pointer;
+  padding: 7px 0;
+}
+.run-event {
+  padding: 6px 10px;
+  border-left: 2px solid #dce8e3;
+  margin: 4px 0;
+}
+.run-event pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  color: #354d47;
+  margin: 3px 0;
+}
+.queued-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #dce8e3;
+  border-radius: 8px;
+  padding: 8px;
+  margin: 5px 0;
+}
+.queued-input span {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+.connections-extra {
+  margin-top: 32px;
+  border-top: 1px solid var(--border, #dce5e2);
+  padding-top: 24px;
+}
+.connection-tabs {
+  margin-bottom: 20px;
+}
+.connection-form {
+  background: white;
+  border: 1px solid #dce5e2;
+  border-radius: 12px;
+  padding: 22px;
+  margin: 18px 0;
+  max-width: 760px;
+}
+.connection-form label {
+  display: block;
+  margin: 12px 0;
+}
+.connection-form input:not([type='checkbox']),
+.connection-form textarea,
+.connection-form select {
+  display: block;
+  width: 100%;
+  margin-top: 7px;
+  padding: 10px;
+  border: 1px solid #dce5e2;
+  border-radius: 7px;
+  background: white;
+}
+.connection-form textarea {
+  min-height: 80px;
+}
+.connections-extra .row {
+  flex-wrap: wrap;
+}
+.connection-record {
+  padding: 12px 0;
+  border-bottom: 1px solid #e8efed;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+.message-actions {
+  margin: -12px 0 24px 62px;
+  display: flex;
+  gap: 16px;
+  opacity: 0.55;
+  font-size: 12px;
+}
+.message-actions:hover {
+  opacity: 1;
+}

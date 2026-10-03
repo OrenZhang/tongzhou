@@ -54,7 +54,7 @@ export function mcpName(id: string, name: string) {
 }
 
 export class PluginConnection {
-  readonly client = new Client({ name: 'tongzhou', version: '0.3.0' }, { capabilities: {} });
+  readonly client = new Client({ name: 'tongzhou', version: '0.4.0' }, { capabilities: {} });
   private secretValues: string[] = [];
   constructor(
     readonly config: PluginConfig,
@@ -123,7 +123,12 @@ export class ToolScope {
   private connections: PluginConnection[] = [];
   private handlers = new Map<
     string,
-    { title: string; execute(args: any): Promise<ToolOutput>; approval: boolean }
+    {
+      title: string;
+      execute(args: any): Promise<ToolOutput>;
+      approval: boolean;
+      allowed: () => boolean;
+    }
   >();
   private closed = false;
   private seen = new Map<string, Promise<ToolOutput>>();
@@ -133,10 +138,16 @@ export class ToolScope {
     private ask: AskTool,
     private record: (name: string, args: unknown, result: ToolOutput) => void,
   ) {}
-  add(spec: ToolSpec, title: string, execute: (args: any) => Promise<ToolOutput>, approval = true) {
+  add(
+    spec: ToolSpec,
+    title: string,
+    execute: (args: any) => Promise<ToolOutput>,
+    approval = true,
+    allowed = () => true,
+  ) {
     if (this.handlers.has(spec.name)) throw new Error('重复工具名');
     this.specs.push(spec);
-    this.handlers.set(spec.name, { title, execute, approval });
+    this.handlers.set(spec.name, { title, execute, approval, allowed });
   }
   async prepare(store: Store, agent: AgentProfile, computer?: ComputerAdapter) {
     this.remaining = agent.maxSteps;
@@ -146,14 +157,67 @@ export class ToolScope {
     this.signal.addEventListener('abort', abort, { once: true });
     this.detach = () => this.signal.removeEventListener('abort', abort);
     try {
-      for (const id of new Set(agent.pluginIds ?? [])) {
+      for (const config of store.list<PluginConfig>('plugin').filter((p) => p.enabled)) {
         this.signal.throwIfAborted();
-        const config = store.get<PluginConfig>('plugin', id);
-        if (!config.enabled) continue;
-        const connection = new PluginConnection(config, store.secret('plugin_' + id));
+        const id = config.id;
+        const capturedSecret = store.secret('plugin_' + id);
+        const allowed = () => {
+          const current = store.list<PluginConfig>('plugin').find((p) => p.id === id);
+          return (
+            !!current?.enabled &&
+            current.command === config.command &&
+            current.url === config.url &&
+            current.transport === config.transport &&
+            JSON.stringify(current.args) === JSON.stringify(config.args) &&
+            JSON.stringify(current.readOnlyTools) === JSON.stringify(config.readOnlyTools) &&
+            store.secret('plugin_' + id) === capturedSecret
+          );
+        };
+        const connection = new PluginConnection(config, capturedSecret);
         this.connections.push(connection);
-        await connection.connect(this.signal);
-        for (const tool of await connection.tools(this.signal)) {
+        let connected: Promise<void> | undefined;
+        const connect = () => (connected ??= connection.connect(this.signal));
+        let catalog = config.catalog;
+        if (!catalog) {
+          this.add(
+            {
+              name: mcpName(id, 'discover'),
+              description: `${config.name}：按需连接 MCP。先 action=list 获取目录，再 action=call 携带 tool 和 arguments 调用。未调用时不启动此插件。`,
+              parameters: {
+                type: 'object',
+                properties: {
+                  action: { type: 'string', enum: ['list', 'call'] },
+                  tool: { type: 'string' },
+                  arguments: { type: 'object', additionalProperties: true },
+                },
+                required: ['action'],
+                additionalProperties: false,
+              },
+            },
+            `${config.name} · 连接和调用`,
+            async (args) => {
+              await connect();
+              catalog ??= (await connection.tools(this.signal)).map((t) => ({
+                name: t.name,
+                description: t.description ?? '',
+                inputSchema: t.inputSchema,
+              }));
+              if (!allowed()) throw new Error('插件配置已变更');
+              store.put('plugin', { ...config, catalog, checkedAt: Date.now() });
+              const visible = catalog.filter(
+                (t) => agent.permission !== 'read-only' || config.readOnlyTools.includes(t.name),
+              );
+              if (args.action === 'list') return { text: JSON.stringify(visible) };
+              if (args.action !== 'call' || !visible.some((t) => t.name === args.tool))
+                throw new Error('工具不存在或没有权限');
+              return connection.call(args.tool, args.arguments ?? {}, this.signal);
+            },
+            true,
+            allowed,
+          );
+          continue;
+        }
+        for (const tool of catalog) {
           if (agent.permission === 'read-only' && !config.readOnlyTools.includes(tool.name))
             continue;
           const name = mcpName(id, tool.name);
@@ -167,26 +231,33 @@ export class ToolScope {
               parameters: tool.inputSchema,
             },
             `${config.name} · ${tool.name}`,
-            (args) => connection.call(tool.name, args, this.signal),
+            async (args) => {
+              await connect();
+              return connection.call(tool.name, args, this.signal);
+            },
+            true,
+            allowed,
           );
         }
       }
-      if (agent.computerEnabled) {
+      if (store.capabilities().computer) {
         if (!computer) throw new Error('此环境没有电脑控制适配器');
         const scopedComputer = computer.fork?.() ?? computer;
         for (const spec of scopedComputer.specs(agent.permission === 'read-only'))
-          this.add(spec, '电脑控制 · ' + spec.name, (args) =>
-            scopedComputer.execute(spec.name, args, this.signal),
+          this.add(
+            spec,
+            '电脑控制 · ' + spec.name,
+            (args) => scopedComputer.execute(spec.name, args, this.signal),
+            true,
+            () => store.capabilities().computer,
           );
       }
-      const skills = (agent.skillIds ?? [])
-        .map((id) => store.get<SkillRecord>('skill', id))
-        .filter((s) => s.enabled);
+      const skills = store.list<SkillRecord>('skill').filter((s) => s.enabled);
       if (skills.length)
         this.add(
           {
             name: 'read_skill_file',
-            description: '读取已为当前 Agent 启用的 Skill 附属文本文件。',
+            description: '按需读取启用的 Skill。先读 SKILL.md 获取使用说明，再读需要的附属文件。',
             parameters: {
               type: 'object',
               properties: {
@@ -200,6 +271,9 @@ export class ToolScope {
           '读取 Skill 文件',
           async (args) => {
             const skill = skills.find((s) => s.id === args.skillId);
+            if (!store.list<SkillRecord>('skill').find((s) => s.id === args.skillId)?.enabled)
+              throw new Error('Skill 已停用');
+            if (skill && args.path === 'SKILL.md') return { text: skill.instructions };
             if (!skill || typeof args.path !== 'string' || !Object.hasOwn(skill.files, args.path))
               throw new Error('Skill 文件不存在或未授权');
             return { text: skill.files[args.path] };
@@ -225,6 +299,7 @@ export class ToolScope {
   private async execute(name: string, args: any): Promise<ToolOutput> {
     const handler = this.handlers.get(name);
     if (!handler) throw new Error('工具未启用或没有权限：' + name);
+    if (!handler.allowed()) throw new Error('工具已停用或配置已改变，请在下一轮使用新配置');
     if (this.closed || this.signal.aborted) throw new Error('工具执行已停止');
     if (this.remaining-- <= 0) throw new Error('已达到本轮插件工具调用上限，请检查结果后再继续');
     let result: ToolOutput;
@@ -235,6 +310,7 @@ export class ToolScope {
         throw new Error('用户未批准此操作，不能重试或绕过');
       this.signal.throwIfAborted();
       if (this.closed) throw new Error('工具执行已停止');
+      if (!handler.allowed()) throw new Error('审批期间工具已停用或配置已改变');
       result = await handler.execute(args);
     } catch (error) {
       result = { text: redact(String(error)), isError: true };
@@ -256,12 +332,12 @@ export class ToolScope {
 }
 
 export function skillInstructions(store: Store, agent: AgentProfile) {
-  return (agent.skillIds ?? [])
-    .map((id) => store.get<SkillRecord>('skill', id))
+  return store
+    .list<SkillRecord>('skill')
     .filter((s) => s.enabled)
     .map(
       (s) =>
-        `\n[启用的 Skill：${s.name}；ID：${s.id}]\n${s.instructions}\n附属文件：${Object.keys(s.files).join(', ')}\nSkill 不会自动扩大工具权限。`,
+        `\n[可用 Skill：${s.name}；ID：${s.id}] ${s.description}\n任务相关时调用 read_skill_file 读取 SKILL.md，按需使用；不自动扩大工具权限。`,
     )
     .join('\n');
 }

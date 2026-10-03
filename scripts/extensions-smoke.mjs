@@ -89,11 +89,7 @@ try {
   await page.getByRole('button', { name: '保存插件', exact: true }).click();
   await page.getByRole('button', { name: '导入 Skill 文件夹', exact: true }).click();
   await page.getByRole('heading', { name: 'sample-skill', exact: true }).waitFor();
-  await page.getByRole('button', { name: '配置默认助手工具', exact: true }).click();
-  await page.getByRole('dialog').getByLabel('测试笔记插件 · MCP', { exact: true }).check();
-  await page.getByRole('dialog').getByLabel('sample-skill · Skill', { exact: true }).check();
-  await page.getByRole('dialog').getByRole('button', { name: '保存工具配置', exact: true }).click();
-  await page.getByRole('dialog').waitFor({ state: 'hidden' });
+  assert.equal((await page.evaluate(() => window.tongzhou.snapshot())).agents.length, 0);
   await page.screenshot({ path: 'test-results/12-extensions.png' });
   const base = `http://127.0.0.1:${server.address().port}/v1`;
   await page.evaluate(async (base) => {
@@ -135,7 +131,8 @@ try {
   assert.equal(after.sessions[0].providerId, 'fixture-b');
   const last = JSON.stringify(requests.at(-1));
   assert.ok(last.includes('Fixture note'));
-  assert.ok(last.includes('Use concise answers.'));
+  assert.ok(last.includes('Test portable skill'));
+  assert.ok(!last.includes('Use concise answers.')); // Skill instructions load on demand.
   assert.ok(!last.includes('"tool_calls"'));
   await page.screenshot({ path: 'test-results/13-plugin-handoff.png' });
   await page.reload();
@@ -145,7 +142,7 @@ try {
   assert.equal(persisted.plugins.length, 1);
   assert.equal(persisted.skills.length, 1);
   console.log(
-    'Extensions UI passed: MCP discovery, Skill import, Agent permissions, approval, projectless tools, same-session provider handoff and persistence.',
+    'Extensions UI passed: MCP discovery, Skill import, global plugin switches, approval, projectless tools, same-session provider handoff and persistence.',
   );
 } finally {
   await app.close();

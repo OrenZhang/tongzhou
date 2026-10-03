@@ -1,3 +1,4 @@
+import { seedAgents } from './fixtures';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
@@ -15,10 +16,12 @@ const fake = vi.hoisted(() => ({
   stopReason: 'end_turn',
 }));
 vi.mock('node:child_process', async () => {
+  const actual = await vi.importActual<typeof import('node:child_process')>('node:child_process');
   const { EventEmitter } = await import('node:events');
   const { PassThrough, Writable } = await import('node:stream');
   return {
     spawn: vi.fn((executable: string, args: string[], options: any) => {
+      if (executable === 'git') return actual.spawn(executable, args, options);
       if (executable === 'taskkill') {
         const target = fake.children.find((c) => String(c.pid) === args[1]);
         if (target) {
@@ -267,6 +270,7 @@ describe('ACP conversation execution', () => {
   function fixture(project: boolean) {
     fake.authenticated = true;
     const store = new Store(':memory:', { encrypt: (s) => s, decrypt: (s) => s });
+    seedAgents(store);
     const runtime = new Runtime(store, root, (event) => {
       if (event.type === 'approval') runtime.approve(event.approval.id, true);
     });
@@ -305,7 +309,7 @@ describe('ACP conversation execution', () => {
     expect(
       fake.calls
         .filter((c) => c.method === 'session/set_mode')
-        .every((c) => c.params.modeId === 'plan'),
+        .every((c) => c.params.modeId === 'default'),
     ).toBe(true);
     expect(fake.replies.every((r) => r.result.outcome.outcome === 'cancelled')).toBe(true);
     expect(fake.calls.filter((c) => c.method === 'session/prompt')[1].params.prompt[0].text).toBe(
@@ -341,11 +345,14 @@ describe('ACP conversation execution', () => {
       fake.calls.filter((c) => c.method === 'session/prompt')[2].params.prompt[0].text,
     ).toContain('Other model answer');
   });
-  it('uses only one-time approval for project actions', async () => {
+  it('denies unmanaged native actions and exposes project tools through the controlled bridge', async () => {
     const { store, runtime, input } = fixture(true);
     runtime.start(input);
     await runtime.waitForIdle();
-    expect(fake.replies[0].result).toEqual({ outcome: { outcome: 'selected', optionId: 'once' } });
+    expect(fake.replies[0].result).toEqual({ outcome: { outcome: 'cancelled' } });
+    expect(fake.calls.find((c) => c.method === 'session/new').params.mcpServers[0].name).toBe(
+      'tongzhou-tools',
+    );
     expect(store.list<any>('run')[0].status).toBe('completed');
   });
   it('rejects stale or unsupported models before sending a prompt', async () => {

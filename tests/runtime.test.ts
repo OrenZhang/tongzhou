@@ -1,3 +1,4 @@
+import { seedAgents } from './fixtures';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -35,6 +36,7 @@ async function fixture(handler: (body: any) => any[] | Promise<any[]>, computer?
       }),
   );
   const store = new Store(':memory:', { encrypt: (s) => s, decrypt: (s) => s });
+  seedAgents(store);
   cleanups.push(async () => store.close());
   store.saveProvider({
     id: 'fixture',
@@ -72,6 +74,54 @@ async function fixture(handler: (body: any) => any[] | Promise<any[]>, computer?
 const text = (content: string) => ({
   choices: [{ delta: { content }, finish_reason: 'stop' }],
   usage: { prompt_tokens: 10, completion_tokens: 4 },
+});
+describe('conversation input and lifecycle changes', () => {
+  it('accepts ordinary chat with no Agent and records progress before the first response', async () => {
+    const f = await fixture(() => [text('Hello')]);
+    const s = f.store.createSession();
+    f.runtime.start({ ...f.input, sessionId: s.id, agentId: '', prompt: '你好' });
+    expect(f.runtime.events(s.id)[0].text).toBe('准备上下文');
+    await f.runtime.waitForIdle();
+    expect(f.store.messages(s.id).at(-1)?.content).toBe('Hello');
+    expect(f.runtime.events(s.id).at(-1)?.text).toBe('已完成');
+  });
+  it('persists a queued next turn and runs it once after the current turn', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    let calls = 0;
+    const f = await fixture(async () => {
+      if (++calls === 1) await gate;
+      return [text('answer ' + calls)];
+    });
+    f.runtime.start(f.input);
+    await f.runtime.enqueue({ ...f.input, prompt: 'next requirement' }, 'next');
+    expect(f.runtime.snapshot().pendingInputs).toHaveLength(1);
+    release();
+    await f.runtime.waitForIdle();
+    expect(calls).toBe(2);
+    expect(
+      f.store
+        .messages(f.input.sessionId)
+        .filter((m) => m.role === 'user')
+        .map((m) => m.content),
+    ).toEqual(['Create the file', 'next requirement']);
+    expect(f.runtime.snapshot().pendingInputs).toHaveLength(0);
+  });
+  it('deletes an archived conversation and refuses a late write', async () => {
+    const f = await fixture(() => [text('answer')]);
+    f.runtime.start(f.input);
+    await f.runtime.waitForIdle();
+    const s = f.store.get<any>('session', f.input.sessionId);
+    const last = f.store.messages(s.id).at(-1)!;
+    f.store.put('session', { ...s, archived: true });
+    await f.runtime.deleteSession(s.id);
+    expect(f.store.messages(s.id)).toHaveLength(0);
+    expect(f.runtime.events(s.id)).toHaveLength(0);
+    expect(() => f.store.message(last)).toThrow();
+    expect(f.store.list('project')).toHaveLength(1);
+  });
 });
 describe('agent execution lifecycle', () => {
   it('uses an explicit model selection instead of silently reverting to Agent defaults', async () => {
@@ -129,7 +179,7 @@ describe('agent execution lifecycle', () => {
       adapter,
     );
     const session = f.store.createSession();
-    f.store.put('agent', { ...f.store.get<any>('agent', 'builder'), computerEnabled: true });
+    f.store.setCapability('computer', true);
     f.runtime.start({ ...f.input, sessionId: session.id });
     await expect.poll(() => f.runtime.snapshot().approvals.length).toBe(1);
     f.runtime.approve(f.runtime.snapshot().approvals[0].id, true);
@@ -317,7 +367,15 @@ describe('agent execution lifecycle', () => {
     expect(f.store.messages(f.input.sessionId).at(-1)?.content).toContain('Independent finding');
     expect(
       f.requests.every((r) =>
-        r.tools.every((t: any) => ['read_file', 'list_files'].includes(t.function.name)),
+        r.tools.every((t: any) =>
+          [
+            'read_file',
+            'list_files',
+            'read_range',
+            'search_files',
+            'project_instructions',
+          ].includes(t.function.name),
+        ),
       ),
     ).toBe(true);
     expect(f.store.list('agent')).toHaveLength(3);

@@ -27,3 +27,11 @@ await build({
   format: 'cjs',
   target: 'node22',
 });
+await build({
+  entryPoints: ['electron/builtin-mcp.ts'],
+  outfile: 'dist-electron/builtin-mcp.cjs',
+  bundle: true,
+  platform: 'node',
+  format: 'cjs',
+  target: 'node22',
+});

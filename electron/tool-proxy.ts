@@ -3,7 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { randomUUID } from 'node:crypto';
 const server = new Server(
-  { name: 'tongzhou-tools', version: '0.3.0' },
+  { name: 'tongzhou-tools', version: '0.4.0' },
   { capabilities: { tools: {} } },
 );
 async function request(body: unknown, signal?: AbortSignal) {
@@ -18,8 +18,8 @@ async function request(body: unknown, signal?: AbortSignal) {
     },
     body: JSON.stringify(body),
     signal: signal
-      ? AbortSignal.any([signal, AbortSignal.timeout(140000)])
-      : AbortSignal.timeout(140000),
+      ? AbortSignal.any([signal, AbortSignal.timeout(31 * 60 * 1000)])
+      : AbortSignal.timeout(31 * 60 * 1000),
     redirect: 'error',
   });
   if (!response.ok) throw new Error('同舟工具通道已关闭或请求失败');

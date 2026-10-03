@@ -71,8 +71,8 @@ try {
   );
   console.log('Native engine smoke passed; no user sign-in or model inference performed.');
 } catch (error) {
-  const page = await app.firstWindow();
-  await page.screenshot({ path: 'test-results/native-failure.png' }).catch(() => {});
+  const page = app.windows()[0];
+  await page?.screenshot({ path: 'test-results/native-failure.png' }).catch(() => {});
   throw error;
 } finally {
   await app.close();

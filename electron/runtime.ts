@@ -10,19 +10,248 @@ import type {
   RunInput,
   Session,
   Snapshot,
+  PendingInput,
+  RunEvent,
 } from '../src/shared/types';
+import { resolveAgent } from './context';
+import { engineHome } from './account-paths';
+import type { ClientCommands } from './client-commands';
 import { Store } from './store';
 import { complete, portableHistory } from './providers';
 import { ToolScope, skillInstructions, type ComputerAdapter } from './extensions';
 import { toolBridge } from './tool-bridge';
-import { executeTool, toolSpecs } from './workspace';
+import {
+  executeTool,
+  toolSpecs,
+  readOnlyToolSpecs,
+  projectInstructions,
+  commandResult,
+} from './workspace';
 import { NativeClient, nativeEngine, modelCatalog } from './native-engine';
 import { CodexClient } from './codex';
 import { redact } from './validation';
 import path from 'node:path';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, rm } from 'node:fs/promises';
 
 export class Runtime {
+  onLifecycle?: (run: Run, event: 'completed' | 'failed' | 'approval', eventId?: string) => void;
+  private stopping = false;
+  private deleting = new Set<string>();
+  private steering = new Map<string, (text: string, messageId: string) => Promise<void>>();
+  private eventSequences = new Map<string, number>();
+  private reasoning = new Map<string, RunEvent>();
+  private toolOutput = new Map<string, RunEvent>();
+  private progressSaved = new Map<string, number>();
+  events(sessionId: string) {
+    return this.store
+      .list<RunEvent>('runEvent')
+      .filter((e) => e.sessionId === sessionId)
+      .sort((a, b) => a.time - b.time || a.seq - b.seq);
+  }
+  private history(run: Run, maxChars: number, messages = this.store.messages(run.sessionId)) {
+    return portableHistory(messages, maxChars, (message, omitted) => {
+      const previous = this.store
+        .list<any>('contextCheckpoint')
+        .find((c) => c.id === run.sessionId);
+      if (previous?.sourceId !== message.id) {
+        this.store.put('contextCheckpoint', {
+          id: run.sessionId,
+          sessionId: run.sessionId,
+          sourceId: message.id,
+          text: message.content,
+          omitted,
+          createdAt: Date.now(),
+        });
+        this.progress(
+          run,
+          'input',
+          `已压缩较早的 ${omitted} 条消息，保留来源摘录及最近完整轮次。历史原文仍可查看。`,
+        );
+      }
+    });
+  }
+  private progress(run: Run, type: RunEvent['type'], text: string) {
+    if (!text || this.stopping) return;
+    if (type === 'phase') {
+      if (run.phase === text) return;
+      run.phase = text;
+      this.store.put('run', run);
+    }
+    let event =
+      type === 'reasoning'
+        ? this.reasoning.get(run.id)
+        : type === 'tool'
+          ? this.toolOutput.get(run.id)
+          : undefined;
+    if (event) {
+      if (event.text.length >= 64000) return;
+      event = {
+        ...event,
+        text: (event.text + (type === 'tool' ? '\n' : '') + text).slice(0, 64000),
+      };
+    } else {
+      const seq = (this.eventSequences.get(run.id) ?? 0) + 1;
+      this.eventSequences.set(run.id, seq);
+      event = {
+        id: randomUUID(),
+        sessionId: run.sessionId,
+        runId: run.id,
+        seq,
+        time: Date.now(),
+        type,
+        text: text.slice(0, 64000),
+      };
+    }
+    if (type === 'reasoning') {
+      this.reasoning.set(run.id, event);
+      if (Date.now() - (this.progressSaved.get(run.id) ?? 0) < 80) return;
+      this.progressSaved.set(run.id, Date.now());
+    }
+    if (type === 'tool') {
+      this.toolOutput.set(run.id, event);
+      if (Date.now() - (this.progressSaved.get(run.id + ':tool') ?? 0) < 80) return;
+      this.progressSaved.set(run.id + ':tool', Date.now());
+    }
+    this.store.put('runEvent', event);
+    this.emit({ type: 'run-event', event });
+  }
+  async enqueue(input: RunInput, mode: PendingInput['mode']) {
+    if (this.deleting.has(input.sessionId)) throw new Error('会话正在删除');
+    if (
+      this.store
+        .list<PendingInput>('pendingInput')
+        .filter(
+          (p) =>
+            p.sessionId === input.sessionId &&
+            ['queued', 'paused', 'dispatching'].includes(p.status),
+        ).length >= 50
+    )
+      throw new Error('当前会话待处理消息已达到 50 条，请先处理或取消');
+    const session = this.store.get<Session>('session', input.sessionId);
+    if (session.archived) throw new Error('请先恢复已归档的会话');
+    const pending: PendingInput = {
+      id: randomUUID(),
+      sessionId: input.sessionId,
+      input,
+      mode,
+      status: 'queued',
+      createdAt: Date.now(),
+    };
+    this.store.put('pendingInput', pending);
+    this.changed();
+    const steer = this.steering.get(input.sessionId);
+    if (mode === 'supplement' && steer) {
+      this.store.put('pendingInput', { ...pending, status: 'dispatching' });
+      try {
+        await steer(input.prompt, pending.id);
+        if (
+          this.deleting.has(input.sessionId) ||
+          !this.store.list<Session>('session').some((s) => s.id === input.sessionId)
+        )
+          return;
+        const run = this.store
+          .list<Run>('run')
+          .find((r) => r.sessionId === input.sessionId && r.status === 'running');
+        this.add(input.sessionId, 'user', input.prompt, { runId: run?.id });
+        this.store.put('pendingInput', { ...pending, status: 'applied', runId: run?.id });
+        this.changed();
+        return;
+      } catch {
+        if (
+          this.deleting.has(input.sessionId) ||
+          !this.store.list<Session>('session').some((s) => s.id === input.sessionId)
+        )
+          return;
+        this.store.put('pendingInput', { ...pending, status: 'paused' });
+        this.changed();
+        throw new Error('补充消息未获确认，已暂停。请检查回复后决定是否重新发送，避免重复应用。');
+      }
+    }
+    if (mode === 'restart') {
+      const active = this.active.get(input.sessionId);
+      active?.controller.abort();
+      await active?.promise;
+    }
+    this.drain(input.sessionId);
+  }
+  cancelInput(id: string) {
+    const item = this.store.get<PendingInput>('pendingInput', id);
+    if (!['queued', 'paused'].includes(item.status)) throw new Error('消息已处理，无法取消');
+    this.store.put('pendingInput', { ...item, status: 'cancelled' });
+    this.changed();
+  }
+  editInput(id: string, prompt: string) {
+    const item = this.store.get<PendingInput>('pendingInput', id);
+    if (!['queued', 'paused'].includes(item.status)) throw new Error('消息已送交引擎，无法修改');
+    if (!prompt.trim() || prompt.length > 100000)
+      throw new Error('请填写有效消息（最多 100000 字符）');
+    this.store.put('pendingInput', { ...item, input: { ...item.input, prompt } });
+    this.changed();
+  }
+  resumeInput(id: string) {
+    const item = this.store.get<PendingInput>('pendingInput', id);
+    if (item.status !== 'paused') throw new Error('此消息不在待恢复状态');
+    this.store.put('pendingInput', { ...item, status: 'queued' });
+    this.changed();
+    this.drain(item.sessionId);
+  }
+  private drain(id: string) {
+    if (this.stopping || this.deleting.has(id) || this.active.has(id) || this.active.size >= 4)
+      return;
+    const item = this.store
+      .list<PendingInput>('pendingInput')
+      .find((p) => p.sessionId === id && p.status === 'queued');
+    if (!item) return;
+    try {
+      const runId = this.start(item.input);
+      this.store.put('pendingInput', { ...item, status: 'applied', runId });
+    } catch (error) {
+      this.store.put('pendingInput', { ...item, status: 'paused' });
+      this.changed();
+    }
+  }
+  private consumeSupplements(run: Run) {
+    let consumed = false;
+    for (const p of this.store.list<PendingInput>('pendingInput'))
+      if (p.sessionId === run.sessionId && p.mode === 'supplement' && p.status === 'queued') {
+        this.add(run.sessionId, 'user', p.input.prompt, { runId: run.id });
+        this.store.put('pendingInput', { ...p, status: 'applied', runId: run.id });
+        this.progress(run, 'input', '已应用补充消息');
+        consumed = true;
+      }
+    if (consumed) this.changed();
+    return consumed;
+  }
+  async deleteSession(id: string) {
+    this.store.get<Session>('session', id);
+    const targets = new Set([id]);
+    for (let changed = true; changed; ) {
+      changed = false;
+      for (const s of this.store.list<Session>('session'))
+        if (s.parentId && targets.has(s.parentId) && !targets.has(s.id)) {
+          targets.add(s.id);
+          changed = true;
+        }
+    }
+    for (const target of targets) this.deleting.add(target);
+    try {
+      for (const target of targets) this.active.get(target)?.controller.abort();
+      await Promise.all([...targets].map((target) => this.active.get(target)?.promise));
+      this.invalidateNative();
+      const root = path.resolve(this.dataDir, 'chat-workspaces');
+      for (const target of targets) {
+        const directory = path.resolve(root, target);
+        const relative = path.relative(root, directory);
+        if (!relative || relative.startsWith('..') || path.isAbsolute(relative))
+          throw new Error('无效的会话数据路径');
+        await rm(directory, { recursive: true, force: true });
+      }
+      this.store.deleteSession(id);
+      this.changed();
+    } finally {
+      for (const target of targets) this.deleting.delete(target);
+    }
+  }
   private active = new Map<string, { controller: AbortController; promise: Promise<void> }>();
   private approvals = new Map<string, { value: Approval; resolve: (allow: boolean) => void }>();
   private clients = new Map<string, CodexClient>();
@@ -35,6 +264,7 @@ export class Runtime {
       lastMessageId?: string;
       timer: NodeJS.Timeout;
       engine: string;
+      bridge?: Awaited<ReturnType<typeof toolBridge>>;
     }
   >();
   invalidateNative(engine?: string) {
@@ -42,15 +272,28 @@ export class Runtime {
       if (!engine || entry.engine === engine) {
         clearTimeout(entry.timer);
         entry.client.stop();
+        entry.bridge?.close();
         this.nativeChats.delete(id);
       }
   }
   readonly authClient: CodexClient;
+  private accountClients = new Map<string, CodexClient>();
+  authClientFor(providerId = 'openai-codex') {
+    if (providerId === 'openai-codex') return this.authClient;
+    let client = this.accountClients.get(providerId);
+    if (!client) {
+      client = new CodexClient(engineHome(this.dataDir, 'codex', providerId));
+      client.on('request', (r) => client!.reject(r.id, 'Login client does not execute tools'));
+      this.accountClients.set(providerId, client);
+    }
+    return client;
+  }
   constructor(
     readonly store: Store,
     readonly dataDir: string,
     private emit: (event: AppEvent) => void,
     private computer?: ComputerAdapter,
+    private commands?: ClientCommands,
   ) {
     this.authClient = new CodexClient(path.join(dataDir, 'codex'));
     this.authClient.on('request', (r) =>
@@ -63,6 +306,18 @@ export class Runtime {
   }
   snapshot(): Snapshot {
     return {
+      connectors: this.store
+        .list<any>('connector')
+        .map((c) => ({ ...c, hasSecret: this.store.hasSecret('connector_' + c.id) })),
+      channels: this.store.list('channel'),
+      channelAuth: this.store.list('channelAuth'),
+      notificationRules: this.store.list('notificationRule'),
+      deliveries: this.store.list<any>('delivery').slice(-200).reverse(),
+      authEvents: this.store.list('authEvent'),
+      capabilities: this.store.capabilities(),
+      pendingInputs: this.store
+        .list<PendingInput>('pendingInput')
+        .filter((p) => ['queued', 'paused', 'dispatching'].includes(p.status)),
       plugins: this.store
         .list<any>('plugin')
         .map((p) => ({ ...p, hasSecret: this.store.hasSecret('plugin_' + p.id) })),
@@ -113,6 +368,10 @@ export class Runtime {
       signal.addEventListener('abort', abort, { once: true });
       this.approvals.set(value.id, { value, resolve: finish });
       this.emit({ type: 'approval', approval: value });
+      const run = this.store
+        .list<Run>('run')
+        .find((r) => r.sessionId === sessionId && r.status === 'running');
+      if (run) this.onLifecycle?.(run, 'approval', value.id);
       this.changed();
     });
   }
@@ -125,11 +384,12 @@ export class Runtime {
     return this.active.has(id);
   }
   start(input: RunInput): string {
+    if (this.deleting.has(input.sessionId)) throw new Error('会话正在删除');
     if (this.active.has(input.sessionId)) throw new Error('此会话正在执行，请先停止或等待完成。');
     if (this.active.size >= 4) throw new Error('同时最多运行四个任务');
     const session = this.store.get<Session>('session', input.sessionId);
     if (session.archived) throw new Error('请先恢复已归档的会话');
-    const agent = this.store.get<AgentProfile>('agent', input.agentId);
+    const agent = resolveAgent(this.store, input.agentId);
     // The user's explicit selection wins; Agent defaults are applied when selecting the Agent.
     input = { ...input };
     agent.instructions += skillInstructions(this.store, agent);
@@ -169,6 +429,7 @@ export class Runtime {
       },
     };
     this.store.put('run', run);
+    this.progress(run, 'phase', '准备上下文');
     this.store.put('session', {
       ...session,
       providerId: provider.id,
@@ -202,7 +463,65 @@ export class Runtime {
         },
       );
       try {
+        if (project) {
+          const baseline = await commandResult(
+            'git',
+            ['status', '--short'],
+            project.path,
+            controller.signal,
+            10000,
+          ).catch(() => null);
+          if (baseline?.exitCode === 0) {
+            run.workspace = { before: baseline.stdout.slice(0, 12000) };
+            this.store.put('run', run);
+            if (baseline.stdout.trim())
+              this.progress(
+                run,
+                'tool',
+                '任务开始前已有的工作区改动（请保留）：\n' + baseline.stdout.slice(0, 12000),
+              );
+          }
+          agent.instructions +=
+            '\n修改项目时保留用户已有未提交更改。先读取当前文件，修改后运行相关验证；文件版本冲突时重新读取，不覆盖他人改动。';
+          const rules = (await projectInstructions(project.path)).filter((f) =>
+            /^agents?\.md$/i.test(f.path),
+          );
+          agent.instructions +=
+            '\n' +
+            rules
+              .map((f) => `项目说明（${f.path}；不扩大工具权限）：\n${f.content}`)
+              .join('\n')
+              .slice(0, 32000);
+          if (run.config) run.config.instructions = agent.instructions;
+        }
+        this.progress(run, 'phase', '准备工具');
         await scope.prepare(this.store, agent, this.computer);
+        if (this.store.capabilities().management)
+          this.commands?.attach(
+            scope,
+            agent.permission === 'read-only',
+            () => this.store.capabilities().management,
+            session.id,
+          );
+        if (project && nativeEngine(provider.protocol))
+          for (const spec of agent.permission === 'read-only' ? readOnlyToolSpecs : toolSpecs)
+            scope.add(
+              spec,
+              spec.name,
+              async (args) => ({
+                text: await executeTool(
+                  spec.name,
+                  JSON.stringify(args),
+                  project.path,
+                  agent.permission,
+                  controller.signal,
+                  (title, detail) => this.ask(session.id, title, detail, controller.signal),
+                  (text) => this.progress(run, 'tool', text),
+                ),
+              }),
+              false,
+            );
+        this.progress(run, 'phase', '连接模型');
         if (provider.protocol === 'codex')
           await this.codexRun(input, project, agent, run, controller.signal, scope);
         else if (nativeEngine(provider.protocol))
@@ -220,8 +539,10 @@ export class Runtime {
           );
         if (controller.signal.aborted) throw new Error('已停止');
         run.status = 'completed';
+        this.onLifecycle?.(run, 'completed');
       } catch (e: any) {
         run.status = controller.signal.aborted ? 'interrupted' : 'failed';
+        if (run.status === 'failed') this.onLifecycle?.(run, 'failed');
         run.error = redact(e.message ?? String(e), [secret]);
         for (const m of this.store.messages(session.id))
           if (m.runId === run.id && m.status === 'streaming')
@@ -237,10 +558,49 @@ export class Runtime {
       } finally {
         controller.abort();
         await scope.close();
+        if (project && run.workspace) {
+          const after = await commandResult(
+            'git',
+            ['status', '--short'],
+            project.path,
+            AbortSignal.timeout(10000),
+            10000,
+          ).catch(() => null);
+          if (after?.exitCode === 0) run.workspace.after = after.stdout.slice(0, 12000);
+        }
+        const pendingReasoning = this.reasoning.get(run.id);
+        const pendingOutput = this.toolOutput.get(run.id);
+        if (pendingOutput) {
+          this.store.put('runEvent', pendingOutput);
+          this.emit({ type: 'run-event', event: pendingOutput });
+        }
+        if (pendingReasoning) {
+          this.store.put('runEvent', pendingReasoning);
+          this.emit({ type: 'run-event', event: pendingReasoning });
+        }
         run.endedAt = Date.now();
+        this.progress(
+          run,
+          'phase',
+          run.status === 'completed'
+            ? '已完成'
+            : run.status === 'interrupted'
+              ? '已停止'
+              : '执行失败',
+        );
         this.store.put('run', run);
         this.active.delete(session.id);
+        this.reasoning.delete(run.id);
+        this.toolOutput.delete(run.id);
+        this.progressSaved.delete(run.id + ':tool');
+        this.progressSaved.delete(run.id);
+        this.eventSequences.delete(run.id);
+        if (run.status === 'failed')
+          for (const p of this.store.list<PendingInput>('pendingInput'))
+            if (p.sessionId === session.id && p.status === 'queued')
+              this.store.put('pendingInput', { ...p, status: 'paused' });
         this.changed();
+        for (const p of this.store.list<PendingInput>('pendingInput')) this.drain(p.sessionId);
       }
     });
     this.active.set(session.id, { controller, promise });
@@ -266,7 +626,9 @@ export class Runtime {
         : '');
     for (let step = 0; step < agent.maxSteps; step++) {
       if (signal.aborted) throw new Error('已停止');
-      const history = this.store.messages(input.sessionId);
+      this.consumeSupplements(run);
+      this.progress(run, 'phase', '等待模型响应');
+      const history = this.history(run, provider.contextChars);
       const message = this.add(input.sessionId, 'assistant', '', {
         runId: run.id,
         model: input.model,
@@ -282,11 +644,16 @@ export class Runtime {
         instructions,
         messages: history,
         tools: [
-          ...(!project ? [] : agent.permission === 'read-only' ? toolSpecs.slice(0, 2) : toolSpecs),
+          ...(!project ? [] : agent.permission === 'read-only' ? readOnlyToolSpecs : toolSpecs),
           ...scope.specs,
         ],
         signal,
+        onReasoning: (text) => {
+          this.progress(run, 'phase', '思考中');
+          this.progress(run, 'reasoning', text);
+        },
         onDelta: (text) => {
+          this.progress(run, 'phase', '正在回复');
           message.content += text;
           if (Date.now() - lastSave > 60) {
             this.message({ ...message });
@@ -301,11 +668,17 @@ export class Runtime {
       this.message({ ...message });
       run.inputTokens += result.inputTokens;
       run.outputTokens += result.outputTokens;
+      run.usageReported = (run.usageReported ?? true) && result.usageReported === true;
       this.store.put('run', run);
-      if (!result.toolCalls.length) return;
+      if (!result.toolCalls.length) {
+        if (this.consumeSupplements(run)) continue;
+        return;
+      }
       if (!project && result.toolCalls.some((c) => !scope.has(c.name)))
         throw new Error('普通聊天不执行文件或命令工具，请让模型直接回答。');
       for (const call of result.toolCalls) {
+        this.progress(run, 'phase', '调用工具');
+        this.progress(run, 'tool', call.name);
         if (scope.has(call.name)) {
           let result;
           try {
@@ -332,6 +705,7 @@ export class Runtime {
             agent.permission,
             signal,
             (title, detail) => this.ask(input.sessionId, title, detail, signal),
+            (text) => this.progress(run, 'tool', text),
           );
         } catch (e: any) {
           output = '工具未完成：' + e.message;
@@ -362,6 +736,7 @@ export class Runtime {
       agent.instructions,
       agent.permission,
       provider.contextChars,
+      scope.specs,
     ]);
     const previous = this.nativeChats.get(input.sessionId);
     if (previous) {
@@ -370,15 +745,23 @@ export class Runtime {
     }
     const reuse =
       !project &&
-      !scope.specs.length &&
       previous?.client.connected &&
       previous?.fingerprint === fingerprint &&
       previous.lastMessageId === this.store.messages(input.sessionId).at(-2)?.id;
-    if (previous && !reuse) previous.client.stop();
+    if (previous && !reuse) {
+      previous.client.stop();
+      previous.bridge?.close();
+    }
     const client = reuse
       ? previous.client
-      : new NativeClient(provider.protocol, path.join(this.dataDir, 'engines', provider.protocol));
-    let bridge: Awaited<ReturnType<typeof toolBridge>> | undefined;
+      : new NativeClient(
+          provider.protocol,
+          engineHome(this.dataDir, provider.protocol, provider.id),
+        );
+    let bridge: Awaited<ReturnType<typeof toolBridge>> | undefined = reuse
+      ? previous.bridge
+      : undefined;
+    if (reuse) bridge?.rebind(scope);
     let keepAlive = false;
     let lastSave = 0;
     const abort = () => client.stop();
@@ -395,18 +778,11 @@ export class Runtime {
       }
       const options = request.params.options ?? [];
       const allowOnce = options.find((o: any) => o.kind === 'allow_once');
+      // Only the authenticated per-run bridge is permitted. Its handlers own approvals.
       const allow =
-        (!!project ||
-          (!!scope.specs.length &&
-            /mcp|tongzhou-tools/i.test(JSON.stringify(request.params.toolCall)))) &&
-        agent.permission === 'ask' &&
         !!allowOnce &&
-        (await this.ask(
-          input.sessionId,
-          `${provider.name} 请求执行许可`,
-          JSON.stringify(request.params.toolCall, null, 2),
-          signal,
-        ));
+        !!scope.specs.length &&
+        /tongzhou-tools/.test(JSON.stringify(request.params.toolCall));
       client.reply(request.id, {
         outcome:
           allow && !signal.aborted
@@ -417,7 +793,12 @@ export class Runtime {
     const onNotification = ({ method, params }: any) => {
       if (method !== 'session/update' || params?.sessionId !== engineSessionId) return;
       const update = params.update;
+      if (update?.sessionUpdate === 'agent_thought_chunk' && update.content?.type === 'text') {
+        this.progress(run, 'phase', '思考中');
+        this.progress(run, 'reasoning', update.content.text);
+      }
       if (update?.sessionUpdate === 'agent_message_chunk' && update.content?.type === 'text') {
+        this.progress(run, 'phase', '正在回复');
         message ??= this.add(input.sessionId, 'assistant', '', {
           runId: run.id,
           model: provider.modelLabels?.[input.model] ?? input.model,
@@ -432,6 +813,7 @@ export class Runtime {
       }
       if (
         !!project &&
+        !scope.specs.length &&
         update?.sessionUpdate === 'tool_call_update' &&
         ['completed', 'failed'].includes(update.status)
       ) {
@@ -456,7 +838,7 @@ export class Runtime {
         await client.authenticate();
         const cwd = project?.path ?? path.join(this.dataDir, 'chat-workspaces', input.sessionId);
         if (!project) await mkdir(cwd, { recursive: true });
-        if (scope.specs.length) bridge = await toolBridge(scope, signal);
+        if (scope.specs.length) bridge = await toolBridge(scope, new AbortController().signal);
         const session = await client.request('session/new', {
           cwd,
           mcpServers: bridge ? [bridge.config] : [],
@@ -476,10 +858,7 @@ export class Runtime {
             sessionId: engineSessionId,
             modelId: input.model,
           });
-        const modeId =
-          agent.permission === 'read-only' || (!project && !scope.specs.length)
-            ? 'plan'
-            : 'default';
+        const modeId = 'default';
         if (!session.modes?.availableModes?.some((m: any) => m.id === modeId))
           throw new Error('此引擎未提供所需的权限模式，请升级内置引擎。');
         await client.request('session/set_mode', { sessionId: engineSessionId, modeId });
@@ -497,11 +876,12 @@ export class Runtime {
           });
         }
       }
-      const history = portableHistory(
+      const history = this.history(
+        run,
+        provider.contextChars,
         this.store
           .messages(input.sessionId)
           .filter((m) => project || m.role !== 'tool' || m.visibleTool),
-        provider.contextChars,
       );
       const transcript = history.map((m) => `${m.role}: ${m.content}`).join('\n\n');
       this.store.put('engineSegment', {
@@ -510,6 +890,7 @@ export class Runtime {
         sessionId: input.sessionId,
       });
       if (signal.aborted) throw new Error('已停止');
+      this.progress(run, 'phase', '等待模型响应');
       const response = await client.request(
         'session/prompt',
         {
@@ -528,16 +909,18 @@ export class Runtime {
       if (response.stopReason === 'cancelled' || signal.aborted) throw new Error('已停止');
       if (response.stopReason === 'max_tokens') throw new Error('达到引擎输出上限，请继续会话');
       if (message) this.message({ ...message, status: 'complete' });
-      keepAlive = !project && !scope.specs.length;
+      keepAlive = !project;
       if (keepAlive) {
         if (this.nativeChats.size >= 4) {
           const [id, oldest] = this.nativeChats.entries().next().value!;
           clearTimeout(oldest.timer);
           oldest.client.stop();
+          oldest.bridge?.close();
           this.nativeChats.delete(id);
         }
         const entry = {
           client,
+          bridge,
           fingerprint,
           sessionId: engineSessionId,
           lastMessageId: this.store.messages(input.sessionId).at(-1)?.id,
@@ -546,6 +929,7 @@ export class Runtime {
             () => {
               if (this.nativeChats.get(input.sessionId)?.client === client) {
                 client.stop();
+                bridge?.close();
                 this.nativeChats.delete(input.sessionId);
               }
             },
@@ -560,7 +944,7 @@ export class Runtime {
       client.removeListener('request', onRequest);
       client.removeListener('notification', onNotification);
       if (!keepAlive) client.stop();
-      bridge?.close();
+      if (!keepAlive) bridge?.close();
     }
   }
   private async codexRun(
@@ -571,10 +955,12 @@ export class Runtime {
     signal: AbortSignal,
     scope: ToolScope,
   ) {
-    const client = new CodexClient(path.join(this.dataDir, 'codex'));
+    const client = new CodexClient(engineHome(this.dataDir, 'codex', input.providerId));
     this.clients.set(input.sessionId, client);
     let threadId = '';
     let turnId = '';
+    let usageBase = { inputTokens: 0, outputTokens: 0 };
+    let usageTotal: { inputTokens: number; outputTokens: number } | undefined;
     const items = new Map<string, Message>();
     let finish: (value?: unknown) => void = () => {};
     let fail: (e: Error) => void = () => {};
@@ -640,8 +1026,15 @@ export class Runtime {
         );
     });
     client.on('notification', ({ method, params: p }) => {
+      if (threadId && p?.threadId && p.threadId !== threadId) return;
+      if (turnId && p?.turnId && p.turnId !== turnId) return;
       if (method === 'turn/started') turnId = p.turn.id;
+      if (method === 'item/reasoning/summaryTextDelta') {
+        this.progress(run, 'phase', '思考中');
+        this.progress(run, 'reasoning', p.delta ?? '');
+      }
       if (method === 'item/agentMessage/delta') {
+        this.progress(run, 'phase', '正在回复');
         let message = items.get(p.itemId);
         if (!message) {
           message = this.add(input.sessionId, 'assistant', '', {
@@ -689,8 +1082,12 @@ export class Runtime {
       }
       if (method === 'thread/tokenUsage/updated') {
         const usage = p.tokenUsage?.total;
-        run.inputTokens = usage?.inputTokens ?? run.inputTokens;
-        run.outputTokens = usage?.outputTokens ?? run.outputTokens;
+        run.usageReported = Boolean(usage);
+        if (usage) {
+          usageTotal = usage;
+          run.inputTokens = Math.max(0, usage.inputTokens - usageBase.inputTokens);
+          run.outputTokens = Math.max(0, usage.outputTokens - usageBase.outputTokens);
+        }
       }
       if (method === 'turn/completed') {
         if (p.turn.status === 'completed') finish();
@@ -709,8 +1106,47 @@ export class Runtime {
         throw new Error('尚未登录 ChatGPT，请在设置中完成浏览器授权或设备码授权后重试。');
       const cwd = project?.path ?? path.join(this.dataDir, 'chat-workspaces', input.sessionId);
       if (!project) await mkdir(cwd, { recursive: true });
-      // Each turn gets a fresh engine segment; the app's transcript is the portable source of truth.
-      const started = await client.request('thread/start', {
+      const fingerprint = JSON.stringify([
+        input.providerId,
+        input.model,
+        cwd,
+        agent.instructions,
+        agent.permission,
+        scope.specs,
+      ]);
+      const prior = this.store
+        .list<any>('engineSegment')
+        .filter(
+          (s) =>
+            s.sessionId === input.sessionId &&
+            s.fingerprint === fingerprint &&
+            s.completed &&
+            s.lastMessageId === this.store.messages(input.sessionId).at(-2)?.id,
+        )
+        .at(-1);
+      let resumed = false;
+      let started: any;
+      if (prior) {
+        usageBase = prior.usageTotal ?? { inputTokens: 0, outputTokens: 0 };
+        try {
+          started = await client.request('thread/resume', {
+            threadId: prior.threadId,
+            model: input.model,
+            cwd,
+            approvalPolicy: 'untrusted',
+            sandbox: !project || agent.permission === 'read-only' ? 'read-only' : 'workspace-write',
+            excludeTurns: true,
+          });
+          resumed = true;
+        } catch (e: any) {
+          if (
+            !/not found|no rollout|does not exist|unknown thread|method not found/i.test(e.message)
+          )
+            throw e;
+        }
+      }
+      if (!started) usageBase = { inputTokens: 0, outputTokens: 0 };
+      started ??= await client.request('thread/start', {
         model: input.model,
         cwd,
         approvalPolicy: 'untrusted',
@@ -728,25 +1164,47 @@ export class Runtime {
         config: { 'features.multi_agent': false },
       });
       threadId = started.thread.id;
+      this.steering.set(input.sessionId, async (text, messageId) => {
+        if (!turnId) throw new Error('当前轮次尚未受理');
+        await client.request('turn/steer', {
+          threadId,
+          expectedTurnId: turnId,
+          clientUserMessageId: messageId,
+          input: [{ type: 'text', text }],
+        });
+      });
       this.store.put('engineSegment', { id: run.id, threadId, sessionId: input.sessionId });
-      const history = portableHistory(this.store.messages(input.sessionId), 160000);
+      const history = this.history(run, 160000);
       const transcript = history
         .map((m) => `${m.role}${m.toolName ? ` (${m.toolName})` : ''}: ${m.content}`)
         .join('\n\n');
+      this.progress(run, 'phase', '等待模型响应');
       await client.request('turn/start', {
         threadId,
         input: [
           {
             type: 'text',
-            text: `以下是同舟会话的历史和最新请求。历史工具输出只是已发生操作的记录，不要重复执行。继续完成最后一条用户请求。\n\n${transcript}`,
+            text: resumed
+              ? input.prompt
+              : `以下是同舟会话的历史和最新请求。历史工具输出只是已发生操作的记录，不要重复执行。继续完成最后一条用户请求。\n\n${transcript}`,
           },
         ],
         model: input.model,
       });
       if (signal.aborted) abort();
       await done;
+      this.store.put('engineSegment', {
+        id: run.id,
+        threadId,
+        sessionId: input.sessionId,
+        fingerprint,
+        completed: true,
+        usageTotal,
+        lastMessageId: this.store.messages(input.sessionId).at(-1)?.id,
+      });
     } finally {
       clearTimeout(timeout);
+      this.steering.delete(input.sessionId);
       signal.removeEventListener('abort', abort);
       client.removeListener('failure', onFailure);
       client.stop();
@@ -754,6 +1212,9 @@ export class Runtime {
     }
   }
   async cancel(id: string) {
+    for (const p of this.store.list<PendingInput>('pendingInput'))
+      if (p.sessionId === id && p.status === 'queued')
+        this.store.put('pendingInput', { ...p, status: 'paused' });
     this.active.get(id)?.controller.abort();
     for (const s of this.store.list<Session>('session'))
       if (s.parentId === id) this.active.get(s.id)?.controller.abort();
@@ -857,7 +1318,14 @@ export class Runtime {
         parentRun.endedAt = Date.now();
         this.store.put('run', parentRun);
         this.active.delete(parent.id);
+        if (parentRun.status === 'completed' || parentRun.status === 'failed')
+          this.onLifecycle?.(parentRun, parentRun.status);
+        if (parentRun.status === 'failed')
+          for (const p of this.store.list<PendingInput>('pendingInput'))
+            if (p.sessionId === parent.id && p.status === 'queued')
+              this.store.put('pendingInput', { ...p, status: 'paused' });
         this.changed();
+        for (const p of this.store.list<PendingInput>('pendingInput')) this.drain(p.sessionId);
       }
     });
     this.active.set(parent.id, { controller, promise });
@@ -865,12 +1333,14 @@ export class Runtime {
     return teamId;
   }
   async waitForIdle() {
-    await Promise.all([...this.active.values()].map((a) => a.promise));
+    while (this.active.size) await Promise.all([...this.active.values()].map((a) => a.promise));
   }
   stop() {
+    this.stopping = true;
     this.invalidateNative();
     for (const a of this.active.values()) a.controller.abort();
     for (const c of this.clients.values()) c.stop();
     this.authClient.stop();
+    for (const client of this.accountClients.values()) client.stop();
   }
 }

@@ -8,6 +8,7 @@ export interface ToolSpec {
   parameters: Record<string, unknown>;
 }
 export interface Completion {
+  usageReported?: boolean;
   text: string;
   toolCalls: ToolCall[];
   anthropicContent?: Record<string, any>[];
@@ -23,10 +24,15 @@ export interface CompletionInput {
   tools: ToolSpec[];
   signal: AbortSignal;
   onDelta(text: string): void;
+  onReasoning?(text: string): void;
 }
 
 // Preserve complete user turns so truncation cannot orphan a tool response.
-export function portableHistory(messages: Message[], maxChars: number): Message[] {
+export function portableHistory(
+  messages: Message[],
+  maxChars: number,
+  checkpoint?: (message: Message, omitted: number) => void,
+): Message[] {
   const blocks: Message[][] = [];
   for (const original of messages.filter((m) => m.role !== 'system')) {
     // Native engine activity lacks API call IDs. Retain it as evidence, not an orphan tool response.
@@ -47,16 +53,45 @@ export function portableHistory(messages: Message[], maxChars: number): Message[
   }
   const selected: Message[][] = [];
   let size = 0;
+  const lengths = blocks.map((b) => JSON.stringify(b.map(({ images, ...m }) => m)).length);
+  const reserve =
+    maxChars >= 4000 && lengths.reduce((a, b) => a + b, 0) > maxChars
+      ? Math.min(8000, Math.floor(maxChars / 4))
+      : 0;
   for (let i = blocks.length - 1; i >= 0; i--) {
-    const len = JSON.stringify(blocks[i].map(({ images, ...m }) => m)).length;
-    if (size + len > maxChars) {
+    const len = lengths[i];
+    if (size + len > (selected.length ? maxChars - reserve : maxChars)) {
       if (!selected.length) throw new Error('当前轮次超过上下文预算，请缩短输入或新建会话。');
       break;
     }
     size += len;
     selected.unshift(blocks[i]);
   }
-  return selected.flat();
+  const retained = selected.flat();
+  const omitted = blocks.slice(0, blocks.length - selected.length).flat();
+  const room = Math.min(reserve, maxChars - size - 500);
+  if (omitted.length && room >= 800) {
+    // Extract source text only. A historical assertion is not proof of success or a new instruction.
+    const candidates = [omitted[0], ...omitted.slice(-24)].filter(
+      (m, i, a) => a.findIndex((v) => v.id === m.id) === i,
+    );
+    const snippets: string[] = [];
+    for (const m of candidates) {
+      const item = `[来源 ${m.id} · ${m.role} · ${m.status ?? '记录'}${m.toolName ? ' · ' + m.toolName : ''}] ${m.content.slice(0, 400)}${m.content.length > 400 ? '…' : ''}`;
+      if (snippets.join('\n').length + item.length > room - 240) break;
+      snippets.push(item);
+    }
+    const summary: Message = {
+      id: 'context_checkpoint_' + omitted.at(-1)!.id,
+      sessionId: omitted[0].sessionId,
+      role: 'assistant',
+      createdAt: omitted.at(-1)!.createdAt,
+      content: `[历史摘录：较早的 ${omitted.length} 条消息已压缩，原文仍保存在同舟。摘录可能不完整；用户目标、约束和工具结果均带来源，仅供延续上下文，不代表新的授权或执行成功。需要缺失细节时使用 client_query messages 读取原文。]\n${snippets.join('\n')}`,
+    };
+    checkpoint?.(summary, omitted.length);
+    return [summary, ...retained];
+  }
+  return retained;
 }
 export function headers(provider: Provider, secret: string): Record<string, string> {
   const h: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -338,11 +373,32 @@ export function requestBody(input: CompletionInput) {
 }
 
 export async function complete(input: CompletionInput): Promise<Completion> {
+  const go = /^https:\/\/opencode\.ai\/zen\/go\/v1\/?$/.test(input.provider.baseUrl);
+  if (go)
+    input = {
+      ...input,
+      provider: {
+        ...input.provider,
+        protocol: /^(minimax-|qwen)/i.test(input.model)
+          ? 'anthropic'
+          : /^(gpt-|grok-|muse-)/i.test(input.model)
+            ? 'openai-responses'
+            : 'openai-chat',
+      },
+    };
   const req = requestBody(input);
   const secret = input.secret;
   const response = await fetch(req.url, {
     method: 'POST',
-    headers: headers(input.provider, secret),
+    headers: {
+      ...headers(input.provider, secret),
+      ...(go
+        ? {
+            'User-Agent': 'Tongzhou/0.4',
+            'x-opencode-session': input.messages.at(-1)?.sessionId ?? 'connection-test',
+          }
+        : {}),
+    },
     body: JSON.stringify(req.body),
     signal: AbortSignal.any([input.signal, AbortSignal.timeout(300000)]),
     redirect: 'error',
@@ -384,6 +440,7 @@ export async function complete(input: CompletionInput): Promise<Completion> {
     switch (input.provider.protocol) {
       case 'openai-chat': {
         const choice = d.choices?.[0];
+        if (choice?.delta?.reasoning_content) input.onReasoning?.(choice.delta.reasoning_content);
         delta(choice?.delta?.content ?? '');
         for (const t of choice?.delta?.tool_calls ?? []) {
           const key = String(t.index);
@@ -398,12 +455,14 @@ export async function complete(input: CompletionInput): Promise<Completion> {
           finishReason = choice.finish_reason;
         }
         if (d.usage) {
+          result.usageReported = true;
           result.inputTokens = d.usage.prompt_tokens ?? 0;
           result.outputTokens = d.usage.completion_tokens ?? 0;
         }
         break;
       }
       case 'openai-responses': {
+        if (d.type === 'response.reasoning_summary_text.delta') input.onReasoning?.(d.delta);
         if (d.type === 'response.output_text.delta') delta(d.delta);
         if (d.type === 'response.output_item.added' && d.item?.type === 'function_call')
           calls.set(d.item.id, {
@@ -422,6 +481,7 @@ export async function complete(input: CompletionInput): Promise<Completion> {
             arguments: d.item.arguments,
           });
         if (d.type === 'response.completed') {
+          result.usageReported = Boolean(d.response?.usage);
           finished = true;
           result.inputTokens = d.response?.usage?.input_tokens ?? 0;
           result.outputTokens = d.response?.usage?.output_tokens ?? 0;
@@ -434,7 +494,10 @@ export async function complete(input: CompletionInput): Promise<Completion> {
         const key = String(d.index);
         if (d.type === 'content_block_start' && d.content_block)
           anthropicBlocks.set(key, { ...d.content_block });
-        if (d.type === 'message_start') result.inputTokens = d.message?.usage?.input_tokens ?? 0;
+        if (d.type === 'message_start') {
+          result.inputTokens = d.message?.usage?.input_tokens ?? 0;
+          result.usageReported = Boolean(d.message?.usage);
+        }
         if (d.type === 'content_block_start' && d.content_block?.type === 'tool_use')
           calls.set(key, { id: d.content_block.id, name: d.content_block.name, arguments: '' });
         if (d.type === 'content_block_delta') {
@@ -447,6 +510,7 @@ export async function complete(input: CompletionInput): Promise<Completion> {
               block.signature = (block.signature ?? '') + d.delta.signature;
           }
           if (d.delta?.type === 'text_delta') delta(d.delta.text);
+          if (d.delta?.type === 'thinking_delta') input.onReasoning?.(d.delta.thinking);
           if (d.delta?.type === 'input_json_delta') {
             const c = calls.get(key);
             if (c) c.arguments += d.delta.partial_json;
@@ -462,6 +526,7 @@ export async function complete(input: CompletionInput): Promise<Completion> {
       case 'gemini': {
         const candidate = d.candidates?.[0];
         for (const part of candidate?.content?.parts ?? []) {
+          if (part.text && part.thought) input.onReasoning?.(part.text);
           if (part.text && !part.thought) delta(part.text);
           if (part.functionCall) {
             const id = randomUUID();
@@ -480,6 +545,7 @@ export async function complete(input: CompletionInput): Promise<Completion> {
           finishReason = candidate.finishReason;
         }
         if (d.usageMetadata) {
+          result.usageReported = true;
           result.inputTokens = d.usageMetadata.promptTokenCount ?? 0;
           result.outputTokens = d.usageMetadata.candidatesTokenCount ?? 0;
         }

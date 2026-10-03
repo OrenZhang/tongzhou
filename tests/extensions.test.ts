@@ -54,6 +54,14 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:r.id,result})+'\\n');});`,
     url: '',
     enabled: true,
     readOnlyTools: ['read_item'],
+    catalog: [
+      {
+        name: 'read_item',
+        description: 'read fixture',
+        inputSchema: { type: 'object', properties: {} },
+      },
+      { name: 'write_item', description: '', inputSchema: { type: 'object', properties: {} } },
+    ],
   };
   store.put('plugin', config);
   store.saveSecret('plugin_fixture', JSON.stringify({ TEST_SECRET: 'sensitive-fixture-value' }));

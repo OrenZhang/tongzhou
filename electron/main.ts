@@ -9,15 +9,23 @@ import {
   globalShortcut,
 } from 'electron';
 import { NativeAccount, nativeEngine } from './native-engine';
-import { CodexAuth } from './codex-auth';
+import { Accounts } from './accounts';
+import { Connectors } from './connectors';
+import { BrowserProfiles } from './browser-profiles';
+import { Channels } from './channels';
+import { Feishu } from './feishu';
+import { initializeAgent } from './project-init';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { realpath, stat, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { Store } from './store';
 import { Runtime } from './runtime';
+import { ClientCommands } from './client-commands';
 import { DesktopComputer } from './computer';
+import { computerDiagnostic } from './computer-diagnostic';
 import { PluginConnection, importSkillDirectory } from './extensions';
 import {
   agentSchema,
@@ -46,9 +54,13 @@ app.setName('Tongzhou');
 let window: BrowserWindow | undefined;
 let store: Store;
 let runtime: Runtime;
-let auth: CodexAuth;
+let accounts: Accounts;
+let connectors: Connectors;
+let browserProfiles: BrowserProfiles;
+let channels: Channels;
+let feishu: Feishu;
 const computer = new DesktopComputer();
-const nativeAccounts = {} as Record<'kimi' | 'minimax', NativeAccount>;
+const clientCommands = new ClientCommands();
 let quitting = false;
 const pendingImports = new Map<string, ProviderInput>();
 const page = path.join(__dirname, '../dist/index.html');
@@ -61,6 +73,7 @@ function emit(event: AppEvent) {
   if (window && !window.isDestroyed()) window.webContents.send('tongzhou:event', event);
 }
 function register(name: string, handler: (...args: any[]) => any) {
+  clientCommands.register(name, handler);
   ipcMain.handle('tongzhou:' + name, async (event, ...args) => {
     if (
       event.sender !== window?.webContents ||
@@ -92,23 +105,107 @@ function setup() {
       return safeStorage.decryptString(Buffer.from(value, 'base64'));
     },
   });
-  runtime = new Runtime(store, dataDir, emit, computer);
-  auth = new CodexAuth(
-    runtime.authClient,
-    (url) => shell.openExternal(url),
-    (state) => emit({ type: 'codex-auth', state }),
-    async () => {
-      const result = await runtime.authClient.request('model/list', { includeHidden: false });
-      const models = result.data
-        .map((m: any) => m.model ?? m.id)
-        .filter((m: unknown) => typeof m === 'string');
-      for (const p of store.list<Provider>('provider'))
-        if (p.protocol === 'codex') store.put('provider', { ...p, models });
-      runtime.changed();
-    },
+  runtime = new Runtime(store, dataDir, emit, computer, clientCommands);
+  connectors = new Connectors(store, () => runtime.changed());
+  browserProfiles = new BrowserProfiles(store);
+  feishu = new Feishu(store, runtime);
+  channels = new Channels(store, () => {
+    runtime.changed();
+    feishu.sync();
+  });
+  feishu.sync();
+  register('onboardFeishu', (id, name) => {
+    idSchema.parse(id);
+    if (store.list<any>('channel').some((c) => c.id === id))
+      throw new Error('此渠道已存在，请创建新的授权连接');
+    return feishu.onboard(id, z.string().min(1).max(100).parse(name));
+  });
+  register('cancelChannelLogin', (id) => feishu.cancel(idSchema.parse(id)));
+  runtime.onLifecycle = (run, event, id) => {
+    void channels.notify(run, event, id).catch(() => {});
+  };
+  register('saveConnector', (c) => connectors.save(c));
+  register('deleteConnector', async (raw) => {
+    const id = idSchema.parse(raw);
+    await browserProfiles.clear(id);
+    connectors.remove(id);
+  });
+  register('testConnector', (id) => connectors.test(idSchema.parse(id)));
+  register('loginConnector', async (id) => {
+    const result = await connectors.login(idSchema.parse(id));
+    await shell.openExternal(result.url);
+    return result;
+  });
+  register('cancelConnectorLogin', (id) => connectors.cancel(idSchema.parse(id)));
+  register('openBrowserProfile', (id) => browserProfiles.open(idSchema.parse(id)));
+  register('clearBrowserProfile', (id) => browserProfiles.clear(idSchema.parse(id)));
+  register('saveChannel', (c) => {
+    channels.save(c);
+    feishu.cancel(c.id);
+  });
+  register('deleteChannel', (id) => {
+    idSchema.parse(id);
+    feishu.cancel(id);
+    channels.remove(id);
+  });
+  register('sendChannel', (id, text, sessionId) =>
+    channels.send(
+      idSchema.parse(id),
+      z.string().min(1).max(4000).parse(text),
+      idSchema.optional().parse(sessionId),
+    ),
   );
+  register('saveNotificationRule', (r) => channels.saveRule(r));
+  register('deleteNotificationRule', (id) => {
+    store.remove('notificationRule', idSchema.parse(id));
+    runtime.changed();
+  });
+  register('initializeAgent', (id) =>
+    initializeAgent(store.get<Project>('project', idSchema.parse(id)).path),
+  );
+  register('branchSession', (raw, rawMessage) => {
+    const id = idSchema.parse(raw),
+      messageId = idSchema.parse(rawMessage);
+    const source = store.get<Session>('session', id);
+    const messages = store.messages(id);
+    const index = messages.findIndex((m) => m.id === messageId);
+    if (index < 0 || messages[index].status === 'streaming')
+      throw new Error('请选择已完成的历史消息');
+    const copy = store.createSession(source.projectId);
+    const result = {
+      ...copy,
+      providerId: source.providerId,
+      model: source.model,
+      agentId: source.agentId,
+      title: source.title + ' · 分支',
+    };
+    store.db.exec('BEGIN');
+    try {
+      store.put('session', result);
+      // Keep portable evidence; do not leave partial tool call pairs in the new branch.
+      for (const m of messages.slice(0, index + 1))
+        store.message({
+          ...m,
+          id: randomUUID(),
+          sessionId: copy.id,
+          runId: undefined,
+          toolCalls: undefined,
+          toolCallId: undefined,
+          anthropicContent: undefined,
+          role: m.role === 'tool' ? 'assistant' : m.role,
+          content: m.role === 'tool' ? '[分支前的工具记录] ' + m.content : m.content,
+        });
+      store.db.exec('COMMIT');
+    } catch (e) {
+      store.db.exec('ROLLBACK');
+      store.deleteSession(copy.id);
+      throw e;
+    }
+    runtime.changed();
+    return result;
+  });
   for (const engine of ['kimi', 'minimax'] as const) {
-    const providerId = `${engine}-account`;
+    const providerId = engine + '-account';
     if (!store.list<Provider>('provider').some((p) => p.id === providerId))
       store.saveProvider({
         id: providerId,
@@ -120,60 +217,96 @@ function setup() {
         maxOutputTokens: 8192,
         contextChars: 160000,
       });
-    nativeAccounts[engine] = new NativeAccount(
-      engine,
-      path.join(dataDir, 'engines', engine),
-      (state) => emit({ type: 'native-auth', state }),
-      (catalog) => {
-        for (const p of store.list<Provider>('provider'))
-          if (p.protocol === engine)
-            store.put('provider', {
-              ...p,
-              models: catalog.models,
-              modelLabels: catalog.modelLabels,
-            });
-        runtime.changed();
-      },
-    );
   }
-  const accountFor = (raw: unknown) => nativeAccounts[z.enum(['kimi', 'minimax']).parse(raw)];
-  const assertNativeIdle = (engine: unknown) => {
-    if (
-      runtime.snapshot().runs.some((r) => r.config?.protocol === engine && r.status === 'running')
-    )
-      throw new Error('请先停止该引擎的任务，再切换账号');
-    runtime.invalidateNative(z.enum(['kimi', 'minimax']).parse(engine));
-  };
-  register('nativeStatus', (raw) => accountFor(raw).read());
-  register('nativeLogin', (raw, region) => {
-    assertNativeIdle(raw);
-    return accountFor(raw).start(z.enum(['cn', 'global']).parse(region));
+  accounts = new Accounts(store, runtime, dataDir, emit, (url) => shell.openExternal(url));
+  const accountFor = (raw: unknown, id?: unknown) =>
+    accounts.native(
+      z.enum(['kimi', 'minimax']).parse(raw),
+      id === undefined ? undefined : idSchema.parse(id),
+    );
+  register('nativeStatus', (raw, id) => accountFor(raw, id).read());
+  register('nativeLogin', (raw, region, id) => {
+    accounts.idle(idSchema.parse(id ?? raw + '-account'));
+    return accountFor(raw, id).start(z.enum(['cn', 'global']).parse(region));
   });
-  register('nativeCancel', (raw) => accountFor(raw).cancel());
-  register('nativeOpen', (raw) => {
-    const state = accountFor(raw).state;
+  register('nativeCancel', (raw, id) => accountFor(raw, id).cancel());
+  register('nativeOpen', (raw, id) => {
+    const state = accountFor(raw, id).state;
     if (state.phase !== 'waiting' || !state.url) throw new Error('授权链接已失效，请重新登录');
     return shell.openExternal(state.url);
   });
-  register('nativeCopyCode', (raw) => {
-    const state = accountFor(raw).state;
+  register('nativeCopyCode', (raw, id) => {
+    const state = accountFor(raw, id).state;
     if (state.phase !== 'waiting' || !state.userCode) throw new Error('设备码已失效');
     clipboard.writeText(state.userCode);
   });
-  register('nativeLogout', async (raw) => {
-    assertNativeIdle(raw);
-    await accountFor(raw).logout();
+  register('nativeLogout', async (raw, id) => {
+    accounts.idle(idSchema.parse(id ?? raw + '-account'));
+    await accountFor(raw, id).logout();
     runtime.changed();
   });
   const requireIdle = () => {
-    if (runtime.snapshot().runs.some((r) => r.status === 'running'))
-      throw new Error('请先停止正在运行的任务，再修改插件或 Skill');
+    // Per-run scope remains frozen; dispatch rechecks global revocation.
   };
+  register('setCapability', (raw, enabled) => {
+    store.setCapability(z.enum(['computer', 'management']).parse(raw), z.boolean().parse(enabled));
+    runtime.invalidateNative();
+    runtime.changed();
+  });
+  register('installBuiltinPlugin', () => {
+    const require = createRequire(path.join(__dirname, '../package.json'));
+    const nodeRoot = path
+      .dirname(require.resolve('node/package.json'))
+      .replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep);
+    store.put('plugin', {
+      id: 'tongzhou-web',
+      name: '网页读取与时间 · 内置',
+      transport: 'stdio',
+      command: path.join(nodeRoot, 'bin', process.platform === 'win32' ? 'node.exe' : 'node'),
+      args: [
+        path
+          .join(__dirname, 'builtin-mcp.cjs')
+          .replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep),
+      ],
+      url: '',
+      enabled: true,
+      readOnlyTools: ['fetch_page', 'current_time'],
+    } satisfies PluginConfig);
+    runtime.invalidateNative();
+    runtime.changed();
+  });
+  register('runEvents', (id) => runtime.events(idSchema.parse(id)));
+  register('enqueue', (input, mode) =>
+    runtime.enqueue(runSchema.parse(input), z.enum(['supplement', 'next', 'restart']).parse(mode)),
+  );
+  register('cancelInput', (id) => runtime.cancelInput(idSchema.parse(id)));
+  register('resumeInput', (id) => runtime.resumeInput(idSchema.parse(id)));
+  register('editInput', (id, prompt) =>
+    runtime.editInput(idSchema.parse(id), z.string().max(100000).parse(prompt)),
+  );
+  register('deleteSession', async (id) => {
+    idSchema.parse(id);
+    channels.abort(id);
+    await runtime.deleteSession(id);
+    feishu.sync();
+  });
   register('savePlugin', (raw) => {
     requireIdle();
     const { secret, clearSecret, ...config } = pluginSchema.parse(raw);
+    const previous = store.list<PluginConfig>('plugin').find((p) => p.id === config.id);
+    const same =
+      previous &&
+      !secret &&
+      !clearSecret &&
+      previous.transport === config.transport &&
+      previous.command === config.command &&
+      previous.url === config.url &&
+      JSON.stringify(previous.args) === JSON.stringify(config.args);
     store.saveSecret('plugin_' + config.id, secret, clearSecret);
-    store.put('plugin', config);
+    store.put('plugin', {
+      ...config,
+      ...(same ? { catalog: previous.catalog, checkedAt: previous.checkedAt } : {}),
+    });
     runtime.invalidateNative();
     runtime.changed();
   });
@@ -194,10 +327,17 @@ function setup() {
     try {
       const signal = AbortSignal.timeout(30000);
       await c.connect(signal);
-      return (await c.tools(signal)).map((t) => ({
+      const catalog = (await c.tools(signal)).map((t) => ({
         name: t.name,
         description: t.description ?? '',
+        inputSchema: t.inputSchema,
       }));
+      const current = store.get<PluginConfig>('plugin', p.id);
+      if (JSON.stringify(current) !== JSON.stringify(p))
+        throw new Error('插件配置已变更，请重新检查');
+      store.put('plugin', { ...p, catalog, checkedAt: Date.now() });
+      runtime.changed();
+      return catalog;
     } finally {
       await c.close();
     }
@@ -239,14 +379,47 @@ function setup() {
     runtime.invalidateNative();
     runtime.changed();
   });
-  register('computerStatus', () => computer.status());
-  register('computerPermission', () => computer.requestPermission());
+  const computerStatus = () => ({
+    ...computer.status(),
+    diagnostic: store.list<any>('computerDiagnostic')[0],
+  });
+  register('computerStatus', computerStatus);
+  register('computerPermission', () => {
+    computer.requestPermission();
+    return computerStatus();
+  });
+  let diagnosing = false;
+  register('computerSelfTest', async () => {
+    if (diagnosing) throw new Error('自检正在进行');
+    diagnosing = true;
+    try {
+      const result = await computerDiagnostic(computer);
+      store.put('computerDiagnostic', { id: 'current', ...result });
+      return computerStatus();
+    } finally {
+      diagnosing = false;
+    }
+  });
   register('emergencyStop', async () => {
     for (const r of runtime.snapshot().runs)
       if (r.status === 'running') await runtime.cancel(r.sessionId);
   });
   register('snapshot', () => runtime.snapshot());
-  register('messages', (id) => store.messages(idSchema.parse(id)));
+  register('clientMethods', () => clientCommands.describe());
+  register('openModule', (view) =>
+    emit({
+      type: 'navigate',
+      view: z
+        .enum(['workspace', 'providers', 'agents', 'activity', 'settings', 'extensions'])
+        .parse(view),
+    }),
+  );
+  register('messages', (id, raw) => {
+    const options = z
+      .object({ before: idSchema.optional(), limit: z.number().int().min(1).max(500).optional() })
+      .parse(raw ?? {});
+    return store.messagesPage(idSchema.parse(id), options.before, options.limit);
+  });
   register('saveProvider', (raw) => {
     const input = providerSchema.parse(raw);
     const pending = pendingImports.get(input.id);
@@ -260,20 +433,21 @@ function setup() {
     if (runtime.snapshot().runs.some((r) => r.providerId === id && r.status === 'running'))
       throw new Error('此连接正在执行任务');
     store.deleteProvider(id);
+    accounts.forget(id);
     runtime.changed();
   });
   register('testProvider', async (raw, model) => {
     const p = store.get<Provider>('provider', idSchema.parse(raw));
     const selected = z.string().min(1).max(200).parse(model);
     if (nativeEngine(p.protocol)) {
-      const catalog = await nativeAccounts[p.protocol].catalog();
+      const catalog = await accounts.native(p.protocol, p.id).catalog();
       store.put('provider', { ...p, models: catalog.models, modelLabels: catalog.modelLabels });
       runtime.changed();
       return '账号已通过官方引擎验证，模型列表已同步；实际调用权限以账号套餐为准。';
     }
     if (p.protocol === 'codex') {
-      await runtime.authClient.start();
-      const a = await runtime.authClient.request('account/read', {});
+      await runtime.authClientFor(p.id).start();
+      const a = await runtime.authClientFor(p.id).request('account/read', {});
       if (!a.account) throw new Error('尚未登录 ChatGPT');
       return 'Codex 已连接，账号已登录。模型访问权限以实际执行为准。';
     }
@@ -301,14 +475,16 @@ function setup() {
     const p = store.get<Provider>('provider', idSchema.parse(raw));
     let models: string[];
     if (nativeEngine(p.protocol)) {
-      const catalog = await nativeAccounts[p.protocol].catalog();
+      const catalog = await accounts.native(p.protocol, p.id).catalog();
       store.put('provider', { ...p, models: catalog.models, modelLabels: catalog.modelLabels });
       runtime.changed();
       return catalog.models;
     }
     if (p.protocol === 'codex') {
-      await runtime.authClient.start();
-      const result = await runtime.authClient.request('model/list', { includeHidden: false });
+      await runtime.authClientFor(p.id).start();
+      const result = await runtime
+        .authClientFor(p.id)
+        .request('model/list', { includeHidden: false });
       models = result.data.map((m: any) => m.model ?? m.id);
     } else {
       models = await listModels(p, store.secret(p.id));
@@ -332,9 +508,9 @@ function setup() {
   });
   register('deleteAgent', (raw) => {
     const id = idSchema.parse(raw);
-    if (['builder', 'reviewer', 'architect'].includes(id))
-      throw new Error('内置 Agent 可以编辑，但不能删除');
     store.remove('agent', id);
+    for (const s of store.list<Session>('session'))
+      if (s.agentId === id) store.put('session', { ...s, agentId: '' });
     runtime.changed();
   });
   register('addProject', async () => {
@@ -447,30 +623,23 @@ function setup() {
     await writeFile(result.filePath, redact(content), 'utf8');
     return result.filePath;
   });
-  register('codexStatus', () => auth.read());
-  register('codexLogin', async (method) => {
-    if (
-      runtime.snapshot().runs.some((r) => r.config?.protocol === 'codex' && r.status === 'running')
-    )
-      throw new Error('请先停止 Codex 任务，再切换登录账号');
-    return auth.start(z.enum(['browser', 'device']).parse(method ?? 'browser'));
+  const codexFor = (id?: unknown) =>
+    accounts.codex(id === undefined ? undefined : idSchema.parse(id));
+  register('codexStatus', (id) => codexFor(id).read());
+  register('codexLogin', (method, id) => {
+    accounts.idle(idSchema.parse(id ?? 'openai-codex'));
+    return codexFor(id).start(z.enum(['browser', 'device']).parse(method ?? 'browser'));
   });
-  register('codexLoginRetry', async (method) => {
-    if (
-      runtime.snapshot().runs.some((r) => r.config?.protocol === 'codex' && r.status === 'running')
-    )
-      throw new Error('请先停止 Codex 任务，再重新授权');
-    return auth.restart(z.enum(['browser', 'device']).parse(method));
+  register('codexLoginRetry', (method, id) => {
+    accounts.idle(idSchema.parse(id ?? 'openai-codex'));
+    return codexFor(id).restart(z.enum(['browser', 'device']).parse(method));
   });
-  register('codexLoginCancel', () => auth.cancel());
-  register('codexLoginOpen', () => auth.openPage());
-  register('codexLoginCopyCode', () => clipboard.writeText(auth.code()));
-  register('codexLogout', async () => {
-    if (
-      runtime.snapshot().runs.some((r) => r.config?.protocol === 'codex' && r.status === 'running')
-    )
-      throw new Error('请先停止 Codex 任务');
-    await auth.logout();
+  register('codexLoginCancel', (id) => codexFor(id).cancel());
+  register('codexLoginOpen', (id) => codexFor(id).openPage());
+  register('codexLoginCopyCode', (id) => clipboard.writeText(codexFor(id).code()));
+  register('codexLogout', async (id) => {
+    accounts.idle(idSchema.parse(id ?? 'openai-codex'));
+    await codexFor(id).logout();
     runtime.changed();
   });
 }
@@ -537,8 +706,11 @@ else {
     event.preventDefault();
     quitting = true;
     globalShortcut.unregisterAll();
-    auth.dispose();
-    for (const account of Object.values(nativeAccounts)) account.dispose();
+    accounts.dispose();
+    connectors.dispose();
+    browserProfiles.dispose();
+    channels.dispose();
+    feishu.dispose();
     runtime.stop();
     void runtime.waitForIdle().finally(() => {
       store.close();

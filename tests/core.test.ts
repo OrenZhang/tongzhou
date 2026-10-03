@@ -46,6 +46,7 @@ describe('persistent data and credentials', () => {
   it('recovers unfinished runs after process restart without replaying', async () => {
     const p = path.join(await temp(), 'state.db');
     let s = new Store(p, codec);
+    s.put('session', { ...s.createSession(), id: 's' });
     s.put('run', { id: 'r', sessionId: 's', status: 'running' });
     s.message({
       id: 'm',
@@ -70,6 +71,7 @@ describe('persistent data and credentials', () => {
       content: 'a',
       createdAt: 1,
     };
+    s.put('session', { ...s.createSession(), id: 's' });
     s.message(m);
     s.message({ ...m, id: 'second', content: 'b' });
     s.message({ ...m, content: 'updated' });

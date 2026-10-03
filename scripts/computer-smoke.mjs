@@ -135,8 +135,7 @@ try {
       contextChars: 100000,
       maxOutputTokens: 1000,
     });
-    const a = (await window.tongzhou.snapshot()).agents.find((a) => a.id === 'builder');
-    await window.tongzhou.saveAgent({ ...a, computerEnabled: true, maxSteps: 24 });
+    await window.tongzhou.setCapability('computer', true);
   }, `http://127.0.0.1:${server.address().port}/v1`);
   await page.getByLabel('当前连接', { exact: true }).selectOption('computer-fixture');
   await page

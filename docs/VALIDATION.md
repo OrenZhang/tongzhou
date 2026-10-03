@@ -1,103 +1,62 @@
-# 0.1.0 验证记录
+# 验证记录：0.4.0 开发预览
 
-验证日期：2026-10-02。执行环境：Windows x64、Node.js 22.19.0、Electron 44.5.1、Codex 0.160.0。此记录区分本机已验证行为与尚未执行的跨平台、真实服务验证。
+日期：2026-10-03。环境：Windows x64、Node 22.23.3、Electron 44.5.1。所有项目修改与测试均在独立测试目录内执行；测试账号使用同舟自身已有的 Kimi 授权副本，不读取其他客户端凭据。原始数据库、认证材料和截图保存在忽略的本地目录，仓库仅保存合成夹具和脱敏结论。
 
-## 自动化验证
+## 自动化与桌面
 
-| 项目                                | 结果         | 覆盖范围                                                                                                                                  |
-| ----------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm test`                          | 30 项通过    | SQLite 恢复、凭据接口、文件越界与联接、审批与写入冲突、CC Switch 只读导入、四种协议、SSE 分片、用量、工具循环、取消、跨模型历史、团队协作 |
-| `npm run build`                     | 通过         | TypeScript 检查、Vite 前端和 esbuild 主进程生产构建                                                                                       |
-| `npm run test:desktop`              | 通过         | Electron UI、新建连接、编辑 Agent、打开项目、审批写文件、流式输出、实际落盘、用量与重启恢复                                               |
-| 打包程序桌面测试                    | 通过         | 从独立目录启动 `release/win-unpacked/Tongzhou.exe`，重复桌面测试；不依赖开发项目作为当前目录                                              |
-| Codex App Server                    | 握手通过     | 使用随应用分发的引擎完成 initialize、account/read；隔离用户配置，账号为空                                                                 |
-| `npm run dist:win`                  | 通过         | 生成 Windows x64 NSIS 安装包                                                                                                              |
-| `npm audit --audit-level=low`       | 0 个已知漏洞 | 验证当日 npm 审计结果，不代表不存在未知漏洞                                                                                               |
-| `npm ci --ignore-scripts --dry-run` | 通过         | package-lock 与安装计划一致；首次开发安装使用正常 `npm ci`                                                                                |
+| 项目                                  | 结果                   | 覆盖范围                                                                                          |
+| ------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------- |
+| `npm test`                            | 101 项 / 11 个文件通过 | 协议、迁移、路径与审批、账号隔离、上下文、队列、删除、批量写入、通知、PKCE / 刷新等               |
+| `npm run typecheck` / `npm run build` | 通过                   | TypeScript 与生产 UI / 主进程 / MCP 构建                                                          |
+| `npm run test:desktop`                | 通过                   | 空 Agent、模型选择、普通聊天、项目写入审批、流式、用量、Codex 初始化、重启恢复                    |
+| `npm run test:auth`                   | 通过                   | 单服务认证弹窗、成功标志、返回导航；账号状态为协议夹具                                            |
+| `npm run test:extensions`             | 通过                   | MCP 发现、Skill 导入、公共开关、审批、无项目工具、跨供应商历史与重启                              |
+| `npm run test:bridge`                 | 通过                   | 真实 stdio MCP / loopback 桥；内置 Codex 接受动态工具线程；不含真实 Codex 推理                    |
+| `npm run test:workflows`              | 通过                   | 公开思考、排队仅一次、历史引用 / 分支、归档删除、连接 / 通知配置回显、Cookie 清理、项目说明初始化 |
+| `npm run test:native`                 | 通过                   | 实际 Kimi / MiniMax CLI 的 ACP 初始化、匿名未登录判定，无用户登录和推理                           |
+| Windows 电脑测试                      | 通过                   | 自有窗口发现、截图、中文输入、Ctrl+A、截图坐标点击，未调用外部模型                                |
+| Windows 打包与 `test:package`         | 通过                   | NSIS 产物、仓库外启动、内置 MCP、中文路径搜索、本机窗口自检、Cookie 重启保存 / 清理               |
+| GitHub Windows / macOS CI             | 等待本次推送结果       | 云构建与无密钥回归；Mac GUI 权限和真人登录仍不能由 CI 替代                                        |
 
-桌面测试使用新建临时项目和独立 `TONGZHOU_USER_DATA`，不读取既有模型账号。测试的实际文件修改仅写入测试项目。测试报告输出到被 Git 忽略的 `test-results/`，不会将个人运行数据纳入仓库。
+新增关键回归包含：一致迁移备份并保留用户角色、排队编辑与未知 steer 不重发、Codex thread 恢复 / 模型变更重建 / Token 增量、并发文件写入冲突、批量预检及中断后的部分提交说明、分页不重不漏、删除子会话和私有目录、解除入站绑定、更换连接器站点清除旧令牌、GitLab PKCE state / 回调与刷新。
 
-额外覆盖：跨供应商切换时将账号相关工具状态转换为历史证据；Gemini 同模型工具签名保留；进程异常退出导致工具结果缺失时不发送孤立调用，不自动重放操作。
+桌面测试曾在“正文已出现、运行尚在收尾”的时间点立即断言完成而失败。修正为等待 Run 终态；不再用正文出现替代运行完成。第一次 MiniMax 匿名测试暴露了空配置导致假授权，修正初次配置引导后已复测通过。
 
-## 复现打包程序测试
+## 真实模型
 
-在 PowerShell 中：
+已经通过一次真实 Kimi Coding 闭环：无项目问候 → 同会话记忆 → 读项目说明 → 修复 clamp → 执行测试。隐藏边界断言由测试驱动在项目外运行，用户笔记和原测试预期保持不变。该次冷聊天 8910ms、热聊天 2125ms、项目修复 35612ms；这是单次样本，不能当成稳定延迟或 P95。当前正在执行扩展的三轮任务矩阵，最终结果会追加到本节。
+
+测试工具为 `scripts/live-coding-smoke.mjs`，使用 `TONGZHOU_CODING_MATRIX=1` 扩展为每组独立 3 次：D01 多文件调用链定位、D02/D06/D07 边界修复与用户内容 / 项目说明保护、D03 服务与渲染模块新增功能、D04 先复现类型错误再构建、D05 先复现测试失败再修复。合成项目范围有限，不代表大型真实仓库的普遍能力。
 
 ```powershell
-npm ci
-npm test
-npm run dist:win
-$env:TONGZHOU_SMOKE_EXECUTABLE = (Resolve-Path 'release/win-unpacked/Tongzhou.exe').Path
-npm run test:desktop
-Remove-Item Env:TONGZHOU_SMOKE_EXECUTABLE
+$env:TONGZHOU_LIVE_CODING = '1'
+$env:TONGZHOU_NATIVE_SOURCE = '已授权的同舟测试配置目录'
+$env:TONGZHOU_TEST_ENGINE = 'kimi'
+$env:TONGZHOU_CODING_MATRIX = '1'
+npm run test:live
 ```
 
-测试会自动启动、关闭、重启自己的桌面进程。它使用本机 HTTP fixture 返回协议数据，无真实模型费用。内置 Codex 路径缺失会报错，不会静默调用系统 PATH 中的另一个版本。
+Kimi 的 `inputTokens` / `outputTokens` 未上报时记录为 null；不使用零伪造用量。MiniMax 真实推理尝试明确返回未登录，未记为通过。ChatGPT、OpenCode Go、其他直接 API / 本地真实模型没有本轮完整真实项目测评。D08–D10 的队列、取消、权限和冲突有确定性测试；跨真实模型任务与 Codex 同模型对照尚未完成，**不能据此宣称开发能力已与 Codex 等同**。
 
-## 尚未验证与发布边界
+## 第三方与平台待验
 
-- 没有执行真实 ChatGPT OAuth 登录和付费模型推理；真实工具执行的供应商兼容性需要账号和网络条件验证。协议测试使用真实 HTTP/SSE 传输与本机模拟响应。
-- 未在 macOS 实机执行或签名、公证。仓库已配置 macOS 构建与桌面测试工作流，但配置存在不等于测试已通过。
-- Windows 已构建并运行打包应用，未自动安装到用户系统，也未执行卸载流程。安装包未配置维护者代码签名证书。
-- GitHub 远端仓库与工作流尚未发布、触发。本次会话的仓库创建页面被浏览器权限审查拒绝，现有 GitHub 连接器没有创建仓库接口，本地没有可用的 Git 推送凭据。没有绕过访问限制。
-- 独立测试不等于安全审计。直接 API 的命令执行有审批，但不是操作系统沙箱。首版其他范围限制见 README。
+- GitHub device flow、GitLab PKCE / 刷新：实现与本地契约验证已完成；真人账号授权、企业策略与仓库权限待对应环境验证。本地 Git 推送凭据独立于这些连接器。
+- 飞书扫码 / 应用 / 长连接：按官方流程实现；白名单、回调去重、发送业务码、一次性规则、失败与未知结果已有替身测试。没有扫描用户二维码、创建真实机器人或发送真实渠道消息，因此真人授权 / 消息权限待验。
+- 企业微信 / 钉钉：Webhook 出站适配；不把企业扫码登录等同于机器人创建。未开放通用扫码机器人配置。
+- macOS：有代码适配和 CI；本轮 Windows 结果不能证明 Mac 屏幕录制、辅助功能、签名 / 公证及实机交互通过。
 
-## 后续本地迭代：普通聊天与可选 Agent
+## 依赖检查
 
-本地源码新增了不关联项目的会话，已通过 33 项自动化测试和更新后的桌面测试。覆盖首页直接发送、不弹出文件夹选择器、连续聊天与切换模型、重启后保留普通会话、无项目团队讨论、拒绝 API 返回的未授权文件工具，以及专属 Agent 提示卡的启用与移除。生产构建和类型检查通过，现有项目会话的写文件审批流程仍通过。
+`npm audit --omit=dev` 无生产依赖漏洞。完整开发依赖审计有 8 项 high，来自打包链的 `http-cache-semantics` / `cacheable-request` / `got` / `@electron/get` 传递影响；当前公告无修复版本，`npm audit fix --ignore-scripts` 未消除。没有将完整审计写成零漏洞。详见 [GHSA-ch52-4w7c-c8xp](https://github.com/advisories/GHSA-ch52-4w7c-c8xp)。该依赖用于开发打包链，不作为同舟的账号共享缓存服务。
 
-此次验证运行源码生产构建；之前导出的 0.1.0 安装包和源码压缩包不包含这些后续改动。
+## 安装包测试复现
 
-## 后续本地迭代：ChatGPT 授权
+```powershell
+$env:TONGZHOU_SMOKE_EXECUTABLE = Join-Path $PWD 'release/win-unpacked/Tongzhou.exe'
+$env:TONGZHOU_COMPUTER_SMOKE = '1'
+npm run test:package
+```
 
-修复登录地址校验、缺失登录完成通知、无法感知失败的问题；补充设备码入口、取消、重开授权页、复制一次性代码、账号自动更新和模型同步。42 项测试通过，包含成功通知后读取账号确认、错误与取消、超时、提前到达的完成通知、官方域名校验及浏览器打不开时的恢复。普通聊天和项目操作桌面回归通过。
+电脑开关只用于显式验证新建的测试窗口。普通 CI 不操作桌面输入。`test:package` 同时覆盖系统打包路径和浏览器 Cookie 重启持久化；`TONGZHOU_PACKAGE_AUTO=1` 可自动选择当前平台的默认产物。
 
-2026-10-02 使用内置 Codex 0.160.0 和全新独立目录实测 `chatgpt` 与 `chatgptDeviceCode` 两种授权请求：均成功返回官方地址，设备码非空，两种流程均可取消。桌面在线验证确认了等待状态、设备码展示、导航后状态保留和取消后清除。没有完成用户账号确认，没有读取或复制既有 OAuth 凭据，没有进行真实模型推理。
-
-显式在线复现：先 `npm run build`，再在 PowerShell 设置 `$env:TONGZHOU_LIVE_AUTH_SMOKE='1'` 后执行 `node scripts/auth-smoke.mjs`。该测试会请求真实授权流程并取消，用测试替身阻止打开系统浏览器。普通 CI 测试不需要此环境变量。
-
-协议依据：[OpenAI App Server 认证文档](https://learn.chatgpt.com/docs/app-server)、[设备码授权说明](https://learn.chatgpt.com/docs/auth)。另核对了内置二进制生成的 LoginAccountParams / LoginAccountResponse schema。
-
-## 0.2.0：Kimi / MiniMax 认证
-
-2026-10-02，Windows x64。固定引擎：Kimi Code 2.1.1、MiniMax Code 0.4.12、内置 Node 22.23.3。55 项自动化测试通过、类型检查与生产构建通过。新增测试覆盖官方域名/设备码提取、原生认证参数、隔离目录、环境密钥不继承、完成后的 ACP 账号验证及模型同步、取消/过期/晚到回调、退出登录、普通聊天和历史交接、单次审批、未知模型拒绝，以及 MiniMax thinking 内容块与签名的同模型回传。
-
-实际供应商验证：Kimi 国内与 MiniMax 国内设备码请求均返回官方授权页面和一次性代码，取消后状态/代码清除。真实 Electron UI 在线测试通过：两个登录入口、未登录检查、设备码展示、重开页面、导航后保留、取消和清除。Kimi 官方 CLI 自行打开系统浏览器；测试没有提交用户账号确认，也没有复制既有凭据或调用付费模型。国际账号参数已接入，国际服务本次未实测。
-
-Windows 0.2.0 已生成 NSIS 安装包，打包后的原生引擎与普通聊天/项目操作桌面回归通过。MiniMax 的原生 SQLite 使用 Node 22 ABI；CLI 通过随包 Node 运行，不使用 Electron 的 Node ABI。Node 及完整生产依赖从 asar 解包，避免外部 Node 无法读取虚拟 asar 模块。开发安装/CI 要求 Node 22，不应直接用 Electron 重建 better-sqlite3。
-
-复现：`node scripts/native-smoke.mjs` 验证真实引擎与未登录状态；设置 `TONGZHOU_LIVE_NATIVE_SMOKE=1` 后会向两家请求真实设备授权并取消，Kimi 可能打开浏览器。可设置 `TONGZHOU_SMOKE_EXECUTABLE` 指向打包程序验证。测试报告/截图保存在忽略目录 test-results。
-
-仍未完成：用户账号授权后的真实模型推理、真实套餐额度/续期验证、macOS 实机和远端 GitHub 工作流。ACP 会话/权限执行测试使用协议替身；不得描述为两家真实付费模型已全链路验收。原 0.1.0 安装包/归档保留为历史产物，新安装包位于 release/Tongzhou Setup 0.2.0.exe。
-
-依据：[Kimi ACP 文档](https://www.kimi.com/code/docs/en/kimi-code-cli/reference/kimi-acp.html)、[Kimi 会员接入说明](https://www.kimi.com/en/help/kimi-code/membership-guide)、[MiniMax Code](https://github.com/MiniMax-AI/minimax-code)、[MiniMax Anthropic 兼容接口](https://platform.minimax.cn/docs/api-reference/text-anthropic-api)。同舟使用官方终端认证入口，不复用厂商 OAuth client ID 编写自己的 OAuth 客户端。
-
-## 0.2.1：认证入口与普通聊天
-
-59 项自动化测试通过，类型检查与生产构建通过。覆盖浏览器授权切换设备码前取消旧流程、取消后的晚到通知/账号读取隔离，以及原生会话复用、账号操作后失效和跨模型历史交接。
-
-独立 Electron 界面测试 `node scripts/account-ui-smoke.mjs` 验证 Kimi、MiniMax、OpenAI 管理入口各自只显示一个账号模块，关闭后返回模型连接页；成功标志来自已验证账号状态，离开页面再进入后仍显示。此测试使用账号状态替身，不代表完成真实登录。
-
-在线 OpenAI 测试通过：创建浏览器登录请求，点击“改用设备码登录”，收到真实设备码，导航后保留状态，取消后清除。未完成真实 ChatGPT 账号授权；用户截图的上游 Route Error 根因尚未确定，不能将恢复入口描述为该网页错误已被修复。
-
-使用用户已登录的同舟 Kimi 隔离配置完成两轮简短真实推理，耗时约 11.2 秒和 7.5 秒，第二轮保留上一轮内容，两轮均无内部工具消息。没有改写用户聊天记录。这不是同条件前后性能基准，不据此声称固定提速比例。MiniMax 真实推理、ChatGPT 登录完成与推理、macOS 实机仍待验证。
-
-普通聊天隐藏历史内部工具条，并提示原生引擎直接在正文提问；同模型连续轮次复用引擎进程/会话，减少启动与历史重传开销。
-
-Windows 0.2.1 NSIS 安装包已生成。打包程序从独立目录启动，通过单供应商认证弹窗/成功标志测试和完整桌面回归（普通聊天、项目写入审批、流式输出及重启恢复）。
-
-## 0.3.0：公共插件、电脑操作与会话切换
-
-2026-10-02，Windows x64。74 项自动化测试通过，类型检查与生产构建通过。新增覆盖真实 stdio MCP 握手/调用、凭据脱敏、权限范围、拒绝/取消、重复调用去重、Skill 附属文件边界、图片大小限制、私有桥接认证、电脑坐标映射，以及四种模型协议中的截图传递和历史交接。
-
-`npm run test:extensions` 使用独立 Electron 配置验证 MCP 添加与连接检查、Skill 导入、默认助手工具配置、普通聊天工具审批、同一会话切换供应商、历史与选择持久化。测试确认切换后保留文本和工具结果，不重新执行上一供应商的工具调用。中断或失败的回复会明确标记；缺失结果的工具调用转换为历史记录，不发送孤立的工具协议消息。
-
-`npm run test:bridge` 验证真实 MCP stdio 代理与每轮独立的本地认证通道。内置 Codex 接受 experimentalApi / dynamicTools 线程配置；此项没有完成 ChatGPT 登录或真实 Codex 推理。额外使用用户已登录的同舟 Kimi 隔离配置，实测 Kimi ACP 调用测试 MCP 工具并返回结果；没有改写用户聊天数据库。MiniMax 共用 ACP 桥接，但未完成真实账号推理工具验收。
-
-显式设置 `TONGZHOU_COMPUTER_SMOKE=1` 后执行 `node scripts/computer-smoke.mjs`，使用独立测试窗口和本地模型替身验证真实 Windows 窗口发现、截图、聚焦、中文 Unicode 输入、Ctrl+A、按截图坐标点击。工具调用经过同舟审批界面；没有向外部模型发送截图。滚动和拖动已实现，但没有本次实机交互验收。macOS 适配已实现，仍未在 Mac 上实机验证或签名、公证。
-
-安全边界：电脑截图和输入逐次审批；坐标只绑定本轮窗口截图，窗口移动或截图过期后拒绝操作。新一轮要求重新截图，历史图片不会自动传给新供应商。全局停止快捷键与界面停止按钮会取消任务。第三方 MCP 子进程不是操作系统沙箱；Skill 导入只保存文本，不自动执行脚本或安装依赖。本版不包含 MCP OAuth 向导或在线插件市场。
-
-协议依据：[OpenAI App Server](https://learn.chatgpt.com/docs/app-server)、[MCP TypeScript SDK](https://ts.sdk.modelcontextprotocol.io/client)、[ACP 会话配置](https://agentclientprotocol.com/protocol/v1/session-setup)、[Electron 窗口截图](https://www.electronjs.org/docs/latest/api/desktop-capturer)。同舟实现自己的公共工具层，不将 Codex 桌面端专有插件描述为已开源或随包分发。
-
-Windows 0.3.0 NSIS 安装包已生成。打包程序使用独立配置通过完整桌面回归、单供应商认证弹窗、插件与会话切换测试、真实电脑测试窗口操作，以及内置 Kimi / MiniMax ACP 初始化与未登录状态检查。旧原生引擎测试的精确文字定位与新增授权标志冲突，已调整为账号状态容器匹配并重新通过；此测试故障不属于供应商认证超时。格式检查和 Git 差异空白检查通过。GitHub 仍未配置可推送远端，未声称已发布线上版本。
+完整代码状态与产品边界见 [实施状态](IMPLEMENTATION_STATUS.md)。当前维持开发预览版，外部账号和平台项目未验收前不贴“全部测试完成”标签。

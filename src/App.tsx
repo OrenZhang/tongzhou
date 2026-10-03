@@ -50,7 +50,9 @@ import type {
   Session,
   Snapshot,
 } from './shared/types';
-import { Extensions, AgentTools } from './Extensions';
+import { Extensions } from './Extensions';
+import { RunActivity } from './RunActivity';
+import { ConnectionsPanel } from './ConnectionsPanel';
 import { AuthBadge, ChatMessage, Field, Mark, Modal, Spinner, ModelPicker } from './components';
 const empty: Snapshot = {
   providers: [],
@@ -70,6 +72,13 @@ const protocolLabels: Record<string, string> = {
   minimax: 'MiniMax Code · 账号授权',
 };
 const presets = [
+  {
+    name: 'OpenCode Go 订阅',
+    protocol: 'openai-chat',
+    baseUrl: 'https://opencode.ai/zen/go/v1',
+    auth: 'api-key',
+    models: [],
+  },
   {
     name: '自定义服务',
     protocol: 'openai-chat',
@@ -157,16 +166,25 @@ const presets = [
 ] as const;
 type View = 'workspace' | 'providers' | 'agents' | 'activity' | 'settings' | 'extensions';
 export default function App() {
+  const [accountStates, setAccountStates] = useState<
+    Record<string, { connected: boolean; pending: boolean; error: boolean }>
+  >({});
   const api = window.tongzhou;
   const [data, setData] = useState<Snapshot>(empty);
   const [view, setView] = useState<View>('workspace');
+  const [authProviderId, setAuthProviderId] = useState<string | undefined>();
+  const authProviderRef = useRef<string | undefined>(undefined);
+  authProviderRef.current = authProviderId;
   const [authPanel, setAuthPanel] = useState<'codex' | NativeEngine | null>(null);
   const [sessionId, setSessionId] = useState('');
   const sessionRef = useRef('');
   const [messages, setMessages] = useState<Message[]>([]);
+  const [hasEarlier, setHasEarlier] = useState(false);
   const [providerId, setProviderId] = useState('');
   const [model, setModel] = useState('');
-  const [agentId, setAgentId] = useState('builder');
+  const [agentId, setAgentId] = useState('');
+  const [inputMode, setInputMode] = useState<'supplement' | 'next' | 'restart'>('supplement');
+  const [deleteId, setDeleteId] = useState('');
   const [draft, setDraft] = useState('');
   const [query, setQuery] = useState('');
   const [notice, setNotice] = useState('');
@@ -175,7 +193,7 @@ export default function App() {
   const [agentEdit, setAgentEdit] = useState<AgentProfile | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [teamOpen, setTeamOpen] = useState(false);
-  const [teamIds, setTeamIds] = useState<string[]>(['reviewer', 'architect']);
+  const [teamIds, setTeamIds] = useState<string[]>([]);
   const [rename, setRename] = useState<string | null>(null);
   const [archived, setArchived] = useState(false);
   const [contextTab, setContextTab] = useState<'files' | 'diff'>('files');
@@ -193,21 +211,20 @@ export default function App() {
   const [codex, setCodex] = useState<CodexAuthState | null>(null);
   const authPending = ['starting', 'waiting', 'checking'].includes(codex?.login?.phase ?? '');
   const startLogin = (method: CodexLoginMethod) =>
-    perform(async () => setCodex(await api.codexLogin(method)));
+    perform(async () => setCodex(await api.codexLogin(method, authProviderId)));
   const feed = useRef<HTMLDivElement>(null);
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const session = data.sessions.find((s) => s.id === sessionId);
   const project = data.projects.find((p) => p.id === session?.projectId);
   const provider = data.providers.find((p) => p.id === providerId);
-  const selectedAgent =
-    agentId !== 'builder' ? data.agents.find((a) => a.id === agentId) : undefined;
+  const selectedAgent = data.agents.find((a) => a.id === agentId);
   const running = data.runs.find((r) => r.sessionId === sessionId && r.status === 'running');
   const activateSession = (selected: Session) => {
     sessionRef.current = selected.id;
     setSessionId(selected.id);
     setProviderId(selected.providerId);
     setModel(selected.model);
-    setAgentId(data.agents.some((a) => a.id === selected.agentId) ? selected.agentId : 'builder');
+    setAgentId(data.agents.some((a) => a.id === selected.agentId) ? selected.agentId : '');
     setView('workspace');
   };
   const refresh = useCallback(async () => {
@@ -230,9 +247,34 @@ export default function App() {
     if (!api) return;
     void refresh().catch(report);
     return api.onEvent((event) => {
-      if (event.type === 'native-auth')
+      if (event.type === 'navigate') setView(event.view);
+      if (event.type === 'native-auth' && event.state.providerId)
+        setAccountStates((old) => ({
+          ...old,
+          [event.state.providerId!]: {
+            connected: event.state.authenticated,
+            pending: ['starting', 'waiting', 'checking'].includes(event.state.phase),
+            error: !!event.state.error,
+          },
+        }));
+      if (event.type === 'codex-auth' && event.state.providerId)
+        setAccountStates((old) => ({
+          ...old,
+          [event.state.providerId!]: {
+            connected: !!event.state.account,
+            pending: ['starting', 'waiting', 'checking'].includes(event.state.login?.phase ?? ''),
+            error: !!event.state.error,
+          },
+        }));
+      if (
+        event.type === 'native-auth' &&
+        (!authProviderRef.current || event.state.providerId === authProviderRef.current)
+      )
         setNativeAccounts((previous) => ({ ...previous, [event.state.engine]: event.state }));
-      if (event.type === 'codex-auth') {
+      if (
+        event.type === 'codex-auth' &&
+        (!authProviderRef.current || event.state.providerId === authProviderRef.current)
+      ) {
         setCodex(event.state);
         if (event.state.login?.phase === 'success') setNotice('ChatGPT 授权成功，账号已连接');
       }
@@ -242,7 +284,7 @@ export default function App() {
           if (i < 0) return [...old, event.message];
           return old.map((m, j) => (j === i ? event.message : m));
         });
-      if (event.type !== 'message' && !refreshTimer.current)
+      if (event.type !== 'message' && event.type !== 'run-event' && !refreshTimer.current)
         refreshTimer.current = setTimeout(() => {
           refreshTimer.current = null;
           void refresh().catch(report);
@@ -250,14 +292,46 @@ export default function App() {
     });
   }, [api, refresh]);
   useEffect(() => {
+    if (view !== 'providers') return;
+    let active = true;
+    for (const p of data.providers) {
+      const request =
+        p.protocol === 'codex'
+          ? api.codexStatus(p.id).then((s) => ({
+              connected: !!s.account,
+              pending: ['starting', 'waiting', 'checking'].includes(s.login?.phase ?? ''),
+              error: !!s.error,
+            }))
+          : p.protocol === 'kimi' || p.protocol === 'minimax'
+            ? api.nativeStatus(p.protocol, p.id).then((s) => ({
+                connected: s.authenticated,
+                pending: ['starting', 'waiting', 'checking'].includes(s.phase),
+                error: !!s.error,
+              }))
+            : null;
+      void request
+        ?.then((status) => {
+          if (active) setAccountStates((old) => ({ ...old, [p.id]: status }));
+        })
+        .catch(() => {});
+    }
+    return () => {
+      active = false;
+    };
+  }, [api, view, data.providers.map((p) => p.id + ':' + p.protocol).join('|')]);
+  useEffect(() => {
     sessionRef.current = sessionId;
     setFilePath('');
     setFileView(null);
+    setHasEarlier(false);
     if (sessionId)
       void api
         .messages(sessionId)
         .then((result) => {
-          if (sessionRef.current === sessionId) setMessages(result);
+          if (sessionRef.current === sessionId) {
+            setMessages(result);
+            setHasEarlier(result.length === 100);
+          }
         })
         .catch(report);
     else setMessages([]);
@@ -270,16 +344,20 @@ export default function App() {
   }, [model, provider?.models]);
   useEffect(() => {
     if (authPanel || view === 'settings' || view === 'providers') {
-      if (!authPanel || authPanel === 'codex') void api.codexStatus().then(setCodex).catch(report);
+      if (!authPanel || authPanel === 'codex')
+        void api
+          .codexStatus(authPanel ? authProviderId : undefined)
+          .then(setCodex)
+          .catch(report);
       for (const engine of ['kimi', 'minimax'] as const) {
         if (authPanel && authPanel !== engine) continue;
         void api
-          .nativeStatus(engine)
+          .nativeStatus(engine, authPanel ? authProviderId : undefined)
           .then((state) => setNativeAccounts((previous) => ({ ...previous, [engine]: state })))
           .catch(report);
       }
     }
-  }, [view, api, authPanel]);
+  }, [view, api, authPanel, authProviderId]);
   useEffect(() => {
     const el = feed.current;
     if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 300)
@@ -308,7 +386,7 @@ export default function App() {
         ...s,
         providerId: providerId || s.providerId,
         model: model || s.model,
-        agentId: 'builder',
+        agentId: '',
       });
       setDraft('');
       await refresh();
@@ -320,8 +398,7 @@ export default function App() {
       if (p) await newSession(p.id);
     });
   const send = async (team = false) => {
-    if (busy || running || session?.archived || !draft.trim() || !model.trim() || !providerId)
-      return;
+    if (busy || session?.archived || !draft.trim() || !model.trim() || !providerId) return;
     setBusy(true);
     try {
       let targetId = sessionId;
@@ -331,7 +408,8 @@ export default function App() {
         activateSession({ ...created, providerId, model, agentId });
       }
       const input = { sessionId: targetId, prompt: draft, providerId, model, agentId };
-      if (team) await api.team(input, teamIds);
+      if (running) await api.enqueue(input, inputMode);
+      else if (team) await api.team(input, teamIds);
       else await api.run(input);
       setDraft('');
       setTeamOpen(false);
@@ -398,7 +476,7 @@ export default function App() {
   };
   const nav = [
     { id: 'workspace', label: '工作空间', icon: MessageSquare },
-    { id: 'providers', label: '模型连接', icon: Network },
+    { id: 'providers', label: '连接中心', icon: Network },
     { id: 'agents', label: 'Agent 团队', icon: Users },
     { id: 'extensions', label: '插件与工具', icon: Terminal },
     { id: 'activity', label: '运行记录', icon: Activity },
@@ -454,7 +532,11 @@ export default function App() {
             </button>
             <button
               className="secondary"
-              onClick={() => perform(async () => setCodex(await api.codexStatus()))}
+              onClick={() =>
+                perform(async () =>
+                  setCodex(await api.codexStatus(authPanel ? authProviderId : undefined)),
+                )
+              }
             >
               <RefreshCw size={14} />
               刷新状态
@@ -464,8 +546,8 @@ export default function App() {
                 className="text-button danger"
                 onClick={() =>
                   perform(async () => {
-                    await api.codexLogout();
-                    setCodex(await api.codexStatus());
+                    await api.codexLogout(authPanel ? authProviderId : undefined);
+                    setCodex(await api.codexStatus(authPanel ? authProviderId : undefined));
                   })
                 }
               >
@@ -502,7 +584,7 @@ export default function App() {
                         className="secondary"
                         onClick={() =>
                           perform(async () => {
-                            await api.codexLoginCopyCode();
+                            await api.codexLoginCopyCode(authPanel ? authProviderId : undefined);
                             setNotice('设备码已复制');
                           })
                         }
@@ -525,14 +607,18 @@ export default function App() {
                         <button
                           className="secondary"
                           disabled={busy}
-                          onClick={() => perform(() => api.codexLoginRetry('device'))}
+                          onClick={() =>
+                            perform(() => api.codexLoginRetry('device', authProviderId))
+                          }
                         >
                           改用设备码登录
                         </button>
                         <button
                           className="text-button"
                           disabled={busy}
-                          onClick={() => perform(() => api.codexLoginRetry('browser'))}
+                          onClick={() =>
+                            perform(() => api.codexLoginRetry('browser', authProviderId))
+                          }
                         >
                           重新发起浏览器授权
                         </button>
@@ -540,12 +626,19 @@ export default function App() {
                     </div>
                   )}
                   <div className="row">
-                    <button className="primary" onClick={() => perform(() => api.codexLoginOpen())}>
+                    <button
+                      className="primary"
+                      onClick={() =>
+                        perform(() => api.codexLoginOpen(authPanel ? authProviderId : undefined))
+                      }
+                    >
                       打开授权页面
                     </button>
                     <button
                       className="text-button"
-                      onClick={() => perform(() => api.codexLoginCancel())}
+                      onClick={() =>
+                        perform(() => api.codexLoginCancel(authPanel ? authProviderId : undefined))
+                      }
                     >
                       取消授权
                     </button>
@@ -611,7 +704,9 @@ export default function App() {
                 <button
                   className="primary"
                   disabled={pending || state?.authenticated}
-                  onClick={() => perform(() => api.nativeLogin(engine, nativeRegions[engine]))}
+                  onClick={() =>
+                    perform(() => api.nativeLogin(engine, nativeRegions[engine], authProviderId))
+                  }
                 >
                   登录 {label}
                   <ArrowRight size={15} />
@@ -619,7 +714,9 @@ export default function App() {
                 <button
                   className="secondary"
                   disabled={pending}
-                  onClick={() => perform(() => api.nativeStatus(engine))}
+                  onClick={() =>
+                    perform(() => api.nativeStatus(engine, authPanel ? authProviderId : undefined))
+                  }
                 >
                   <RefreshCw size={14} />
                   刷新状态
@@ -627,7 +724,11 @@ export default function App() {
                 {state?.authenticated && !pending && (
                   <button
                     className="text-button danger"
-                    onClick={() => perform(() => api.nativeLogout(engine))}
+                    onClick={() =>
+                      perform(() =>
+                        api.nativeLogout(engine, authPanel ? authProviderId : undefined),
+                      )
+                    }
                   >
                     退出登录
                   </button>
@@ -647,7 +748,11 @@ export default function App() {
                       <code aria-label={`${label} 设备码`}>{state.userCode}</code>
                       <button
                         className="secondary"
-                        onClick={() => perform(() => api.nativeCopyCode(engine))}
+                        onClick={() =>
+                          perform(() =>
+                            api.nativeCopyCode(engine, authPanel ? authProviderId : undefined),
+                          )
+                        }
                       >
                         复制设备码
                       </button>
@@ -657,14 +762,22 @@ export default function App() {
                     {state.url && (
                       <button
                         className="primary"
-                        onClick={() => perform(() => api.nativeOpen(engine))}
+                        onClick={() =>
+                          perform(() =>
+                            api.nativeOpen(engine, authPanel ? authProviderId : undefined),
+                          )
+                        }
                       >
                         打开授权页面
                       </button>
                     )}
                     <button
                       className="text-button"
-                      onClick={() => perform(() => api.nativeCancel(engine))}
+                      onClick={() =>
+                        perform(() =>
+                          api.nativeCancel(engine, authPanel ? authProviderId : undefined),
+                        )
+                      }
                     >
                       取消授权
                     </button>
@@ -685,7 +798,7 @@ export default function App() {
               )}
               <p className="footnote">
                 使用内置官方引擎管理登录与续期，凭据保存在同舟独立目录。账号套餐与 API Key
-                分开配置；API / 套餐 Key 可在“模型连接”中添加。
+                分开配置；API / 套餐 Key 可在“连接中心”中添加。
               </p>
             </section>
           );
@@ -711,7 +824,7 @@ export default function App() {
             <strong>同舟</strong>
             <span>TONGZHOU</span>
           </div>
-          <span className="version">0.3</span>
+          <span className="version">0.4</span>
         </div>
         <button className="new-chat" onClick={() => newSession()}>
           <Plus size={17} />
@@ -830,7 +943,7 @@ export default function App() {
               {view === 'workspace'
                 ? (project?.name ?? '工作空间')
                 : {
-                    providers: '模型连接',
+                    providers: '连接中心',
                     agents: 'Agent 团队',
                     activity: '运行记录',
                     settings: '设置与关于',
@@ -887,10 +1000,42 @@ export default function App() {
                     >
                       <Archive size={16} />
                     </button>
+                    {session.archived && (
+                      <button
+                        className="icon-button danger"
+                        aria-label="删除会话"
+                        onClick={() => setDeleteId(session.id)}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
               <div className={'feed ' + (!messages.length ? 'empty-feed' : '')} ref={feed}>
+                {hasEarlier && (
+                  <button
+                    className="secondary"
+                    onClick={() =>
+                      perform(async () => {
+                        const result = await api.messages(sessionId, { before: messages[0]?.id });
+                        if (sessionRef.current !== sessionId) return;
+                        const height = feed.current?.scrollHeight ?? 0;
+                        setMessages((old) => [
+                          ...result,
+                          ...old.filter((m) => !result.some((r) => r.id === m.id)),
+                        ]);
+                        setHasEarlier(result.length === 100);
+                        requestAnimationFrame(() => {
+                          if (feed.current)
+                            feed.current.scrollTop = feed.current.scrollHeight - height;
+                        });
+                      })
+                    }
+                  >
+                    加载更早消息
+                  </button>
+                )}
                 {!messages.length ? (
                   <div className="welcome">
                     <div className="eyebrow">
@@ -923,7 +1068,7 @@ export default function App() {
                         </button>
                       )}
                       <button className="text-button" onClick={() => setView('providers')}>
-                        配置模型连接
+                        配置连接中心
                         <ArrowRight size={14} />
                       </button>
                     </div>
@@ -979,7 +1124,7 @@ export default function App() {
                     </div>
                     <div className="welcome-foot">
                       <Layers3 size={14} />
-                      {data.providers.length} 个模型连接<span>·</span>
+                      {data.providers.length} 个连接中心<span>·</span>
                       <Bot size={14} />
                       {data.agents.length} 个 Agent<span>·</span>上下文随任务同行
                     </div>
@@ -987,10 +1132,41 @@ export default function App() {
                 ) : (
                   messages
                     .filter((m) => project || m.role !== 'tool' || m.visibleTool)
-                    .map((m) => <ChatMessage key={m.id} message={m} />)
+                    .map((m) => (
+                      <div key={m.id}>
+                        <ChatMessage message={m} />
+                        {m.role !== 'tool' && m.role !== 'system' && m.status !== 'streaming' && (
+                          <div className="message-actions">
+                            <button
+                              onClick={() =>
+                                setDraft(
+                                  (text) =>
+                                    `${text}${text ? '\n\n' : ''}针对历史消息（${m.id}）补充：\n> ${m.content.slice(0, 1500).replace(/\n/g, '\n> ')}\n\n`,
+                                )
+                              }
+                            >
+                              引用补充
+                            </button>
+                            <button
+                              disabled={!!running}
+                              onClick={() =>
+                                perform(async () => {
+                                  const branch = await api.branchSession(sessionId, m.id);
+                                  await refresh();
+                                  activateSession(branch);
+                                })
+                              }
+                            >
+                              从此处新建分支
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))
                 )}
               </div>
               <div className="composer-wrap">
+                <RunActivity api={api} sessionId={sessionId} run={running} data={data} />
                 {selectedAgent && (
                   <div className="selected-agent-note">
                     <Bot size={16} />
@@ -1001,9 +1177,9 @@ export default function App() {
                     <button
                       className="icon-button"
                       aria-label="移除专属 Agent"
-                      title="恢复默认助手"
+                      title="移除角色"
                       disabled={!!running}
-                      onClick={() => setAgentId('builder')}
+                      onClick={() => setAgentId('')}
                     >
                       <X size={15} />
                     </button>
@@ -1023,7 +1199,7 @@ export default function App() {
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                         e.preventDefault();
-                        if (!running) void send();
+                        void send();
                       }
                     }}
                   />
@@ -1073,6 +1249,26 @@ export default function App() {
                       >
                         <Users size={18} />
                       </button>
+                      {running && (
+                        <>
+                          <select
+                            aria-label="补充方式"
+                            value={inputMode}
+                            onChange={(e) => setInputMode(e.target.value as typeof inputMode)}
+                          >
+                            <option value="supplement">补充当前任务</option>
+                            <option value="next">排队下一轮</option>
+                            <option value="restart">停止后继续</option>
+                          </select>
+                          <button
+                            className="primary"
+                            disabled={busy || !draft.trim()}
+                            onClick={() => send()}
+                          >
+                            补充
+                          </button>
+                        </>
+                      )}
                       {running ? (
                         <button
                           className="send-button stop"
@@ -1124,6 +1320,24 @@ export default function App() {
                 <FolderOpen size={16} />
               </div>
               <div className="context-tabs">
+                {project && (
+                  <button
+                    title="生成项目 agent.md，已有说明不会覆盖"
+                    onClick={() =>
+                      perform(async () => {
+                        const result = await api.initializeAgent(project.id);
+                        setNotice(
+                          result.created
+                            ? '已生成 ' + result.path
+                            : '已有项目说明，未覆盖：' + result.path,
+                        );
+                        setEntries(await api.listFiles(project.id, filePath));
+                      })
+                    }
+                  >
+                    初始化说明
+                  </button>
+                )}
                 <button
                   className={contextTab === 'files' ? 'active' : ''}
                   onClick={() => setContextTab('files')}
@@ -1234,8 +1448,8 @@ export default function App() {
               <div className="eyebrow">CONNECTIONS</div>
               <div className="page-title-row">
                 <div>
-                  <h1>让好模型，都在这里。</h1>
-                  <p>使用你的账号、API 密钥或本地服务，统一连接。</p>
+                  <h1>所有连接，统一管理。</h1>
+                  <p>模型、订阅、代码托管账号、浏览器和通知渠道。</p>
                 </div>
                 <div className="row">
                   <button
@@ -1252,85 +1466,85 @@ export default function App() {
                 </div>
               </div>
             </div>
-            <div className="info-strip">
-              <ShieldCheck size={17} />
-              <span>
-                API 密钥通过操作系统加密保存。每次运行使用独立配置，切换连接不会覆盖已有会话。
-              </span>
-            </div>
-            <div className="provider-grid">
-              {data.providers.map((p) => (
-                <article className="provider-card" key={p.id}>
-                  <div className="card-top">
-                    <div className={'provider-icon ' + p.protocol}>
-                      {p.protocol === 'codex' ? (
-                        <Mark small />
-                      ) : p.auth === 'none' ? (
-                        <Terminal size={23} />
-                      ) : (
-                        <Globe2 size={23} />
-                      )}
-                    </div>
-                    {p.protocol === 'codex' ? (
-                      <AuthBadge
-                        connected={codex ? !!codex.account : undefined}
-                        pending={authPending}
-                        error={!!codex?.error}
-                      />
-                    ) : p.protocol === 'kimi' || p.protocol === 'minimax' ? (
-                      <AuthBadge
-                        connected={nativeAccounts[p.protocol]?.authenticated}
-                        pending={['starting', 'waiting', 'checking'].includes(
-                          nativeAccounts[p.protocol]?.phase ?? '',
-                        )}
-                        error={!!nativeAccounts[p.protocol]?.error}
-                      />
-                    ) : (
-                      <span className="tag">
-                        {p.auth === 'none' ? '无需密钥' : p.hasSecret ? '已配置密钥' : '待配置'}
-                      </span>
-                    )}
-                    <button
-                      className="icon-button"
-                      aria-label={'编辑 ' + p.name}
-                      onClick={() => setProviderEdit({ ...p, secret: '' })}
-                    >
-                      <SlidersHorizontal size={17} />
-                    </button>
-                  </div>
-                  <h3>{p.name}</h3>
-                  <p>{protocolLabels[p.protocol]}</p>
-                  <div className="provider-endpoint">
-                    {p.baseUrl || '使用官方 Codex 登录与执行'}
-                  </div>
-                  <div className="card-footer">
-                    <span>
-                      <Layers3 size={13} />
-                      {p.models.length ? `${p.models.length} 个模型` : '模型可手动填写或发现'}
-                    </span>
-                    <button onClick={() => setProviderEdit({ ...p, secret: '' })}>
-                      管理
-                      <ArrowRight size={13} />
-                    </button>
-                  </div>
-                </article>
-              ))}
-              <button className="add-card" onClick={editNewProvider}>
-                <Plus size={24} />
-                <strong>连接下一个模型</strong>
-                <span>兼容服务 · 国内模型 · 本地推理</span>
-              </button>
-            </div>
-            <div className="section-note">
-              <Network size={19} />
-              <div>
-                <strong>协议统一，能力保持透明</strong>
-                <p>
-                  支持 Chat Completions、Responses、Anthropic 与 Gemini
-                  API。具体模型的工具调用能力需由服务支持；模型目录不代表账号已获得访问权限。
-                </p>
+            <ConnectionsPanel api={api} data={data} refresh={refresh}>
+              <div className="info-strip">
+                <ShieldCheck size={17} />
+                <span>
+                  API 密钥通过操作系统加密保存。每次运行使用独立配置，切换连接不会覆盖已有会话。
+                </span>
               </div>
-            </div>
+              <div className="provider-grid">
+                {data.providers.map((p) => (
+                  <article className="provider-card" key={p.id}>
+                    <div className="card-top">
+                      <div className={'provider-icon ' + p.protocol}>
+                        {p.protocol === 'codex' ? (
+                          <Mark small />
+                        ) : p.auth === 'none' ? (
+                          <Terminal size={23} />
+                        ) : (
+                          <Globe2 size={23} />
+                        )}
+                      </div>
+                      {p.protocol === 'codex' ? (
+                        <AuthBadge
+                          connected={accountStates[p.id]?.connected}
+                          pending={accountStates[p.id]?.pending}
+                          error={accountStates[p.id]?.error}
+                        />
+                      ) : p.protocol === 'kimi' || p.protocol === 'minimax' ? (
+                        <AuthBadge
+                          connected={accountStates[p.id]?.connected}
+                          pending={accountStates[p.id]?.pending}
+                          error={accountStates[p.id]?.error}
+                        />
+                      ) : (
+                        <span className="tag">
+                          {p.auth === 'none' ? '无需密钥' : p.hasSecret ? '已配置密钥' : '待配置'}
+                        </span>
+                      )}
+                      <button
+                        className="icon-button"
+                        aria-label={'编辑 ' + p.name}
+                        onClick={() => setProviderEdit({ ...p, secret: '' })}
+                      >
+                        <SlidersHorizontal size={17} />
+                      </button>
+                    </div>
+                    <h3>{p.name}</h3>
+                    <p>{protocolLabels[p.protocol]}</p>
+                    <div className="provider-endpoint">
+                      {p.baseUrl || protocolLabels[p.protocol] + ' · 官方账号'}
+                    </div>
+                    <div className="card-footer">
+                      <span>
+                        <Layers3 size={13} />
+                        {p.models.length ? `${p.models.length} 个模型` : '登录或获取模型列表'}
+                      </span>
+                      <button onClick={() => setProviderEdit({ ...p, secret: '' })}>
+                        管理
+                        <ArrowRight size={13} />
+                      </button>
+                    </div>
+                  </article>
+                ))}
+                <button className="add-card" onClick={editNewProvider}>
+                  <Plus size={24} />
+                  <strong>连接下一个模型</strong>
+                  <span>兼容服务 · 国内模型 · 本地推理</span>
+                </button>
+              </div>
+              <div className="section-note">
+                <Network size={19} />
+                <div>
+                  <strong>协议统一，能力保持透明</strong>
+                  <p>
+                    支持 Chat Completions、Responses、Anthropic 与 Gemini
+                    API。具体模型的工具调用能力需由服务支持；模型目录不代表账号已获得访问权限。
+                  </p>
+                </div>
+              </div>
+            </ConnectionsPanel>
           </main>
         )}
         {view === 'extensions' && (
@@ -1366,6 +1580,9 @@ export default function App() {
               </div>
             </div>
             <div className="agent-grid">
+              {!data.agents.length && (
+                <p className="muted">尚未创建 Agent。普通聊天可以直接使用，专属角色按需创建。</p>
+              )}
               {data.agents.map((a, i) => (
                 <article className="agent-card" key={a.id}>
                   <div className="card-top">
@@ -1410,7 +1627,7 @@ export default function App() {
                         setView('workspace');
                       }}
                     >
-                      {a.id === 'builder' ? '使用默认助手' : '用于当前会话'}
+                      用于当前会话
                     </button>
                     <button onClick={() => setAgentEdit(a)}>
                       配置
@@ -1444,11 +1661,11 @@ export default function App() {
                 { label: '累计运行', value: data.runs.length },
                 { label: '进行中', value: data.runs.filter((r) => r.status === 'running').length },
                 {
-                  label: '输入 Tokens',
+                  label: '已报告输入 Tokens',
                   value: data.runs.reduce((s, r) => s + r.inputTokens, 0).toLocaleString(),
                 },
                 {
-                  label: '输出 Tokens',
+                  label: '已报告输出 Tokens',
                   value: data.runs.reduce((s, r) => s + r.outputTokens, 0).toLocaleString(),
                 },
               ].map((s) => (
@@ -1493,7 +1710,11 @@ export default function App() {
                       minute: '2-digit',
                     })}
                   </span>
-                  <span>{r.inputTokens + r.outputTokens || '—'}</span>
+                  <span>
+                    {r.usageReported || r.inputTokens + r.outputTokens > 0
+                      ? r.inputTokens + r.outputTokens
+                      : '未上报'}
+                  </span>
                 </button>
               ))}
               {!data.runs.length && (
@@ -1519,7 +1740,7 @@ export default function App() {
             <div className="page-heading">
               <div className="eyebrow">BUILT FOR YOU</div>
               <h1>轻装出发，掌控在你。</h1>
-              <p>同舟 0.3.0 · 开源多模型桌面工作台</p>
+              <p>同舟 0.4.0 · 开源多模型桌面工作台</p>
             </div>
             {renderAccounts()}
             <section className="settings-card">
@@ -1572,7 +1793,10 @@ export default function App() {
         <Modal
           title={`${authPanel === 'codex' ? 'OpenAI / ChatGPT' : authPanel === 'kimi' ? 'Kimi Code' : 'MiniMax Code'} 账号授权`}
           subtitle="仅管理当前连接的账号；关闭窗口不会取消正在进行的授权。"
-          onClose={() => setAuthPanel(null)}
+          onClose={() => {
+            setAuthPanel(null);
+            setAuthProviderId(undefined);
+          }}
           wide
         >
           <div className="modal-content account-dialog">{renderAccounts(authPanel)}</div>
@@ -1581,7 +1805,7 @@ export default function App() {
       {providerEdit && (
         <Modal
           title={
-            data.providers.some((p) => p.id === providerEdit.id) ? '管理模型连接' : '添加模型连接'
+            data.providers.some((p) => p.id === providerEdit.id) ? '管理连接中心' : '添加连接中心'
           }
           subtitle="选择服务与认证方式，保存后即可获取并选择模型。"
           onClose={() => !busy && setProviderEdit(null)}
@@ -1654,6 +1878,9 @@ export default function App() {
                   className="text-button"
                   onClick={() => {
                     setProviderEdit(null);
+                    setAuthProviderId(providerEdit.id);
+                    setCodex(null);
+                    setNativeAccounts({});
                     setAuthPanel(providerEdit.protocol as 'codex' | NativeEngine);
                   }}
                 >
@@ -1826,7 +2053,6 @@ export default function App() {
                 </select>
               </Field>
             </div>
-            <AgentTools agent={agentEdit} data={data} onChange={setAgentEdit} />
             <Field label="职责描述">
               <input
                 value={agentEdit.description}
@@ -1841,7 +2067,7 @@ export default function App() {
               />
             </Field>
             <div className="form-grid">
-              <Field label="模型连接">
+              <Field label="连接中心">
                 <select
                   value={agentEdit.providerId}
                   onChange={(e) =>
@@ -1890,22 +2116,21 @@ export default function App() {
             </Field>
           </div>
           <div className="modal-footer">
-            {!['builder', 'reviewer', 'architect'].includes(agentEdit.id) &&
-              data.agents.some((a) => a.id === agentEdit.id) && (
-                <button
-                  className="text-button danger"
-                  onClick={() =>
-                    perform(async () => {
-                      await api.deleteAgent(agentEdit.id);
-                      setAgentEdit(null);
-                      await refresh();
-                    })
-                  }
-                >
-                  <Trash2 size={14} />
-                  删除
-                </button>
-              )}
+            {data.agents.some((a) => a.id === agentEdit.id) && (
+              <button
+                className="text-button danger"
+                onClick={() =>
+                  perform(async () => {
+                    await api.deleteAgent(agentEdit.id);
+                    setAgentEdit(null);
+                    await refresh();
+                  })
+                }
+              >
+                <Trash2 size={14} />
+                删除
+              </button>
+            )}
             <span className="spacer" />
             <button
               className="primary"
@@ -1919,6 +2144,31 @@ export default function App() {
             >
               保存 Agent
               <Check size={15} />
+            </button>
+          </div>
+        </Modal>
+      )}
+      {deleteId && (
+        <Modal title="删除会话" onClose={() => setDeleteId('')}>
+          <p>删除此会话的消息、运行记录和内部团队子会话。项目文件和共享配置会保留。</p>
+          <div className="modal-footer">
+            <button onClick={() => setDeleteId('')}>取消</button>
+            <button
+              className="primary"
+              onClick={() =>
+                perform(async () => {
+                  await api.deleteSession(deleteId);
+                  if (sessionId === deleteId) {
+                    setSessionId('');
+                    sessionRef.current = '';
+                    setMessages([]);
+                  }
+                  setDeleteId('');
+                  await refresh();
+                })
+              }
+            >
+              确认删除
             </button>
           </div>
         </Modal>

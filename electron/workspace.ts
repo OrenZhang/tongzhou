@@ -1,10 +1,40 @@
-import { lstat, mkdir, readdir, readFile, realpath, rename, writeFile } from 'node:fs/promises';
+import {
+  lstat,
+  mkdir,
+  readdir,
+  readFile,
+  realpath,
+  rename,
+  writeFile,
+  rm,
+  chmod,
+} from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
+import { StringDecoder } from 'node:string_decoder';
+import { createRequire } from 'node:module';
+import { randomUUID, createHash } from 'node:crypto';
 import { z } from 'zod';
 import type { FileEntry } from '../src/shared/types';
 import type { ToolSpec } from './providers';
+
+const writeLocks = new Map<string, Promise<void>>();
+async function withFileLock<T>(file: string, action: () => Promise<T>) {
+  const key = process.platform === 'win32' ? file.toLowerCase() : file;
+  const previous = writeLocks.get(key) ?? Promise.resolve();
+  let release!: () => void;
+  const current = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  writeLocks.set(key, current);
+  await previous;
+  try {
+    return await action();
+  } finally {
+    release();
+    if (writeLocks.get(key) === current) writeLocks.delete(key);
+  }
+}
 
 export function minimalEnv(): NodeJS.ProcessEnv {
   const allowed =
@@ -53,14 +83,41 @@ export async function read(root: string, relative: string): Promise<string> {
   if (content.includes('\0')) throw new Error('此文件是二进制文件');
   return content;
 }
-export function command(
+export async function command(
   executable: string,
   args: string[],
   cwd: string,
   signal: AbortSignal,
   timeout = 120000,
+  onOutput?: (text: string) => void,
 ): Promise<string> {
+  const result = await commandResult(executable, args, cwd, signal, timeout, onOutput);
+  if (result.status !== 'completed')
+    throw new Error(result.status === 'cancelled' ? '执行已停止' : '命令执行超时');
+  return `exit code: ${result.exitCode}\n${result.output}${result.truncated ? '\n[输出已截断]' : ''}`;
+}
+export interface CommandResult {
+  commandId: string;
+  cwd: string;
+  exitCode: number | null;
+  status: 'completed' | 'cancelled' | 'timeout';
+  stdout: string;
+  stderr: string;
+  output: string;
+  truncated: boolean;
+  durationMs: number;
+}
+export function commandResult(
+  executable: string,
+  args: string[],
+  cwd: string,
+  signal: AbortSignal,
+  timeout = 120000,
+  onOutput?: (text: string) => void,
+): Promise<CommandResult> {
   return new Promise((resolve, reject) => {
+    const commandId = randomUUID(),
+      startedAt = Date.now();
     if (signal.aborted) {
       reject(new Error('已停止'));
       return;
@@ -73,6 +130,9 @@ export function command(
       detached: process.platform !== 'win32',
     });
     let output = '';
+    let stdout = '',
+      stderr = '',
+      truncated = false;
     let reason = '';
     let settled = false;
     const terminate = () => {
@@ -104,11 +164,22 @@ export function command(
       clearTimeout(timer);
       signal.removeEventListener('abort', stop);
     };
-    const append = (b: Buffer) => {
-      if (output.length < 200000) output += b.toString().slice(0, 200000 - output.length);
+    const append = (text: string, errorStream: boolean) => {
+      onOutput?.(text);
+      if (
+        output.length + text.length > 200000 ||
+        (errorStream ? stderr : stdout).length + text.length > 100000
+      )
+        truncated = true;
+      if (output.length < 200000) output += text.slice(0, 200000 - output.length);
+      if (errorStream) stderr = (stderr + text).slice(0, 100000);
+      else stdout = (stdout + text).slice(0, 100000);
     };
-    child.stdout?.on('data', append);
-    child.stderr?.on('data', append);
+    for (const stream of [child.stdout, child.stderr]) {
+      const decoder = new StringDecoder('utf8');
+      stream?.on('data', (b) => append(decoder.write(b), stream === child.stderr));
+      stream?.on('end', () => append(decoder.end(), stream === child.stderr));
+    }
     child.on('error', (e) => {
       if (!settled) {
         settled = true;
@@ -120,16 +191,101 @@ export function command(
       if (!settled) {
         settled = true;
         cleanup();
-        if (reason) reject(new Error(reason));
-        else
-          resolve(
-            `exit code: ${code}\n${output}${output.length >= 200000 ? '\n[输出已截断]' : ''}`,
-          );
+        resolve({
+          commandId,
+          cwd,
+          exitCode: code,
+          status: !reason ? 'completed' : reason === '执行已停止' ? 'cancelled' : 'timeout',
+          stdout,
+          stderr,
+          output,
+          truncated,
+          durationMs: Date.now() - startedAt,
+        });
       }
     });
   });
 }
 export const toolSpecs: ToolSpec[] = [
+  {
+    name: 'apply_edits',
+    description:
+      '按版本哈希批量精确替换多个文件。先校验整批内容并一次审批，再逐文件提交；中断或并发冲突时明确报告已应用的文件，不保证跨文件原子提交。',
+    parameters: {
+      type: 'object',
+      properties: {
+        edits: {
+          type: 'array',
+          maxItems: 20,
+          items: {
+            type: 'object',
+            properties: {
+              path: { type: 'string' },
+              expectedHash: { type: 'string' },
+              oldText: { type: 'string' },
+              newText: { type: 'string' },
+            },
+            required: ['path', 'expectedHash', 'oldText', 'newText'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['edits'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'search_files',
+    description:
+      '在项目文本文件中搜索关键词，返回相对路径、行号与内容。跳过依赖、构建目录和二进制文件；有界扫描。',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string' },
+        path: { type: 'string' },
+        limit: { type: 'integer' },
+      },
+      required: ['query'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'read_range',
+    description:
+      '按行读取项目文件并返回 sha256。编辑已有文件时先取得完整文件版本哈希，再使用 apply_edit。',
+    parameters: {
+      type: 'object',
+      properties: {
+        path: { type: 'string' },
+        startLine: { type: 'integer' },
+        endLine: { type: 'integer' },
+      },
+      required: ['path'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'apply_edit',
+    description:
+      '精确修改文件中的唯一文本片段。expectedHash 必须来自最近 read_range，旧文本需唯一匹配；文件变化则拒绝，写入需审批。',
+    parameters: {
+      type: 'object',
+      properties: {
+        path: { type: 'string' },
+        expectedHash: { type: 'string' },
+        oldText: { type: 'string' },
+        newText: { type: 'string' },
+      },
+      required: ['path', 'expectedHash', 'oldText', 'newText'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'project_instructions',
+    description:
+      '读取项目已有 agent.md / AGENTS.md 说明及初始化所需的 README 和脚本清单。生成说明前先调用，不覆盖已有文件。',
+    parameters: { type: 'object', properties: {}, additionalProperties: false },
+  },
   {
     name: 'list_files',
     description: '列出项目相对目录中的文件，不跟随符号链接。',
@@ -166,12 +322,108 @@ export const toolSpecs: ToolSpec[] = [
       '在项目目录执行 shell 命令，每次必须经过用户审批。Windows 使用 PowerShell，macOS 使用 /bin/sh。',
     parameters: {
       type: 'object',
-      properties: { command: { type: 'string' } },
+      properties: {
+        command: { type: 'string' },
+        timeoutMs: { type: 'integer', minimum: 1000, maximum: 1800000 },
+      },
       required: ['command'],
       additionalProperties: false,
     },
   },
 ];
+export const readOnlyToolSpecs = toolSpecs.filter((t) =>
+  ['list_files', 'read_file', 'read_range', 'search_files', 'project_instructions'].includes(
+    t.name,
+  ),
+);
+export const fileHash = (content: string) => createHash('sha256').update(content).digest('hex');
+
+export async function projectInstructions(root: string) {
+  const names = await files(root);
+  const wanted = names.filter(
+    (f) =>
+      /^(agents?\.md|readme\.md|package\.json|pyproject\.toml|cargo\.toml)$/i.test(f.name) &&
+      !f.directory,
+  );
+  const result: { path: string; content: string }[] = [];
+  for (const f of wanted)
+    result.push({ path: f.path, content: (await read(root, f.path)).slice(0, 24000) });
+  return result;
+}
+
+async function searchProject(
+  root: string,
+  relative: string,
+  query: string,
+  limit: number,
+  signal: AbortSignal,
+) {
+  await within(root, relative);
+  const require = createRequire(path.join(process.cwd(), 'package.json'));
+  const binary = require
+    .resolve(
+      `@vscode/ripgrep-${process.platform}-${process.arch}/bin/${process.platform === 'win32' ? 'rg.exe' : 'rg'}`,
+      { paths: [__dirname, process.cwd()] },
+    )
+    .replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep);
+  const result = await commandResult(
+    binary,
+    [
+      '--json',
+      '--fixed-strings',
+      '--ignore-case',
+      '--hidden',
+      '--no-require-git',
+      '--max-count',
+      String(limit),
+      '--max-filesize',
+      '500K',
+      '-g',
+      '!.git/**',
+      '-g',
+      '!node_modules/**',
+      '-g',
+      '!.env*',
+      '-g',
+      '!auth.json',
+      '-g',
+      '!credentials*',
+      '-g',
+      '!*.{pem,key,db,sqlite,lock}',
+      '--',
+      query,
+      relative || '.',
+    ],
+    root,
+    signal,
+    15000,
+  );
+  if (result.status !== 'completed') throw new Error('搜索已停止或超时');
+  if (result.exitCode !== 0 && result.exitCode !== 1)
+    throw new Error('项目搜索失败：' + result.stderr.slice(0, 500));
+  const found: { path: string; line: number; text: string }[] = [];
+  let scannedFiles = 0;
+  for (const line of result.stdout.split('\n')) {
+    let record: any;
+    try {
+      record = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (record.type === 'begin') scannedFiles++;
+    if (record.type === 'match' && record.data.path.text && found.length < limit)
+      found.push({
+        path: record.data.path.text.replace(/^\.([/\\])/, ''),
+        line: record.data.line_number,
+        text: record.data.lines.text.trimEnd().slice(0, 1000),
+      });
+  }
+  return {
+    matches: found,
+    scanned: scannedFiles,
+    truncated: result.truncated || found.length >= limit,
+  };
+}
 export async function executeTool(
   name: string,
   raw: string,
@@ -179,9 +431,44 @@ export async function executeTool(
   permission: 'read-only' | 'ask',
   signal: AbortSignal,
   approve: (title: string, detail: string) => Promise<boolean>,
+  onOutput?: (text: string) => void,
 ): Promise<string> {
   if (signal.aborted) throw new Error('已停止');
   const args = JSON.parse(raw);
+  if (name === 'search_files') {
+    const a = z
+      .object({
+        query: z.string().min(1).max(500),
+        path: z.string().max(1000).default(''),
+        limit: z.number().int().min(1).max(200).default(60),
+      })
+      .parse(args);
+    return JSON.stringify(await searchProject(root, a.path, a.query, a.limit, signal));
+  }
+  if (name === 'project_instructions') return JSON.stringify(await projectInstructions(root));
+  if (name === 'read_range') {
+    const a = z
+      .object({
+        path: z.string().max(1000),
+        startLine: z.number().int().min(1).default(1),
+        endLine: z.number().int().min(1).optional(),
+      })
+      .parse(args);
+    const content = await read(root, a.path);
+    const lines = content.split(/\r?\n/);
+    const end = Math.min(a.endLine ?? a.startLine + 249, a.startLine + 499, lines.length);
+    return JSON.stringify({
+      path: a.path,
+      sha256: fileHash(content),
+      totalLines: lines.length,
+      startLine: a.startLine,
+      endLine: end,
+      content: lines
+        .slice(a.startLine - 1, end)
+        .map((l, i) => `${a.startLine + i}: ${l}`)
+        .join('\n'),
+    });
+  }
   if (name === 'list_files')
     return JSON.stringify(
       await files(root, z.object({ path: z.string().max(1000) }).parse(args).path),
@@ -189,36 +476,142 @@ export async function executeTool(
   if (name === 'read_file')
     return read(root, z.object({ path: z.string().max(1000) }).parse(args).path);
   if (permission === 'read-only') throw new Error('此 Agent 只有只读权限');
+  if (name === 'apply_edits') {
+    const { edits } = z
+      .object({
+        edits: z
+          .array(
+            z.object({
+              path: z.string().min(1).max(1000),
+              expectedHash: z.string().regex(/^[a-f0-9]{64}$/),
+              oldText: z.string().min(1).max(500000),
+              newText: z.string().max(500000),
+            }),
+          )
+          .min(1)
+          .max(20),
+      })
+      .parse(args);
+    if (
+      new Set(edits.map((e) => (process.platform === 'win32' ? e.path.toLowerCase() : e.path)))
+        .size !== edits.length
+    )
+      throw new Error('批量修改每个文件只能出现一次');
+    if (JSON.stringify(edits).length > 500000) throw new Error('批量修改超过 500 KB，请拆分');
+    for (const edit of edits) {
+      const before = await read(root, edit.path);
+      if (fileHash(before) !== edit.expectedHash || before.split(edit.oldText).length !== 2)
+        throw new Error(`${edit.path} 版本或上下文不匹配，整批未执行`);
+    }
+    if (
+      !(await approve(
+        '批量修改 ' + edits.length + ' 个文件',
+        edits.map((e) => `${e.path}\n旧文本：\n${e.oldText}\n新文本：\n${e.newText}`).join('\n\n'),
+      ))
+    )
+      return '用户拒绝了批量修改，未执行。';
+    const applied: string[] = [];
+    try {
+      for (const edit of edits) {
+        signal.throwIfAborted();
+        await executeTool(
+          'apply_edit',
+          JSON.stringify(edit),
+          root,
+          permission,
+          signal,
+          async () => true,
+        );
+        applied.push(edit.path);
+      }
+    } catch (error) {
+      throw new Error(
+        `批量修改中断；已应用：${applied.join(', ') || '无'}。其余文件未执行。${String(error)}`,
+      );
+    }
+    return JSON.stringify({ applied });
+  }
+  if (name === 'apply_edit') {
+    const a = z
+      .object({
+        path: z.string().min(1).max(1000),
+        expectedHash: z.string().regex(/^[a-f0-9]{64}$/),
+        oldText: z.string().min(1).max(500000),
+        newText: z.string().max(500000),
+      })
+      .parse(args);
+    const before = await read(root, a.path);
+    if (fileHash(before) !== a.expectedHash) throw new Error('文件已变化，请重新读取后修改');
+    if (before.split(a.oldText).length !== 2) throw new Error('旧文本必须在文件中唯一匹配');
+    const content = before.replace(a.oldText, () => a.newText);
+    return executeTool(
+      'write_file',
+      JSON.stringify({ path: a.path, content, expectedHash: a.expectedHash }),
+      root,
+      permission,
+      signal,
+      approve,
+    );
+  }
   if (name === 'write_file') {
-    const { path: relative, content } = z
-      .object({ path: z.string().min(1).max(1000), content: z.string().max(500000) })
+    const {
+      path: relative,
+      content,
+      expectedHash,
+    } = z
+      .object({
+        path: z.string().min(1).max(1000),
+        content: z.string().max(500000),
+        expectedHash: z.string().optional(),
+      })
       .parse(args);
     let target = await within(root, relative, true);
-    let before = '';
-    try {
-      before = await read(root, relative);
-    } catch (e: any) {
-      if (e.code !== 'ENOENT') throw e;
-    }
-    if (!(await approve(`写入 ${relative}`, `原内容：\n${before}\n\n新内容：\n${content}`)))
-      return '用户拒绝了文件写入。';
-    if (signal.aborted) throw new Error('已停止');
-    target = await within(root, relative, true);
-    let current = '';
-    try {
-      current = await read(root, relative);
-    } catch (e: any) {
-      if (e.code !== 'ENOENT') throw e;
-    }
-    if (current !== before) throw new Error('审批期间文件发生变化，请重新读取再修改。');
-    await mkdir(path.dirname(target), { recursive: true });
-    const temp = target + `.tongzhou-${randomUUID()}.tmp`;
-    await writeFile(temp, content, { flag: 'wx' });
-    await rename(temp, target);
-    return `已写入 ${relative} (${Buffer.byteLength(content)} bytes)`;
+    return withFileLock(target, async () => {
+      signal.throwIfAborted();
+      let before = '';
+      try {
+        before = await read(root, relative);
+      } catch (e: any) {
+        if (e.code !== 'ENOENT') throw e;
+      }
+      if (expectedHash && fileHash(before) !== expectedHash)
+        throw new Error('文件已变化，请重新读取后修改');
+      if (!(await approve(`写入 ${relative}`, `原内容：\n${before}\n\n新内容：\n${content}`)))
+        return '用户拒绝了文件写入。';
+      if (signal.aborted) throw new Error('已停止');
+      target = await within(root, relative, true);
+      let current = '';
+      try {
+        current = await read(root, relative);
+      } catch (e: any) {
+        if (e.code !== 'ENOENT') throw e;
+      }
+      if (current !== before) throw new Error('审批期间文件发生变化，请重新读取再修改。');
+      await mkdir(path.dirname(target), { recursive: true });
+      const temp = target + `.tongzhou-${randomUUID()}.tmp`;
+      try {
+        await writeFile(temp, content, { flag: 'wx' });
+        const mode = await lstat(target)
+          .then((s) => s.mode)
+          .catch((e) => {
+            if (e.code !== 'ENOENT') throw e;
+            return undefined;
+          });
+        if (mode !== undefined) await chmod(temp, mode);
+        await rename(temp, target);
+      } finally {
+        await rm(temp, { force: true });
+      }
+      return `已写入 ${relative} (${Buffer.byteLength(content)} bytes)`;
+    });
   }
   if (name === 'run_command') {
-    const { command: cmd } = z.object({ command: z.string().trim().min(1).max(16000) }).parse(args);
+    const { command: cmd, timeoutMs } = z
+      .object({
+        command: z.string().trim().min(1).max(16000),
+        timeoutMs: z.number().int().min(1000).max(1800000).default(120000),
+      })
+      .parse(args);
     if (
       !(await approve(
         '执行终端命令',
@@ -226,9 +619,18 @@ export async function executeTool(
       ))
     )
       return '用户拒绝了命令执行。';
-    return process.platform === 'win32'
-      ? command('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', cmd], root, signal)
-      : command('/bin/sh', ['-c', cmd], root, signal);
+    const result =
+      process.platform === 'win32'
+        ? await commandResult(
+            'powershell.exe',
+            ['-NoProfile', '-NonInteractive', '-Command', cmd],
+            root,
+            signal,
+            timeoutMs,
+            onOutput,
+          )
+        : await commandResult('/bin/sh', ['-c', cmd], root, signal, timeoutMs, onOutput);
+    return JSON.stringify(result);
   }
   throw new Error('未知工具：' + name);
 }
