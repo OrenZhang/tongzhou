@@ -74,6 +74,17 @@ export function TurnProcess({
   const elapsed = run
     ? formatDuration((active ? now : (run.endedAt ?? run.startedAt)) - run.startedAt)
     : undefined;
+  const ordered = events.filter((e) => e.type === 'phase').sort((a, b) => a.time - b.time);
+  const waiting = ordered.find((e) => e.text === '等待模型响应');
+  const output = ordered.find(
+    (e) =>
+      (!waiting || e.time >= waiting.time) &&
+      (e.text === '正在回复' || e.text === '思考中' || e.text === '调用工具'),
+  );
+  const timing =
+    run && waiting
+      ? `准备 ${formatDuration(waiting.time - run.startedAt)} · ${output ? '首条输出 ' + formatDuration(output.time - waiting.time) : '等待首条输出 ' + formatDuration((active ? now : run.endedAt || now) - waiting.time)}`
+      : '';
   if (!run && !events.length) return <>{children}</>;
   return (
     <>
@@ -92,6 +103,7 @@ export function TurnProcess({
           <ChevronDown size={13} className={expanded ? 'rotate' : ''} />
         </button>
         <div id={contentId} className="process-timeline" hidden={!expanded}>
+          {timing && <small className="muted">{timing}（包含网络与服务端等待）</small>}
           {children}
           {active && (
             <div className="process-current" role="status">

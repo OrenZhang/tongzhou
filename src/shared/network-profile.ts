@@ -9,6 +9,22 @@ export interface NetworkProfile {
   error?: string;
   latency?: number;
   usedBy: string[];
+  routing?: 'manual' | 'auto';
+  health?: { checkedAt: number; results: NetworkNodeHealth[]; recommended?: string };
+  checking?: { completed: number; total: number };
+}
+export type NetworkTarget = 'internet' | 'auth' | 'chatgpt';
+export interface NetworkProbe {
+  status: 'ok' | 'timeout' | 'dns' | 'tls' | 'blocked' | 'failed';
+  ms?: number;
+  target?: string;
+}
+export interface NetworkNodeHealth {
+  node: string;
+  checkedAt: number;
+  internet: NetworkProbe;
+  auth: NetworkProbe;
+  chatgpt: NetworkProbe;
 }
 export interface NetworkProfileInput {
   id: string;

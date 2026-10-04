@@ -25,7 +25,10 @@ vi.mock('../electron/codex', async () => {
         fake.instances.push(this);
       }
       async start() {}
-      stop() {}
+      stopped = false;
+      stop() {
+        this.stopped = true;
+      }
       reply() {}
       reject() {}
       complete(threadId: string, turnId: string) {
@@ -149,24 +152,53 @@ describe('locked Codex resume and steer contracts', () => {
       'read-only',
     );
   });
-  it('resumes continuous history but rebuilds after changing model', async () => {
+  it('reuses the live thread without resuming, isolates turn listeners, and rebuilds after a model change', async () => {
     const f = await fixture();
     f.runtime.start(f.input);
     await f.runtime.waitForIdle();
+    const client = fake.instances.at(-1);
     f.runtime.start({ ...f.input, prompt: 'second' });
     await f.runtime.waitForIdle();
     expect(fake.calls.filter((c) => c.method === 'thread/start')).toHaveLength(1);
-    expect(fake.calls.filter((c) => c.method === 'thread/resume')).toHaveLength(1);
+    expect(fake.calls.filter((c) => c.method === 'thread/resume')).toHaveLength(0);
+    expect(fake.instances.at(-1)).toBe(client);
+    expect(client.stopped).toBe(false);
+    expect(client.listenerCount('notification')).toBe(0);
+    expect(client.listenerCount('request')).toBe(1);
+    expect(f.store.messages(f.input.sessionId).filter((m) => m.role === 'assistant')).toHaveLength(
+      2,
+    );
     expect(fake.calls.filter((c) => c.method === 'turn/start')[1].params.input[0].text).toBe(
       'second',
     );
     expect(f.store.list<any>('run').map((r) => r.inputTokens)).toEqual([100, 100]);
     f.runtime.start({ ...f.input, model: 'different-model', prompt: 'third' });
     await f.runtime.waitForIdle();
+    expect(client.stopped).toBe(true);
     expect(fake.calls.filter((c) => c.method === 'thread/start')).toHaveLength(2);
     expect(fake.calls.filter((c) => c.method === 'turn/start')[2].params.input[0].text).toContain(
       'Verified reply',
     );
+  });
+  it('resumes persisted history after account reset and resolves the network before every turn', async () => {
+    const f = await fixture();
+    const resolve = vi.fn(async (network) => network);
+    f.runtime.resolveNetwork = resolve;
+    f.runtime.start(f.input);
+    await f.runtime.waitForIdle();
+    const old = fake.instances.at(-1);
+    f.runtime.resetCodexAccount(f.input.providerId);
+    expect(old.stopped).toBe(true);
+    f.runtime.start({ ...f.input, prompt: 'second' });
+    await f.runtime.waitForIdle();
+    expect(resolve).toHaveBeenCalledTimes(2);
+    expect(fake.calls.filter((c) => c.method === 'thread/resume')).toHaveLength(1);
+    expect(fake.calls.filter((c) => c.method === 'turn/start').at(-1).params.input[0].text).toBe(
+      'second',
+    );
+    const latest = fake.instances.at(-1);
+    await f.runtime.deleteSession(f.input.sessionId);
+    expect(latest.stopped).toBe(true);
   });
   it('passes actual images into Codex turns and model handoffs', async () => {
     const f = await fixture();

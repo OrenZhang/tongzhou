@@ -386,6 +386,9 @@ export interface TongzhouAPI {
   stopNetworkProfile(id: string): Promise<void>;
   selectNetworkNode(id: string, node: string): Promise<void>;
   testNetworkProfile(id: string): Promise<string>;
+  checkNetworkNodes(id: string, node?: string): Promise<string>;
+  cancelNetworkCheck(id: string): Promise<void>;
+  setNetworkRouting(id: string, routing: 'manual' | 'auto'): Promise<void>;
   installNetworkCore(offline: boolean): Promise<string>;
   models(id: string): Promise<string[]>;
   saveAgent(agent: AgentProfile): Promise<AgentProfile>;

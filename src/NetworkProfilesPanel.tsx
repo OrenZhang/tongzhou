@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Network, Plus, RefreshCw, Download, Play, Square } from 'lucide-react';
 import { Field, Modal } from './components';
 import { errorMessage } from './feedback';
+import { NetworkHealth } from './NetworkHealth';
 import type { TongzhouAPI } from './shared/types';
 import type {
   NetworkOverview,
@@ -36,6 +37,8 @@ export function NetworkProfilesPanel({ api }: { api: TongzhouAPI }) {
   const [busy, setBusy] = useState('');
   const [edit, setEdit] = useState<NetworkProfileInput | null>(null);
   const [deleting, setDeleting] = useState<NetworkProfile | null>(null);
+  const [binding, setBinding] = useState<NetworkProfile | null>(null);
+  const [providers, setProviders] = useState<import('./shared/types').Provider[]>([]);
   const refresh = async () => setData(await api.networkProfiles());
   useEffect(() => {
     let live = true;
@@ -49,7 +52,7 @@ export function NetworkProfilesPanel({ api }: { api: TongzhouAPI }) {
           if (live) setNotice(errorMessage(e));
         });
     void load();
-    const timer = setInterval(() => void load(), 4000);
+    const timer = setInterval(() => void load(), 1000);
     return () => {
       live = false;
       clearInterval(timer);
@@ -151,6 +154,27 @@ export function NetworkProfilesPanel({ api }: { api: TongzhouAPI }) {
               {p.source === 'subscription' ? '订阅' : '本地配置'} · {p.nodes.length} 个节点 ·{' '}
               {p.usedBy.length ? '用于 ' + p.usedBy.join('、') : '尚未绑定账号'}
             </p>
+            {!p.usedBy.length && (
+              <p className="info-strip">此配置尚未用于聊天。导入订阅不会自动修改账号网络。</p>
+            )}
+            <button
+              className="text-button"
+              disabled={!!busy}
+              onClick={() =>
+                void act(
+                  'bind',
+                  async () => {
+                    setProviders(
+                      (await api.snapshot()).providers.filter((v) => v.protocol === 'codex'),
+                    );
+                    setBinding(p);
+                  },
+                  '',
+                )
+              }
+            >
+              绑定 ChatGPT 账号…
+            </button>
             <Field label="出口节点">
               <select
                 aria-label={`${p.name}的出口节点`}
@@ -171,19 +195,13 @@ export function NetworkProfilesPanel({ api }: { api: TongzhouAPI }) {
                 ))}
               </select>
             </Field>
+            <NetworkHealth p={p} api={api} busy={!!busy || !data.core.installed} act={act} />
             {p.error && (
               <p className="error" role="status">
                 {p.error}
               </p>
             )}
             <div className="row network-actions">
-              <button
-                className="secondary"
-                disabled={!!busy || !data.core.installed}
-                onClick={() => void act(p.id, () => api.testNetworkProfile(p.id), '网络可达')}
-              >
-                {busy === p.id ? '处理中…' : '测试出口'}
-              </button>
               <button
                 className="secondary"
                 disabled={!!busy || !data.core.installed}
@@ -238,6 +256,42 @@ export function NetworkProfilesPanel({ api }: { api: TongzhouAPI }) {
           </article>
         ))}
       </div>
+      {binding && (
+        <Modal
+          title="绑定 ChatGPT 账号"
+          onClose={() => {
+            if (!busy) setBinding(null);
+          }}
+        >
+          <div className="modal-content">
+            <p>将所选账号的授权和后续聊天切换到“{binding.name}”。现有会话和登录状态保留。</p>
+            {providers.map((p) => (
+              <button
+                key={p.id}
+                className="secondary"
+                disabled={!!busy}
+                onClick={() =>
+                  void act(
+                    'bind-save',
+                    async () => {
+                      await api.saveProvider({
+                        ...p,
+                        network: { ...p.network, mode: 'managed', profileId: binding.id },
+                      });
+                      setBinding(null);
+                    },
+                    '账号已绑定此网络配置',
+                  )
+                }
+              >
+                {p.name}
+                {p.network?.profileId === binding.id ? ' · 已绑定' : ''}
+              </button>
+            ))}
+            {notice && <p role="status">{notice}</p>}
+          </div>
+        </Modal>
+      )}
       {data && !data.profiles.length && (
         <div className="empty-state compact">
           <Network size={28} />

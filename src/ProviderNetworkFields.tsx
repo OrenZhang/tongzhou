@@ -48,6 +48,7 @@ export function ProviderNetworkFields({
             setResult('');
             onChange({
               mode: e.target.value as ProviderNetwork['mode'],
+              ...(value?.transport ? { transport: value.transport } : {}),
               ...(e.target.value === 'proxy' ? { proxyUrl: value?.proxyUrl || '' } : {}),
               ...(e.target.value === 'managed' ? { profileId: value?.profileId || '' } : {}),
             });
@@ -68,7 +69,7 @@ export function ProviderNetworkFields({
               disabled={testing}
               onChange={(e) => {
                 setResult('');
-                onChange({ mode: 'managed', profileId: e.target.value });
+                onChange({ ...value, mode: 'managed', profileId: e.target.value });
               }}
             >
               <option value="">请选择…</option>
@@ -96,12 +97,29 @@ export function ProviderNetworkFields({
             disabled={testing}
             onChange={(e) => {
               setResult('');
-              onChange({ mode: 'proxy', proxyUrl: e.target.value });
+              onChange({ ...value, mode: 'proxy', proxyUrl: e.target.value });
             }}
             spellCheck={false}
           />
         </Field>
       )}
+      <Field
+        label="ChatGPT 传输方式"
+        hint="两种方式均使用加密连接，支持流式回复与工具调用，不改变模型能力。代理下 WebSocket 反复超时可使用 HTTPS 流式。"
+      >
+        <select
+          aria-label="ChatGPT 传输方式"
+          value={value?.transport || 'auto'}
+          disabled={testing}
+          onChange={(e) => {
+            setResult('');
+            onChange({ ...value, mode, transport: e.target.value as 'http' | 'auto' });
+          }}
+        >
+          <option value="auto">自动（优先 WebSocket，默认）</option>
+          <option value="http">HTTPS 流式（代理兼容方式）</option>
+        </select>
+      </Field>
       <p className="muted">
         {mode === 'inherit'
           ? '网页登录继续使用系统浏览器。'

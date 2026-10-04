@@ -15,8 +15,13 @@ import { NetworkCore, boundedBody } from './network-core';
 import { serviceFetch } from './service-network';
 import { accountEnvironment } from './provider-network';
 import { minimalEnv } from './workspace';
+import { bestNetworkNode, probeFailure, probeNetworkNode } from './network-health';
+import type { NetworkNodeHealth } from '../src/shared/network-profile';
 
-type Saved = Pick<NetworkProfile, 'id' | 'name' | 'source' | 'nodes' | 'selected' | 'updatedAt'>;
+type Saved = Pick<
+  NetworkProfile,
+  'id' | 'name' | 'source' | 'nodes' | 'selected' | 'updatedAt' | 'routing'
+>;
 type Running = {
   child: ChildProcess;
   proxy: number;
@@ -41,15 +46,21 @@ export class NetworkProfiles {
   private latencies = new Map<string, number>();
   private locks = new Map<string, Promise<unknown>>();
   private closed = false;
+  private scans = new Map<
+    string,
+    { promise: Promise<string>; controller: AbortController; completed: number; total: number }
+  >();
+  private health = new Map<string, NonNullable<NetworkProfile['health']>>();
   constructor(
     private store: Store,
     private dataDir: string,
     private changed: () => void,
-    private guard: (id: string) => void = () => {},
+    private guard: (id: string, exceptRunId?: string) => void = () => {},
     private invalidate: (id: string) => void = () => {},
     private host = path
       .join(__dirname, 'network-core-host.cjs')
       .replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep),
+    private invalidateIdle: (id: string) => void = () => {},
   ) {
     this.core = new NetworkCore(dataDir);
     // Windows may terminate the whole child job on an abrupt desktop exit before
@@ -92,6 +103,10 @@ export class NetworkProfiles {
                 : 'stopped',
             error: this.errors.get(p.id),
             latency: this.latencies.get(p.id),
+            health: this.health.get(p.id),
+            checking: this.scans.has(p.id)
+              ? { completed: this.scans.get(p.id)!.completed, total: this.scans.get(p.id)!.total }
+              : undefined,
             usedBy: this.store
               .providers()
               .filter((v) => v.network?.mode === 'managed' && v.network.profileId === p.id)
@@ -144,6 +159,7 @@ export class NetworkProfiles {
         nodes: nodes.map((p) => p.name),
         selected: nodes.some((p) => p.name === old?.selected) ? old!.selected : nodes[0].name,
         updatedAt: Date.now(),
+        routing: old?.routing || 'manual',
       };
       // Encrypt before stopping the working runtime; failures preserve the existing profile.
       this.store.saveSecret(
@@ -156,6 +172,8 @@ export class NetworkProfiles {
       await this.stopCore(input.id);
       this.store.put('networkProfile', saved);
       this.errors.delete(input.id);
+      this.cancelCheck(input.id);
+      this.health.delete(input.id);
       this.latencies.delete(input.id);
       this.invalidate(input.id);
       this.changed();
@@ -180,6 +198,7 @@ export class NetworkProfiles {
       this.store.saveSecret('network_' + id, undefined, true);
       this.errors.delete(id);
       this.latencies.delete(id);
+      this.health.delete(id);
       this.changed();
     });
   }
@@ -281,6 +300,7 @@ export class NetworkProfiles {
     });
   }
   private async stopCore(id: string) {
+    this.cancelCheck(id);
     const r = this.running.get(id);
     if (!r) return;
     this.running.delete(id);
@@ -304,19 +324,163 @@ export class NetworkProfiles {
         });
         await this.request(r, '/connections', { method: 'DELETE' });
       }
-      this.store.put('networkProfile', { ...p, selected: node });
+      this.store.put('networkProfile', { ...p, selected: node, routing: 'manual' });
       this.latencies.delete(id);
       this.invalidate(id);
       this.changed();
     });
   }
-  async resolve(network?: ProviderNetwork): Promise<ProviderNetwork | undefined> {
+  async resolve(network?: ProviderNetwork, runId?: string): Promise<ProviderNetwork | undefined> {
     if (network?.mode !== 'managed') return network;
     const id = network.profileId || '';
     await this.start(id);
+    if (this.store.get<Saved>('networkProfile', id).routing === 'auto') {
+      if (!this.health.get(id) || Date.now() - this.health.get(id)!.checkedAt > 5 * 60_000)
+        await this.check(id);
+      const recommended = this.health.get(id)?.checkedAt
+        ? this.health.get(id)?.recommended
+        : undefined;
+      if (!recommended)
+        throw new Error(
+          '未找到 OpenAI 登录与 ChatGPT 检测均通过的节点，请在网络配置中查看检测结果',
+        );
+      await this.serial(id, async () => {
+        const p = this.store.get<Saved>('networkProfile', id);
+        // Runtime already owns a running turn during this preflight: never switch
+        // an existing shared core under another account. The routing guard handles this below.
+        if (p.selected !== recommended) {
+          try {
+            this.guard(id, runId);
+          } catch {
+            const current = this.health.get(id)?.results.find((n) => n.node === p.selected);
+            if (current?.auth.status === 'ok' && current.chatgpt.status === 'ok') return;
+            throw new Error('此网络还有任务运行，暂不能切换出口；请待任务结束后再试');
+          }
+          const r = this.running.get(id);
+          if (!r) throw new Error('网络已停止');
+          await this.request(r, '/proxies/TZ-OUT', {
+            method: 'PUT',
+            body: JSON.stringify({ name: recommended }),
+          });
+          await this.request(r, '/connections', { method: 'DELETE' });
+          this.store.put('networkProfile', { ...p, selected: recommended });
+          // Auth may be awaiting resolve() itself: don't stop its starting client.
+          this.invalidateIdle(id);
+          this.changed();
+        }
+      });
+    }
     const entry = this.running.get(id);
     if (!entry?.ready) throw new Error('内置网络不可用');
-    return { mode: 'proxy', proxyUrl: `http://127.0.0.1:${entry.proxy}` };
+    return {
+      mode: 'proxy',
+      proxyUrl: `http://127.0.0.1:${entry.proxy}`,
+      ...(network.transport ? { transport: network.transport } : {}),
+    };
+  }
+  cancelCheck(id: string) {
+    this.scans.get(id)?.controller.abort();
+  }
+  async setRouting(id: string, routing: 'manual' | 'auto') {
+    this.guard(id);
+    if (routing === 'auto') await this.check(id);
+    return this.serial(id, async () => {
+      this.guard(id);
+      const p = this.store.get<Saved>('networkProfile', id);
+      const selected =
+        routing === 'auto'
+          ? this.health.get(id)?.checkedAt
+            ? this.health.get(id)?.recommended
+            : undefined
+          : p.selected;
+      if (!selected) throw new Error('没有通过 OpenAI 与 ChatGPT 检测的节点，保持原来的手动模式');
+      const r = this.running.get(id);
+      if (r && selected !== p.selected) {
+        await this.request(r, '/proxies/TZ-OUT', {
+          method: 'PUT',
+          body: JSON.stringify({ name: selected }),
+        });
+        await this.request(r, '/connections', { method: 'DELETE' });
+      }
+      this.store.put('networkProfile', { ...p, selected, routing });
+      this.invalidate(id);
+      this.changed();
+    });
+  }
+  async check(id: string, onlyNode?: string): Promise<string> {
+    if (this.scans.has(id)) return this.scans.get(id)!.promise;
+    const p = this.store.get<Saved>('networkProfile', id);
+    if (onlyNode && !p.nodes.includes(onlyNode)) throw new Error('节点不存在');
+    const controller = new AbortController();
+    const scan = {
+      controller,
+      completed: 0,
+      total: onlyNode ? 1 : p.nodes.length,
+      promise: Promise.resolve(''),
+    };
+    this.scans.set(id, scan);
+    this.changed();
+    scan.promise = (async () => {
+      await this.start(id);
+      const r = this.running.get(id)!;
+      if (!onlyNode) this.health.set(id, { checkedAt: 0, results: [] });
+      const nodes = onlyNode ? [onlyNode] : p.nodes;
+      const results: NetworkNodeHealth[] = onlyNode
+        ? (this.health.get(id)?.results || []).filter((n) => n.node !== onlyNode)
+        : [];
+      let cursor = 0;
+      await Promise.all(
+        Array.from({ length: Math.min(4, nodes.length) }, async () => {
+          while (cursor < nodes.length && !controller.signal.aborted) {
+            const node = nodes[cursor++];
+            const result = await probeNetworkNode(node, async (name, url, expected) => {
+              if (controller.signal.aborted) return { status: 'failed' };
+              try {
+                const query = new URLSearchParams({ url, timeout: '6000', expected });
+                const response = await fetch(
+                  `http://127.0.0.1:${r.controller}/proxies/${encodeURIComponent(name)}/delay?${query}`,
+                  {
+                    headers: { Authorization: 'Bearer ' + r.secret },
+                    signal: AbortSignal.any([controller.signal, AbortSignal.timeout(8000)]),
+                    redirect: 'error',
+                  },
+                );
+                const body = await response.json();
+                if (!response.ok) return { status: probeFailure(String(body.message || '')) };
+                if (!Number.isFinite(body.delay) || body.delay < 0) return { status: 'failed' };
+                return { status: 'ok', ms: body.delay };
+              } catch (e) {
+                return { status: probeFailure(String(e)) };
+              }
+            });
+            if (controller.signal.aborted || this.running.get(id) !== r) break;
+            results.push(result);
+            scan.completed++;
+            this.health.set(id, {
+              checkedAt: onlyNode ? this.health.get(id)?.checkedAt || 0 : 0,
+              results: [...results],
+              recommended: bestNetworkNode(results),
+            });
+            this.changed();
+          }
+        }),
+      );
+      if (controller.signal.aborted || this.running.get(id) !== r)
+        return '检测已取消，已完成的结果保留';
+      this.health.set(id, {
+        checkedAt: onlyNode ? this.health.get(id)?.checkedAt || 0 : Date.now(),
+        results,
+        recommended: bestNetworkNode(results),
+      });
+      const available = results.filter(
+        (n) => n.auth.status === 'ok' && n.chatgpt.status === 'ok',
+      ).length;
+      return `已检测 ${scan.completed} 个节点，${available} 个通过 OpenAI 与 ChatGPT 检测。延迟是请求往返时间，不代表下载带宽或模型输出速度。`;
+    })().finally(() => {
+      if (this.scans.get(id) === scan) this.scans.delete(id);
+      this.changed();
+    });
+    return scan.promise;
   }
   recordLatency(id: string, ms: number) {
     this.latencies.set(id, ms);
@@ -324,6 +488,7 @@ export class NetworkProfiles {
   }
   async dispose() {
     this.closed = true;
+    for (const scan of this.scans.values()) scan.controller.abort();
     await Promise.allSettled(this.locks.values());
     await Promise.all([...this.running.keys()].map((id) => this.stopCore(id)));
   }

@@ -7,6 +7,7 @@ import { EventEmitter } from 'node:events';
 import { minimalEnv } from './workspace';
 import { accountEnvironment, proxyEnvironmentKeys } from './provider-network';
 import type { ProviderNetwork } from '../src/shared/provider-network';
+import { codexTransportArgs } from './codex-transport';
 
 export function codexBinary(): string {
   if (process.env.TONGZHOU_CODEX_PATH && existsSync(process.env.TONGZHOU_CODEX_PATH))
@@ -88,6 +89,7 @@ export class CodexClient extends EventEmitter {
         'cli_auth_credentials_store="keyring"',
         '-c',
         'analytics.enabled=false',
+        ...codexTransportArgs(this.network?.transport),
         ...(this.network && this.network.mode !== 'inherit'
           ? ['-c', 'shell_environment_policy.exclude=' + JSON.stringify(proxyEnvironmentKeys)]
           : []),

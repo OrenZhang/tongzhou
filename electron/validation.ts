@@ -49,18 +49,20 @@ export const providerSchema = z
         mode: z.enum(['inherit', 'direct', 'proxy', 'managed']),
         proxyUrl: z.string().max(2048).optional(),
         profileId: id.optional(),
+        transport: z.enum(['http', 'auto']).optional(),
       })
-      .transform((value, ctx) => {
+      .transform<import('../src/shared/provider-network').ProviderNetwork>((value, ctx) => {
+        const extra = value.transport ? { transport: value.transport } : {};
         if (value.mode === 'managed') {
           if (!value.profileId) {
             ctx.addIssue({ code: 'custom', message: '请选择内置网络配置', path: ['profileId'] });
             return z.NEVER;
           }
-          return { mode: value.mode, profileId: value.profileId };
+          return { mode: value.mode, profileId: value.profileId, ...extra };
         }
-        if (value.mode !== 'proxy') return { mode: value.mode };
+        if (value.mode !== 'proxy') return { mode: value.mode, ...extra };
         try {
-          return { mode: value.mode, proxyUrl: normalizeProxyUrl(value.proxyUrl || '') };
+          return { mode: value.mode, proxyUrl: normalizeProxyUrl(value.proxyUrl || ''), ...extra };
         } catch {
           ctx.addIssue({
             code: 'custom',

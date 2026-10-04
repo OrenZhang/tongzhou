@@ -3633,3 +3633,52 @@ kbd {
     flex-wrap: wrap;
   }
 }
+.network-health {
+  margin: 16px 0;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+.network-routing {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+.network-routing select {
+  width: auto;
+  flex: 1;
+}
+.network-health p {
+  font-size: 12px;
+}
+.network-health-results {
+  margin-top: 12px;
+}
+.network-health-scroll {
+  max-height: 320px;
+  overflow: auto;
+}
+.network-health table {
+  width: 100%;
+  font-size: 12px;
+  border-collapse: collapse;
+}
+.network-health th,
+.network-health td {
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+}
+.network-health th {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+}
+.network-probe-ok {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.network-profile-list:has(.network-health-results) {
+  grid-template-columns: 1fr;
+}

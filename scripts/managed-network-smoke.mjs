@@ -82,6 +82,22 @@ try {
   assert.ok(!JSON.stringify(overview).includes('private-fixture-password'));
   await page.getByRole('button', { name: '启动', exact: true }).click();
   await page.getByText('运行中', { exact: true }).waitFor();
+  await page.getByRole('button', { name: '检测全部节点', exact: true }).click();
+  await page.getByText(/已检测 2 个节点/).waitFor();
+  const tested = (await page.evaluate(() => window.tongzhou.networkProfiles())).profiles[0];
+  assert.equal(tested.health.results.length, 2);
+  assert.equal(tested.selected, '测试节点0', 'scan must not change the active exit');
+  assert.equal(tested.health.recommended, undefined, 'failing fixtures must never be recommended');
+  assert.ok(hosts.every((h) => h.includes('auth.openai.com:443') && h.includes('chatgpt.com:443')));
+  await page.getByLabel('测试内置网络的出口策略').selectOption('auto');
+  await page.getByText(/没有通过 OpenAI 与 ChatGPT 检测的节点/).waitFor();
+  assert.equal(
+    (await page.evaluate(() => window.tongzhou.networkProfiles())).profiles[0].routing,
+    'manual',
+  );
+  checks.push(
+    'per-node real-core probes, latency table, failed auto routing preserves current selection',
+  );
   const profile = path.join(root, 'profile');
   const generated = await readdir(path.join(profile, 'network-runtime'));
   for (const directory of generated)
@@ -89,13 +105,18 @@ try {
       !(await readdir(path.join(profile, 'network-runtime', directory))).includes('config.yaml'),
       'plaintext config must be removed once loaded',
     );
-  await page.evaluate(async (id) => {
-    const p = (await window.tongzhou.snapshot()).providers.find((p) => p.id === 'openai-codex');
-    await window.tongzhou.saveProvider({ ...p, network: { mode: 'managed', profileId: id } });
+  await page.getByRole('button', { name: '绑定 ChatGPT 账号…', exact: true }).click();
+  const accountName = await page.evaluate(
+    async () =>
+      (await window.tongzhou.snapshot()).providers.find((p) => p.id === 'openai-codex').name,
+  );
+  await page.getByRole('dialog').getByRole('button', { name: accountName, exact: true }).click();
+  await page.getByText('账号已绑定此网络配置', { exact: true }).waitFor();
+  await page.evaluate(async () => {
     try {
-      await window.tongzhou.testProviderNetwork(p.id);
+      await window.tongzhou.testProviderNetwork('openai-codex');
     } catch {}
-  }, id);
+  });
   assert.ok(
     hosts[0].some((h) => h === 'auth.openai.com:443'),
     'managed account test reaches first upstream',

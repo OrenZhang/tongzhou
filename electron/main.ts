@@ -143,12 +143,18 @@ function setup() {
     store,
     dataDir,
     () => runtime.changed(),
-    (id) => {
+    (id, exceptRunId) => {
       const ids = store
         .providers()
         .filter((p) => p.network?.mode === 'managed' && p.network.profileId === id)
         .map((p) => p.id);
-      if (runtime.snapshot().runs.some((r) => ids.includes(r.providerId) && r.status === 'running'))
+      if (
+        runtime
+          .snapshot()
+          .runs.some(
+            (r) => ids.includes(r.providerId) && r.status === 'running' && r.id !== exceptRunId,
+          )
+      )
         throw new Error('使用此网络的账号正在执行任务，请结束任务后再修改、切换或停止网络。');
     },
     (id) => {
@@ -159,8 +165,42 @@ function setup() {
         accounts?.resetCodex(p.id);
       }
     },
+    undefined,
+    (id) => {
+      for (const p of store
+        .providers()
+        .filter((p) => p.network?.mode === 'managed' && p.network.profileId === id))
+        runtime.invalidateCodexSessions(p.id);
+    },
   );
-  runtime.resolveNetwork = (network) => networks.resolve(network);
+  runtime.resolveNetwork = (network, runId) => networks.resolve(network, runId);
+  register(
+    'checkNetworkNodes',
+    operation(
+      '网络配置',
+      'change',
+      '逐节点检测普通联网、OpenAI 登录和 ChatGPT 可达性，返回延迟；不切换当前出口',
+      [idSchema.describe('profileId'), z.string().min(1).max(160).optional().describe('node')],
+    ),
+    (id, node) =>
+      networks.check(idSchema.parse(id), z.string().min(1).max(160).optional().parse(node)),
+  );
+  register(
+    'cancelNetworkCheck',
+    operation('网络配置', 'change', '取消节点检测', [idSchema.describe('profileId')]),
+    (id) => networks.cancelCheck(idSchema.parse(id)),
+  );
+  register(
+    'setNetworkRouting',
+    operation(
+      '网络配置',
+      'change',
+      '设置手动或自动选择可用出口；自动模式在请求前检测，避免打断其他任务',
+      [idSchema.describe('profileId'), z.enum(['manual', 'auto'])],
+    ),
+    (id, routing) =>
+      networks.setRouting(idSchema.parse(id), z.enum(['manual', 'auto']).parse(routing)),
+  );
   register(
     'networkProfiles',
     operation('网络配置', 'query', '列出内置网络状态与节点名称，不返回节点凭据'),

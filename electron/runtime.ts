@@ -33,6 +33,8 @@ import {
 } from './workspace';
 import { NativeClient, nativeEngine, modelCatalog } from './native-engine';
 import { CodexClient } from './codex';
+import { CodexSessions } from './codex-sessions';
+import { networkKey } from '../src/shared/provider-network';
 import { redact } from './validation';
 import path from 'node:path';
 import { mkdir, rm } from 'node:fs/promises';
@@ -41,6 +43,7 @@ import { z } from 'zod';
 export class Runtime {
   resolveNetwork?: (
     network?: import('../src/shared/provider-network').ProviderNetwork,
+    runId?: string,
   ) => Promise<import('../src/shared/provider-network').ProviderNetwork | undefined>;
   projectUnavailable?: (id: string) => boolean;
   onLifecycle?: (
@@ -326,6 +329,7 @@ export class Runtime {
       for (const target of targets) this.active.get(target)?.controller.abort();
       await Promise.all([...targets].map((target) => this.active.get(target)?.promise));
       this.invalidateNative();
+      for (const target of targets) this.codexChats.remove(target);
       const root = path.resolve(this.dataDir, 'chat-workspaces');
       for (const target of targets) {
         const directory = path.resolve(root, target);
@@ -343,6 +347,7 @@ export class Runtime {
   private active = new Map<string, { controller: AbortController; promise: Promise<void> }>();
   private approvals = new Map<string, { value: Approval; resolve: (allow: boolean) => void }>();
   private clients = new Map<string, CodexClient>();
+  private codexChats = new CodexSessions();
   private nativeChats = new Map<
     string,
     {
@@ -382,6 +387,7 @@ export class Runtime {
     return client;
   }
   resetCodexAccount(providerId: string) {
+    this.codexChats.clear(providerId);
     if (providerId === 'openai-codex') {
       this.authClient.stop();
       this.authClient = new CodexClient(
@@ -398,6 +404,9 @@ export class Runtime {
       this.accountClients.get(providerId)?.stop();
       this.accountClients.delete(providerId);
     }
+  }
+  invalidateCodexSessions(providerId: string) {
+    this.codexChats.clear(providerId);
   }
   constructor(
     readonly store: Store,
@@ -1228,11 +1237,37 @@ export class Runtime {
     signal: AbortSignal,
     scope: ToolScope,
   ) {
-    const client = new CodexClient(
-      engineHome(this.dataDir, 'codex', input.providerId),
-      this.store.get<Provider>('provider', input.providerId).network,
-      (network) => (this.resolveNetwork ? this.resolveNetwork(network) : Promise.resolve(network)),
-    );
+    const provider = this.store.get<Provider>('provider', input.providerId);
+    const network = this.resolveNetwork
+      ? await this.resolveNetwork(provider.network, run.id)
+      : provider.network;
+    if (signal.aborted) throw new Error('已停止');
+    const cwd = project?.path ?? path.join(this.dataDir, 'chat-workspaces', input.sessionId);
+    if (!project) await mkdir(cwd, { recursive: true });
+    const fingerprint = JSON.stringify([
+      input.providerId,
+      networkKey(provider.network),
+      input.model,
+      cwd,
+      agent.instructions,
+      agent.permission,
+      scope.specs,
+    ]);
+    const prior = this.store
+      .list<any>('engineSegment')
+      .filter(
+        (s) =>
+          s.sessionId === input.sessionId &&
+          s.fingerprint === fingerprint &&
+          s.completed &&
+          s.lastMessageId === this.store.messages(input.sessionId).at(-2)?.id,
+      )
+      .at(-1);
+    const key = JSON.stringify([fingerprint, networkKey(network)]);
+    const warm = this.codexChats.take(input.sessionId, key, prior?.threadId);
+    const client =
+      warm ?? new CodexClient(engineHome(this.dataDir, 'codex', input.providerId), network);
+    let keepAlive = false;
     this.clients.set(input.sessionId, client);
     let threadId = '';
     let turnId = '';
@@ -1254,7 +1289,7 @@ export class Runtime {
       fail(new Error('已停止'));
     };
     signal.addEventListener('abort', abort, { once: true });
-    client.on('request', async (request) => {
+    const onRequest = async (request: any) => {
       if (request.method === 'item/tool/call') {
         try {
           if (request.params.threadId !== threadId || (turnId && request.params.turnId !== turnId))
@@ -1301,8 +1336,9 @@ export class Runtime {
           request.id,
           'Tongzhou does not implement this interaction; stop and ask in chat.',
         );
-    });
-    client.on('notification', ({ method, params: p }) => {
+    };
+    client.on('request', onRequest);
+    const onNotification = ({ method, params: p }: any) => {
       if (threadId && p?.threadId && p.threadId !== threadId) return;
       if (turnId && p?.turnId && p.turnId !== turnId) return;
       if (method === 'turn/started') turnId = p.turn.id;
@@ -1376,7 +1412,8 @@ export class Runtime {
         if (p.turn.status === 'completed') finish();
         else fail(new Error(p.turn.error?.message ?? `Codex ${p.turn.status}`));
       }
-    });
+    };
+    client.on('notification', onNotification);
     const timeout = setTimeout(
       () => fail(new Error('Codex 单次执行超过 30 分钟，请检查任务后继续。')),
       30 * 60 * 1000,
@@ -1384,47 +1421,31 @@ export class Runtime {
     try {
       await client.start();
       if (signal.aborted) throw new Error('已停止');
+      this.progress(run, 'phase', '检查账号状态');
       const account = await client.request('account/read', { refreshToken: false });
       if (!account.account)
         throw new Error('尚未登录 ChatGPT，请在设置中完成浏览器授权或设备码授权后重试。');
-      const cwd = project?.path ?? path.join(this.dataDir, 'chat-workspaces', input.sessionId);
-      if (!project) await mkdir(cwd, { recursive: true });
-      const fingerprint = JSON.stringify([
-        input.providerId,
-        input.model,
-        cwd,
-        agent.instructions,
-        agent.permission,
-        scope.specs,
-      ]);
-      const prior = this.store
-        .list<any>('engineSegment')
-        .filter(
-          (s) =>
-            s.sessionId === input.sessionId &&
-            s.fingerprint === fingerprint &&
-            s.completed &&
-            s.lastMessageId === this.store.messages(input.sessionId).at(-2)?.id,
-        )
-        .at(-1);
       let resumed = false;
+      this.progress(run, 'phase', '准备模型会话');
       let started: any;
       if (prior) {
         usageBase = prior.usageTotal ?? { inputTokens: 0, outputTokens: 0 };
         try {
-          started = await client.request('thread/resume', {
-            threadId: prior.threadId,
-            model: input.model,
-            cwd,
-            approvalPolicy: agent.permission === 'full-access' ? 'never' : 'untrusted',
-            sandbox:
-              !project || agent.permission === 'read-only'
-                ? 'read-only'
-                : agent.permission === 'full-access'
-                  ? 'danger-full-access'
-                  : 'workspace-write',
-            excludeTurns: true,
-          });
+          started = warm
+            ? { thread: { id: prior.threadId } }
+            : await client.request('thread/resume', {
+                threadId: prior.threadId,
+                model: input.model,
+                cwd,
+                approvalPolicy: agent.permission === 'full-access' ? 'never' : 'untrusted',
+                sandbox:
+                  !project || agent.permission === 'read-only'
+                    ? 'read-only'
+                    : agent.permission === 'full-access'
+                      ? 'danger-full-access'
+                      : 'workspace-write',
+                excludeTurns: true,
+              });
           resumed = true;
         } catch (e: any) {
           if (
@@ -1502,6 +1523,7 @@ export class Runtime {
       });
       if (signal.aborted) abort();
       await done;
+      if (signal.aborted) throw new Error('已停止');
       this.store.put('engineSegment', {
         id: run.id,
         threadId,
@@ -1511,12 +1533,16 @@ export class Runtime {
         usageTotal,
         lastMessageId: this.store.messages(input.sessionId).at(-1)?.id,
       });
+      keepAlive = !this.stopping && !this.deleting.has(input.sessionId);
     } finally {
       clearTimeout(timeout);
       this.steering.delete(input.sessionId);
       signal.removeEventListener('abort', abort);
       client.removeListener('failure', onFailure);
-      client.stop();
+      client.removeListener('request', onRequest);
+      client.removeListener('notification', onNotification);
+      if (keepAlive) this.codexChats.put(input.sessionId, key, input.providerId, threadId, client);
+      else client.stop();
       this.clients.delete(input.sessionId);
     }
   }
@@ -1650,6 +1676,7 @@ export class Runtime {
   }
   stop() {
     this.stopping = true;
+    this.codexChats.clear();
     this.invalidateNative();
     for (const a of this.active.values()) a.controller.abort();
     for (const c of this.clients.values()) c.stop();

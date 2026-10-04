@@ -31,13 +31,22 @@ async function fixture() {
   });
   const guard = vi.fn();
   const invalidate = vi.fn();
-  const networks = new NetworkProfiles(store, root, () => {}, guard, invalidate);
+  const invalidateIdle = vi.fn();
+  const networks = new NetworkProfiles(
+    store,
+    root,
+    () => {},
+    guard,
+    invalidate,
+    undefined,
+    invalidateIdle,
+  );
   cleanup.push(async () => {
     await networks.dispose();
     store.close();
     await rm(root, { recursive: true, force: true });
   });
-  return { networks, store, root, guard, invalidate };
+  return { networks, store, root, guard, invalidate, invalidateIdle };
 }
 describe('managed account networks', () => {
   it('extracts nodes and discards source routing, TUN, scripts and remote providers', () => {
@@ -166,5 +175,110 @@ describe('managed account networks', () => {
       '安装内核',
     );
     expect(await f.networks.resolve({ mode: 'direct' })).toEqual({ mode: 'direct' });
+  });
+});
+
+async function healthFixture() {
+  const f = await fixture();
+  await f.networks.save({
+    id: 'one',
+    name: 'Test',
+    source: 'config',
+    config: JSON.stringify({ proxies: [node, { ...node, name: 'fast' }] }),
+  });
+  const internal = f.networks as any;
+  internal.running.set('one', {
+    ready: true,
+    proxy: 12345,
+    controller: 12346,
+    secret: 'private-controller',
+  });
+  vi.spyOn(f.networks, 'start').mockResolvedValue(undefined);
+  vi.spyOn(internal, 'stopCore').mockImplementation(async () => internal.running.delete('one'));
+  const control = vi.spyOn(internal, 'request').mockResolvedValue({});
+  const fetcher = vi.fn(
+    async (url: string) =>
+      new Response(JSON.stringify({ delay: url.includes('/fast/') ? 10 : 50 })),
+  );
+  vi.stubGlobal('fetch', fetcher);
+  return { ...f, internal, control, fetcher };
+}
+describe('node scans and automatic routing', () => {
+  it('automatic preflight invalidates idle chat connections without stopping its own auth client', async () => {
+    const f = await healthFixture();
+    await f.networks.check('one');
+    const saved = f.store.get<any>('networkProfile', 'one');
+    f.store.put('networkProfile', { ...saved, routing: 'auto' });
+    f.invalidate.mockClear();
+    await f.networks.resolve({ mode: 'managed', profileId: 'one' });
+    expect(f.networks.list().profiles[0].selected).toBe('fast');
+    expect(f.invalidateIdle).toHaveBeenCalledWith('one');
+    expect(f.invalidate).not.toHaveBeenCalled();
+  });
+  it('checks both nodes without moving live traffic, caches results, then chooses a usable fast route', async () => {
+    const f = await healthFixture();
+    await f.networks.check('one');
+    expect(f.control).not.toHaveBeenCalled();
+    const p = f.networks.list().profiles[0];
+    expect(p.selected).toBe('fixture');
+    expect(p.health?.recommended).toBe('fast');
+    expect(p.health?.results).toHaveLength(2);
+    expect(p.checking).toBeUndefined();
+    await f.networks.setRouting('one', 'auto');
+    expect(f.networks.list().profiles[0]).toMatchObject({ selected: 'fast', routing: 'auto' });
+    f.fetcher.mockClear();
+    expect(await f.networks.resolve({ mode: 'managed', profileId: 'one' }, 'own-turn')).toEqual({
+      mode: 'proxy',
+      proxyUrl: 'http://127.0.0.1:12345',
+    });
+    expect(f.fetcher).not.toHaveBeenCalled();
+    await f.networks.select('one', 'fixture');
+    expect(f.networks.list().profiles[0].routing).toBe('manual');
+  });
+  it('cancels scans and does not enable auto mode using partial results', async () => {
+    const f = await healthFixture();
+    f.fetcher.mockImplementation(
+      async (_url, init?: any) =>
+        new Promise((_resolve, reject) => {
+          init.signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+        }),
+    );
+    const checking = f.networks.setRouting('one', 'auto');
+    const rejected = expect(checking).rejects.toThrow('没有通过');
+    await expect.poll(() => f.fetcher.mock.calls.length).toBeGreaterThan(0);
+    f.networks.cancelCheck('one');
+    await rejected;
+    expect(f.networks.list().profiles[0]).toMatchObject({ routing: 'manual', selected: 'fixture' });
+    expect(f.networks.list().profiles[0].checking).toBeUndefined();
+    expect(f.control).not.toHaveBeenCalled();
+  });
+  it('preserves a working active node when another turn owns it, and rejects switching an unusable active route', async () => {
+    const f = await healthFixture();
+    await f.networks.check('one');
+    const saved = f.store.get<any>('networkProfile', 'one');
+    f.store.put('networkProfile', { ...saved, routing: 'auto' });
+    f.guard.mockImplementation(() => {
+      throw new Error('another active turn');
+    });
+    await f.networks.resolve({ mode: 'managed', profileId: 'one' }, 'own-turn');
+    expect(f.guard).toHaveBeenCalledWith('one', 'own-turn');
+    expect(f.control).not.toHaveBeenCalled();
+    f.internal.health.get('one').results.find((n: any) => n.node === 'fixture').chatgpt.status =
+      'timeout';
+    await expect(
+      f.networks.resolve({ mode: 'managed', profileId: 'one' }, 'own-turn'),
+    ).rejects.toThrow('还有任务运行');
+    expect(f.control).not.toHaveBeenCalled();
+  });
+  it('never picks general connectivity alone when the ChatGPT target is blocked', async () => {
+    const f = await healthFixture();
+    f.fetcher.mockImplementation(async (url) =>
+      new URL(url).searchParams.get('url')?.includes('chatgpt.com')
+        ? new Response(JSON.stringify({ message: 'status 403 secret-token' }), { status: 504 })
+        : new Response(JSON.stringify({ delay: 10 })),
+    );
+    await expect(f.networks.setRouting('one', 'auto')).rejects.toThrow('没有通过');
+    expect(f.networks.list().profiles[0].health?.recommended).toBeUndefined();
+    expect(JSON.stringify(f.networks.list())).not.toContain('secret-token');
   });
 });
