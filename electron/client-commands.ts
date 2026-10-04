@@ -89,7 +89,7 @@ export class ClientCommands {
         access: op.access,
         reason: op.reason,
         view: op.view,
-        arguments: z.toJSONSchema(op.args, { unrepresentable: 'any' }),
+        arguments: z.toJSONSchema(op.args, { unrepresentable: 'any', io: 'input' }),
       }));
     return {
       modules: [...new Set(methods.map((m) => m.module))],

@@ -361,17 +361,36 @@ export class Runtime {
         this.nativeChats.delete(id);
       }
   }
-  readonly authClient: CodexClient;
+  authClient: CodexClient;
   private accountClients = new Map<string, CodexClient>();
   authClientFor(providerId = 'openai-codex') {
     if (providerId === 'openai-codex') return this.authClient;
     let client = this.accountClients.get(providerId);
     if (!client) {
-      client = new CodexClient(engineHome(this.dataDir, 'codex', providerId));
+      client = new CodexClient(
+        engineHome(this.dataDir, 'codex', providerId),
+        this.store.get<Provider>('provider', providerId).network,
+      );
       client.on('request', (r) => client!.reject(r.id, 'Login client does not execute tools'));
       this.accountClients.set(providerId, client);
     }
     return client;
+  }
+  resetCodexAccount(providerId: string) {
+    if (providerId === 'openai-codex') {
+      this.authClient.stop();
+      this.authClient = new CodexClient(
+        path.join(this.dataDir, 'codex'),
+        this.store.get<Provider>('provider', providerId).network,
+      );
+      this.authClient.on('request', (r) =>
+        this.authClient.reject(r.id, 'Login client does not execute tools'),
+      );
+      this.authClient.on('notification', () => this.changed());
+    } else {
+      this.accountClients.get(providerId)?.stop();
+      this.accountClients.delete(providerId);
+    }
   }
   constructor(
     readonly store: Store,
@@ -381,7 +400,10 @@ export class Runtime {
     private commands?: ClientCommands,
   ) {
     this.attachments = new Attachments(store, dataDir);
-    this.authClient = new CodexClient(path.join(dataDir, 'codex'));
+    this.authClient = new CodexClient(
+      path.join(dataDir, 'codex'),
+      store.providers().find((p) => p.id === 'openai-codex')?.network,
+    );
     this.authClient.on('request', (r) =>
       this.authClient.reject(r.id, 'Login client does not execute tools'),
     );
@@ -1198,7 +1220,10 @@ export class Runtime {
     signal: AbortSignal,
     scope: ToolScope,
   ) {
-    const client = new CodexClient(engineHome(this.dataDir, 'codex', input.providerId));
+    const client = new CodexClient(
+      engineHome(this.dataDir, 'codex', input.providerId),
+      this.store.get<Provider>('provider', input.providerId).network,
+    );
     this.clients.set(input.sessionId, client);
     let threadId = '';
     let turnId = '';

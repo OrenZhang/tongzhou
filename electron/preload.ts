@@ -71,6 +71,7 @@ const api: TongzhouAPI = {
   saveProvider: (p) => call('saveProvider', p),
   deleteProvider: (id) => call('deleteProvider', id),
   testProvider: (id, model) => call('testProvider', id, model),
+  testProviderNetwork: (id) => call('testProviderNetwork', id),
   models: (id) => call('models', id),
   saveAgent: (a) => call('saveAgent', a),
   deleteAgent: (id) => call('deleteAgent', id),

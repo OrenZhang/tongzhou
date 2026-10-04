@@ -18,6 +18,7 @@ export type Protocol =
   | 'codex';
 export type AuthMode = 'api-key' | 'bearer' | 'none' | 'chatgpt' | 'native';
 export interface Provider {
+  network?: import('./provider-network').ProviderNetwork;
   id: string;
   name: string;
   protocol: Protocol;
@@ -376,6 +377,7 @@ export interface TongzhouAPI {
   saveProvider(provider: ProviderInput): Promise<Provider>;
   deleteProvider(id: string): Promise<void>;
   testProvider(id: string, model: string): Promise<string>;
+  testProviderNetwork(id: string): Promise<string>;
   models(id: string): Promise<string[]>;
   saveAgent(agent: AgentProfile): Promise<AgentProfile>;
   deleteAgent(id: string): Promise<void>;

@@ -13,6 +13,8 @@ import {
 } from 'electron';
 import { NativeAccount, nativeEngine } from './native-engine';
 import { Accounts } from './accounts';
+import { AccountBrowser } from './account-browser';
+import { networkKey } from '../src/shared/provider-network';
 import { Connectors, connectorSchema } from './connectors';
 import { BrowserProfiles } from './browser-profiles';
 import { Channels, channelSchema, notificationRuleSchema } from './channels';
@@ -72,6 +74,7 @@ let window: BrowserWindow | undefined;
 let store: Store;
 let runtime: Runtime;
 let accounts: Accounts;
+let accountBrowser: AccountBrowser;
 let connectors: Connectors;
 let browserProfiles: BrowserProfiles;
 let channels: Channels;
@@ -541,7 +544,8 @@ function setup() {
         contextChars: 0,
       });
   }
-  accounts = new Accounts(store, runtime, dataDir, emit, (url) => shell.openExternal(url));
+  accountBrowser = new AccountBrowser(store);
+  accounts = new Accounts(store, runtime, dataDir, emit, (url, id) => accountBrowser.open(url, id));
   const accountFor = (raw: unknown, id?: unknown) =>
     accounts.native(
       z.enum(['kimi', 'minimax']).parse(raw),
@@ -1130,8 +1134,19 @@ function setup() {
     ]),
     (raw) => {
       const input = providerSchema.parse(raw);
+      const before = store.providers().find((p) => p.id === input.id);
+      const networkChanged = networkKey(before?.network) !== networkKey(input.network);
+      if (
+        networkChanged &&
+        runtime.snapshot().runs.some((r) => r.providerId === input.id && r.status === 'running')
+      )
+        throw new Error('此 ChatGPT 连接正在执行任务，请结束或停止任务后再修改代理。');
       const pending = pendingImports.get(input.id);
       const result = store.saveProvider({ ...input, secret: input.secret || pending?.secret });
+      if (networkChanged) {
+        accountBrowser.close(input.id);
+        accounts.resetCodex(input.id);
+      }
       pendingImports.delete(input.id);
       runtime.changed();
       return result;
@@ -1146,6 +1161,7 @@ function setup() {
         throw new Error('此连接正在执行任务');
       store.deleteProvider(id);
       accounts.forget(id);
+      accountBrowser.close(id);
       runtime.changed();
     },
   );
@@ -1190,6 +1206,16 @@ function setup() {
       });
       return `连接成功：${result.text.slice(0, 120)}`;
     },
+  );
+  register(
+    'testProviderNetwork',
+    operation(
+      '模型连接与认证',
+      'query',
+      '检查 ChatGPT 账号独立网络是否可达授权服务，不执行登录或模型推理',
+      [idSchema.describe('providerId')],
+    ),
+    (id) => accountBrowser.test(idSchema.parse(id)),
   );
   register(
     'models',
@@ -1544,7 +1570,10 @@ function setup() {
   register(
     'codexLoginCancel',
     operation('模型连接与认证', 'change', '取消 ChatGPT 登录', [idSchema.optional()]),
-    (id) => codexFor(id).cancel(),
+    (id) => {
+      accountBrowser.close(idSchema.parse(id ?? 'openai-codex'));
+      return codexFor(id).cancel();
+    },
   );
   register(
     'codexLoginOpen',
@@ -1570,6 +1599,7 @@ function setup() {
     async (id) => {
       accounts.idle(idSchema.parse(id ?? 'openai-codex'));
       await codexFor(id).logout();
+      accountBrowser.close(idSchema.parse(id ?? 'openai-codex'));
       runtime.changed();
     },
   );
@@ -1664,6 +1694,7 @@ else {
     quitting = true;
     globalShortcut.unregisterAll();
     accounts.dispose();
+    accountBrowser.dispose();
     connectors.dispose();
     browserProfiles.dispose();
     channels.dispose();

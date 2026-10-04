@@ -17,7 +17,10 @@ vi.mock('../electron/codex', async () => {
   const { EventEmitter } = await import('node:events');
   return {
     CodexClient: class extends EventEmitter {
-      constructor(public home: string) {
+      constructor(
+        public home: string,
+        public network?: any,
+      ) {
         super();
         fake.instances.push(this);
       }
@@ -106,6 +109,21 @@ async function fixture() {
   };
 }
 describe('locked Codex resume and steer contracts', () => {
+  it('passes account-scoped networking to login and inference and resets only that account', async () => {
+    const f = await fixture();
+    const base = f.store.providers().find((p) => p.id === f.input.providerId)!;
+    const network = { mode: 'proxy' as const, proxyUrl: 'http://127.0.0.1:7890' };
+    f.store.saveProvider({ ...base, network });
+    f.store.saveProvider({ ...base, id: 'other-account', network: { mode: 'direct' } });
+    const other = f.runtime.authClientFor('other-account');
+    f.runtime.resetCodexAccount(base.id);
+    expect((f.runtime.authClientFor(base.id) as any).network).toEqual(network);
+    expect(f.runtime.authClientFor('other-account')).toBe(other);
+    f.runtime.start(f.input);
+    await f.runtime.waitForIdle();
+    expect(fake.instances.at(-1).network).toEqual(network);
+    expect((other as any).network).toEqual({ mode: 'direct' });
+  });
   it('maps a project full-access override to Codex and rebuilds when permission changes', async () => {
     const f = await fixture();
     f.store.put('project', {

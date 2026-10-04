@@ -34,6 +34,7 @@
     "test:attachments": "node scripts/attachments-smoke.mjs",
     "test:project-context": "node scripts/project-context-smoke.mjs",
     "test:auth": "node scripts/account-ui-smoke.mjs",
+    "test:account-proxy": "node scripts/account-proxy-smoke.mjs",
     "test:native": "node scripts/native-smoke.mjs",
     "test:capabilities": "node scripts/capabilities-smoke.mjs",
     "test:management": "node scripts/client-management-smoke.mjs",

@@ -16,7 +16,7 @@ export class Accounts {
     private runtime: Runtime,
     private dataDir: string,
     private emit: (e: AppEvent) => void,
-    private open: (url: string) => Promise<void>,
+    private open: (url: string, providerId: string) => Promise<void>,
   ) {}
   private verify(id: string, protocol: string) {
     const p = this.store.get<Provider>('provider', id);
@@ -43,7 +43,8 @@ export class Accounts {
   idle(id: string) {
     if (this.runtime.snapshot().runs.some((r) => r.providerId === id && r.status === 'running'))
       throw new Error('请先停止此账号的任务，再修改授权');
-    this.runtime.invalidateNative();
+    const protocol = this.store.get<Provider>('provider', id).protocol;
+    if (protocol !== 'codex') this.runtime.invalidateNative(protocol);
   }
   native(engine: NativeEngine, id = `${engine}-account`) {
     this.verify(id, engine);
@@ -78,7 +79,7 @@ export class Accounts {
       const client = this.runtime.authClientFor(id);
       account = new CodexAuth(
         client,
-        this.open,
+        (url) => this.open(url, id),
         (state) => {
           this.emit({ type: 'codex-auth', state: { ...state, providerId: id } });
           if (state.login?.phase) this.record(id, state.login.phase, state.login.error);
@@ -102,6 +103,11 @@ export class Accounts {
   dispose() {
     for (const a of this.natives.values()) a.dispose();
     for (const a of this.codices.values()) a.dispose();
+  }
+  resetCodex(id: string) {
+    this.codices.get(id)?.dispose();
+    this.codices.delete(id);
+    this.runtime.resetCodexAccount(id);
   }
   forget(id: string) {
     this.natives.get(id)?.dispose();

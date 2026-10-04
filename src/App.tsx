@@ -61,6 +61,7 @@ import { ConnectionsPanel } from './ConnectionsPanel';
 import { Appearance, useAppearance } from './Appearance';
 import { useDraft } from './useDraft';
 import { ProjectContext } from './ProjectContext';
+import { ProviderNetworkFields } from './ProviderNetworkFields';
 import { AttachmentCards, useAttachmentDraft } from './Attachments';
 import { longPaste } from './shared/attachments';
 import { useConversationFollow } from './useConversationFollow';
@@ -1960,7 +1961,37 @@ export default function App() {
           }}
           wide
         >
-          <div className="modal-content account-dialog">{renderAccounts(authPanel)}</div>
+          <div className="modal-content account-dialog">
+            {authPanel === 'codex' && (
+              <div className="info-strip">
+                <span>
+                  账号网络：
+                  {data.providers.find((p) => p.id === (authProviderId || 'openai-codex'))?.network
+                    ?.mode === 'proxy'
+                    ? '独立代理'
+                    : data.providers.find((p) => p.id === (authProviderId || 'openai-codex'))
+                          ?.network?.mode === 'direct'
+                      ? '不使用代理'
+                      : '默认网络'}
+                </span>
+                <button
+                  className="text-button"
+                  onClick={() => {
+                    const p = data.providers.find(
+                      (p) => p.id === (authProviderId || 'openai-codex'),
+                    );
+                    if (p) {
+                      setAuthPanel(null);
+                      setProviderEdit({ ...p, secret: '' });
+                    }
+                  }}
+                >
+                  配置账号网络
+                </button>
+              </div>
+            )}
+            {renderAccounts(authPanel)}
+          </div>
         </Modal>
       )}
       {providerEdit && (
@@ -2037,13 +2068,18 @@ export default function App() {
                 <span>通过官方引擎完成账号授权，完成后自动同步可选模型。</span>
                 <button
                   className="text-button"
-                  onClick={() => {
-                    setProviderEdit(null);
-                    setAuthProviderId(providerEdit.id);
-                    setCodex(null);
-                    setNativeAccounts({});
-                    setAuthPanel(providerEdit.protocol as 'codex' | NativeEngine);
-                  }}
+                  disabled={busy}
+                  onClick={() =>
+                    perform(async () => {
+                      const saved = await api.saveProvider(normalizedProvider());
+                      await refresh();
+                      setProviderEdit(null);
+                      setAuthProviderId(saved.id);
+                      setCodex(null);
+                      setNativeAccounts({});
+                      setAuthPanel(providerEdit.protocol as 'codex' | NativeEngine);
+                    })
+                  }
                 >
                   前往登录
                 </button>
@@ -2107,6 +2143,18 @@ export default function App() {
                   </label>
                 )}
               </>
+            )}
+            {providerEdit.protocol === 'codex' && (
+              <ProviderNetworkFields
+                key={providerEdit.id}
+                value={providerEdit.network}
+                onChange={(network) => setProviderEdit({ ...providerEdit, network })}
+                onTest={async () => {
+                  const saved = await api.saveProvider(normalizedProvider());
+                  await refresh();
+                  return api.testProviderNetwork(saved.id);
+                }}
+              />
             )}
             <button className="secondary" disabled={busy} onClick={fetchModels}>
               {busy ? <Spinner /> : <RefreshCw size={14} />}

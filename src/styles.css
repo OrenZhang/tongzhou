@@ -3545,3 +3545,19 @@ kbd {
   font-size: 12px;
   padding: 5px 12px;
 }
+
+.provider-network-fields {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  margin: 12px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.provider-network-fields > .secondary {
+  justify-self: start;
+}
+.provider-network-fields > .muted {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}

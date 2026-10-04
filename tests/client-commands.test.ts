@@ -18,6 +18,18 @@ function attach(
   return { scope, ask };
 }
 describe('self-registering client capabilities', () => {
+  it('publishes input schemas for normalized configuration fields', () => {
+    const commands = new ClientCommands();
+    commands.register(
+      'normalize',
+      operation('配置', 'change', '保存', [
+        z.object({ value: z.string().transform((s) => s.trim()) }),
+      ]),
+      () => {},
+    );
+    const catalog = commands.describe({ method: 'normalize' });
+    expect(JSON.stringify(catalog)).toContain('"type":"string"');
+  });
   it('accepts JSON positional arguments from native engines without weakening validation', async () => {
     const commands = new ClientCommands();
     const save = vi.fn(() => ({ success: true }));

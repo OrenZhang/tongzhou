@@ -23,6 +23,7 @@ jobs:
       - run: npm run build
       - run: npm run test:desktop
       - run: node scripts/account-ui-smoke.mjs
+      - run: npm run test:account-proxy
       - run: npm run test:extensions
       - run: npm run test:bridge
       - run: npm run test:workflows

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { normalizeProxyUrl } from '../src/shared/provider-network';
 const id = z
   .string()
   .min(1)
@@ -43,8 +44,33 @@ export const providerSchema = z
     contextChars: z.union([z.literal(0), z.number().int().min(4000).max(1000000)]),
     secret: z.string().max(16000).optional(),
     clearSecret: z.boolean().optional(),
+    network: z
+      .object({
+        mode: z.enum(['inherit', 'direct', 'proxy']),
+        proxyUrl: z.string().max(2048).optional(),
+      })
+      .transform((value, ctx) => {
+        if (value.mode !== 'proxy') return { mode: value.mode };
+        try {
+          return { mode: value.mode, proxyUrl: normalizeProxyUrl(value.proxyUrl || '') };
+        } catch {
+          ctx.addIssue({
+            code: 'custom',
+            message: '代理地址需为 HTTP / HTTPS，不包含账号密码、路径或参数',
+            path: ['proxyUrl'],
+          });
+          return z.NEVER;
+        }
+      })
+      .optional(),
   })
   .superRefine((p, ctx) => {
+    if (p.network && p.protocol !== 'codex')
+      ctx.addIssue({
+        code: 'custom',
+        message: '此独立网络设置仅适用于 ChatGPT 账号连接',
+        path: ['network'],
+      });
     if (p.protocol === 'codex' && p.auth !== 'chatgpt')
       ctx.addIssue({ code: 'custom', message: 'Codex 连接使用 ChatGPT 登录', path: ['auth'] });
     const native = p.protocol === 'kimi' || p.protocol === 'minimax';

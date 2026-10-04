@@ -5,6 +5,8 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { minimalEnv } from './workspace';
+import { accountEnvironment, proxyEnvironmentKeys } from './provider-network';
+import type { ProviderNetwork } from '../src/shared/provider-network';
 
 export function codexBinary(): string {
   if (process.env.TONGZHOU_CODEX_PATH && existsSync(process.env.TONGZHOU_CODEX_PATH))
@@ -39,7 +41,10 @@ export class CodexClient extends EventEmitter {
     { resolve: (v: any) => void; reject: (e: Error) => void; timer: NodeJS.Timeout }
   >();
   private lastError = '';
-  constructor(readonly home: string) {
+  constructor(
+    readonly home: string,
+    private network?: ProviderNetwork,
+  ) {
     super();
   }
   async start() {
@@ -57,7 +62,10 @@ export class CodexClient extends EventEmitter {
   private async initialize() {
     mkdirSync(this.home, { recursive: true });
     const binary = codexBinary();
-    const env: NodeJS.ProcessEnv = { ...minimalEnv(), CODEX_HOME: this.home };
+    const env: NodeJS.ProcessEnv = {
+      ...accountEnvironment(minimalEnv(), this.network),
+      CODEX_HOME: this.home,
+    };
     // Windows binaries include rg and sandbox helpers alongside the CLI distribution.
     env.PATH = [
       path.dirname(binary),
@@ -75,6 +83,9 @@ export class CodexClient extends EventEmitter {
         'cli_auth_credentials_store="keyring"',
         '-c',
         'analytics.enabled=false',
+        ...(this.network && this.network.mode !== 'inherit'
+          ? ['-c', 'shell_environment_policy.exclude=' + JSON.stringify(proxyEnvironmentKeys)]
+          : []),
       ],
       {
         env,
