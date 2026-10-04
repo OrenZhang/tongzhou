@@ -343,7 +343,7 @@ export function BotsPanel({
                       <span>{s.title}</span>
                     </label>
                   ))}
-                {!data.sessions.length && <p>暂无会话，可先在工作空间创建。</p>}
+                {!data.sessions.length && <p>暂无会话，可先点击“开启新会话”创建。</p>}
               </div>
             )}
             <label className="checkbox-line">

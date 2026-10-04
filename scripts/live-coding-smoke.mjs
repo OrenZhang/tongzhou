@@ -40,7 +40,7 @@ let page;
 const report = { engine, startedAt: new Date().toISOString(), passed: false, checks: [], runs: [] };
 try {
   page = await app.firstWindow();
-  await page.waitForSelector('.welcome');
+  await page.waitForSelector('.app-shell');
   await app.evaluate(({ BrowserWindow, shell }) => {
     BrowserWindow.getAllWindows().forEach((w) => w.setIgnoreMouseEvents(true));
     shell.openExternal = async () => {

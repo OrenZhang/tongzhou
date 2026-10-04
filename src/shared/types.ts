@@ -18,6 +18,8 @@ export type Protocol =
   | 'codex';
 export type AuthMode = 'api-key' | 'bearer' | 'none' | 'chatgpt' | 'native';
 export interface Provider {
+  /** Existing connections without this field remain enabled. */
+  enabled?: boolean;
   network?: import('./provider-network').ProviderNetwork;
   id: string;
   name: string;

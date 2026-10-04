@@ -1293,6 +1293,11 @@ function setup() {
       const input = providerSchema.parse(raw);
       if (input.network?.mode === 'managed') networks.exists(input.network.profileId!);
       const before = store.providers().find((p) => p.id === input.id);
+      if (
+        input.enabled === false &&
+        runtime.snapshot().runs.some((r) => r.providerId === input.id && r.status === 'running')
+      )
+        throw new Error('此连接正在执行任务，请结束或停止任务后再停用。');
       const networkChanged = networkKey(before?.network) !== networkKey(input.network);
       if (
         networkChanged &&

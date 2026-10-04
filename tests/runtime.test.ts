@@ -78,6 +78,17 @@ const text = (content: string) => ({
   usage: { prompt_tokens: 10, completion_tokens: 4 },
 });
 describe('conversation input and lifecycle changes', () => {
+  it('rejects disabled providers before starting a run, retaining secrets and history', async () => {
+    const f = await fixture(() => [text('unexpected')]);
+    const provider = f.store.providers().find((p) => p.id === 'fixture')!;
+    f.store.saveProvider({ ...provider, enabled: false, secret: 'saved-key' });
+    expect(() => f.runtime.start(f.input)).toThrow('已停用');
+    expect(f.store.list('run')).toHaveLength(0);
+    expect(f.requests).toHaveLength(0);
+    f.store.saveProvider({ ...provider, enabled: undefined });
+    expect(f.store.providers().find((p) => p.id === 'fixture')?.enabled).toBe(false);
+    expect(f.store.secret('fixture')).toBe('saved-key');
+  });
   it('shares user attachments with read-only collaborators without losing the parent reference', async () => {
     const f = await fixture(() => [text('read attachment')]);
     const a = new Attachments(f.store, f.root).save({

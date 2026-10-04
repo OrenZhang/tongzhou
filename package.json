@@ -28,6 +28,7 @@
     "test:workflows": "node scripts/workflows-smoke.mjs",
     "test:turns": "node scripts/turn-process-smoke.mjs",
     "test:ui": "node scripts/ui-smoke.mjs",
+    "test:session-entry": "node scripts/session-entry-smoke.mjs",
     "test:workbench": "node scripts/workbench-smoke.mjs",
     "test:markdown": "node scripts/markdown-smoke.mjs",
     "test:appearance": "node scripts/appearance-smoke.mjs",

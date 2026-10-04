@@ -53,7 +53,7 @@ const app = await electron.launch({
 const checks = [];
 try {
   const page = await app.firstWindow();
-  await page.waitForSelector('.welcome');
+  await page.waitForSelector('.app-shell');
   await app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows().forEach((w) => w.setIgnoreMouseEvents(true)),
   );
@@ -161,7 +161,7 @@ try {
   );
   await page.screenshot({ path: 'test-results/turn-supplement.png' });
   await page.reload();
-  await page.waitForSelector('.welcome');
+  await page.waitForSelector('.app-shell');
   await page.locator('.session-list .session-title').first().click();
   await page.getByText('已回复：本轮补充内容', { exact: true }).waitFor();
   await page.waitForFunction(
@@ -247,7 +247,7 @@ try {
   assert.ok(!JSON.stringify(snapshot).includes('fixture-token'));
   assert.ok(!JSON.stringify(snapshot).includes('/hook/fixture'));
   await page.reload();
-  await page.waitForSelector('.welcome');
+  await page.waitForSelector('.app-shell');
   const again = await page.evaluate(() => window.tongzhou.snapshot());
   assert.equal(again.channels[0].enabled, false);
   assert.equal(again.notificationRules[0].once, true);

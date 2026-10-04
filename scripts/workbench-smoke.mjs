@@ -47,7 +47,7 @@ try {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.setDefaultTimeout(12000);
-  await page.waitForSelector('.welcome');
+  await page.waitForSelector('.app-shell');
   await app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()[0].setIgnoreMouseEvents(true),
   );
@@ -82,7 +82,7 @@ try {
   await page.locator(`[data-session-id="${sessions[0].id}"]`).click();
   assert.equal(await page.locator('.composer textarea').inputValue(), '普通会话草稿');
   await page.reload();
-  await page.waitForSelector('.welcome');
+  await page.waitForSelector('.app-shell');
   await page.locator(`[data-session-id="${sessions[1].id}"]`).click();
   assert.equal(await page.locator('.composer textarea').inputValue(), '项目会话草稿');
   checks.push('drafts are isolated per session and survive renderer reload');
@@ -383,7 +383,7 @@ try {
   await page.getByRole('button', { name: '深色', exact: true }).click();
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
   await page.reload();
-  await page.waitForSelector('.welcome');
+  await page.waitForSelector('.app-shell');
   assert.equal(await page.locator('html').getAttribute('data-theme'), 'dark');
   for (const [width, height] of [
     [1440, 900],
@@ -399,7 +399,7 @@ try {
         .getByRole('button', { name: theme === 'dark' ? '深色' : '浅色', exact: true })
         .click();
       await capture(`${width}-${theme}-settings`);
-      await nav('工作空间');
+      await page.getByRole('button', { name: '返回会话', exact: true }).click();
       await page.locator(`[data-session-id="${sessions[0].id}"]`).click();
       await capture(`${width}-${theme}-chat`);
       await nav('连接中心');

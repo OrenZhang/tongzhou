@@ -119,7 +119,7 @@ const app = await electron.launch(
 );
 try {
   const page = await app.firstWindow();
-  await page.waitForSelector('.welcome');
+  await page.waitForSelector('.app-shell');
   inspectPointer = () =>
     app.evaluate(({ BrowserWindow }) => {
       const pointer = BrowserWindow.getAllWindows().find((w) => w.getTitle() === '同舟操作指针');

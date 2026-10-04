@@ -15,7 +15,7 @@ const app = await electron.launch(
 );
 try {
   const page = await app.firstWindow();
-  await page.waitForSelector('.welcome');
+  await page.waitForSelector('.app-shell');
   await app.evaluate(({ ipcMain, BrowserWindow }) => {
     BrowserWindow.getAllWindows().forEach((w) => w.setIgnoreMouseEvents(true));
     // Fixture states deliberately omit a transient login-success phase. Success badges

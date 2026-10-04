@@ -57,7 +57,7 @@ try {
   await app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()[0].setContentSize(1440, 900),
   );
-  await page.waitForSelector('.welcome');
+  await page.waitForSelector('.app-shell');
   await page.locator(`[data-session-id="${session.id}"]`).click();
   if (await page.getByLabel('展开项目面板', { exact: true }).count())
     await page.getByLabel('展开项目面板', { exact: true }).click();

@@ -30,6 +30,7 @@ jobs:
       - run: npm run test:workflows
       - run: npm run test:turns
       - run: npm run test:ui
+      - run: npm run test:session-entry
       - run: npm run test:workbench
       - run: npm run test:capabilities
       - run: npm run test:management

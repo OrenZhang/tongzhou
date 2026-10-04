@@ -77,7 +77,7 @@ let app;
 try {
   app = await electron.launch(launchOptions);
   const page = await app.firstWindow();
-  await page.waitForSelector('.welcome');
+  await page.waitForSelector('.app-shell');
   await app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows().forEach((w) => w.setIgnoreMouseEvents(true)),
   );
@@ -148,7 +148,7 @@ try {
       throw new Error('普通聊天不应打开文件夹选择器');
     };
   });
-  await page.getByRole('button', { name: '工作空间', exact: true }).click();
+  await page.getByRole('button', { name: '返回会话', exact: true }).click();
   await page.getByLabel('当前连接', { exact: true }).selectOption(provider.id);
   await page.getByRole('button', { name: '当前模型', exact: true }).click();
   await page.getByRole('button', { name: 'fixture-model', exact: true }).click();
@@ -228,7 +228,7 @@ try {
   await app.evaluate(({ dialog }, project) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [project] });
   }, project);
-  await page.getByRole('button', { name: '工作空间', exact: true }).click();
+  await page.getByRole('button', { name: '返回会话', exact: true }).click();
   await page.locator('.welcome').getByRole('button', { name: '打开项目', exact: true }).click();
   await page.getByLabel('消息', { exact: true }).waitFor();
   await page.evaluate(async (p) => window.tongzhou.saveProvider({ ...p, models: [] }), provider);
@@ -330,7 +330,7 @@ try {
     () => document.querySelector('#global-permission')?.value === 'full-access',
   );
   await page.screenshot({ path: 'test-results/permissions-settings.png' });
-  await page.getByRole('button', { name: '工作空间', exact: true }).click();
+  await page.getByRole('button', { name: '返回会话', exact: true }).click();
   await page.getByText('当前：完全开放', { exact: true }).waitFor();
   await page.getByLabel('会话权限', { exact: true }).selectOption('read-only');
   await page.getByText('当前：只读', { exact: true }).waitFor();
@@ -348,7 +348,7 @@ try {
   app = undefined;
   app = await electron.launch(launchOptions);
   const again = await app.firstWindow();
-  await again.waitForSelector('.welcome');
+  await again.waitForSelector('.app-shell');
   await app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows().forEach((w) => w.setIgnoreMouseEvents(true)),
   );

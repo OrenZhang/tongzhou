@@ -16,7 +16,7 @@ try {
   const page = await app.firstWindow();
   page.setDefaultTimeout(15000);
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.waitForSelector('.welcome');
+  await page.waitForSelector('.app-shell');
   await app.evaluate(({ BrowserWindow }) => {
     const w = BrowserWindow.getAllWindows()[0];
     w.setContentSize(1200, 950);
@@ -37,7 +37,7 @@ try {
   await managementSwitch.uncheck();
   await management.getByText('已停用，后续工具调用将不再使用此能力。', { exact: true }).waitFor();
   await page.reload();
-  await page.waitForSelector('.welcome');
+  await page.waitForSelector('.app-shell');
   await navigate();
   assert.equal(await computerSwitch.isChecked(), true);
   assert.equal(await managementSwitch.isChecked(), false);

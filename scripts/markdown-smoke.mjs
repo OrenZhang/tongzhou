@@ -53,7 +53,7 @@ try {
   page.on('request', (r) => {
     if (/^https?:/.test(r.url())) externalRequests.push(r.url());
   });
-  await page.waitForSelector('.welcome');
+  await page.waitForSelector('.app-shell');
   await app.evaluate(({ BrowserWindow, shell }) => {
     const window = BrowserWindow.getAllWindows()[0];
     window.setIgnoreMouseEvents(true);

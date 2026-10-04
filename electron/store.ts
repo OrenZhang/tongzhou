@@ -168,6 +168,8 @@ export class Store {
   }
   saveProvider(input: ProviderInput): Provider {
     const { secret, clearSecret, hasSecret: _, ...provider } = input;
+    provider.enabled ??=
+      this.list<Provider>('provider').find((p) => p.id === input.id)?.enabled ?? true;
     const encrypted = secret ? this.codec.encrypt(secret) : null;
     this.db.exec('BEGIN');
     try {

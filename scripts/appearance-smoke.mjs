@@ -52,7 +52,7 @@ const prepare = async () => {
   const page = await app.firstWindow();
   page.on('pageerror', (e) => errors.push(e.message));
   page.setDefaultTimeout(10000);
-  await page.waitForSelector('.welcome');
+  await page.waitForSelector('.app-shell');
   await app.evaluate(({ BrowserWindow }) => {
     const w = BrowserWindow.getAllWindows()[0];
     w.setIgnoreMouseEvents(true);
@@ -88,7 +88,7 @@ try {
     localStorage.setItem('tongzhou-theme', 'dark');
   });
   await page.reload();
-  await page.waitForSelector('.welcome');
+  await page.waitForSelector('.app-shell');
   assert.equal(await page.locator('html').getAttribute('data-theme'), 'dark');
   await nav('设置与优化');
   const cdp = await page.context().newCDPSession(page);
@@ -190,7 +190,7 @@ try {
   await capture('default-chat');
   await page.evaluate(() => localStorage.setItem('tongzhou-appearance', '{invalid'));
   await page.reload();
-  await page.waitForSelector('.welcome');
+  await page.waitForSelector('.app-shell');
   assert.equal(await page.locator('html').getAttribute('data-style'), 'graphite');
   assert.deepEqual(errors, []);
   await writeFile(

@@ -96,7 +96,7 @@ const checks = [];
 try {
   app = await electron.launch(options);
   let page = await app.firstWindow();
-  await page.waitForSelector('.welcome');
+  await page.waitForSelector('.app-shell');
   await app.evaluate(({ BrowserWindow, shell }) => {
     BrowserWindow.getAllWindows().forEach((w) => w.setIgnoreMouseEvents(true));
     shell.openExternal = async () => {};
@@ -180,7 +180,7 @@ try {
   await app.close();
   app = await electron.launch(options);
   page = await app.firstWindow();
-  await page.waitForSelector('.welcome');
+  await page.waitForSelector('.app-shell');
   const cookies = await app.evaluate(async ({ session }) =>
     session
       .fromPartition('persist:tongzhou-connector-browser-fixture')

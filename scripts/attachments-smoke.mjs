@@ -55,7 +55,7 @@ const errors = [];
 try {
   const page = await app.firstWindow();
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.waitForSelector('.welcome');
+  await page.waitForSelector('.app-shell');
   await app.evaluate(async ({ BrowserWindow, clipboard, ClipboardItem }) => {
     BrowserWindow.getAllWindows()[0].setContentSize(1200, 850);
     globalThis.attachmentClipboard = await Promise.all(
@@ -110,7 +110,7 @@ try {
   await page.locator('.attachment-dialog img').waitFor();
   await page.getByRole('button', { name: '关闭附件预览' }).click();
   await page.reload();
-  await page.waitForSelector('.welcome');
+  await page.waitForSelector('.app-shell');
   assert.equal(
     await page.locator('.composer .attachment-card').count(),
     2,
@@ -159,7 +159,7 @@ try {
     'Reader receives complete file',
   );
   await page.reload();
-  await page.waitForSelector('.welcome');
+  await page.waitForSelector('.app-shell');
   await page.locator('[data-session-id]').first().click();
   await page.locator('.chat-message.user .attachment-card.is-text').waitFor();
   await page.locator('.chat-message.user .attachment-card.is-text .attachment-open').click();

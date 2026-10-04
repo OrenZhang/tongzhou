@@ -74,7 +74,7 @@ const app = await electron.launch(
 );
 try {
   const page = await app.firstWindow();
-  await page.waitForSelector('.welcome');
+  await page.waitForSelector('.app-shell');
   await app.evaluate(({ BrowserWindow, dialog }, skill) => {
     BrowserWindow.getAllWindows().forEach((w) => w.setIgnoreMouseEvents(true));
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [skill] });
@@ -111,7 +111,7 @@ try {
         maxOutputTokens: 1000,
       });
   }, base);
-  await page.getByRole('button', { name: '工作空间', exact: true }).click();
+  await page.getByRole('button', { name: '返回会话', exact: true }).click();
   await page.getByLabel('当前连接', { exact: true }).selectOption('fixture-a');
   await page.getByLabel('消息', { exact: true }).fill('读取测试笔记');
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
@@ -123,7 +123,7 @@ try {
   const id = before.sessions[0].id;
   await page.getByLabel('当前连接', { exact: true }).selectOption('fixture-b');
   await page.getByRole('button', { name: '插件', exact: true }).click();
-  await page.getByRole('button', { name: '工作空间', exact: true }).click();
+  await page.getByRole('button', { name: '返回会话', exact: true }).click();
   assert.equal(await page.getByLabel('当前连接', { exact: true }).inputValue(), 'fixture-b');
   await page.getByLabel('消息', { exact: true }).fill('换个供应商继续');
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
@@ -139,7 +139,7 @@ try {
   assert.ok(!last.includes('"tool_calls"'));
   await page.screenshot({ path: 'test-results/13-plugin-handoff.png' });
   await page.reload();
-  await page.waitForSelector('.welcome');
+  await page.waitForSelector('.app-shell');
   const persisted = await page.evaluate(() => window.tongzhou.snapshot());
   assert.equal(persisted.sessions[0].model, 'model-b');
   assert.equal(persisted.plugins.length, 1);

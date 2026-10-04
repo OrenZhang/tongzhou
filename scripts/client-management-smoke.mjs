@@ -88,7 +88,7 @@ try {
   const page = await app.firstWindow();
   page.setDefaultTimeout(20000);
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.waitForSelector('.welcome');
+  await page.waitForSelector('.app-shell');
   await app.evaluate(({ BrowserWindow }) => {
     const w = BrowserWindow.getAllWindows()[0];
     w.setIgnoreMouseEvents(true);
@@ -143,7 +143,7 @@ try {
   await card.getByText('没有匹配的功能。').waitFor();
   await card.getByLabel('搜索客户端功能').fill('批准');
   await card.getByRole('button', { name: '打开：批准或拒绝待审批操作' }).click();
-  await page.waitForSelector('.welcome');
+  await page.waitForSelector('.app-shell');
   await page.evaluate(
     async (baseUrl) => {
       const api = window.tongzhou;
@@ -185,7 +185,7 @@ try {
   assert.equal(await page.locator('html').getAttribute('data-font'), 'system');
   assert.equal((await page.evaluate(() => window.tongzhou.getAppearance())).textSize, 18);
   await page.reload();
-  await page.waitForSelector('.welcome');
+  await page.waitForSelector('.app-shell');
   await page.waitForFunction(() => document.documentElement.dataset.style === 'blue');
   await page.locator('.sidebar').getByRole('button', { name: '插件', exact: true }).click();
   await card.locator('.client-capability-catalog > summary').click();

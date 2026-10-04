@@ -17,7 +17,7 @@ try {
     shell.openExternal = async () => {};
   });
   const page = await app.firstWindow();
-  await page.waitForSelector('.welcome');
+  await page.waitForSelector('.app-shell');
   await app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows().forEach((w) => w.setIgnoreMouseEvents(true)),
   );
@@ -36,7 +36,7 @@ try {
   assert.ok((await page.getByLabel('设备授权码', { exact: true }).innerText()).length > 0);
   await page.getByRole('button', { name: '打开授权页面', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: '关闭', exact: true }).click();
-  await page.getByRole('button', { name: '工作空间', exact: true }).click();
+  await page.getByRole('button', { name: '返回会话', exact: true }).click();
   await page.getByRole('button', { name: /^模型与订阅/ }).click();
   await page.getByRole('button', { name: '编辑 OpenAI · ChatGPT', exact: true }).click();
   await page.getByRole('button', { name: '前往登录', exact: true }).click();

@@ -53,6 +53,7 @@ import { CommandPalette } from './CommandPalette';
 import { PendingInputs, useRunEvents } from './RunActivity';
 import { ConversationTurn } from './ConversationTurn';
 import { conversationTurns } from './shared/turns';
+import { providerUnavailableReason } from './shared/provider-availability';
 import { InputModePicker, inputModes } from './InputModePicker';
 import { SessionNavigator } from './SessionNavigator';
 import { GlobalPermission, SessionPermission } from './PermissionControls';
@@ -191,6 +192,8 @@ export default function App() {
   >({});
   const api = window.tongzhou;
   const [data, setData] = useState<Snapshot>(empty);
+  const [loaded, setLoaded] = useState(false);
+  const restoredSession = useRef(false);
   const [view, setView] = useState<View>('workspace');
   const [connectionInitialTab, setConnectionInitialTab] = useState<'accounts' | 'network'>(
     'accounts',
@@ -251,6 +254,7 @@ export default function App() {
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const [providerEdit, setProviderEdit] = useState<ProviderInput | null>(null);
+  const [providerToggles, setProviderToggles] = useState<Record<string, boolean>>({});
   const [agentEdit, setAgentEdit] = useState<AgentProfile | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [teamOpen, setTeamOpen] = useState(false);
@@ -280,6 +284,13 @@ export default function App() {
   const session = data.sessions.find((s) => s.id === sessionId);
   const project = data.projects.find((p) => p.id === session?.projectId);
   const provider = data.providers.find((p) => p.id === providerId);
+  const availableProviders = data.providers.filter(
+    (p) => !providerUnavailableReason(p, accountStates[p.id]),
+  );
+  const unavailableReason = provider
+    ? providerUnavailableReason(provider, accountStates[provider.id])
+    : '请选择连接';
+  const providerReady = !!provider && !unavailableReason;
   const selectedAgent = data.agents.find((a) => a.id === agentId);
   const sessionPermission = effectivePermission(session, data.defaultPermission, selectedAgent);
   const running = data.runs.find((r) => r.sessionId === sessionId && r.status === 'running');
@@ -290,6 +301,7 @@ export default function App() {
   );
   const conversationFollow = useConversationFollow(feed, sessionId, view === 'workspace', turns);
   const activateSession = (selected: Session) => {
+    localStorage.setItem('tongzhou-last-session', selected.id);
     sessionRef.current = selected.id;
     setSessionId(selected.id);
     setInputMode('supplement');
@@ -299,8 +311,20 @@ export default function App() {
     setView('workspace');
   };
   const refresh = useCallback(async () => {
-    if (api) setData(await api.snapshot());
+    if (api) {
+      setData(await api.snapshot());
+      setLoaded(true);
+    }
   }, [api]);
+  useEffect(() => {
+    if (!loaded || restoredSession.current) return;
+    restoredSession.current = true;
+    if (sessionRef.current) return;
+    const saved = localStorage.getItem('tongzhou-last-session');
+    const previous = data.sessions.find((s) => s.id === saved && !s.archived && !s.parentId);
+    if (previous) activateSession(previous);
+    else if (saved) localStorage.removeItem('tongzhou-last-session');
+  }, [loaded, data.sessions]);
   const report = (e: unknown) =>
     setNotice(
       e instanceof Error
@@ -363,9 +387,9 @@ export default function App() {
     });
   }, [api, refresh]);
   useEffect(() => {
-    if (view !== 'providers') return;
     let active = true;
     for (const p of data.providers) {
+      if (p.enabled === false) continue;
       const request =
         p.protocol === 'codex'
           ? api.codexStatus(p.id).then((s) => ({
@@ -384,12 +408,18 @@ export default function App() {
         ?.then((status) => {
           if (active) setAccountStates((old) => ({ ...old, [p.id]: status }));
         })
-        .catch(() => {});
+        .catch(() => {
+          if (active)
+            setAccountStates((old) => ({
+              ...old,
+              [p.id]: { connected: false, pending: false, error: true },
+            }));
+        });
     }
     return () => {
       active = false;
     };
-  }, [api, view, data.providers.map((p) => p.id + ':' + p.protocol).join('|')]);
+  }, [api, view, data.providers.map((p) => p.id + ':' + p.protocol + ':' + p.enabled).join('|')]);
   useEffect(() => {
     sessionRef.current = sessionId;
     setHasEarlier(false);
@@ -412,8 +442,11 @@ export default function App() {
     else setMessages([]);
   }, [sessionId, api]);
   useEffect(() => {
-    if (!providerId && data.providers.length) setProviderId(data.providers[0].id);
-  }, [providerId, data.providers]);
+    if (!sessionRef.current && !sessionId && !providerId && availableProviders.length) {
+      setProviderId(availableProviders[0].id);
+      setModel(availableProviders[0].models[0] ?? '');
+    }
+  }, [sessionId, providerId, availableProviders]);
   useEffect(() => {
     if (!model && provider?.models[0]) setModel(provider.models[0]);
   }, [model, provider?.models]);
@@ -441,12 +474,18 @@ export default function App() {
   const newSession = async (projectId?: string) => {
     await perform(async () => {
       const s = await api.createSession(projectId);
+      const preferred = providerReady ? provider : availableProviders[0];
       activateSession({
         ...s,
-        providerId: providerId || s.providerId,
-        model: model || s.model,
+        providerId: preferred?.id ?? '',
+        model: preferred?.id === providerId ? model : (preferred?.models[0] ?? ''),
         agentId: '',
       });
+      if (preferred)
+        await api.updateSession(s.id, {
+          providerId: preferred.id,
+          model: preferred.id === providerId ? model : (preferred.models[0] ?? ''),
+        });
       await refresh();
     });
   };
@@ -465,6 +504,7 @@ export default function App() {
       !providerId
     )
       return;
+    if (!running && !providerReady) return;
     setBusy(true);
     try {
       let targetId = sessionId;
@@ -552,7 +592,6 @@ export default function App() {
     }
   };
   const nav = [
-    { id: 'workspace', label: '工作空间', icon: MessageSquare },
     { id: 'providers', label: '模型与订阅', icon: Network },
     { id: 'agents', label: 'Agent 团队', icon: Users },
     { id: 'extensions', label: '插件', icon: Terminal },
@@ -895,14 +934,19 @@ export default function App() {
   return (
     <div className={`app-shell ${sidebarOpen ? '' : 'sidebar-collapsed'}`} data-view={view}>
       <aside className="sidebar" aria-label="主导航" inert={!sidebarOpen}>
-        <div className="brand">
+        <button
+          className="brand"
+          aria-label="返回会话"
+          title="返回当前会话"
+          onClick={() => setView('workspace')}
+        >
           <Mark />
           <div>
             <strong>同舟</strong>
             <span>TONGZHOU</span>
           </div>
           <span className="version">0.5</span>
-        </div>
+        </button>
         <button className="new-chat" onClick={() => newSession()}>
           <Plus size={17} />
           开启新会话<span>↗</span>
@@ -970,7 +1014,7 @@ export default function App() {
             <ChevronRight size={13} />
             <strong>
               {view === 'workspace'
-                ? (project?.name ?? '工作空间')
+                ? (project?.name ?? (session ? '会话' : '新会话'))
                 : {
                     providers: '模型与订阅',
                     connections: '连接中心',
@@ -1177,7 +1221,7 @@ export default function App() {
                     </div>
                     <div className="welcome-foot">
                       <Layers3 size={14} />
-                      {data.providers.length} 个连接<span>·</span>
+                      {availableProviders.length} 个可用连接<span>·</span>
                       <Bot size={14} />
                       {data.agents.length} 个 Agent<span>·</span>上下文随任务同行
                     </div>
@@ -1305,7 +1349,7 @@ export default function App() {
                     <div className="composer-controls">
                       <select
                         aria-label="当前连接"
-                        value={providerId}
+                        value={providerReady ? providerId : ''}
                         onChange={(e) => {
                           selectModel(
                             e.target.value,
@@ -1315,9 +1359,9 @@ export default function App() {
                         disabled={!!running}
                       >
                         <option value="" disabled>
-                          选择连接
+                          {availableProviders.length ? '选择连接' : '暂无可用连接'}
                         </option>
-                        {data.providers.map((p) => (
+                        {availableProviders.map((p) => (
                           <option key={p.id} value={p.id}>
                             {p.name}
                           </option>
@@ -1327,12 +1371,12 @@ export default function App() {
                         key={providerId}
                         label="当前模型"
                         compact
-                        value={model}
-                        models={provider?.models ?? []}
+                        value={providerReady ? model : ''}
+                        models={providerReady ? (provider?.models ?? []) : []}
                         modelLabels={provider?.modelLabels}
-                        load={provider ? () => api.models(provider.id) : undefined}
+                        load={providerReady && provider ? () => api.models(provider.id) : undefined}
                         onChange={(m) => selectModel(providerId, m)}
-                        disabled={!!running}
+                        disabled={!!running || !providerReady}
                       />
                     </div>
                     <div className="row composer-actions">
@@ -1355,7 +1399,8 @@ export default function App() {
                           !!running ||
                           busy ||
                           attachments.pending ||
-                          !model
+                          !model ||
+                          !providerReady
                         }
                         onClick={() => setTeamOpen(true)}
                       >
@@ -1400,6 +1445,7 @@ export default function App() {
                             attachments.pending ||
                             !model.trim() ||
                             !providerId ||
+                            !providerReady ||
                             busy ||
                             !!session?.archived
                           }
@@ -1411,6 +1457,18 @@ export default function App() {
                     </div>
                   </div>
                 </div>
+                {!providerReady && !running && (
+                  <div className="composer-connection-notice" role="status">
+                    <span>
+                      {provider
+                        ? `${provider.name}：${unavailableReason}`
+                        : '先连接一个模型，即可开始聊天'}
+                    </span>
+                    <button className="text-button" onClick={() => setView('providers')}>
+                      管理模型与订阅 <ArrowRight size={13} />
+                    </button>
+                  </div>
+                )}
                 <div className="composer-caption">
                   <span>
                     {running ? (
@@ -1546,6 +1604,40 @@ export default function App() {
                       <p>{protocolLabels[p.protocol]}</p>
                       <div className="provider-endpoint">
                         {p.baseUrl || protocolLabels[p.protocol] + ' · 官方账号'}
+                      </div>
+                      <div className="provider-availability">
+                        <span className="muted">
+                          {providerUnavailableReason(p, accountStates[p.id]) || '可在会话中选择'}
+                        </span>
+                        <label className="switch-control">
+                          <input
+                            type="checkbox"
+                            role="switch"
+                            aria-label={'启用连接 ' + p.name}
+                            checked={providerToggles[p.id] ?? p.enabled !== false}
+                            disabled={
+                              p.id in providerToggles ||
+                              data.runs.some((r) => r.providerId === p.id && r.status === 'running')
+                            }
+                            onChange={(e) => {
+                              const enabled = e.target.checked;
+                              setProviderToggles((old) => ({ ...old, [p.id]: enabled }));
+                              void perform(async () => {
+                                try {
+                                  await api.saveProvider({ ...p, enabled });
+                                  await refresh();
+                                } finally {
+                                  setProviderToggles((old) => {
+                                    const next = { ...old };
+                                    delete next[p.id];
+                                    return next;
+                                  });
+                                }
+                              });
+                            }}
+                          />
+                          <span aria-hidden="true" />
+                        </label>
                       </div>
                       <div className="card-footer">
                         <span>
@@ -1817,7 +1909,7 @@ export default function App() {
                   <h3>准备好启航</h3>
                   <p>开始一项任务后，运行记录会出现在这里。</p>
                   <button className="secondary" onClick={() => setView('workspace')}>
-                    回到工作空间
+                    回到会话
                     <ArrowRight size={14} />
                   </button>
                 </div>
@@ -2428,6 +2520,7 @@ export default function App() {
                   clearDraft(deleteId);
                   if (sessionId === deleteId) {
                     setSessionId('');
+                    localStorage.removeItem('tongzhou-last-session');
                     sessionRef.current = '';
                     setMessages([]);
                   }

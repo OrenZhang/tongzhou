@@ -97,7 +97,7 @@ const executablePath = process.env.TONGZHOU_SMOKE_EXECUTABLE;
 const app = await electron.launch({ executablePath, args: executablePath ? [] : ['.'], env });
 try {
   const page = await app.firstWindow();
-  await page.waitForSelector('.welcome');
+  await page.waitForSelector('.app-shell');
   await app.evaluate(({ BrowserWindow, dialog }, folder) => {
     BrowserWindow.getAllWindows().forEach((w) => w.setIgnoreMouseEvents(true));
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] });
@@ -217,7 +217,7 @@ try {
   assert.match(duration, /用时/);
   await page.screenshot({ path: 'test-results/process-segments-expanded.png' });
   await page.reload();
-  await page.waitForSelector('.welcome');
+  await page.waitForSelector('.app-shell');
   await page.locator(`[data-session-id="${session.id}"]`).click();
   await page.locator('.turn-final').waitFor();
   assert.equal(await page.locator('.process-toggle').innerText(), duration);

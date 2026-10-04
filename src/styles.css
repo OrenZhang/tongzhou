@@ -142,6 +142,11 @@ svg {
   gap: 8px;
   padding: 0 8px 16px;
   height: 42px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  color: inherit;
 }
 .brand-mark {
   display: inline-flex;
@@ -3681,4 +3686,20 @@ kbd {
 }
 .network-profile-list:has(.network-health-results) {
   grid-template-columns: 1fr;
+}
+.provider-availability,
+.composer-connection-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+}
+.provider-availability {
+  margin: 12px 0;
+}
+.composer-connection-notice {
+  padding: 8px 4px 0;
+  color: var(--muted);
+  flex-wrap: wrap;
 }

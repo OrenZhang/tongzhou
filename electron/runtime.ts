@@ -544,6 +544,8 @@ export class Runtime {
     if (agent.instructions.length > 64000)
       throw new Error('已启用的 Skill 指令过长，请减少启用数量');
     const provider = this.store.get<Provider>('provider', input.providerId);
+    if (provider.enabled === false)
+      throw new Error('此连接已停用，请在模型与订阅中启用，或选择其他连接。');
     const project = session.projectId
       ? this.store.get<Project>('project', session.projectId)
       : null;
@@ -1565,6 +1567,7 @@ export class Runtime {
     const profiles = agentIds.map((id) => this.store.get<AgentProfile>('agent', id));
     for (const a of profiles) {
       const p = this.store.get<Provider>('provider', a.providerId || input.providerId);
+      if (p.enabled === false) throw new Error(`${p.name} 已停用，请先启用或选择其他连接`);
       if (!(a.model || input.model)) throw new Error('请指定模型');
       if (
         p.auth !== 'none' &&

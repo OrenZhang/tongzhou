@@ -278,7 +278,7 @@ export function CoreCapabilities({
             onClick={() =>
               void act('management', '正在打开会话…', async () => {
                 await api.openModule('workspace');
-                return '已打开工作空间';
+                return '已返回会话';
               })
             }
           >

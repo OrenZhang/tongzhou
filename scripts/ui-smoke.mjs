@@ -181,7 +181,7 @@ try {
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   page.setDefaultTimeout(12000);
-  await page.waitForSelector('.welcome');
+  await page.waitForSelector('.app-shell');
   await app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows().forEach((w) => w.setIgnoreMouseEvents(true)),
   );
@@ -254,7 +254,7 @@ try {
     true,
   );
   checks.push('provider search, modal tab containment, escape and focus restoration');
-  await nav('工作空间');
+  await page.getByRole('button', { name: '返回会话', exact: true }).click();
   assert.equal(await page.locator('.context-panel').count(), 0);
   await page.locator(`[data-session-id="${sessions[1].id}"]`).click();
   await page.getByRole('button', { name: '关闭项目面板', exact: true }).click();
@@ -262,7 +262,7 @@ try {
   await page.getByRole('button', { name: '收起导航', exact: true }).click();
   assert.equal(await page.locator('.sidebar').getAttribute('inert'), '');
   await page.reload();
-  await page.waitForSelector('.welcome');
+  await page.waitForSelector('.app-shell');
   assert.equal(await page.locator('.sidebar').getAttribute('inert'), '');
   await page.getByRole('button', { name: '展开导航', exact: true }).click();
   await page.locator(`[data-session-id="${sessions[1].id}"]`).click();
@@ -286,7 +286,7 @@ try {
       ({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0].setContentSize(...size),
       [width, height],
     );
-    await nav('工作空间');
+    await page.getByRole('button', { name: '返回会话', exact: true }).click();
     await page.locator(`[data-session-id="${sessions[0].id}"]`).click();
     await page.locator('.turn-final').waitFor();
     assert.equal(await page.locator('.context-panel').count(), 0);

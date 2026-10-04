@@ -48,7 +48,7 @@ try {
   const page = await app.firstWindow();
   page.setDefaultTimeout(30000);
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.waitForSelector('.welcome');
+  await page.waitForSelector('.app-shell');
   await app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()[0].setContentSize(1280, 930),
   );
@@ -199,7 +199,7 @@ try {
   checks.push('desktop shutdown removes owned runtime and process');
   app = await launch();
   const reopened = await app.firstWindow();
-  await reopened.waitForSelector('.welcome');
+  await reopened.waitForSelector('.app-shell');
   await reopened.evaluate(async () => {
     try {
       await window.tongzhou.testProviderNetwork('openai-codex');
@@ -239,7 +239,7 @@ try {
     await new Promise((r) => setTimeout(r, 100));
   assert.equal(await listening(), false, 'desktop crash must stop the owned proxy listener');
   app = await launch();
-  await (await app.firstWindow()).waitForSelector('.welcome');
+  await (await app.firstWindow()).waitForSelector('.app-shell');
   assert.deepEqual(
     await readdir(path.join(profile, 'network-runtime')),
     [],
