@@ -56,6 +56,50 @@ try {
   assert.deepEqual(options.sort(), ['key-ready', 'ready']);
   await page.getByLabel('消息', { exact: true }).fill('保留这份草稿');
   await page.getByRole('button', { name: '模型与订阅', exact: true }).click();
+  // Status text and controls must stay in the two-row layout, including when
+  // the endpoint column is hidden. Horizontal-overflow checks alone miss this.
+  const originalTheme = await page.locator('html').getAttribute('data-theme');
+  for (const width of [1440, 1000, 900]) {
+    await app.evaluate(({ BrowserWindow }, width) => {
+      const window = BrowserWindow.getAllWindows()[0];
+      window.setMinimumSize(800, 600);
+      window.setContentSize(width, 900);
+    }, width);
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate((theme) => {
+        document.documentElement.dataset.theme = theme;
+      }, theme);
+      await page.screenshot({
+        path: `test-results/connections-${width}-${theme}.png`,
+        animations: 'disabled',
+      });
+      const failures = await page
+        .locator('.model-connections > .provider-card')
+        .evaluateAll((cards) =>
+          cards.flatMap((card) => {
+            const row = card.getBoundingClientRect();
+            const status = card.querySelector('.provider-availability > .muted');
+            const text = status.getBoundingClientRect();
+            const toggle = card.querySelector('.switch-control').getBoundingClientRect();
+            const edit = card.querySelector('.card-top > .icon-button').getBoundingClientRect();
+            return row.height > 90 ||
+              text.height > 22 ||
+              status.scrollWidth > status.clientWidth + 1 ||
+              text.right > toggle.left ||
+              toggle.right > edit.left ||
+              edit.right > row.right ||
+              toggle.top < row.top ||
+              toggle.bottom > row.bottom
+              ? [card.querySelector('h3').textContent]
+              : [];
+          }),
+        );
+      assert.deepEqual(failures, [], `connection row layout at ${width}px (${theme})`);
+    }
+  }
+  await page.evaluate((theme) => {
+    document.documentElement.dataset.theme = theme;
+  }, originalTheme);
   await page.getByRole('switch', { name: '启用连接 可用服务', exact: true }).uncheck();
   await page.waitForFunction(
     async () =>
@@ -98,6 +142,7 @@ try {
         checks: [
           'conversation-first navigation',
           'credential and enable filtering',
+          'compact provider rows and controls at 1440/1000/900px in light/dark themes',
           'disabled selection preserved without silent fallback',
           'restore session and draft after reload',
           'archived session skipped',
