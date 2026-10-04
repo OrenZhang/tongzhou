@@ -403,7 +403,7 @@ export async function projectInstructions(root: string) {
   return result;
 }
 
-async function searchProject(
+export async function searchProject(
   root: string,
   relative: string,
   query: string,

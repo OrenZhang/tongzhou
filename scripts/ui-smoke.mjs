@@ -293,7 +293,7 @@ try {
     const textSize = await page
       .locator('.turn-final .markdown')
       .evaluate((e) => parseFloat(getComputedStyle(e).fontSize));
-    assert.ok(textSize >= 15);
+    assert.equal(textSize, 14);
     await capture(`${width}-chat`);
     await page.locator(`[data-session-id="${sessions[1].id}"]`).click();
     await page.locator('.context-panel').waitFor();

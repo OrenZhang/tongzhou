@@ -11,7 +11,6 @@ import {
   ChevronRight,
   CircleHelp,
   Code2,
-  FileCode2,
   Folder,
   FolderOpen,
   GitBranch,
@@ -43,7 +42,6 @@ import type {
   NativeEngine,
   CodexAuthState,
   CodexLoginMethod,
-  FileEntry,
   ImportPreview,
   Message,
   ProviderInput,
@@ -62,6 +60,7 @@ import { effectivePermission } from './shared/permissions';
 import { ConnectionsPanel } from './ConnectionsPanel';
 import { Appearance, useAppearance } from './Appearance';
 import { useDraft } from './useDraft';
+import { ProjectContext } from './ProjectContext';
 import { AttachmentCards, useAttachmentDraft } from './Attachments';
 import { longPaste } from './shared/attachments';
 import { useConversationFollow } from './useConversationFollow';
@@ -254,11 +253,6 @@ export default function App() {
   const [teamIds, setTeamIds] = useState<string[]>([]);
   const [rename, setRename] = useState<string | null>(null);
   const [archived, setArchived] = useState(false);
-  const [contextTab, setContextTab] = useState<'files' | 'diff'>('files');
-  const [filePath, setFilePath] = useState('');
-  const [entries, setEntries] = useState<FileEntry[]>([]);
-  const [fileView, setFileView] = useState<{ path: string; content: string } | null>(null);
-  const [diff, setDiff] = useState('');
   const [nativeAccounts, setNativeAccounts] = useState<
     Partial<Record<NativeEngine, NativeAuthState>>
   >({});
@@ -394,8 +388,6 @@ export default function App() {
   }, [api, view, data.providers.map((p) => p.id + ':' + p.protocol).join('|')]);
   useEffect(() => {
     sessionRef.current = sessionId;
-    setFilePath('');
-    setFileView(null);
     setHasEarlier(false);
     setMessages((old) => old.filter((m) => m.sessionId === sessionId));
     if (sessionId)
@@ -442,37 +434,6 @@ export default function App() {
     const t = setTimeout(() => setNotice(''), 7000);
     return () => clearTimeout(t);
   }, [notice]);
-  useEffect(() => {
-    if (!project || view !== 'workspace') return;
-    let active = true;
-    let pending = false;
-    const update = async () => {
-      if (pending) return;
-      pending = true;
-      try {
-        if (contextTab === 'files') {
-          const result = await api.listFiles(project.id, filePath);
-          if (active) setEntries(result);
-        } else {
-          const result = await api.diff(project.id);
-          if (active) setDiff(result);
-        }
-      } catch (e) {
-        if (active) {
-          if (contextTab === 'diff') setDiff(String(e));
-          else report(e);
-        }
-      } finally {
-        pending = false;
-      }
-    };
-    void update();
-    const timer = running ? setInterval(() => void update(), 2500) : undefined;
-    return () => {
-      active = false;
-      clearInterval(timer);
-    };
-  }, [project?.id, filePath, contextTab, view, running?.id]);
   const newSession = async (projectId?: string) => {
     await perform(async () => {
       const s = await api.createSession(projectId);
@@ -1475,123 +1436,20 @@ export default function App() {
               </div>
             </main>
             {project && contextOpen && (
-              <aside className="context-panel" aria-label="项目上下文">
-                <div className="context-title">
-                  <span>项目上下文</span>
-                  <button
-                    className="icon-button"
-                    aria-label="关闭项目面板"
-                    onClick={() => setContextOpen(false)}
-                  >
-                    <X size={15} />
-                  </button>
-                </div>
-                <div className="context-tabs">
-                  {project && (
-                    <button
-                      title="生成项目 agent.md，已有说明不会覆盖"
-                      onClick={() =>
-                        perform(async () => {
-                          const result = await api.initializeAgent(project.id);
-                          setNotice(
-                            result.created
-                              ? '已生成 ' + result.path
-                              : '已有项目说明，未覆盖：' + result.path,
-                          );
-                          setEntries(await api.listFiles(project.id, filePath));
-                        })
-                      }
-                    >
-                      初始化说明
-                    </button>
-                  )}
-                  <button
-                    className={contextTab === 'files' ? 'active' : ''}
-                    onClick={() => setContextTab('files')}
-                  >
-                    文件
-                  </button>
-                  <button
-                    className={contextTab === 'diff' ? 'active' : ''}
-                    onClick={() => setContextTab('diff')}
-                  >
-                    Git 变更
-                  </button>
-                  <button
-                    aria-label="刷新文件"
-                    className="icon-button"
-                    onClick={() =>
-                      perform(async () => {
-                        if (project) {
-                          if (contextTab === 'files')
-                            setEntries(await api.listFiles(project.id, filePath));
-                          else setDiff(await api.diff(project.id));
-                        }
-                      })
-                    }
-                  >
-                    <RefreshCw size={13} />
-                  </button>
-                </div>
-                {!project ? (
-                  <div className="context-empty">
-                    <Folder size={32} />
-                    <p>普通聊天</p>
-                    <span>
-                      直接发送消息即可，无需选择文件夹。
-                      <br />
-                      需要操作文件时，可以另开项目会话。
-                    </span>
-                    <button onClick={openProject}>
-                      选择文件夹
-                      <Plus size={13} />
-                    </button>
-                  </div>
-                ) : contextTab === 'diff' ? (
-                  <pre className="diff-view">{diff || '暂无变更'}</pre>
-                ) : (
-                  <>
-                    <div className="file-breadcrumb">
-                      <button onClick={() => setFilePath('')}>{project.name}</button>
-                      {filePath && (
-                        <>
-                          <span>/ {filePath}</span>
-                          <button
-                            aria-label="上一级目录"
-                            onClick={() =>
-                              setFilePath(filePath.split(/[\\/]/).slice(0, -1).join('/'))
-                            }
-                          >
-                            ↑
-                          </button>
-                        </>
-                      )}
-                    </div>
-                    <div className="file-list">
-                      {entries.map((f) => (
-                        <button
-                          key={f.path}
-                          onClick={() =>
-                            f.directory
-                              ? setFilePath(f.path)
-                              : perform(async () =>
-                                  setFileView({
-                                    path: f.path,
-                                    content: await api.readFile(project.id, f.path),
-                                  }),
-                                )
-                          }
-                        >
-                          {f.directory ? <Folder size={14} /> : <FileCode2 size={14} />}
-                          <span>{f.name}</span>
-                          {f.directory && <ChevronRight size={12} />}
-                        </button>
-                      ))}
-                      {!entries.length && <p className="muted">此目录为空</p>}
-                    </div>
-                  </>
-                )}
-              </aside>
+              <ProjectContext
+                key={project.id + ':' + sessionId}
+                project={project}
+                sessionId={sessionId}
+                running={!!running}
+                api={api}
+                onClose={() => setContextOpen(false)}
+                onNotice={setNotice}
+                onReference={(text) => {
+                  setDraft((old) => (old ? old + '\n\n' + text : text));
+                  setNotice('已引用到当前会话输入框，可补充要求后发送');
+                  composerInput.current?.focus();
+                }}
+              />
             )}
           </div>
         )}
@@ -2635,11 +2493,6 @@ export default function App() {
               保存
             </button>
           </div>
-        </Modal>
-      )}
-      {fileView && (
-        <Modal title={fileView.path} subtitle="只读文件预览" onClose={() => setFileView(null)} wide>
-          <pre className="file-preview">{fileView.content}</pre>
         </Modal>
       )}
       {data.approvals.length > 0 && (

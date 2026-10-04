@@ -392,6 +392,21 @@ export interface TongzhouAPI {
   listFiles(projectId: string, path: string): Promise<FileEntry[]>;
   readFile(projectId: string, path: string): Promise<string>;
   diff(projectId: string): Promise<string>;
+  projectChanges(
+    projectId: string,
+    scope: import('./project-context').ChangeScope,
+  ): Promise<import('./project-context').ProjectChanges>;
+  projectPatch(
+    projectId: string,
+    path: string,
+    scope: import('./project-context').ChangeScope,
+  ): Promise<import('./project-context').ProjectPatch>;
+  projectSearch(
+    projectId: string,
+    query: string,
+    mode: 'path' | 'content',
+  ): Promise<import('./project-context').ProjectSearch>;
+  projectInstructions(projectId: string): Promise<import('./project-context').ProjectInstruction[]>;
   importCCSwitch(): Promise<ImportPreview | null>;
   exportSession(id: string): Promise<string | null>;
   nativeStatus(engine: NativeEngine, providerId?: string): Promise<NativeAuthState>;

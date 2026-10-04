@@ -152,79 +152,79 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.markdown .hljs-keyword,
-.markdown .hljs-selector-tag,
-.markdown .hljs-literal {
+:is(.markdown, .project-source) .hljs-keyword,
+:is(.markdown, .project-source) .hljs-selector-tag,
+:is(.markdown, .project-source) .hljs-literal {
   color: #a626a4;
 }
-.markdown .hljs-string,
-.markdown .hljs-regexp,
-.markdown .hljs-addition {
+:is(.markdown, .project-source) .hljs-string,
+:is(.markdown, .project-source) .hljs-regexp,
+:is(.markdown, .project-source) .hljs-addition {
   color: #23733b;
 }
-.markdown .hljs-title,
-.markdown .hljs-section,
-.markdown .hljs-built_in {
+:is(.markdown, .project-source) .hljs-title,
+:is(.markdown, .project-source) .hljs-section,
+:is(.markdown, .project-source) .hljs-built_in {
   color: #155ca2;
 }
-.markdown .hljs-number,
-.markdown .hljs-attr,
-.markdown .hljs-symbol,
-.markdown .hljs-bullet {
+:is(.markdown, .project-source) .hljs-number,
+:is(.markdown, .project-source) .hljs-attr,
+:is(.markdown, .project-source) .hljs-symbol,
+:is(.markdown, .project-source) .hljs-bullet {
   color: #925600;
 }
-.markdown .hljs-comment,
-.markdown .hljs-quote {
+:is(.markdown, .project-source) .hljs-comment,
+:is(.markdown, .project-source) .hljs-quote {
   color: #647080;
   font-style: italic;
 }
-.markdown .hljs-variable,
-.markdown .hljs-name,
-.markdown .hljs-deletion {
+:is(.markdown, .project-source) .hljs-variable,
+:is(.markdown, .project-source) .hljs-name,
+:is(.markdown, .project-source) .hljs-deletion {
   color: #b32942;
 }
-.markdown .hljs-type,
-.markdown .hljs-meta {
+:is(.markdown, .project-source) .hljs-type,
+:is(.markdown, .project-source) .hljs-meta {
   color: #7151ab;
 }
-.markdown .hljs-emphasis {
+:is(.markdown, .project-source) .hljs-emphasis {
   font-style: italic;
 }
-.markdown .hljs-strong {
+:is(.markdown, .project-source) .hljs-strong {
   font-weight: 700;
 }
-[data-theme='dark'] .markdown .hljs-keyword,
-[data-theme='dark'] .markdown .hljs-selector-tag,
-[data-theme='dark'] .markdown .hljs-literal {
+[data-theme='dark'] :is(.markdown, .project-source) .hljs-keyword,
+[data-theme='dark'] :is(.markdown, .project-source) .hljs-selector-tag,
+[data-theme='dark'] :is(.markdown, .project-source) .hljs-literal {
   color: #d6a3f0;
 }
-[data-theme='dark'] .markdown .hljs-string,
-[data-theme='dark'] .markdown .hljs-regexp,
-[data-theme='dark'] .markdown .hljs-addition {
+[data-theme='dark'] :is(.markdown, .project-source) .hljs-string,
+[data-theme='dark'] :is(.markdown, .project-source) .hljs-regexp,
+[data-theme='dark'] :is(.markdown, .project-source) .hljs-addition {
   color: #a4d59b;
 }
-[data-theme='dark'] .markdown .hljs-title,
-[data-theme='dark'] .markdown .hljs-section,
-[data-theme='dark'] .markdown .hljs-built_in {
+[data-theme='dark'] :is(.markdown, .project-source) .hljs-title,
+[data-theme='dark'] :is(.markdown, .project-source) .hljs-section,
+[data-theme='dark'] :is(.markdown, .project-source) .hljs-built_in {
   color: #8dc8fc;
 }
-[data-theme='dark'] .markdown .hljs-number,
-[data-theme='dark'] .markdown .hljs-attr,
-[data-theme='dark'] .markdown .hljs-symbol,
-[data-theme='dark'] .markdown .hljs-bullet {
+[data-theme='dark'] :is(.markdown, .project-source) .hljs-number,
+[data-theme='dark'] :is(.markdown, .project-source) .hljs-attr,
+[data-theme='dark'] :is(.markdown, .project-source) .hljs-symbol,
+[data-theme='dark'] :is(.markdown, .project-source) .hljs-bullet {
   color: #edc07c;
 }
-[data-theme='dark'] .markdown .hljs-comment,
-[data-theme='dark'] .markdown .hljs-quote {
+[data-theme='dark'] :is(.markdown, .project-source) .hljs-comment,
+[data-theme='dark'] :is(.markdown, .project-source) .hljs-quote {
   color: #929cac;
 }
-[data-theme='dark'] .markdown .hljs-variable,
-[data-theme='dark'] .markdown .hljs-name,
-[data-theme='dark'] .markdown .hljs-deletion {
+[data-theme='dark'] :is(.markdown, .project-source) .hljs-variable,
+[data-theme='dark'] :is(.markdown, .project-source) .hljs-name,
+[data-theme='dark'] :is(.markdown, .project-source) .hljs-deletion {
   color: #f29ba6;
 }
-[data-theme='dark'] .markdown .hljs-type,
-[data-theme='dark'] .markdown .hljs-meta {
+[data-theme='dark'] :is(.markdown, .project-source) .hljs-type,
+[data-theme='dark'] :is(.markdown, .project-source) .hljs-meta {
   color: #b6b1fc;
 }
 .diagram-status {

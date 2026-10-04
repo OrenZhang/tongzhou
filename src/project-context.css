@@ -1,0 +1,398 @@
+.workspace-layout {
+  position: relative;
+}
+.context-panel.project-context {
+  width: 360px;
+  min-width: 0;
+  font-size: 12px;
+  background: var(--surface);
+}
+.context-panel.project-context.wide {
+  width: min(620px, 54vw);
+}
+.project-panel-heading {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 13px 12px 10px;
+  min-height: 64px;
+  border-bottom: 1px solid var(--border);
+}
+.project-panel-heading > div {
+  display: grid;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.project-panel-heading strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.project-panel-heading span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--muted);
+  font-size: 11px;
+}
+.project-tabs {
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  gap: 12px;
+}
+.project-tabs > button[role='tab'] {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  font-size: 12px;
+  padding: 12px 2px;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+}
+.project-tabs > button[aria-selected='true'] {
+  border-bottom-color: var(--ink);
+  color: var(--ink);
+}
+.project-tabs > .icon-button {
+  margin-left: auto;
+}
+.project-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-bottom: 12px;
+}
+.project-search {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 12px 10px;
+  padding-left: 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--muted);
+}
+.project-search input {
+  min-width: 0;
+  flex: 1;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  box-shadow: none;
+  background: transparent;
+  padding: 8px 0;
+  font-size: 12px;
+}
+.project-search:focus-within {
+  outline: 1px solid var(--accent);
+}
+.project-search select {
+  border: 0;
+  background: transparent;
+  width: 72px;
+  font-size: 11px;
+  padding: 6px 3px;
+}
+.project-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding: 0 12px 6px;
+  color: var(--muted);
+}
+.project-breadcrumb span {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.project-breadcrumb button {
+  font-size: 11px;
+}
+.project-file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% - 12px);
+  margin: 1px 6px;
+  padding: 7px 8px;
+  border-radius: 5px;
+  text-align: left;
+  font-size: 12px;
+  min-height: 31px;
+}
+.project-file-row:hover,
+.project-file-row:focus-visible,
+.project-file-row.active {
+  background: var(--canvas);
+}
+.project-file-row > span:not(.git-status) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  white-space: nowrap;
+}
+.project-file-row svg {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.project-file-row small {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+.project-file-row b {
+  font-weight: 500;
+}
+.search-result > span {
+  display: grid;
+  gap: 3px;
+}
+.search-result small {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.project-hint,
+.project-error {
+  margin: 0;
+  padding: 16px 14px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.project-hint svg {
+  vertical-align: middle;
+}
+.project-error {
+  color: var(--danger, #b44d4d);
+  background: color-mix(in srgb, #d55 6%, transparent);
+}
+.project-preview-bar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding: 8px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  min-height: 40px;
+}
+.project-preview-bar > span:first-of-type {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.project-preview-options {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 7px 12px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.project-preview-options button {
+  font-size: 10px;
+  color: var(--muted);
+}
+.project-preview-options button[aria-pressed='true'] {
+  color: var(--accent);
+}
+.project-source,
+.project-diff-lines {
+  overflow-x: auto;
+  font: 12px/1.7 var(--font-code);
+  tab-size: 2;
+  user-select: text;
+}
+.source-line,
+.diff-line {
+  display: flex;
+  min-width: max-content;
+  align-items: stretch;
+}
+.source-line code,
+.diff-line code {
+  white-space: pre;
+  flex: 1;
+  padding-right: 12px;
+  font: inherit;
+  background: transparent;
+}
+.source-line > button,
+.diff-line > button {
+  width: 40px;
+  padding: 0 8px 0 2px;
+  flex-shrink: 0;
+  font: 10px/2.04 var(--font-code);
+  color: var(--muted);
+  text-align: right;
+  user-select: none;
+}
+.source-line > button:hover,
+.diff-line > button:not(:disabled):hover {
+  color: var(--accent);
+  background: var(--border);
+}
+.source-line.selected,
+.diff-line.selected {
+  box-shadow: inset 3px 0 var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.project-context.wrap-code .source-line,
+.project-context.wrap-code .diff-line {
+  min-width: 0;
+}
+.project-context.wrap-code code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.project-more {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  font-size: 11px;
+  color: var(--accent);
+}
+.project-change-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 10px 4px;
+}
+.project-change-controls select {
+  font-size: 11px;
+  max-width: 175px;
+  padding: 6px;
+}
+.project-change-controls > span {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.project-change-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.project-change-summary button,
+.project-text-action {
+  font-size: 11px;
+  color: var(--accent);
+}
+.project-text-action {
+  display: block;
+  margin-top: 8px;
+}
+.project-change-list {
+  max-height: 220px;
+  overflow: auto;
+}
+.git-status {
+  width: 14px;
+  flex-shrink: 0;
+  font-family: var(--font-code);
+  font-weight: 600;
+  font-size: 11px;
+  color: #8c7330;
+}
+.status-A,
+.status-\? {
+  color: #378462;
+}
+.status-D,
+.status-U {
+  color: #be5353;
+}
+.project-diff {
+  margin-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.diff-line.add {
+  background: color-mix(in srgb, #33a36d 12%, transparent);
+}
+.diff-line.remove {
+  background: color-mix(in srgb, #d95b61 12%, transparent);
+}
+.diff-line.header {
+  color: var(--muted);
+  background: var(--canvas);
+  font-size: 11px;
+}
+.diff-line > button {
+  width: 34px;
+}
+.diff-count {
+  display: flex;
+  gap: 5px;
+  font: 10px var(--font-code);
+}
+.diff-count b {
+  color: #378462;
+  font-weight: 500;
+}
+.diff-count i {
+  color: #be5353;
+  font-style: normal;
+}
+.project-footnote {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.7;
+  margin: 14px;
+}
+.project-instructions-intro {
+  padding: 16px 14px 6px;
+}
+.project-instructions-intro strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+.project-instructions-intro p {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted);
+  margin: 8px 0;
+}
+.project-instruction-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 14px;
+}
+.project-instruction-actions .button {
+  font-size: 11px;
+  padding: 7px 10px;
+}
+@media (max-width: 1200px) {
+  .context-panel.project-context {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 8;
+    width: min(420px, 78vw);
+    box-shadow: -8px 0 24px #0000000b;
+  }
+  .context-panel.project-context.wide {
+    width: min(680px, 85vw);
+  }
+}

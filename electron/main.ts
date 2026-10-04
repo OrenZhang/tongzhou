@@ -23,6 +23,12 @@ import { GitRepositories } from './git-repositories';
 import { McpAuth, pluginOAuth, pluginAuthIdentity } from './mcp-auth';
 import { setServiceTransport } from './service-network';
 import { initializeAgent } from './project-init';
+import {
+  projectChanges,
+  projectPatch,
+  projectSearch,
+  projectInstructionsView,
+} from './project-context';
 import { writeClipboardText } from './clipboard';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -1406,6 +1412,51 @@ function setup() {
       );
       return status + '\n\n' + diff;
     },
+  );
+  const changeScope = z.enum(['unstaged', 'staged']);
+  const projectRoot = (id: unknown) => store.get<Project>('project', idSchema.parse(id)).path;
+  register(
+    'projectChanges',
+    operation('项目与 Git', 'query', '按未暂存或已暂存范围查询结构化变更，包含未跟踪文件', [
+      idSchema.describe('projectId'),
+      changeScope,
+    ]),
+    (id, scope) => projectChanges(projectRoot(id), changeScope.parse(scope)),
+  );
+  register(
+    'projectPatch',
+    operation('项目与 Git', 'query', '读取单个文件的 Git 差异', [
+      idSchema.describe('projectId'),
+      z.string().min(1).max(1000).describe('relativePath'),
+      changeScope,
+    ]),
+    (id, relative, scope) =>
+      projectPatch(
+        projectRoot(id),
+        z.string().min(1).max(1000).parse(relative),
+        changeScope.parse(scope),
+      ),
+  );
+  register(
+    'projectSearch',
+    operation('项目与 Git', 'query', '按文件路径或文本内容搜索项目，遵循忽略规则', [
+      idSchema.describe('projectId'),
+      z.string().trim().min(1).max(500).describe('query'),
+      z.enum(['path', 'content']),
+    ]),
+    (id, query, mode) =>
+      projectSearch(
+        projectRoot(id),
+        z.string().trim().min(1).max(500).parse(query),
+        z.enum(['path', 'content']).parse(mode),
+      ),
+  );
+  register(
+    'projectInstructions',
+    operation('项目与 Git', 'query', '查看项目根目录现有 AGENTS.md、agent.md 和 README', [
+      idSchema.describe('projectId'),
+    ]),
+    (id) => projectInstructionsView(projectRoot(id)),
   );
   register(
     'importCCSwitch',

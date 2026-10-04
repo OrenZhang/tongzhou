@@ -34,6 +34,7 @@ jobs:
       - run: npm run test:markdown
       - run: npm run test:appearance
       - run: npm run test:attachments
+      - run: npm run test:project-context
       - run: node scripts/native-smoke.mjs
       - run: npm run dist
         env:
