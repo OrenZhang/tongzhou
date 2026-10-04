@@ -172,6 +172,7 @@ export function ConversationTurn({ turn, ...actions }: Actions & { turn: Turn })
               events={turn.events}
               run={turn.run}
               active={active}
+              hasContent={entries.some((entry) => entry !== final)}
               collapsedContent={entries
                 .filter((e) => 'message' in e && e.message.role === 'user')
                 .map(renderEntry)}

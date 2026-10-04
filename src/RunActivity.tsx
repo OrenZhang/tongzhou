@@ -42,12 +42,14 @@ export function TurnProcess({
   events,
   run,
   active,
+  hasContent,
   children,
   collapsedContent,
 }: {
   events: RunEvent[];
   run?: Run;
   active: boolean;
+  hasContent: boolean;
   children: ReactNode;
   collapsedContent?: ReactNode;
 }) {
@@ -62,7 +64,8 @@ export function TurnProcess({
   }, [active, run?.id]);
   const phase = events.filter((e) => e.type === 'phase').at(-1)?.text ?? run?.phase ?? '准备上下文';
   const phaseKey = active ? 'active' : 'finished';
-  const expanded = manual?.phase === phaseKey ? manual.open : active;
+  const explicitlyExpanded = manual?.phase === phaseKey && manual.open;
+  const expanded = manual?.phase === phaseKey ? manual.open : active && hasContent;
   const labels: Record<string, string> = {
     准备上下文: '准备中',
     准备工具: '准备中',
@@ -103,7 +106,9 @@ export function TurnProcess({
           <ChevronDown size={13} className={expanded ? 'rotate' : ''} />
         </button>
         <div id={contentId} className="process-timeline" hidden={!expanded}>
-          {timing && <small className="muted">{timing}（包含网络与服务端等待）</small>}
+          {timing && explicitlyExpanded && (
+            <small className="muted">{timing}（包含网络与服务端等待）</small>
+          )}
           {children}
           {active && (
             <div className="process-current" role="status">

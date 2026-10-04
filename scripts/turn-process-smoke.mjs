@@ -27,6 +27,10 @@ execFileSync(
   { cwd: project },
 );
 let release, streamMore;
+let releaseFirst;
+const firstOutput = new Promise((resolve) => {
+  releaseFirst = resolve;
+});
 const gate = new Promise((resolve) => {
   release = resolve;
 });
@@ -54,6 +58,7 @@ const server = createServer(async (req, res) => {
       'length',
     );
   } else if (!body.messages.some((m) => m.role === 'tool')) {
+    await firstOutput;
     send({ reasoning_content: '先检查项目环境。' });
     send({ content: '环境已确认，继续检查项目。' });
     send({ reasoning_content: '接下来读取说明文件。' });
@@ -115,6 +120,16 @@ try {
   await page.getByLabel('当前连接', { exact: true }).selectOption('fixture');
   await page.getByLabel('消息', { exact: true }).fill('检查项目');
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
+  const waitingTurn = page.locator('.conversation-turn').last();
+  await waitingTurn.locator('.process-toggle').getByText('等待回复', { exact: true }).waitFor();
+  assert.equal(await waitingTurn.locator('.process-toggle').getAttribute('aria-expanded'), 'false');
+  assert.equal(await waitingTurn.getByText(/包含网络与服务端等待/).count(), 0);
+  await waitingTurn.locator('.process-toggle').click();
+  await waitingTurn.getByText(/包含网络与服务端等待/).waitFor();
+  // Reopening the session resets presentation, without restarting the running task.
+  await page.getByRole('button', { name: /设置与优化/ }).click();
+  await page.locator(`[data-session-id="${session.id}"]`).click();
+  releaseFirst();
   await page.getByText('文件已检查，继续整理。', { exact: true }).waitFor();
   const turn = page.locator('.conversation-turn').last();
   assert.equal(await page.locator('.chat-message.assistant').count(), 1);
@@ -123,6 +138,7 @@ try {
     true,
   );
   assert.equal(await turn.locator('.process-current').innerText(), '正在回复');
+  assert.equal(await turn.getByText(/包含网络与服务端等待/).count(), 0);
   assert.equal(await turn.locator('.process-reasoning').count(), 2);
   assert.equal(await turn.getByText('先检查项目环境。', { exact: true }).isVisible(), true);
   assert.equal(await turn.getByText('接下来读取说明文件。', { exact: true }).isVisible(), true);
