@@ -44,6 +44,13 @@ export const workPluginCatalog = [
     docs: 'https://linear.app/docs/mcp',
   },
 ];
+export function workPluginDefinition(plugin: PluginConfig) {
+  return plugin.transport === 'http'
+    ? workPluginCatalog.find(
+        (p) => plugin.url === p.url || (p.id === 'figma' && plugin.url === figmaDesktopUrl),
+      )
+    : undefined;
+}
 export function OAuthFields({
   edit,
   onChange,
@@ -180,12 +187,15 @@ export function WorkPlugins({
   api,
   refresh,
   onCustom,
+  onManage,
 }: {
   data: Snapshot;
   api: TongzhouAPI;
   refresh: () => Promise<void>;
   onCustom: () => void;
+  onManage: (plugin: PluginConfig) => void;
 }) {
+  const [selectedConnections, setSelectedConnections] = useState<Record<string, string>>({});
   const [query, setQuery] = useState(''),
     [edit, setEdit] = useState<PluginInput | null>(null),
     [token, setToken] = useState(''),
@@ -248,7 +258,7 @@ export function WorkPlugins({
       <div className="collection-toolbar">
         <div>
           <h2>工作插件</h2>
-          <p>按需添加设计、文档与协作工具，启用后可在会话中调用。</p>
+          <p>统一管理应用的授权、启停和工具。这里的连接不会在其他分类重复显示。</p>
         </div>
         <div className="search-box">
           <Search size={14} />
@@ -271,11 +281,11 @@ export function WorkPlugins({
             (p.name + p.category + p.description).toLowerCase().includes(query.toLowerCase()),
           )
           .map((p) => {
-            const installed = data.plugins?.find(
-              (c) =>
-                c.transport === 'http' &&
-                (c.url === p.url || (p.id === 'figma' && c.url === figmaDesktopUrl)),
+            const connections = (data.plugins ?? []).filter(
+              (c) => workPluginDefinition(c)?.id === p.id,
             );
+            const installed =
+              connections.find((c) => c.id === selectedConnections[p.id]) ?? connections[0];
             return (
               <article className="provider-card" key={p.id}>
                 <div className="service-card-heading row">
@@ -284,6 +294,22 @@ export function WorkPlugins({
                   <span className="tag">{p.category}</span>
                 </div>
                 <p>{p.description}</p>
+                {connections.length > 1 && (
+                  <select
+                    aria-label={`${p.name} 连接`}
+                    value={installed.id}
+                    onChange={(e) =>
+                      setSelectedConnections((old) => ({ ...old, [p.id]: e.target.value }))
+                    }
+                  >
+                    {connections.map((connection, index) => (
+                      <option key={connection.id} value={connection.id}>
+                        {connection.name} · {index + 1}
+                        {connection.url === figmaDesktopUrl ? ' · 桌面' : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <div className="row">
                   <span className="muted">
                     {installed
@@ -411,7 +437,7 @@ export function WorkPlugins({
       </div>
       <button className="text-button" onClick={onCustom}>
         <Plus size={14} />
-        配置其他 MCP 服务或本机插件
+        前往内置与自定义
       </button>
       {edit && (
         <Modal title={`连接 ${edit.name}`} onClose={() => setEdit(null)}>
@@ -635,6 +661,25 @@ export function WorkPlugins({
               >
                 保存并检查
               </button>
+              {current && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    void act(async () => {
+                      await save();
+                      const saved = (await api.snapshot()).plugins?.find(
+                        (p) => p.id === current.id,
+                      );
+                      if (!saved) throw new Error('连接已删除，请刷新后重试');
+                      setEdit(null);
+                      onManage(saved);
+                    })
+                  }
+                >
+                  高级 MCP 设置
+                </button>
+              )}
             </div>
           </form>
         </Modal>

@@ -82,7 +82,7 @@ try {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [skill] });
   }, skill);
   await page.getByRole('button', { name: '插件', exact: true }).click();
-  await page.getByRole('button', { name: /^MCP 插件/ }).click();
+  await page.getByRole('button', { name: /^内置与自定义/ }).click();
   const builtins = (await page.evaluate(() => window.tongzhou.snapshot())).plugins;
   assert.deepEqual(builtins.map((p) => p.id).sort(), ['tongzhou-system', 'tongzhou-web']);
   assert.ok(builtins.every((p) => !p.enabled));

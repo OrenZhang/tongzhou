@@ -2,7 +2,13 @@ import { useState } from 'react';
 import { Plus, Plug, RefreshCw, Trash2, Upload } from 'lucide-react';
 import { Field, Modal, Spinner } from './components';
 import { MultiValueInput } from './MultiValueInput';
-import { OAuthFields, WorkPlugins, workPluginCatalog, PluginAuthStatus } from './WorkPlugins';
+import {
+  OAuthFields,
+  WorkPlugins,
+  workPluginCatalog,
+  PluginAuthStatus,
+  workPluginDefinition,
+} from './WorkPlugins';
 import { errorMessage } from './feedback';
 import { CoreCapabilities } from './CoreCapabilities';
 import { builtinPlugins } from './shared/builtin-plugins';
@@ -28,6 +34,7 @@ export function Extensions({
     {},
   );
   const [notice, setNotice] = useState('');
+  const otherPlugins = (data.plugins ?? []).filter((p) => !workPluginDefinition(p));
   const perform = async (fn: () => Promise<unknown>) => {
     setBusy(true);
     setNotice('');
@@ -63,14 +70,14 @@ export function Extensions({
             className={tab === value ? 'active' : ''}
             onClick={() => setTab(value)}
           >
-            {['核心能力', '工作插件', 'MCP 插件', 'Skills'][i]}
+            {['核心能力', '工作插件', '内置与自定义', 'Skills'][i]}
             <span className="tab-count">
               {value === 'core'
                 ? 3
                 : value === 'catalog'
                   ? workPluginCatalog.length
                   : value === 'mcp'
-                    ? (data.plugins ?? []).length
+                    ? otherPlugins.length
                     : (data.skills ?? []).length}
             </span>
           </button>
@@ -82,12 +89,25 @@ export function Extensions({
         </p>
       )}
       {tab === 'catalog' && (
-        <WorkPlugins api={api} data={data} refresh={refresh} onCustom={() => setTab('mcp')} />
+        <WorkPlugins
+          api={api}
+          data={data}
+          refresh={refresh}
+          onCustom={() => setTab('mcp')}
+          onManage={(plugin) => {
+            setNotice('');
+            setLoginUrl('');
+            setEdit({ ...plugin, secret: '' });
+          }}
+        />
       )}
       {tab === 'core' && <CoreCapabilities api={api} data={data} refresh={refresh} />}
       <div hidden={tab !== 'mcp'}>
         <div className="section-heading">
-          <h2>MCP 插件</h2>
+          <div>
+            <h2>内置与自定义</h2>
+            <p className="muted">内置工具和其他 MCP 服务；应用授权与启停请在“工作插件”中管理。</p>
+          </div>
           <button
             className="primary"
             onClick={() => {
@@ -110,7 +130,7 @@ export function Extensions({
           </button>
         </div>
         <div className="provider-grid">
-          {(data.plugins ?? []).map((p) => (
+          {otherPlugins.map((p) => (
             <article className="provider-card" key={p.id}>
               <div className="card-top">
                 <Plug />
@@ -173,7 +193,7 @@ export function Extensions({
             </article>
           ))}
         </div>
-        {!(data.plugins ?? []).length && (
+        {!otherPlugins.length && (
           <p className="muted">
             添加本机 stdio 或远程 Streamable HTTP 服务。插件全局启用后，各会话按需使用，无需在 Agent
             中重复配置。

@@ -285,6 +285,35 @@ try {
   );
   assert.equal(plugin.url, 'https://mcp.figma.com/mcp');
   assert.equal(plugin.enabled, false);
+  await page.getByRole('button', { name: /^内置与自定义/ }).click();
+  assert.equal(await page.getByRole('heading', { name: 'Figma', exact: true }).count(), 0);
+  await page.getByRole('heading', { name: '系统环境 · 内置', exact: true }).waitFor();
+  await page.getByRole('button', { name: /^工作插件/ }).click();
+  await page.getByLabel('搜索工作插件', { exact: true }).fill('Figma');
+  await page
+    .locator('.work-plugins')
+    .getByRole('button', { name: '管理连接', exact: true })
+    .click();
+  await dialog.getByRole('button', { name: '高级 MCP 设置', exact: true }).click();
+  await dialog.getByRole('heading', { name: '管理 MCP 插件', exact: true }).waitFor();
+  assert.equal(await dialog.getByLabel('插件名称', { exact: true }).inputValue(), 'Figma');
+  await dialog.getByRole('button', { name: '保存插件', exact: true }).click();
+  await dialog.waitFor({ state: 'hidden' });
+  // Multiple accounts of the same application remain reachable in its one card.
+  await page.evaluate(
+    (p) => window.tongzhou.savePlugin({ ...p, id: 'figma-extra', name: 'Figma 备用' }),
+    plugin,
+  );
+  await page.getByLabel('Figma 连接', { exact: true }).selectOption('figma-extra');
+  await page
+    .locator('.work-plugins')
+    .getByRole('button', { name: '管理连接', exact: true })
+    .click();
+  await dialog.getByRole('heading', { name: '连接 Figma 备用', exact: true }).waitFor();
+  await dialog.getByRole('button', { name: '关闭', exact: true }).click();
+  await page.evaluate(() => window.tongzhou.deletePlugin('figma-extra'));
+  await page.getByLabel('Figma 连接', { exact: true }).waitFor({ state: 'detached' });
+  await capture('plugin-single-entry');
   await page
     .locator('.work-plugins')
     .getByRole('button', { name: '管理连接', exact: true })
