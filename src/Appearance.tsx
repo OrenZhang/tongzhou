@@ -156,8 +156,8 @@ export function Appearance({
                   onChange({ ...value, font: e.target.value as AppearancePreferences['font'] })
                 }
               >
-                <option value="modern">现代黑体</option>
-                <option value="system">系统字体</option>
+                <option value="system">系统字体 · 推荐</option>
+                <option value="modern">思源黑体</option>
                 <option value="serif">书籍宋体</option>
               </select>
             </label>
@@ -173,15 +173,15 @@ export function Appearance({
                   })
                 }
               >
-                <option value="14">紧凑 · 14</option>
-                <option value="16">标准 · 16</option>
+                <option value="14">紧凑 · 14（默认）</option>
+                <option value="16">舒适 · 16</option>
                 <option value="18">大字 · 18</option>
               </select>
             </label>
           </div>
           <p className="appearance-hint">
-            使用本机字体：黑体优先思源 / 苹方 / 微软雅黑，宋体优先思源宋体 /
-            系统宋体。缺少时自动回退，代码保持等宽。
+            默认使用系统界面字体，中文优先苹方 /
+            微软雅黑。也可选思源黑体或宋体，缺少时自动回退；代码保持等宽。
           </p>
         </div>
         <div className="appearance-preview" aria-label="外观预览">

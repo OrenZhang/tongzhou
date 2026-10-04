@@ -2,6 +2,14 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.markdown p {
+  margin: 0 0 0.7em;
+}
+.markdown ul,
+.markdown ol {
+  margin: 0.7em 0;
+  padding-left: 1.65em;
+}
 .markdown h1 {
   font-size: 1.5em;
 }

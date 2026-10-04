@@ -177,8 +177,8 @@ try {
   assert.equal(await page.getByLabel('聊天字号', { exact: true }).inputValue(), '14');
   await page.getByRole('button', { name: '恢复默认外观', exact: true }).click();
   assert.equal(await page.locator('html').getAttribute('data-style'), 'graphite');
-  assert.equal(await page.locator('html').getAttribute('data-font'), 'modern');
-  assert.equal(await page.getByLabel('聊天字号', { exact: true }).inputValue(), '16');
+  assert.equal(await page.locator('html').getAttribute('data-font'), 'system');
+  assert.equal(await page.getByLabel('聊天字号', { exact: true }).inputValue(), '14');
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
   await page.emulateMedia({ colorScheme: 'light' });

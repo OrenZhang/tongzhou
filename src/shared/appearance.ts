@@ -10,8 +10,8 @@ export interface AppearancePreferences {
 export const defaultAppearance: AppearancePreferences = {
   theme: 'system',
   style: 'graphite',
-  font: 'modern',
-  textSize: 16,
+  font: 'system',
+  textSize: 14,
 };
 export function normalizeAppearance(raw: unknown, legacyTheme?: unknown): AppearancePreferences {
   const value = raw && typeof raw === 'object' ? (raw as Partial<AppearancePreferences>) : {};
@@ -19,7 +19,7 @@ export function normalizeAppearance(raw: unknown, legacyTheme?: unknown): Appear
   return {
     theme: theme === 'light' || theme === 'dark' ? theme : 'system',
     style: value.style === 'blue' || value.style === 'sand' ? value.style : 'graphite',
-    font: value.font === 'system' || value.font === 'serif' ? value.font : 'modern',
-    textSize: value.textSize === 14 || value.textSize === 18 ? value.textSize : 16,
+    font: value.font === 'modern' || value.font === 'serif' ? value.font : 'system',
+    textSize: value.textSize === 16 || value.textSize === 18 ? value.textSize : 14,
   };
 }
