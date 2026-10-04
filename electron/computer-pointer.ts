@@ -7,16 +7,30 @@ const labels: Record<string, string> = {
   scroll: '滚动',
   type: '输入',
   key: '快捷键',
+  windows: '观察窗口',
+  waiting: '等待下一步',
 };
 
 /** A click-through, non-focusing marker. Never changes the user's OS cursor. */
 export class ComputerPointer {
   private window?: BrowserWindow;
   private tracking?: ReturnType<typeof setInterval>;
-  private expiry?: ReturnType<typeof setTimeout>;
+  private owner?: AbortSignal;
+  private detach?: () => void;
 
-  async show(action: string) {
-    this.hide();
+  async show(action: string, owner: AbortSignal) {
+    owner.throwIfAborted();
+    if (this.owner !== owner) {
+      this.hide();
+      this.owner = owner;
+      const abort = () => this.hide(owner);
+      owner.addEventListener('abort', abort, { once: true });
+      this.detach = () => owner.removeEventListener('abort', abort);
+    }
+    if (this.window && !this.window.isDestroyed()) {
+      await this.label(action);
+      return;
+    }
     const window = new BrowserWindow({
       width: 146,
       height: 76,
@@ -49,7 +63,7 @@ export class ComputerPointer {
       <path d="M18 18 L19 44 L26 37 L32 49 L38 46 L31 34 L41 33 Z" fill="#6750ee" stroke="white" stroke-width="2" stroke-linejoin="round"/></svg>
       <span>同舟 · ${label}</span>`),
     );
-    if (this.window !== window || window.isDestroyed()) return;
+    if (this.window !== window || window.isDestroyed() || owner.aborted) return;
     const position = () => {
       if (window.isDestroyed()) return;
       // Electron returns desktop DIPs, including negative coordinates on secondary monitors.
@@ -61,15 +75,33 @@ export class ComputerPointer {
     this.tracking = setInterval(position, 25);
   }
 
-  finish() {
-    this.expiry = setTimeout(() => this.hide(), 700);
+  private async label(action: string) {
+    const window = this.window;
+    if (!window || window.isDestroyed()) return;
+    await window.webContents.executeJavaScript(
+      `document.querySelector('span').textContent = ${JSON.stringify('同舟 · ' + (labels[action] ?? '操作'))}`,
+    );
   }
 
-  hide() {
+  pause() {
+    if (this.window && !this.window.isDestroyed()) this.window.hide();
+  }
+
+  async finish(owner: AbortSignal) {
+    if (this.owner !== owner || owner.aborted) return;
+    await this.label('waiting');
+    if (this.owner === owner && !owner.aborted && this.window && !this.window.isDestroyed())
+      this.window.showInactive();
+  }
+
+  hide(owner?: AbortSignal) {
+    // An older run ending must not remove another run's current indicator.
+    if (owner && this.owner !== owner) return;
     clearInterval(this.tracking);
-    clearTimeout(this.expiry);
     this.tracking = undefined;
-    this.expiry = undefined;
+    this.detach?.();
+    this.detach = undefined;
+    this.owner = undefined;
     const window = this.window;
     this.window = undefined;
     if (window && !window.isDestroyed()) window.destroy();

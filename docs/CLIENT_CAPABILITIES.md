@@ -33,6 +33,8 @@ register(
 3. client_query({method: 'listBookmarks', args: []}) 执行查询。写操作使用 client_change。
 4. clientMethods 是供界面使用的完整目录，也保留旧工具查询路径。
 
+原生引擎可能把不定类型数组限制为字符串数组。此时优先使用 `argsJson`，将整个位置参数数组编码成 JSON 字符串，例如 `client_change({method: 'saveConnector', argsJson: JSON.stringify([{id: 'local-test', name: '本地测试', kind: 'browser', enabled: true, baseUrl: 'http://127.0.0.1:3000'}])})`。`args` 与 `argsJson` 必须且只能提供一种；解码后继续执行相同的凭据检查、参数验证与权限检查。
+
 管理开关在调用前及批准后重新检查。注册名重复时拒绝启动该注册，避免覆盖其他模块。只读会话没有 client_change；manual 操作即使在完全开放模式也不会变成可调用操作。当前轮次不能通过管理工具递归启动、取消或删除自身，应使用会话控件。
 
 ## 验证

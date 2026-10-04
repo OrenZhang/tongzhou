@@ -19,10 +19,17 @@ let stage = 0,
   windowBounds,
   frameSize;
 const outcomes = [];
+const waitingPointers = [];
+let inspectPointer;
 const server = createServer(async (req, res) => {
   let raw = '';
   for await (const b of req) raw += b;
   const body = JSON.parse(raw);
+  if (stage > 0 && inspectPointer) {
+    // Simulate a model thinking pause longer than the old 700 ms expiry.
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    waitingPointers.push(await inspectPointer());
+  }
   const result = body.messages.filter((m) => m.role === 'tool').at(-1);
   if (
     result &&
@@ -113,6 +120,11 @@ const app = await electron.launch(
 try {
   const page = await app.firstWindow();
   await page.waitForSelector('.welcome');
+  inspectPointer = () =>
+    app.evaluate(({ BrowserWindow }) => {
+      const pointer = BrowserWindow.getAllWindows().find((w) => w.getTitle() === '同舟操作指针');
+      return !!pointer && pointer.isVisible() && !pointer.isFocusable();
+    });
   await app.evaluate(({ app }) => {
     globalThis.pointerObservations = [];
     app.on('browser-window-created', (_event, window) => {
@@ -187,7 +199,13 @@ try {
   );
   assert.ok(outcomes.filter((v) => v.includes('frameId')).length >= 3);
   const pointers = await app.evaluate(() => globalThis.pointerObservations);
-  assert.ok(pointers.length >= 4, 'Computer actions should display the Tongzhou pointer');
+  assert.equal(pointers.length, 1, 'Reuse one pointer window throughout the run');
+  assert.ok(
+    waitingPointers.length >= 12 && waitingPointers.every(Boolean),
+    'Pointer must remain visible during every model thinking gap',
+  );
+  await page.waitForFunction(() => !document.querySelector('[aria-label="停止生成"]'));
+  assert.equal(await inspectPointer(), false, 'Pointer must be removed when the run ends');
   assert.ok(
     pointers.every((p) => !p.focusable && !p.focused && p.onTop),
     'Pointer must be non-focusing and on top: ' + JSON.stringify(pointers),

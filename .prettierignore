@@ -25,3 +25,6 @@ temp
 .kimi
 .minimax
 .cc-switch
+
+# Standalone example maintained by the Tongzhou dogfood session
+examples/miniapp-admin

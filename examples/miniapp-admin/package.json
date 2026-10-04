@@ -1,0 +1,15 @@
+{
+  "name": "miniapp-admin",
+  "version": "1.0.0",
+  "private": true,
+  "description": "小程序运营后台 Miniapp Admin（Node.js + Express + SQLite / React + TS + Vite）",
+  "scripts": {
+    "install:all": "npm --prefix server install && npm --prefix web install",
+    "dev:server": "npm --prefix server run dev",
+    "dev:web": "npm --prefix web run dev",
+    "test": "npm --prefix server test",
+    "typecheck": "npm --prefix web run typecheck",
+    "build": "npm --prefix web run build",
+    "start": "npm --prefix server start"
+  }
+}

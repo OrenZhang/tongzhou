@@ -1,0 +1,397 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', system-ui, sans-serif;
+  background: #f3f5f9;
+  color: #1f2733;
+  font-size: 14px;
+}
+
+h1, h2, h3 {
+  margin: 0;
+}
+
+.muted {
+  color: #8a94a6;
+}
+
+.small {
+  font-size: 12px;
+}
+
+.splash {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  color: #8a94a6;
+}
+
+/* 登录页 */
+.login-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #1f2d4d 0%, #3556a0 100%);
+}
+
+.login-card {
+  width: 360px;
+  background: #fff;
+  border-radius: 12px;
+  padding: 32px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.login-card h1 {
+  font-size: 20px;
+  text-align: center;
+}
+
+/* 布局 */
+.shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 200px;
+  background: #1f2d4d;
+  color: #cdd7ea;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.brand {
+  padding: 18px 16px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sidebar nav {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+}
+
+.sidebar nav a {
+  color: #cdd7ea;
+  text-decoration: none;
+  padding: 11px 16px;
+  border-left: 3px solid transparent;
+}
+
+.sidebar nav a:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.sidebar nav a.active {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border-left-color: #4d7cfe;
+}
+
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.topbar {
+  height: 52px;
+  background: #fff;
+  border-bottom: 1px solid #e6eaf2;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  padding: 0 20px;
+}
+
+.content {
+  padding: 20px;
+  flex: 1;
+}
+
+.page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.page-head h2 {
+  font-size: 18px;
+}
+
+/* 卡片与表格 */
+.card {
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid #e6eaf2;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th, td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid #eef1f7;
+  white-space: nowrap;
+}
+
+th {
+  color: #8a94a6;
+  font-weight: 500;
+  background: #fafbfd;
+}
+
+tr:last-child td {
+  border-bottom: none;
+}
+
+.toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+/* 表单 */
+input, select, textarea {
+  padding: 8px 10px;
+  border: 1px solid #d5dbe7;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  background: #fff;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: 2px solid rgba(77, 124, 254, 0.25);
+  border-color: #4d7cfe;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.field-label {
+  color: #5a6577;
+  font-size: 13px;
+}
+
+/* 按钮 */
+.btn {
+  padding: 8px 14px;
+  border: 1px solid #d5dbe7;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  color: #1f2733;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: #4d7cfe;
+  color: #4d7cfe;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: #4d7cfe;
+  border-color: #4d7cfe;
+  color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #3a68e0;
+  color: #fff;
+}
+
+.btn-danger {
+  color: #e14b4b;
+}
+
+.btn-danger:hover:not(:disabled) {
+  border-color: #e14b4b;
+  color: #e14b4b;
+}
+
+.btn-ghost {
+  border: none;
+  background: transparent;
+  padding: 4px 8px;
+}
+
+.btn-block {
+  width: 100%;
+}
+
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 13px;
+}
+
+.row-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* 徽标 */
+.badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.badge-gray { background: #eef1f7; color: #6b7688; }
+.badge-green { background: #e2f6e8; color: #1e9e4b; }
+.badge-red { background: #fdeaea; color: #d93a3a; }
+.badge-blue { background: #e7effe; color: #3560c0; }
+.badge-orange { background: #fff3e0; color: #c07d1a; }
+
+/* 提示 */
+.alert {
+  background: #fdeaea;
+  color: #d93a3a;
+  border-radius: 6px;
+  padding: 9px 12px;
+  font-size: 13px;
+}
+
+.empty {
+  text-align: center;
+  color: #a0a9b8;
+  padding: 40px 0;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+/* 弹窗 */
+.modal-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 28, 45, 0.45);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 60px 16px;
+  z-index: 100;
+}
+
+.modal {
+  background: #fff;
+  border-radius: 10px;
+  width: 440px;
+  max-width: 100%;
+  max-height: calc(100vh - 120px);
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-wide {
+  width: 640px;
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid #eef1f7;
+}
+
+.modal-head h3 {
+  font-size: 16px;
+}
+
+.modal-body {
+  padding: 18px;
+  overflow-y: auto;
+}
+
+/* 仪表盘 */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.stat-card {
+  background: #fff;
+  border: 1px solid #e6eaf2;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.stat-card .stat-value {
+  font-size: 24px;
+  font-weight: 600;
+  margin-top: 6px;
+}
+
+.stat-card .stat-sub {
+  font-size: 12px;
+  color: #8a94a6;
+  margin-top: 4px;
+}
+
+.trend {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  height: 160px;
+  padding-top: 10px;
+}
+
+.trend-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  gap: 6px;
+  font-size: 12px;
+  color: #8a94a6;
+}
+
+.trend-bar {
+  width: 60%;
+  min-height: 2px;
+  background: #4d7cfe;
+  border-radius: 4px 4px 0 0;
+}
