@@ -42,6 +42,8 @@ import { realpath, stat, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { Store } from './store';
+import { ensureBuiltinPlugins } from './builtin-plugins';
+import { builtinPlugins } from '../src/shared/builtin-plugins';
 import { Runtime } from './runtime';
 import { Attachments, attachmentUploadSchema } from './attachments';
 import { ClientCommands, operation, manual, type ClientOperation } from './client-commands';
@@ -138,6 +140,17 @@ function setup() {
       return safeStorage.decryptString(Buffer.from(value, 'base64'));
     },
   });
+  const require = createRequire(path.join(__dirname, '../package.json'));
+  const nodeRoot = path
+    .dirname(require.resolve('node/package.json'))
+    .replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep);
+  ensureBuiltinPlugins(
+    store,
+    path.join(nodeRoot, 'bin', process.platform === 'win32' ? 'node.exe' : 'node'),
+    path
+      .join(__dirname, 'builtin-mcp.cjs')
+      .replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep),
+  );
   runtime = new Runtime(store, dataDir, emit, computer, clientCommands);
   networks = new NetworkProfiles(
     store,
@@ -798,26 +811,15 @@ function setup() {
   );
   register(
     'installBuiltinPlugin',
-    operation('插件', 'change', '安装内置网页读取与时间插件', []),
+    operation(
+      '插件',
+      'change',
+      '启用内置网页读取和系统环境两个插件；单独启停请使用 savePlugin',
+      [],
+    ),
     () => {
-      const require = createRequire(path.join(__dirname, '../package.json'));
-      const nodeRoot = path
-        .dirname(require.resolve('node/package.json'))
-        .replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep);
-      store.put('plugin', {
-        id: 'tongzhou-web',
-        name: '网页读取与时间 · 内置',
-        transport: 'stdio',
-        command: path.join(nodeRoot, 'bin', process.platform === 'win32' ? 'node.exe' : 'node'),
-        args: [
-          path
-            .join(__dirname, 'builtin-mcp.cjs')
-            .replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep),
-        ],
-        url: '',
-        enabled: true,
-        readOnlyTools: ['fetch_page', 'current_time'],
-      } satisfies PluginConfig);
+      for (const definition of builtinPlugins)
+        store.put('plugin', { ...store.get<PluginConfig>('plugin', definition.id), enabled: true });
       runtime.invalidateNative();
       runtime.changed();
     },

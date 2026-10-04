@@ -5,6 +5,7 @@ import { MultiValueInput } from './MultiValueInput';
 import { OAuthFields, WorkPlugins, workPluginCatalog, PluginAuthStatus } from './WorkPlugins';
 import { errorMessage } from './feedback';
 import { CoreCapabilities } from './CoreCapabilities';
+import { builtinPlugins } from './shared/builtin-plugins';
 import type { AgentProfile, PluginInput, Snapshot, TongzhouAPI } from './shared/types';
 
 export function Extensions({
@@ -22,6 +23,7 @@ export function Extensions({
   const [loginUrl, setLoginUrl] = useState('');
   const [edit, setEdit] = useState<PluginInput | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pendingToggle, setPendingToggle] = useState<{ id: string; enabled: boolean } | null>(null);
   const [catalogs, setCatalogs] = useState<Record<string, { name: string; description: string }[]>>(
     {},
   );
@@ -87,18 +89,6 @@ export function Extensions({
         <div className="section-heading">
           <h2>MCP 插件</h2>
           <button
-            className="secondary"
-            disabled={busy || data.plugins?.some((p) => p.id === 'tongzhou-web')}
-            onClick={() =>
-              perform(async () => {
-                await api.installBuiltinPlugin();
-                setNotice('已启用内置网页读取与时间工具，无需 API Key；在会话中按需调用');
-              })
-            }
-          >
-            启用内置网页与时间
-          </button>
-          <button
             className="primary"
             onClick={() => {
               setNotice('');
@@ -129,17 +119,24 @@ export function Extensions({
                   <input
                     type="checkbox"
                     aria-label={`启用 ${p.name}`}
-                    checked={p.enabled}
+                    checked={pendingToggle?.id === p.id ? pendingToggle.enabled : p.enabled}
                     disabled={busy}
-                    onChange={(e) =>
-                      perform(() => api.savePlugin({ ...p, enabled: e.target.checked }))
-                    }
+                    onChange={(e) => {
+                      const enabled = e.target.checked;
+                      setPendingToggle({ id: p.id, enabled });
+                      void perform(() => api.savePlugin({ ...p, enabled })).finally(() =>
+                        setPendingToggle(null),
+                      );
+                    }}
                   />
                   <span aria-hidden="true" />
                 </label>
               </div>
               <h3>{p.name}</h3>
-              <p>{p.transport === 'http' ? p.url : [p.command, ...p.args].join(' ')}</p>
+              <p>
+                {builtinPlugins.find((item) => item.id === p.id)?.description ??
+                  (p.transport === 'http' ? p.url : [p.command, ...p.args].join(' '))}
+              </p>
               <p className="muted">
                 {(catalogs[p.id] ?? p.catalog)
                   ? `已发现 ${(catalogs[p.id] ?? p.catalog)!.length} 个工具`
@@ -160,16 +157,18 @@ export function Extensions({
                   <RefreshCw size={14} />
                   连接检查
                 </button>
-                <button
-                  className="text-button"
-                  onClick={() => {
-                    setNotice('');
-                    setLoginUrl('');
-                    setEdit({ ...p, secret: '' });
-                  }}
-                >
-                  管理插件
-                </button>
+                {!builtinPlugins.some((item) => item.id === p.id) && (
+                  <button
+                    className="text-button"
+                    onClick={() => {
+                      setNotice('');
+                      setLoginUrl('');
+                      setEdit({ ...p, secret: '' });
+                    }}
+                  >
+                    管理插件
+                  </button>
+                )}
               </div>
             </article>
           ))}

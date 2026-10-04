@@ -3,6 +3,8 @@ import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import path from 'node:path';
 import assert from 'node:assert/strict';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 await mkdir('test-results', { recursive: true });
 const root = await mkdtemp(path.resolve('test-results/extensions-'));
 const skill = path.join(root, 'example-skill');
@@ -81,6 +83,83 @@ try {
   }, skill);
   await page.getByRole('button', { name: '插件', exact: true }).click();
   await page.getByRole('button', { name: /^MCP 插件/ }).click();
+  const builtins = (await page.evaluate(() => window.tongzhou.snapshot())).plugins;
+  assert.deepEqual(builtins.map((p) => p.id).sort(), ['tongzhou-system', 'tongzhou-web']);
+  assert.ok(builtins.every((p) => !p.enabled));
+  const webCard = page
+    .locator('.provider-card')
+    .filter({ has: page.getByRole('heading', { name: '网页读取 · 内置', exact: true }) });
+  const systemCard = page
+    .locator('.provider-card')
+    .filter({ has: page.getByRole('heading', { name: '系统环境 · 内置', exact: true }) });
+  await systemCard.getByRole('checkbox').check();
+  await page.waitForFunction(
+    async () =>
+      (await window.tongzhou.snapshot()).plugins.find((p) => p.id === 'tongzhou-system').enabled,
+  );
+  assert.equal(await webCard.getByRole('checkbox').isChecked(), false);
+  await systemCard.getByRole('button', { name: '连接检查' }).click();
+  await page
+    .getByRole('status')
+    .getByText('系统环境 · 内置：连接成功，发现 2 个工具', { exact: true })
+    .waitFor();
+  await webCard.getByRole('button', { name: '连接检查' }).click();
+  await page
+    .getByRole('status')
+    .getByText('网页读取 · 内置：连接成功，发现 1 个工具', { exact: true })
+    .waitFor();
+  assert.equal(await webCard.getByRole('checkbox').isChecked(), false);
+  assert.ok(!(await webCard.innerText()).includes('builtin-mcp.cjs'));
+  await page.screenshot({ path: 'test-results/builtin-plugins.png' });
+  // Exercise the actual bundled servers, including rejecting cross-plugin calls.
+  for (const config of builtins) {
+    const client = new Client({ name: 'builtin-smoke', version: '1' });
+    try {
+      await client.connect(
+        new StdioClientTransport({ command: config.command, args: config.args }),
+      );
+      const { tools } = await client.listTools();
+      if (config.id === 'tongzhou-system') {
+        assert.deepEqual(tools.map((t) => t.name).sort(), ['current_time', 'system_info']);
+        const time = JSON.parse(
+          (await client.callTool({ name: 'current_time', arguments: {} })).content[0].text,
+        );
+        assert.ok(Math.abs(Date.parse(time.utc) - Date.now()) < 10000);
+        assert.ok(time.timeZone && time.local && Number.isFinite(time.utcOffsetMinutes));
+        const info = JSON.parse(
+          (await client.callTool({ name: 'system_info', arguments: {} })).content[0].text,
+        );
+        assert.equal(info.platform, process.platform);
+        assert.ok(info.memory.totalBytes > 0 && info.cpu.logicalCores > 0 && info.runtime.node);
+        assert.equal(info.env, undefined);
+        await assert.rejects(
+          client.callTool({ name: 'fetch_page', arguments: {} }),
+          /Unknown tool/,
+        );
+      } else {
+        assert.deepEqual(
+          tools.map((t) => t.name),
+          ['fetch_page'],
+        );
+        const result = await client.callTool({
+          name: 'fetch_page',
+          arguments: { url: `http://127.0.0.1:${server.address().port}/` },
+        });
+        assert.ok(result.content[0].text.includes('model-a'));
+        await assert.rejects(
+          client.callTool({ name: 'current_time', arguments: {} }),
+          /Unknown tool/,
+        );
+      }
+    } finally {
+      await client.close();
+    }
+  }
+  await systemCard.getByRole('checkbox').uncheck();
+  await page.waitForFunction(
+    async () =>
+      !(await window.tongzhou.snapshot()).plugins.find((p) => p.id === 'tongzhou-system').enabled,
+  );
   await page.getByRole('button', { name: '添加 MCP', exact: true }).click();
   await page.getByLabel('插件名称', { exact: true }).fill('测试笔记插件');
   await page.getByLabel('启动命令', { exact: true }).fill(process.execPath);
@@ -142,7 +221,7 @@ try {
   await page.waitForSelector('.app-shell');
   const persisted = await page.evaluate(() => window.tongzhou.snapshot());
   assert.equal(persisted.sessions[0].model, 'model-b');
-  assert.equal(persisted.plugins.length, 1);
+  assert.equal(persisted.plugins.length, 3);
   assert.equal(persisted.skills.length, 1);
   console.log(
     'Extensions UI passed: MCP discovery, Skill import, global plugin switches, approval, projectless tools, same-session provider handoff and persistence.',
