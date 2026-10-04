@@ -29,7 +29,7 @@ export function turnEntries(turn: ConversationTurn): TurnEntry[] {
             text,
           });
       }
-    } else if (message.content) {
+    } else if (message.content || message.attachments?.length) {
       entries.push({
         key: message.id,
         time: message.createdAt,

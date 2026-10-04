@@ -1,0 +1,98 @@
+.attachment-strip {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 8px 0 12px;
+}
+.composer .attachment-strip {
+  margin: 10px 12px 0;
+}
+.attachment-card {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  max-width: 200px;
+  min-width: 100px;
+}
+.attachment-open {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 24px 8px 8px;
+  border: 0;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  color: var(--ink);
+  font-size: 12px;
+}
+.attachment-open img {
+  height: 42px;
+  width: 54px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+.attachment-open span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.attachment-open small {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  margin-top: 3px;
+}
+.attachment-remove {
+  position: absolute;
+  right: 3px;
+  top: 3px;
+  display: flex;
+  padding: 3px;
+  border: 0;
+  background: var(--surface);
+  color: var(--muted);
+  border-radius: 4px;
+}
+.attachment-dialog {
+  width: min(840px, 90vw);
+  max-height: 85vh;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.attachment-dialog::backdrop {
+  background: #0008;
+}
+.attachment-dialog header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+  font-size: 14px;
+}
+.attachment-dialog img {
+  display: block;
+  max-width: 100%;
+  max-height: 68vh;
+  object-fit: contain;
+  margin: auto;
+}
+.attachment-dialog pre {
+  font: 13px/1.7 var(--font-code);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 65vh;
+  overflow: auto;
+  user-select: text;
+}
+.attachment-hint {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 4px 12px;
+}

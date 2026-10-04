@@ -132,9 +132,12 @@ export function requestBody(input: CompletionInput) {
   // A provider/model handoff receives text evidence and must take a fresh screenshot.
   const currentRun = history.filter((m) => m.role === 'user').at(-1)?.runId;
   const latestImage = currentRun
-    ? [...messages].reverse().find((m) => m.images?.length && m.runId === currentRun)
+    ? [...messages]
+        .reverse()
+        .find((m) => m.role !== 'user' && m.images?.length && m.runId === currentRun)
     : undefined;
-  const imagesFor = (m: Message) => (m.id === latestImage?.id ? (m.images ?? []) : []);
+  const imagesFor = (m: Message) =>
+    m.role === 'user' || m.id === latestImage?.id ? (m.images ?? []) : [];
   const base = p.baseUrl.replace(/\/$/, '');
   if (p.protocol === 'openai-chat')
     return {
@@ -148,7 +151,16 @@ export function requestBody(input: CompletionInput) {
           { role: 'system', content: instructions },
           ...messages.map((m) => ({
             role: m.role,
-            content: m.content || (m.toolCalls?.length ? null : ''),
+            content:
+              m.role === 'user' && imagesFor(m).length
+                ? [
+                    { type: 'text', text: m.content || '请分析图片' },
+                    ...imagesFor(m).map((i) => ({
+                      type: 'image_url',
+                      image_url: { url: `data:${i.mimeType};base64,${i.data}` },
+                    })),
+                  ]
+                : m.content || (m.toolCalls?.length ? null : ''),
             ...(m.toolCalls?.length
               ? {
                   tool_calls: m.toolCalls.map((t) => ({
@@ -204,7 +216,22 @@ export function requestBody(input: CompletionInput) {
                   : []),
               ]
             : [
-                ...(m.content ? [{ role: m.role, content: m.content }] : []),
+                ...(m.role === 'user' && imagesFor(m).length
+                  ? [
+                      {
+                        role: 'user',
+                        content: [
+                          { type: 'input_text', text: m.content || '请分析图片' },
+                          ...imagesFor(m).map((i) => ({
+                            type: 'input_image',
+                            image_url: `data:${i.mimeType};base64,${i.data}`,
+                          })),
+                        ],
+                      },
+                    ]
+                  : m.content
+                    ? [{ role: m.role, content: m.content }]
+                    : []),
                 ...(m.toolCalls ?? []).map((t) => ({
                   type: 'function_call',
                   call_id: t.id,
@@ -244,6 +271,10 @@ export function requestBody(input: CompletionInput) {
               ]
             : [
                 ...(m.content ? [{ type: 'text', text: m.content }] : []),
+                ...imagesFor(m).map((i) => ({
+                  type: 'image',
+                  source: { type: 'base64', media_type: i.mimeType, data: i.data },
+                })),
                 ...(m.toolCalls ?? []).map((t) => ({
                   type: 'tool_use',
                   id: t.id,
@@ -293,6 +324,9 @@ export function requestBody(input: CompletionInput) {
                   ]
                 : [
                     ...(m.content ? [{ text: m.content }] : []),
+                    ...imagesFor(m).map((i) => ({
+                      inlineData: { mimeType: i.mimeType, data: i.data },
+                    })),
                     ...(m.toolCalls ?? []).map((t) => ({
                       functionCall: { name: t.name, args: JSON.parse(t.arguments) },
                       ...(t.signature && t.signatureModel === model

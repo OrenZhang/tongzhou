@@ -67,6 +67,7 @@ export function stopEngine(child?: ChildProcessWithoutNullStreams) {
 
 /** ACP over stdio. No credential files or access tokens cross this interface. */
 export class NativeClient extends EventEmitter {
+  supportsImages = false;
   private child?: ChildProcessWithoutNullStreams;
   private sequence = 0;
   private pending = new Map<
@@ -138,6 +139,7 @@ export class NativeClient extends EventEmitter {
         terminal: false,
       },
     });
+    this.supportsImages = initialized.agentCapabilities?.promptCapabilities?.image === true;
     if (bootstrap) {
       this.stop();
       if (!existsSync(path.join(this.home, 'config.yaml')))

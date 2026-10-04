@@ -31,6 +31,7 @@
     "test:workbench": "node scripts/workbench-smoke.mjs",
     "test:markdown": "node scripts/markdown-smoke.mjs",
     "test:appearance": "node scripts/appearance-smoke.mjs",
+    "test:attachments": "node scripts/attachments-smoke.mjs",
     "test:auth": "node scripts/account-ui-smoke.mjs",
     "test:native": "node scripts/native-smoke.mjs",
     "test:capabilities": "node scripts/capabilities-smoke.mjs",

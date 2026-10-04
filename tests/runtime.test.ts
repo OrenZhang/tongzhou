@@ -7,6 +7,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { Store } from '../electron/store';
 import { Runtime } from '../electron/runtime';
+import { Attachments } from '../electron/attachments';
 import type { ComputerAdapter } from '../electron/extensions';
 import { mcpName } from '../electron/extensions';
 import type { AppEvent, Run } from '../src/shared/types';
@@ -77,6 +78,72 @@ const text = (content: string) => ({
   usage: { prompt_tokens: 10, completion_tokens: 4 },
 });
 describe('conversation input and lifecycle changes', () => {
+  it('shares user attachments with read-only collaborators without losing the parent reference', async () => {
+    const f = await fixture(() => [text('read attachment')]);
+    const a = new Attachments(f.store, f.root).save({
+      name: 'team.txt',
+      mimeType: 'text/plain',
+      data: Buffer.from('协作资料').toString('base64'),
+    });
+    await f.runtime.team({ ...f.input, attachmentIds: [a.id] }, ['reviewer', 'architect']);
+    await f.runtime.waitForIdle();
+    expect(f.requests.every((r) => JSON.stringify(r.messages).includes(a.id))).toBe(true);
+    expect(f.store.messages(f.input.sessionId)[0].attachments?.[0].id).toBe(a.id);
+  });
+  it('reads the complete pasted file without expanding its text and denies another conversation attachment', async () => {
+    let selected = '';
+    const f = await fixture((body) =>
+      body.messages.at(-1)?.role === 'tool'
+        ? [text('read complete')]
+        : [
+            {
+              choices: [
+                {
+                  delta: {
+                    tool_calls: [
+                      {
+                        index: 0,
+                        id: 'attachment-read',
+                        function: {
+                          name: 'read_attachment',
+                          arguments: JSON.stringify({
+                            attachmentId: selected,
+                            offset: 100,
+                            limit: 50,
+                          }),
+                        },
+                      },
+                    ],
+                  },
+                  finish_reason: 'tool_calls',
+                },
+              ],
+            },
+          ],
+    );
+    const files = new Attachments(f.store, f.root);
+    const contents = '完整资料，不应截断。'.repeat(1000);
+    const a = files.save({
+      name: 'paste.txt',
+      mimeType: 'text/plain',
+      data: Buffer.from(contents).toString('base64'),
+    });
+    selected = a.id;
+    const session = f.store.createSession();
+    f.runtime.start({ ...f.input, sessionId: session.id, prompt: '', attachmentIds: [a.id] });
+    await f.runtime.waitForIdle();
+    expect(JSON.stringify(f.requests[0].messages)).not.toContain(contents);
+    expect(f.store.messages(session.id).find((m) => m.role === 'tool')?.content).toContain(
+      contents.slice(100, 150),
+    );
+    expect(f.store.messages(session.id)[0].attachments?.[0].id).toBe(a.id);
+    const other = f.store.createSession();
+    f.runtime.start({ ...f.input, sessionId: other.id });
+    await f.runtime.waitForIdle();
+    expect(f.store.messages(other.id).find((m) => m.role === 'tool')?.content).toContain(
+      '不属于当前会话',
+    );
+  });
   it('automatically compacts zero-manual-limit history and retains the original goal across turns', async () => {
     const f = await fixture(() => [text('continued from compressed history')]);
     const provider = f.store.providers().find((p) => p.id === 'fixture')!;
@@ -508,7 +575,9 @@ describe('agent execution lifecycle', () => {
     await f.runtime.waitForIdle();
     f.runtime.start({ ...input, prompt: 'Continue', model: 'second' });
     await f.runtime.waitForIdle();
-    expect(f.requests.every((r) => !r.tools)).toBe(true);
+    expect(
+      f.requests.every((r) => r.tools.every((t: any) => t.function.name === 'read_attachment')),
+    ).toBe(true);
     expect(f.requests[1].messages.some((m: any) => m.content === input.prompt)).toBe(true);
     expect(f.store.list<Run>('run').every((r) => r.status === 'completed')).toBe(true);
     expect(f.runtime.snapshot().approvals).toHaveLength(0);
@@ -548,7 +617,9 @@ describe('agent execution lifecycle', () => {
     await f.runtime.team({ ...f.input, sessionId: session.id }, ['reviewer', 'architect']);
     await f.runtime.waitForIdle();
     expect(f.store.list<Run>('run').every((r) => r.status === 'completed')).toBe(true);
-    expect(f.requests.every((r) => !r.tools)).toBe(true);
+    expect(
+      f.requests.every((r) => r.tools.every((t: any) => t.function.name === 'read_attachment')),
+    ).toBe(true);
     expect(f.store.messages(session.id).at(-1)?.content).toContain('Discussion finding');
   });
   it('completes a tool loop, waits for approval, and records actual usage', async () => {
@@ -662,6 +733,7 @@ describe('agent execution lifecycle', () => {
             'search_files',
             'project_instructions',
             'read_history',
+            'read_attachment',
           ].includes(t.function.name),
         ),
       ),

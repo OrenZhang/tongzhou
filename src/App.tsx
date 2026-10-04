@@ -22,6 +22,7 @@ import {
   MoreHorizontal,
   Network,
   Plus,
+  Paperclip,
   Radio,
   RefreshCw,
   Search,
@@ -61,6 +62,8 @@ import { effectivePermission } from './shared/permissions';
 import { ConnectionsPanel } from './ConnectionsPanel';
 import { Appearance, useAppearance } from './Appearance';
 import { useDraft } from './useDraft';
+import { AttachmentCards, useAttachmentDraft } from './Attachments';
+import { longPaste } from './shared/attachments';
 import { useConversationFollow } from './useConversationFollow';
 import { SessionNotification } from './NotificationControls';
 import { AuthBadge, Field, Mark, Modal, Spinner, ModelPicker } from './components';
@@ -238,6 +241,8 @@ export default function App() {
   const [inputMode, setInputMode] = useState<'supplement' | 'next' | 'restart'>('supplement');
   const [deleteId, setDeleteId] = useState('');
   const { draft, setDraft, clearDraft } = useDraft(sessionId);
+  const attachments = useAttachmentDraft(sessionId, (error) => report(error));
+  const attachmentPicker = useRef<HTMLInputElement>(null);
   const { appearance, setAppearance } = useAppearance();
   const [query, setQuery] = useState('');
   const [notice, setNotice] = useState('');
@@ -486,20 +491,39 @@ export default function App() {
       if (p) await newSession(p.id);
     });
   const send = async (team = false) => {
-    if (busy || session?.archived || !draft.trim() || !model.trim() || !providerId) return;
+    if (
+      busy ||
+      attachments.pending ||
+      session?.archived ||
+      (!draft.trim() && !attachments.items.length) ||
+      !model.trim() ||
+      !providerId
+    )
+      return;
     setBusy(true);
     try {
       let targetId = sessionId;
       if (!targetId) {
         const created = await api.createSession();
         targetId = created.id;
+        attachments.copyTo(targetId);
+        attachments.clear(sessionId, attachments.items);
         activateSession({ ...created, providerId, model, agentId });
       }
-      const input = { sessionId: targetId, prompt: draft, providerId, model, agentId };
+      const input = {
+        sessionId: targetId,
+        prompt: draft,
+        providerId,
+        model,
+        agentId,
+        attachmentIds: attachments.items.map((a) => a.id),
+      };
       if (running) await api.enqueue(input, inputMode);
       else if (team) await api.team(input, teamIds);
       else await api.run(input);
       clearDraft(sessionId, draft);
+      attachments.clear(sessionId, attachments.items);
+      if (targetId !== sessionId) attachments.clear(targetId, attachments.items);
       setTeamOpen(false);
       await refresh();
       setTimeout(
@@ -1254,6 +1278,27 @@ export default function App() {
                   </div>
                 )}
                 <div className={'composer ' + (running ? 'is-running' : '')}>
+                  <AttachmentCards
+                    items={attachments.items}
+                    onRemove={busy ? undefined : attachments.remove}
+                  />
+                  {attachments.pending && (
+                    <p className="attachment-hint" role="status">
+                      正在添加附件…
+                    </p>
+                  )}
+                  <input
+                    ref={attachmentPicker}
+                    type="file"
+                    hidden
+                    multiple
+                    accept="image/png,image/jpeg,image/webp,.txt,.md,.json,.csv,.log,.js,.ts,.tsx,.py,.yaml,.yml"
+                    aria-label="选择附件文件"
+                    onChange={(e) => {
+                      void attachments.addFiles(Array.from(e.target.files ?? []));
+                      e.target.value = '';
+                    }}
+                  />
                   <textarea
                     ref={composerInput}
                     aria-label="消息"
@@ -1265,6 +1310,25 @@ export default function App() {
                     value={draft}
                     disabled={!!session?.archived}
                     onChange={(e) => setDraft(e.target.value)}
+                    onPaste={(e) => {
+                      const files = Array.from(e.clipboardData.files);
+                      if (files.length) {
+                        e.preventDefault();
+                        void attachments.addFiles(files);
+                        return;
+                      }
+                      const text = e.clipboardData.getData('text/plain');
+                      if (longPaste(text)) {
+                        e.preventDefault();
+                        void attachments
+                          .addFiles([
+                            new File([text], `粘贴文本-${Date.now()}.txt`, { type: 'text/plain' }),
+                          ])
+                          .then((added) => {
+                            if (added) setNotice('长文本已转为附件，点击卡片可查看全文');
+                          });
+                      }
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                         e.preventDefault();
@@ -1309,10 +1373,24 @@ export default function App() {
                     <div className="row composer-actions">
                       <button
                         className="icon-button"
+                        aria-label="添加图片或文件"
+                        title="添加图片或文本文件，也可直接粘贴图片"
+                        disabled={busy || attachments.pending || !!session?.archived}
+                        onClick={() => attachmentPicker.current?.click()}
+                      >
+                        <Paperclip size={17} />
+                      </button>
+                      <button
+                        className="icon-button"
                         title="多 Agent 协作（只读分析）"
                         aria-label="多 Agent 协作"
                         disabled={
-                          !!session?.archived || !draft.trim() || !!running || busy || !model
+                          !!session?.archived ||
+                          (!draft.trim() && !attachments.items.length) ||
+                          !!running ||
+                          busy ||
+                          attachments.pending ||
+                          !model
                         }
                         onClick={() => setTeamOpen(true)}
                       >
@@ -1329,7 +1407,11 @@ export default function App() {
                             className="send-button"
                             aria-label="补充"
                             title={inputModes.find((mode) => mode.value === inputMode)?.label}
-                            disabled={busy || !draft.trim()}
+                            disabled={
+                              busy ||
+                              attachments.pending ||
+                              (!draft.trim() && !attachments.items.length)
+                            }
                             onClick={() => send()}
                           >
                             {busy ? <Spinner /> : <ArrowUp size={18} />}
@@ -1349,7 +1431,8 @@ export default function App() {
                           className="send-button"
                           aria-label="发送消息"
                           disabled={
-                            !draft.trim() ||
+                            (!draft.trim() && !attachments.items.length) ||
+                            attachments.pending ||
                             !model.trim() ||
                             !providerId ||
                             busy ||

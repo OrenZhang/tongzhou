@@ -86,6 +86,17 @@ export interface ToolImage {
   data: string;
   mimeType: 'image/png' | 'image/jpeg' | 'image/webp';
 }
+export interface Attachment {
+  id: string;
+  name: string;
+  mimeType: ToolImage['mimeType'] | 'text/plain';
+  size: number;
+}
+export interface AttachmentUpload {
+  name: string;
+  mimeType: Attachment['mimeType'];
+  data: string;
+}
 export interface ToolOutput {
   text: string;
   images?: ToolImage[];
@@ -134,6 +145,7 @@ export interface WorktreeInfo {
   unsharedCommits: boolean;
 }
 export interface Message {
+  attachments?: Attachment[];
   // Presentation order within a run; protocol content remains unchanged.
   sequence?: number;
   segments?: { seq: number; start: number; end: number; time: number }[];
@@ -251,6 +263,7 @@ export type AppEvent =
   | { type: 'message'; message: Message }
   | { type: 'approval'; approval: Approval };
 export interface RunInput {
+  attachmentIds?: string[];
   sessionId: string;
   prompt: string;
   providerId: string;
@@ -285,6 +298,8 @@ export interface ImportPreview {
   warnings: string[];
 }
 export interface TongzhouAPI {
+  uploadAttachment(value: AttachmentUpload): Promise<Attachment>;
+  attachmentContent(id: string): Promise<string>;
   clientMethods(): Promise<import('./client-catalog').ClientCatalog>;
   getAppearance(): Promise<Partial<import('./appearance').AppearancePreferences>>;
   setAppearance(value: import('./appearance').AppearancePreferences): Promise<void>;

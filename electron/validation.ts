@@ -141,13 +141,16 @@ export const pluginSchema = z
       }
     }
   });
-export const runSchema = z.object({
-  sessionId: id,
-  prompt: z.string().trim().min(1).max(100000),
-  providerId: id,
-  model: z.string().trim().min(1).max(200),
-  agentId: id.or(z.literal('')).default(''),
-});
+export const runSchema = z
+  .object({
+    attachmentIds: z.array(z.uuid()).max(6).optional(),
+    sessionId: id,
+    prompt: z.string().trim().max(100000),
+    providerId: id,
+    model: z.string().trim().min(1).max(200),
+    agentId: id.or(z.literal('')).default(''),
+  })
+  .refine((v) => !!v.prompt || !!v.attachmentIds?.length, '请输入消息或添加附件');
 export const idSchema = id;
 export function redact(value: string, secrets: string[] = []) {
   let out = value

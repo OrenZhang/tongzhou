@@ -6,6 +6,7 @@ import path from 'node:path';
 import { NativeAccount, NativeClient, loginDetails, modelCatalog } from '../electron/native-engine';
 import { Runtime } from '../electron/runtime';
 import { Store } from '../electron/store';
+import { Attachments } from '../electron/attachments';
 import { providerSchema } from '../electron/validation';
 
 const fake = vi.hoisted(() => ({
@@ -15,6 +16,7 @@ const fake = vi.hoisted(() => ({
   authenticated: false,
   stopReason: 'end_turn',
   updates: [] as any[],
+  images: false,
 }));
 vi.mock('node:child_process', async () => {
   const actual = await vi.importActual<typeof import('node:child_process')>('node:child_process');
@@ -58,6 +60,8 @@ vi.mock('node:child_process', async () => {
           }
           fake.calls.push({ ...msg, child });
           let result: any = {};
+          if (msg.method === 'initialize')
+            result = { agentCapabilities: { promptCapabilities: { image: fake.images } } };
           if (msg.method === 'authenticate' && !fake.authenticated) {
             emit({ id: msg.id, error: { code: -32000, message: 'Authentication required' } });
             done();
@@ -126,6 +130,7 @@ beforeEach(() => {
   fake.authenticated = false;
   fake.stopReason = 'end_turn';
   fake.updates = [];
+  fake.images = false;
 });
 afterEach(() => {
   for (const cleanup of cleanups.splice(0)) cleanup();
@@ -347,6 +352,32 @@ describe('ACP conversation execution', () => {
     expect(store.messages(input.sessionId).some((m) => m.role === 'tool')).toBe(false);
     expect(store.messages(input.sessionId).filter((m) => m.role === 'assistant')).toHaveLength(2);
   });
+  it.each([true, false])(
+    'honors ACP image capability %s and never silently drops an attachment',
+    async (supported) => {
+      fake.images = supported;
+      const f = fixture(false);
+      const a = new Attachments(f.store, root).save({
+        name: 'p.png',
+        mimeType: 'image/png',
+        data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==',
+      });
+      f.runtime.start({ ...f.input, prompt: '', attachmentIds: [a.id] });
+      await f.runtime.waitForIdle();
+      const prompts = fake.calls.filter((c) => c.method === 'session/prompt');
+      if (supported)
+        expect(
+          prompts[0].params.prompt.some(
+            (p: any) => p.type === 'image' && p.mimeType === 'image/png',
+          ),
+        ).toBe(true);
+      else {
+        expect(prompts).toHaveLength(0);
+        expect(f.store.list<any>('run')[0].status).toBe('failed');
+      }
+      expect(f.store.messages(f.input.sessionId)[0].attachments?.[0].id).toBe(a.id);
+    },
+  );
   it.each([false, true])(
     'keeps native supplements inside the same run (project=%s)',
     async (project) => {

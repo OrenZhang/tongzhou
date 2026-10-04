@@ -32,6 +32,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { Store } from './store';
 import { Runtime } from './runtime';
+import { Attachments, attachmentUploadSchema } from './attachments';
 import { ClientCommands, operation, manual, type ClientOperation } from './client-commands';
 import { DesktopComputer } from './computer';
 import { computerDiagnostic } from './computer-diagnostic';
@@ -125,6 +126,21 @@ function setup() {
     },
   });
   runtime = new Runtime(store, dataDir, emit, computer, clientCommands);
+  const attachments = new Attachments(store, dataDir);
+  register(
+    'uploadAttachment',
+    manual('会话', '添加图片或文本附件', 'workspace', '由用户在输入框选择或粘贴文件', [
+      attachmentUploadSchema,
+    ]),
+    (raw) => attachments.save(raw),
+  );
+  register(
+    'attachmentContent',
+    manual('会话', '预览已添加附件', 'workspace', '模型通过当前会话的 read_attachment 读取附件', [
+      z.uuid(),
+    ]),
+    (id) => attachments.content(id),
+  );
   mcpAuth = new McpAuth(
     store,
     () => runtime.changed(),

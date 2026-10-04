@@ -3,6 +3,8 @@ import type { TongzhouAPI } from '../src/shared/types';
 const call = (method: string, ...args: unknown[]) =>
   ipcRenderer.invoke('tongzhou:' + method, ...args);
 const api: TongzhouAPI = {
+  uploadAttachment: (value) => call('uploadAttachment', value),
+  attachmentContent: (id) => call('attachmentContent', id),
   clientMethods: () => call('clientMethods'),
   getAppearance: () => call('getAppearance'),
   setAppearance: (value) => call('setAppearance', value),

@@ -133,6 +133,7 @@ export function PendingInputs({
                     ? '等待补充到下一安全点'
                     : '等待下一轮'}
               ：{p.input.prompt}
+              {p.input.attachmentIds?.length ? ` · ${p.input.attachmentIds.length} 个附件` : ''}
             </span>
             {p.status === 'paused' && (
               <button onClick={() => void api.resumeInput(p.id).catch((e) => setError(String(e)))}>

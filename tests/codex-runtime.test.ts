@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { Store } from '../electron/store';
 import { Runtime } from '../electron/runtime';
+import { Attachments } from '../electron/attachments';
 
 const fake = vi.hoisted(() => ({
   calls: [] as any[],
@@ -149,6 +150,27 @@ describe('locked Codex resume and steer contracts', () => {
       'Verified reply',
     );
   });
+  it('passes actual images into Codex turns and model handoffs', async () => {
+    const f = await fixture();
+    const a = new Attachments(f.store, f.runtime.dataDir).save({
+      name: 'p.png',
+      mimeType: 'image/png',
+      data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==',
+    });
+    f.runtime.start({ ...f.input, prompt: '', attachmentIds: [a.id] });
+    await f.runtime.waitForIdle();
+    f.runtime.start({ ...f.input, prompt: '继续看图', model: 'other' });
+    await f.runtime.waitForIdle();
+    const turns = fake.calls.filter((c) => c.method === 'turn/start');
+    expect(turns).toHaveLength(2);
+    expect(
+      turns.every((t) =>
+        t.params.input.some(
+          (i: any) => i.type === 'image' && i.url.startsWith('data:image/png;base64,'),
+        ),
+      ),
+    ).toBe(true);
+  });
   it('pauses an unacknowledged steer without duplicating it or claiming application', async () => {
     fake.hold = true;
     fake.loseSteer = true;
@@ -189,5 +211,26 @@ describe('locked Codex resume and steer contracts', () => {
         .map((m) => m.content),
     ).toEqual(['first', 'edited queued']);
     expect(() => f.runtime.editInput(queued.id, 'late')).toThrow('已送交');
+  });
+  it('steers attachments into the active Codex turn and persists them on the supplement', async () => {
+    fake.hold = true;
+    const f = await fixture();
+    const a = new Attachments(f.store, f.runtime.dataDir).save({
+      name: 'notes.txt',
+      mimeType: 'text/plain',
+      data: Buffer.from('补充资料').toString('base64'),
+    });
+    f.runtime.start(f.input);
+    await expect.poll(() => fake.calls.some((c) => c.method === 'turn/start')).toBe(true);
+    await f.runtime.enqueue({ ...f.input, prompt: '', attachmentIds: [a.id] }, 'supplement');
+    expect(fake.calls.find((c) => c.method === 'turn/steer').params.input[0].text).toContain(a.id);
+    expect(
+      f.store
+        .messages(f.input.sessionId)
+        .filter((m) => m.role === 'user')
+        .at(-1)?.attachments?.[0].id,
+    ).toBe(a.id);
+    await f.runtime.cancel(f.input.sessionId);
+    await f.runtime.waitForIdle();
   });
 });

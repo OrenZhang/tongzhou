@@ -9,6 +9,7 @@ import {
 } from './shared/turns';
 import { ChatMessage, Mark, Markdown } from './components';
 import { TurnProcess } from './RunActivity';
+import { AttachmentCards } from './Attachments';
 
 interface Actions {
   onCopy: (message: Message) => void;
@@ -122,6 +123,7 @@ export function ConversationTurn({ turn, ...actions }: Actions & { turn: Turn })
           data-entry-kind="supplement"
         >
           <span>你补充</span>
+          <AttachmentCards items={m.attachments} />
           <Markdown text={entry.text} />
           <MessageActions message={m} {...actions} />
         </aside>

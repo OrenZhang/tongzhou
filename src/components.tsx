@@ -1,3 +1,4 @@
+import { AttachmentCards } from './Attachments';
 import {
   X,
   LoaderCircle,
@@ -427,6 +428,7 @@ export function ChatMessage({ message: m, footer }: { message: Message; footer?:
           {m.status === 'streaming' && <Spinner />}
           {m.status === 'interrupted' && <span>已中断</span>}
         </div>
+        <AttachmentCards items={m.attachments} />
         <Markdown
           text={m.content || (m.status === 'streaming' ? '正在思考…' : '')}
           streaming={m.status === 'streaming'}
