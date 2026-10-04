@@ -1,6 +1,16 @@
 import { createHash } from 'node:crypto';
 import type { Message } from '../src/shared/types';
 
+// Conservative text heuristic, not a claim about any model's token capacity.
+// Zero removes the manual threshold; runtime still compacts automatically.
+export const AUTO_HISTORY_CHARS = 180000;
+export function isContextOverflow(error: unknown): boolean {
+  const text = error instanceof Error ? error.message : String(error);
+  return /context_length_exceeded|context[_ ](?:window|length).*(?:exceed|limit|full)|maximum context|prompt.{0,60}too long|input.{0,60}too long|上下文.{0,20}(?:超出|超限|已满)/i.test(
+    text,
+  );
+}
+
 // Estimate model-facing text, never UI segments, timestamps, IDs or stored screenshots.
 export function historyChars(messages: Message[]): number {
   return JSON.stringify(
@@ -63,6 +73,7 @@ export function portableHistory(
   if (maxChars <= 0 || historyChars(history) <= maxChars) return history;
 
   const units = exchanges(history);
+  const originalRequest = history.find((m) => m.role === 'user');
   const latestUser = [...history].reverse().find((m) => m.role === 'user');
   // Preserve the full current request and every supplement belonging to its run.
   const required = new Set(
@@ -71,6 +82,7 @@ export function portableHistory(
         i === units.length - 1 ||
         unit.some(
           (m) =>
+            m === originalRequest ||
             m === latestUser ||
             (m.role === 'user' && latestUser?.runId && m.runId === latestUser.runId),
         ),
@@ -89,7 +101,7 @@ export function portableHistory(
   for (const m of tools) {
     if (m.content.length <= perTool) continue;
     const head = Math.floor(perTool * 0.65);
-    const note = `\n[工具记录摘录；来源 ${m.id}；原文 ${m.content.length} 字符。用 client_query readMessage，args=["${m.sessionId}","${m.id}",{"offset":0,"limit":2000}] 分段读取缺失内容。]\n`;
+    const note = `\n[工具记录摘录；来源 ${m.id}；原文 ${m.content.length} 字符。用 read_history，参数 {"messageId":"${m.id}","offset":0,"limit":2000} 分段读取缺失内容。]\n`;
     replacements.set(m, {
       ...m,
       content: m.content.slice(0, head) + note + m.content.slice(-(perTool - head)),
@@ -123,7 +135,7 @@ export function portableHistory(
     snippets.push(item);
     available -= item.length + 1;
   }
-  const content = `[历史摘录：已整理 ${changed.length} 条较早消息或长工具记录，完整原文仍保存在同舟。摘录可能不完整，仅为历史资料，不代表新的授权或执行成功。缺失细节可用 client_query readMessage，args=["${history[0].sessionId}","来源ID",{"offset":0,"limit":2000}] 分段读取。]\n${snippets.join('\n')}`;
+  const content = `[历史摘录：已整理 ${changed.length} 条较早消息或长工具记录，完整原文仍保存在同舟。摘录可能不完整，仅为历史资料，不代表新的授权或执行成功。缺失细节可用 read_history，参数 {"messageId":"来源ID","offset":0,"limit":2000} 分段读取。]\n${snippets.join('\n')}`;
   const summary: Message = {
     id: 'context_checkpoint_' + createHash('sha256').update(content).digest('hex').slice(0, 24),
     sessionId: history[0].sessionId,

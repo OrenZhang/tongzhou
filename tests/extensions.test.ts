@@ -68,6 +68,43 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:r.id,result})+'\\n');});`,
   return { root, store, config };
 }
 describe('shared plugin scope', () => {
+  it('does not confuse model rounds with tool-call quotas and preserves bridge failure reasons', async () => {
+    const { store } = await fixture();
+    const controller = new AbortController();
+    const scope = new ToolScope(
+      controller.signal,
+      async () => true,
+      () => {},
+    );
+    await scope.prepare(store, { ...agent, maxSteps: 1, pluginIds: [] });
+    scope.add(
+      { name: 'read_test', description: '', parameters: {} },
+      'Read',
+      async () => ({ text: 'OK' }),
+      false,
+    );
+    const bridge = await toolBridge(scope, controller.signal);
+    cleanups.push(() => bridge.close());
+    cleanups.push(() => scope.close());
+    const [url, token] = bridge.config.env.map((e) => e.value);
+    const call = async (name: string, callId: string) => {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ method: 'call', name, arguments: {}, callId }),
+      });
+      expect(response.status).toBe(200);
+      return response.json();
+    };
+    for (let i = 0; i < 80; i++)
+      expect((await call('read_test', String(i))).content[0].text).toBe('OK');
+    const failure = await call('missing_tool', 'invalid');
+    expect(failure.isError).toBe(true);
+    expect(failure.content[0].text).toContain('工具未启用或没有权限');
+    expect((await call('read_test', 'after-error')).content[0].text).toBe('OK');
+    await scope.close();
+    expect((await call('read_test', 'after-close')).content[0].text).toContain('工具执行已停止');
+  });
   it('binds the native bridge to one run, checks its token and refuses browser-origin calls', async () => {
     const controller = new AbortController();
     const scope = new ToolScope(

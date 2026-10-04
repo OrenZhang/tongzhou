@@ -86,7 +86,7 @@ describe('optional local history compaction', () => {
     expect(compact.find((m) => m.id === 'u')).toEqual(user);
     expect(compact.at(-1)?.content).toContain('HEAD-');
     expect(compact.at(-1)?.content).toContain('-TAIL');
-    expect(compact.at(-1)?.content).toContain('readMessage');
+    expect(compact.at(-1)?.content).toContain('read_history');
     expect(compact.at(-2)?.toolCalls?.[0].signature).toBe('vendor-signature');
     expect(checkpoint).toHaveBeenCalledOnce();
     expect(JSON.stringify(history)).toBe(original);

@@ -347,6 +347,22 @@ describe('ACP conversation execution', () => {
     expect(store.messages(input.sessionId).some((m) => m.role === 'tool')).toBe(false);
     expect(store.messages(input.sessionId).filter((m) => m.role === 'assistant')).toHaveLength(2);
   });
+  it.each([false, true])(
+    'keeps native supplements inside the same run (project=%s)',
+    async (project) => {
+      const { store, runtime, input } = fixture(project);
+      const runId = runtime.start(input);
+      await runtime.enqueue({ ...input, prompt: '补充：检查负库存' }, 'supplement');
+      await runtime.waitForIdle();
+      expect(store.list<any>('run')).toHaveLength(1);
+      expect(store.list<any>('run')[0].status).toBe('completed');
+      expect(store.list<any>('pendingInput')[0]).toMatchObject({ status: 'applied', runId });
+      const prompts = fake.calls.filter((c) => c.method === 'session/prompt');
+      expect(prompts).toHaveLength(2);
+      expect(prompts[1].params.prompt[0].text).toContain('补充：检查负库存');
+      expect(store.messages(input.sessionId).every((m) => m.runId === runId)).toBe(true);
+    },
+  );
   it('rebuilds an engine segment after account invalidation or intervening history', async () => {
     const { store, runtime, input } = fixture(false);
     runtime.start(input);

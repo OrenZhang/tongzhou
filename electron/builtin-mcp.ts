@@ -4,7 +4,7 @@ import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprot
 import { z } from 'zod';
 
 const server = new Server(
-  { name: 'tongzhou-web', version: '0.5.6' },
+  { name: 'tongzhou-web', version: '0.5.7' },
   { capabilities: { tools: {} } },
 );
 server.setRequestHandler(ListToolsRequestSchema, async () => ({

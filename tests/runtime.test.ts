@@ -77,6 +77,63 @@ const text = (content: string) => ({
   usage: { prompt_tokens: 10, completion_tokens: 4 },
 });
 describe('conversation input and lifecycle changes', () => {
+  it('automatically compacts zero-manual-limit history and retains the original goal across turns', async () => {
+    const f = await fixture(() => [text('continued from compressed history')]);
+    const provider = f.store.providers().find((p) => p.id === 'fixture')!;
+    f.store.saveProvider({ ...provider, contextChars: 0 });
+    f.store.message({
+      id: 'original-goal',
+      sessionId: f.input.sessionId,
+      role: 'user',
+      content: '开发后台，禁止删除订单数据',
+      createdAt: 1,
+    });
+    f.store.message({
+      id: 'old-big-output',
+      sessionId: f.input.sessionId,
+      role: 'assistant',
+      content: '旧工具信息'.repeat(60000),
+      createdAt: 2,
+    });
+    f.runtime.start(f.input);
+    await f.runtime.waitForIdle();
+    expect(f.store.list('contextCheckpoint')).toHaveLength(1);
+    expect(JSON.stringify(f.requests[0]).length).toBeLessThan(180000);
+    expect(
+      f.requests[0].messages.some((m: any) => m.content === '开发后台，禁止删除订单数据'),
+    ).toBe(true);
+    expect(f.requests[0].tools.some((t: any) => t.function.name === 'read_history')).toBe(true);
+    expect(f.store.readMessage(f.input.sessionId, 'old-big-output').totalChars).toBe(300000);
+  });
+  it('continues the default agent past 32 model rounds without a hidden cap', async () => {
+    let calls = 0;
+    const f = await fixture(() =>
+      ++calls <= 34
+        ? [
+            {
+              choices: [
+                {
+                  delta: {
+                    tool_calls: [
+                      {
+                        index: 0,
+                        id: 'read-' + calls,
+                        function: { name: 'list_files', arguments: '{"path":""}' },
+                      },
+                    ],
+                  },
+                  finish_reason: 'tool_calls',
+                },
+              ],
+            },
+          ]
+        : [text('finished after 34 tool rounds')],
+    );
+    f.runtime.start({ ...f.input, agentId: '' });
+    await f.runtime.waitForIdle();
+    expect(f.requests).toHaveLength(35);
+    expect(f.store.list<Run>('run')[0].status).toBe('completed');
+  });
   it.each([0, 8000])(
     'continues a long tool loop with history setting %s and preserves originals',
     async (contextChars) => {
@@ -604,6 +661,7 @@ describe('agent execution lifecycle', () => {
             'read_range',
             'search_files',
             'project_instructions',
+            'read_history',
           ].includes(t.function.name),
         ),
       ),

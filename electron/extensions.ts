@@ -56,7 +56,7 @@ export function mcpName(id: string, name: string) {
 }
 
 export class PluginConnection {
-  readonly client = new Client({ name: 'tongzhou', version: '0.5.6' }, { capabilities: {} });
+  readonly client = new Client({ name: 'tongzhou', version: '0.5.7' }, { capabilities: {} });
   private secretValues: string[] = [];
   constructor(
     readonly config: PluginConfig,
@@ -150,7 +150,6 @@ export class ToolScope {
   >();
   private closed = false;
   private seen = new Map<string, Promise<ToolOutput>>();
-  private remaining = 40;
   constructor(
     private signal: AbortSignal,
     private ask: AskTool,
@@ -168,7 +167,6 @@ export class ToolScope {
     this.handlers.set(spec.name, { title, execute, approval, allowed });
   }
   async prepare(store: Store, agent: AgentProfile, computer?: ComputerAdapter) {
-    this.remaining = agent.maxSteps;
     const abort = () => {
       void this.close();
     };
@@ -322,7 +320,6 @@ export class ToolScope {
     if (!handler) throw new Error('工具未启用或没有权限：' + name);
     if (!handler.allowed()) throw new Error('工具已停用或配置已改变，请在下一轮使用新配置');
     if (this.closed || this.signal.aborted) throw new Error('工具执行已停止');
-    if (this.remaining-- <= 0) throw new Error('已达到本轮插件工具调用上限，请检查结果后再继续');
     let result: ToolOutput;
     try {
       if (!args || Array.isArray(args) || typeof args !== 'object')

@@ -146,26 +146,50 @@ export class ClientCommands {
           name,
           description:
             (approval ? '执行' : '查询') +
-            '同舟模块功能。先调用 client_catalog 发现操作及参数；method 是注册名，args 按 arguments 的位置参数顺序传入。不得传入凭据。',
+            '同舟模块功能。先调用 client_catalog 发现操作及参数；method 是注册名。推荐 argsJson：将完整位置参数数组编码为 JSON 字符串，例如 [{"name":"demo"}]。也可用 args 数组；二选一。不得传入凭据。',
           parameters: {
             type: 'object',
-            properties: { method: { type: 'string' }, args: { type: 'array', items: {} } },
-            required: ['method', 'args'],
+            properties: {
+              method: { type: 'string' },
+              args: { type: 'array', items: {} },
+              argsJson: {
+                type: 'string',
+                description:
+                  'JSON 编码的完整位置参数数组；支持对象、布尔等原始类型。与 args 二选一。',
+              },
+            },
+            required: ['method'],
             additionalProperties: false,
           },
         },
         approval ? '执行同舟操作' : '查询同舟',
         async (input) => {
           const call = z
-            .object({ method: z.string(), args: z.array(z.unknown()) })
+            .object({
+              method: z.string(),
+              args: z.array(z.unknown()).optional(),
+              argsJson: z.string().max(1000000).optional(),
+            })
             .strict()
+            .refine(
+              (v) => (v.args !== undefined) !== (v.argsJson !== undefined),
+              'args 与 argsJson 必须且只能提供一种',
+            )
             .parse(input);
+          let args = call.args;
+          if (call.argsJson !== undefined) {
+            try {
+              args = z.array(z.unknown()).parse(JSON.parse(call.argsJson));
+            } catch {
+              throw new Error('argsJson 必须是有效的 JSON 数组，例如 [{"name":"demo"}]');
+            }
+          }
           const entry = this.handlers.get(call.method);
           if (!entry || entry.operation.access !== access)
             throw new Error('此操作不可通过当前工具执行，请查询 client_catalog');
-          if (containsCredential(call.args))
+          if (containsCredential(args))
             throw new Error('请通过安全配置界面设置凭据，聊天工具不接收凭据');
-          const parsed = entry.operation.args.safeParse(call.args);
+          const parsed = entry.operation.args.safeParse(args);
           if (!parsed.success)
             throw new Error(
               '参数不符合操作定义：' +

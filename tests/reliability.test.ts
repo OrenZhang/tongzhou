@@ -136,7 +136,7 @@ describe('long conversations and concurrent changes', () => {
     const result = portableHistory(messages, 5000, (m) => {
       summary = m;
     });
-    expect(summary?.content).toContain('Preserve original constraint');
+    expect(result.find((m) => m.id === messages[0].id)).toEqual(messages[0]);
     expect(summary?.role).toBe('assistant');
     expect(result.at(-1)?.id).toBe('m39');
     expect(historyChars(result)).toBeLessThanOrEqual(5000);

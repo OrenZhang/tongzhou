@@ -54,6 +54,84 @@ async function serve(events: string[], fn: (base: string, requests: any[]) => Pr
 }
 const event = (d: any) => 'data: ' + JSON.stringify(d) + '\n\n';
 describe('streaming protocol adapters', () => {
+  it('does not replay output or retry unrelated errors during compaction', async () => {
+    for (const partial of [false, true]) {
+      await serve(
+        [
+          ...(partial ? [event({ choices: [{ delta: { content: 'already started' } }] })] : []),
+          event({
+            error: { message: partial ? 'Maximum context length exceeded' : 'Rate limit exceeded' },
+          }),
+        ],
+        async (base, requests) => {
+          const request = input('openai-chat', base);
+          let retries = 0;
+          request.onContextRetry = (_target, messages) => {
+            retries++;
+            return messages;
+          };
+          await expect(complete(request)).rejects.toThrow(
+            partial ? 'Maximum context' : 'Rate limit',
+          );
+          expect(retries).toBe(0);
+          expect(requests).toHaveLength(1);
+        },
+      );
+    }
+  });
+  it('automatically compacts a rejected context and retries without losing the current request', async () => {
+    const requests: any[] = [];
+    const server = createServer(async (req, res) => {
+      let raw = '';
+      for await (const chunk of req) raw += chunk;
+      requests.push(JSON.parse(raw));
+      if (requests.length === 1) {
+        res.writeHead(400);
+        res.end(
+          JSON.stringify({
+            error: { code: 'context_length_exceeded', message: 'Maximum context length exceeded' },
+          }),
+        );
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      res.end(
+        event({ choices: [{ delta: { content: 'continued' }, finish_reason: 'stop' }] }) +
+          'data: [DONE]\n\n',
+      );
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    try {
+      const request = input(
+        'openai-chat',
+        `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`,
+      );
+      request.historyPrepared = true;
+      request.messages = [
+        message,
+        { ...message, id: 'old', role: 'assistant', content: 'old code '.repeat(30000) },
+        { ...message, id: 'latest', content: '继续实现，保留订单数据' },
+      ];
+      let compacted = 0;
+      request.onContextRetry = (target, messages) => {
+        compacted++;
+        return portableHistory(messages, target);
+      };
+      expect((await complete(request)).text).toBe('continued');
+      expect(compacted).toBe(1);
+      expect(requests).toHaveLength(2);
+      expect(JSON.stringify(requests[1]).length).toBeLessThan(
+        JSON.stringify(requests[0]).length / 2,
+      );
+      expect(requests[1].messages.some((m: any) => m.content === '继续实现，保留订单数据')).toBe(
+        true,
+      );
+      expect(request.messages[1].content).toHaveLength(270000);
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((r) => server.close(() => r()));
+    }
+  });
   it('preserves interrupted replies and failed tool evidence during a provider switch', () => {
     const params = input('anthropic');
     params.messages = [
@@ -519,7 +597,7 @@ describe('portable history and protocol mapping', () => {
       { ...message, id: 't', role: 'tool' as const, toolCallId: 't', content: 'result' },
       { ...message, id: 'new', content: 'next' },
     ];
-    expect(portableHistory(history, 500)).toEqual([history[3]]);
+    expect(portableHistory(history, 500)).toEqual([history[0], history[3]]);
     expect(portableHistory([{ ...message, content: 'x'.repeat(1000) }], 500)[0].content).toBe(
       'x'.repeat(1000),
     );

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Message, Provider, ToolCall } from '../src/shared/types';
 import { redact } from './validation';
-import { portableHistory } from './history';
+import { portableHistory, historyChars, isContextOverflow } from './history';
 export { portableHistory } from './history';
 
 export interface ToolSpec {
@@ -28,6 +28,7 @@ export interface CompletionInput {
   signal: AbortSignal;
   onDelta(text: string): void;
   onReasoning?(text: string): void;
+  onContextRetry?(targetChars: number, messages: Message[]): Message[];
 }
 
 export function headers(provider: Provider, secret: string): Record<string, string> {
@@ -312,6 +313,46 @@ export function requestBody(input: CompletionInput) {
 }
 
 export async function complete(input: CompletionInput): Promise<Completion> {
+  let messages = input.messages;
+  for (let attempt = 0; ; attempt++) {
+    let started = false;
+    try {
+      return await completeRequest({
+        ...input,
+        messages,
+        onDelta: (text) => {
+          started = true;
+          input.onDelta(text);
+        },
+        onReasoning: (text) => {
+          started = true;
+          input.onReasoning?.(text);
+        },
+      });
+    } catch (error) {
+      // Only retry a rejected context before any response. Never replay interrupted
+      // network requests or a turn that may already have performed external work.
+      if (
+        started ||
+        input.signal.aborted ||
+        attempt >= 3 ||
+        !input.onContextRetry ||
+        !isContextOverflow(error)
+      )
+        throw error;
+      const before = historyChars(messages);
+      const target = Math.max(4000, Math.floor(before * 0.55));
+      const compact = input.onContextRetry(target, messages);
+      if (historyChars(compact) >= before)
+        throw new Error(
+          '已自动整理历史，但当前请求或最近工具状态仍超过模型容量。请拆分本次输入；已完成工作和完整历史已保留。',
+        );
+      messages = compact;
+    }
+  }
+}
+
+async function completeRequest(input: CompletionInput): Promise<Completion> {
   const go = /^https:\/\/opencode\.ai\/zen\/go\/v1\/?$/.test(input.provider.baseUrl);
   if (go)
     input = {

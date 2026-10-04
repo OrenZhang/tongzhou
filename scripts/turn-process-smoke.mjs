@@ -26,7 +26,7 @@ execFileSync(
   ],
   { cwd: project },
 );
-let release;
+let release, streamMore;
 const gate = new Promise((resolve) => {
   release = resolve;
 });
@@ -76,6 +76,7 @@ const server = createServer(async (req, res) => {
       'tool_calls',
     );
   } else {
+    streamMore = (content) => send({ content });
     send({ content: '文件已检查，继续整理。' });
     await gate;
     send({ reasoning_content: '根据实际文件整理结果。' });
@@ -149,6 +150,38 @@ try {
     'response',
   ]);
   await page.screenshot({ path: 'test-results/process-segments-live.png' });
+  // A single large delta must not accidentally disable following after layout grows.
+  streamMore('\n\n' + Array.from({ length: 55 }, (_, i) => `进度行 ${i}\n\n`).join(''));
+  await page.waitForFunction(() => {
+    const el = document.querySelector('[aria-label="会话内容"]');
+    return (
+      el.textContent.includes('进度行 54') && el.scrollHeight - el.scrollTop - el.clientHeight < 50
+    );
+  });
+  const feed = page.getByLabel('会话内容', { exact: true });
+  await feed.evaluate((el) => {
+    el.scrollTop = 100;
+  });
+  await page.getByRole('button', { name: '回到最新', exact: true }).waitFor();
+  const beforeTop = await feed.evaluate((el) => el.scrollTop);
+  streamMore('\n\n后续流式内容\n\n' + '新增段落\n\n'.repeat(30));
+  await page.getByText('后续流式内容', { exact: true }).waitFor({ state: 'attached' });
+  assert.ok(
+    Math.abs((await feed.evaluate((el) => el.scrollTop)) - beforeTop) < 5,
+    'Reading history must not be pulled to the bottom',
+  );
+  await page.getByRole('button', { name: '回到最新', exact: true }).click();
+  await page.waitForFunction(() => {
+    const el = document.querySelector('[aria-label="会话内容"]');
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+  });
+  // Files created while the same run is still active should appear without manual refresh.
+  if (await page.getByRole('button', { name: '展开项目面板', exact: true }).count())
+    await page.getByRole('button', { name: '展开项目面板', exact: true }).click();
+  await writeFile(path.join(project, 'live-created.txt'), 'Created while a run is active.');
+  await page
+    .getByRole('button', { name: 'live-created.txt', exact: true })
+    .waitFor({ timeout: 8000 });
   release();
   await turn
     .locator('.turn-final')

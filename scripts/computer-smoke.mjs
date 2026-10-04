@@ -11,7 +11,7 @@ await mkdir('test-results', { recursive: true });
 const root = await mkdtemp(path.resolve('test-results/computer-'));
 await writeFile(
   path.join(root, 'fixture.html'),
-  `<html><head><title>同舟电脑控制测试</title><meta charset="utf-8"></head><body><h1>同舟电脑控制测试</h1><input autofocus id="sample" style="font-size:24px"/><p>此窗口仅供自动化测试，输入不会发送到外部服务。</p><button id="click-test" onclick="this.textContent='点击成功'">验证点击</button></body></html>`,
+  `<html><head><title>同舟电脑控制测试</title><meta charset="utf-8"></head><body><h1>同舟电脑控制测试</h1><input autofocus id="sample" style="font-size:24px"/><p>此窗口仅供自动化测试，输入不会发送到外部服务。</p><button id="click-test" onclick="this.textContent=confirm('同舟独立测试确认框，请取消')?'已确认':'已取消'">验证点击</button></body></html>`,
 );
 let stage = 0,
   frame,
@@ -74,6 +74,9 @@ const server = createServer(async (req, res) => {
         y: frameSize ? frameSize.height * 0.56 : 0,
       },
     ],
+    ['computer_screenshot', { windowId }],
+    ['computer_key', { frameId: frame, key: 'ESC' }],
+    ['computer_screenshot', { windowId }],
   ];
   const action = actions[stage++];
   const response = action
@@ -110,6 +113,19 @@ const app = await electron.launch(
 try {
   const page = await app.firstWindow();
   await page.waitForSelector('.welcome');
+  await app.evaluate(({ app }) => {
+    globalThis.pointerObservations = [];
+    app.on('browser-window-created', (_event, window) => {
+      if (window.getTitle() !== '同舟操作指针') return;
+      window.once('show', () =>
+        globalThis.pointerObservations.push({
+          focusable: window.isFocusable(),
+          onTop: window.isAlwaysOnTop(),
+          focused: window.isFocused(),
+        }),
+      );
+    });
+  });
   await app.evaluate(
     async ({ BrowserWindow }, file) => {
       const fixture = new BrowserWindow({
@@ -142,7 +158,7 @@ try {
     .getByLabel('消息', { exact: true })
     .fill('仅操作同舟电脑控制测试窗口，验证中文输入和快捷键');
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < 12; i++) {
     await app.evaluate(({ app, BrowserWindow }) => {
       app.focus({ steal: true });
       BrowserWindow.getAllWindows()[0].focus();
@@ -164,8 +180,18 @@ try {
   }
   await page.getByText('电脑控制测试结束', { exact: true }).waitFor({ timeout: 45000 });
   assert.equal(await target.locator('#sample').inputValue(), '验证完成');
-  assert.equal(await target.locator('#click-test').innerText(), '点击成功');
+  assert.equal(await target.locator('#click-test').innerText(), '已取消');
+  assert.ok(
+    outcomes.some((v) => v.includes('requestedWindowId')),
+    'Owned modal should be captured explicitly',
+  );
   assert.ok(outcomes.filter((v) => v.includes('frameId')).length >= 3);
+  const pointers = await app.evaluate(() => globalThis.pointerObservations);
+  assert.ok(pointers.length >= 4, 'Computer actions should display the Tongzhou pointer');
+  assert.ok(
+    pointers.every((p) => !p.focusable && !p.focused && p.onTop),
+    'Pointer must be non-focusing and on top: ' + JSON.stringify(pointers),
+  );
   await page.screenshot({ path: 'test-results/14-computer.png' });
   await target.screenshot({ path: 'test-results/15-computer-fixture.png' });
   console.log(

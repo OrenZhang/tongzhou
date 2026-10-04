@@ -1,4 +1,4 @@
-import { desktopCapturer, systemPreferences } from 'electron';
+import { desktopCapturer, systemPreferences, nativeImage } from 'electron';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
@@ -8,6 +8,7 @@ import { command } from './workspace';
 import type { ComputerAdapter } from './extensions';
 import type { ComputerStatus, ToolOutput } from '../src/shared/types';
 import type { ToolSpec } from './providers';
+import { ComputerPointer, POINTER_TITLE } from './computer-pointer';
 
 const schema = (properties: Record<string, unknown>, required: string[] = []) => ({
   type: 'object',
@@ -46,13 +47,14 @@ export const computerTools: ToolSpec[] = [
   },
   {
     name: 'computer_type',
-    description: '向截图对应窗口输入文本，不自动提交。不得输入密码或验证码。',
+    description:
+      '向截图对应窗口输入文本，不自动提交。frameId 仅可使用一次，点击后需重新截图再输入。不得输入密码或验证码。',
     parameters: schema({ ...frame, text: string }, ['frameId', 'text']),
   },
   {
     name: 'computer_key',
     description:
-      '按一个键或组合键。例如 CTRL+C、CMD+A、ENTER、TAB、ESC、LEFT。会聚焦截图对应窗口。',
+      '按一个键或组合键。例如 CTRL+C、CMD+A、ENTER、TAB、ESC、LEFT。会聚焦截图对应窗口。frameId 仅可使用一次；每次操作后重新截图。',
     parameters: schema({ ...frame, key: string }, ['frameId', 'key']),
   },
   {
@@ -125,9 +127,26 @@ type WindowInfo = {
   id: string;
   title: string;
   pid: number;
+  ownerId?: string;
+  enabled?: boolean;
+  className?: string;
   bounds: { x: number; y: number; width: number; height: number };
   clientBounds?: { x: number; y: number; width: number; height: number };
 };
+export function observedWindow(windows: WindowInfo[], id: string): WindowInfo {
+  let target = windows.find((w) => w.id === id);
+  if (!target) throw new Error('窗口已关闭，请重新列出窗口');
+  const visited = new Set<string>();
+  while (target.enabled === false) {
+    visited.add(target.id);
+    const modal = windows.find(
+      (w) => w.ownerId === target!.id && w.pid === target!.pid && !visited.has(w.id),
+    );
+    if (!modal) throw new Error('目标窗口被弹窗阻挡，请重新列出窗口并观察弹窗；不要猜测点击位置');
+    target = modal;
+  }
+  return target;
+}
 type Frame = {
   window: WindowInfo;
   width: number;
@@ -137,9 +156,12 @@ type Frame = {
 };
 export class DesktopComputer implements ComputerAdapter {
   private frames = new Map<string, Frame>();
-  constructor(private lock = { busy: false }) {}
+  constructor(
+    private lock = { busy: false },
+    private pointer = new ComputerPointer(),
+  ) {}
   fork() {
-    return new DesktopComputer(this.lock);
+    return new DesktopComputer(this.lock, this.pointer);
   }
   emergencyShortcut = false;
   status(): ComputerStatus {
@@ -215,16 +237,19 @@ export class DesktopComputer implements ComputerAdapter {
     try {
       signal.throwIfAborted();
       if (name === 'computer_windows') {
+        this.pointer.hide();
         const windows = await this.helper({ action: 'windows' }, signal);
-        return { text: JSON.stringify(windows) };
+        return {
+          text: JSON.stringify(windows.filter((w: WindowInfo) => w.title !== POINTER_TITLE)),
+        };
       }
       if (name === 'computer_screenshot') {
+        this.pointer.hide();
         const { windowId } = z.object({ windowId: z.string().max(80) }).parse(args);
         if (this.status().screen === 'denied')
           throw new Error('请在 macOS 系统设置授予同舟屏幕录制权限后重启');
         const windows: WindowInfo[] = await this.helper({ action: 'windows' }, signal);
-        const window = windows.find((w) => w.id === windowId);
-        if (!window) throw new Error('窗口已关闭，请重新列出窗口');
+        const window = observedWindow(windows, windowId);
         let source: Awaited<ReturnType<typeof desktopCapturer.getSources>>[number] | undefined;
         // A newly shown window may be enumerated before its first capture frame exists.
         // Retry only the requested window; never substitute another window or a full screen.
@@ -236,31 +261,46 @@ export class DesktopComputer implements ComputerAdapter {
             fetchWindowIcons: false,
           });
           signal.throwIfAborted();
-          source = sources.find((s) => s.id.split(':')[1] === windowId);
+          source = sources.find((s) => s.id.split(':')[1] === window.id);
           if (source && !source.thumbnail.isEmpty()) break;
           if (attempt < 2) await delay(150 * (attempt + 1), undefined, { signal });
         }
-        if (!source || source.thumbnail.isEmpty())
+        let image = source?.thumbnail;
+        let dialogBounds: WindowInfo['bounds'] | undefined;
+        // Chromium omits owned Win32 dialogs from window sources. Capture only that
+        // exact dialog HWND; never substitute a desktop screenshot or another app.
+        if (
+          (!image || image.isEmpty()) &&
+          process.platform === 'win32' &&
+          window.className === '#32770' &&
+          window.ownerId &&
+          window.ownerId !== '0'
+        ) {
+          const captured = await this.helper({ action: 'capture-dialog', window }, signal);
+          image = nativeImage.createFromBuffer(Buffer.from(captured.data, 'base64'));
+          dialogBounds = captured.bounds;
+        }
+        if (!image || image.isEmpty())
           throw new Error(
             process.platform === 'darwin'
               ? '未获取目标窗口图像。请检查屏幕录制权限，并保持窗口可见后重试。'
               : '未获取目标窗口图像。请保持窗口可见、退出最小化后重试；受保护窗口可能不允许截图。',
           );
-        const image = source.thumbnail;
         const { width, height } = image.getSize();
         const frameId = randomUUID();
         // Chromium's Windows window capturer excludes the title bar and invisible resize borders.
         // Align the image with the client bottom; image aspect also accounts for a native menu bar.
         const client = window.clientBounds;
         const captureBounds =
-          client && client.width > 0
+          dialogBounds ??
+          (client && client.width > 0
             ? {
                 x: client.x,
                 y: client.y + client.height - (client.width * height) / width,
                 width: client.width,
                 height: (client.width * height) / width,
               }
-            : window.bounds;
+            : window.bounds);
         for (const [id, frame] of this.frames)
           if (frame.expires < Date.now()) this.frames.delete(id);
         if (this.frames.size >= 20) this.frames.delete(this.frames.keys().next().value!);
@@ -274,6 +314,13 @@ export class DesktopComputer implements ComputerAdapter {
         return {
           text: JSON.stringify({
             frameId,
+            windowId: window.id,
+            ...(window.id !== windowId
+              ? {
+                  requestedWindowId: windowId,
+                  note: '原窗口被其确认弹窗阻挡；当前截图及 frameId 对应此弹窗。根据实际内容决定操作，不自动确认。',
+                }
+              : {}),
             window: window.title,
             width,
             height,
@@ -287,10 +334,15 @@ export class DesktopComputer implements ComputerAdapter {
       if (!computerTools.some((t) => t.name === name)) throw new Error('未知电脑工具');
       const { frameId } = z.object({ frameId: z.string() }).parse(args);
       const frame = this.frames.get(frameId);
-      if (!frame || frame.expires < Date.now()) throw new Error('截图已过期，请重新截图观察窗口');
+      if (!frame || frame.expires < Date.now())
+        throw new Error(
+          '截图已用于上次操作或已过期，请重新截图观察窗口；每张截图只能执行一次动作。',
+        );
       if (!this.status().accessibility) throw new Error('请先为同舟授予 macOS 辅助功能权限');
       const current: WindowInfo[] = await this.helper({ action: 'windows' }, signal);
       const window = current.find((w) => w.id === frame.window.id && w.pid === frame.window.pid);
+      if (window?.enabled === false)
+        throw new Error('目标窗口被弹窗阻挡，请重新截图观察确认框，不要复用原窗口坐标');
       if (
         !window ||
         JSON.stringify(window.bounds) !== JSON.stringify(frame.window.bounds) ||
@@ -307,7 +359,19 @@ export class DesktopComputer implements ComputerAdapter {
       }
       // Each screenshot authorizes one action only. Never reuse stale coordinates after changes.
       this.frames.delete(frameId);
-      await this.helper(payload, signal);
+      const hidePointer = () => this.pointer.hide();
+      signal.addEventListener('abort', hidePointer, { once: true });
+      try {
+        await this.pointer.show(action.action).catch(hidePointer);
+        signal.throwIfAborted();
+        await this.helper(payload, signal);
+        this.pointer.finish();
+      } catch (error) {
+        this.pointer.hide();
+        throw error;
+      } finally {
+        signal.removeEventListener('abort', hidePointer);
+      }
       return { text: '操作已发送。请重新截图确认实际结果；不能仅凭输入已发送判断任务成功。' };
     } finally {
       if (signal.aborted && !['computer_windows', 'computer_screenshot'].includes(name))

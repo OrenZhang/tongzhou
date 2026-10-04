@@ -23,6 +23,17 @@ export function serviceUrl(value: string) {
     throw new Error('连接地址必须是无凭据的 HTTPS 地址');
   return url;
 }
+export function browserUrl(value: string) {
+  const url = new URL(value);
+  if (
+    url.protocol === 'http:' &&
+    ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) &&
+    !url.username &&
+    !url.password
+  )
+    return url;
+  return serviceUrl(value);
+}
 export class Connectors {
   private pending = new Map<string, AbortController>();
   constructor(
@@ -36,7 +47,7 @@ export class Connectors {
   }
   save(raw: unknown) {
     const { secret, clearSecret, ...config } = connectorSchema.parse(raw);
-    const url = serviceUrl(config.baseUrl);
+    const url = config.kind === 'browser' ? browserUrl(config.baseUrl) : serviceUrl(config.baseUrl);
     if (config.kind !== 'browser' && (url.pathname !== '/' || url.search || url.hash))
       throw new Error('服务地址只填写站点根地址');
     const old = this.list().find((c) => c.id === config.id);

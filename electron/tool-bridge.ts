@@ -4,6 +4,7 @@ import type { AddressInfo } from 'node:net';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import type { ToolScope } from './extensions';
+import { redact } from './validation';
 
 /** Private per-run channel for the stdio MCP adapter; never accepts a new tool catalog. */
 export async function toolBridge(scope: ToolScope, signal: AbortSignal) {
@@ -43,7 +44,15 @@ export async function toolBridge(scope: ToolScope, signal: AbortSignal) {
           inputSchema: t.parameters,
         }));
       else if (input.method === 'call') {
-        const output = await scope.call(input.name, input.arguments, input.callId);
+        // Tool failures are MCP results, not a broken HTTP transport. Preserve the
+        // actionable reason so the model can correct arguments or respect a denial.
+        const output = await scope
+          .call(input.name, input.arguments, input.callId)
+          .catch((error) => ({
+            text: redact(error instanceof Error ? error.message : String(error)),
+            isError: true,
+            images: undefined,
+          }));
         result = {
           isError: output.isError,
           content: [

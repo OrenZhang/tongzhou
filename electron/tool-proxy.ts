@@ -3,7 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { randomUUID } from 'node:crypto';
 const server = new Server(
-  { name: 'tongzhou-tools', version: '0.5.6' },
+  { name: 'tongzhou-tools', version: '0.5.7' },
   { capabilities: { tools: {} } },
 );
 async function request(body: unknown, signal?: AbortSignal) {
@@ -22,7 +22,14 @@ async function request(body: unknown, signal?: AbortSignal) {
       : AbortSignal.timeout(31 * 60 * 1000),
     redirect: 'error',
   });
-  if (!response.ok) throw new Error('同舟工具通道已关闭或请求失败');
+  if (!response.ok)
+    throw new Error(
+      response.status === 413
+        ? '工具参数超过单次请求大小限制，请分批提交文件或编辑'
+        : response.status === 403
+          ? '同舟工具通道认证失败，请重新开始本轮任务'
+          : `同舟工具请求失败（HTTP ${response.status}），请检查参数后重试`,
+    );
   return response.json();
 }
 server.setRequestHandler(ListToolsRequestSchema, async () => ({

@@ -18,6 +18,30 @@ function attach(
   return { scope, ask };
 }
 describe('self-registering client capabilities', () => {
+  it('accepts JSON positional arguments from native engines without weakening validation', async () => {
+    const commands = new ClientCommands();
+    const save = vi.fn(() => ({ success: true }));
+    commands.register(
+      'save',
+      operation('测试', 'change', '保存', [z.object({ name: z.string(), enabled: z.boolean() })]),
+      save,
+    );
+    const { scope } = attach(commands);
+    await scope.call('client_change', {
+      method: 'save',
+      argsJson: '[{"name":"demo","enabled":true}]',
+    });
+    expect(save).toHaveBeenCalledWith({ name: 'demo', enabled: true });
+    for (const input of [
+      { argsJson: '{' },
+      { argsJson: '{}' },
+      { argsJson: '[{"name":"demo","enabled":"true"}]' },
+      { args: [], argsJson: '[]' },
+      { argsJson: '[{"name":"demo","enabled":true,"secret":"sensitive"}]' },
+    ])
+      expect((await scope.call('client_change', { method: 'save', ...input })).isError).toBe(true);
+    expect(save).toHaveBeenCalledTimes(1);
+  });
   it('returns useful auth state without passwords, tokens, device codes or authorization URLs', async () => {
     const commands = new ClientCommands();
     commands.register('auth', operation('认证', 'query', '读取认证状态'), () => ({

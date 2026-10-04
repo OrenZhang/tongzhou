@@ -73,7 +73,7 @@ export const agentSchema = z.object({
   providerId: z.string().max(120),
   model: z.string().max(200),
   permission: z.enum(['read-only', 'ask']),
-  maxSteps: z.number().int().min(1).max(40),
+  maxSteps: z.number().int().min(0).max(1000),
   pluginIds: z.array(id).max(20).optional(),
   skillIds: z.array(id).max(20).optional(),
   computerEnabled: z.boolean().optional(),

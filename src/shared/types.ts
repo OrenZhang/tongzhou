@@ -27,7 +27,7 @@ export interface Provider {
   modelLabels?: Record<string, string>;
   hasSecret?: boolean;
   maxOutputTokens: number;
-  /** 0 = no local limit; positive = automatic history compaction target. */
+  /** 0 = automatic compaction; positive = manual character target (never a turn limit). */
   contextChars: number;
 }
 export interface ProviderInput extends Provider {
@@ -43,6 +43,7 @@ export interface AgentProfile {
   providerId: string;
   model: string;
   permission: PermissionMode;
+  /** Model response rounds; 0 has no local round limit. Not a tool-call quota. */
   maxSteps: number;
   pluginIds?: string[];
   skillIds?: string[];

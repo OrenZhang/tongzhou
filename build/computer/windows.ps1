@@ -18,8 +18,12 @@ public class TZDesktop {
   [StructLayout(LayoutKind.Sequential)] public struct INPUT { public uint type; public UNION u; }
   [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc proc,IntPtr p);
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool IsWindowEnabled(IntPtr h);
+  [DllImport("user32.dll")] public static extern IntPtr GetWindow(IntPtr h,uint command);
   [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
   [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr h,StringBuilder s,int n);
+  [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern int GetClassName(IntPtr h,StringBuilder s,int n);
+  [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h,IntPtr dc,uint flags);
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h,out RECT r);
   [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr h,out RECT r);
   [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr h,ref POINT p);
@@ -51,7 +55,8 @@ public class TZDesktop {
     EnumWindows((h,p)=> { if(!IsWindowVisible(h)||IsIconic(h)) return true; var s=new StringBuilder(512); GetWindowText(h,s,512); if(s.Length==0) return true;
       RECT r; if(DwmGetWindowAttribute(h,9,out r,Marshal.SizeOf(typeof(RECT)))!=0) GetWindowRect(h,out r);
       RECT c; GetClientRect(h,out c); var origin=new POINT(); ClientToScreen(h,ref origin);
-      uint pid; GetWindowThreadProcessId(h,out pid); if(r.right>r.left&&r.bottom>r.top) list.Add(new{id=h.ToInt64().ToString(),title=s.ToString(),pid=pid,bounds=new{x=r.left,y=r.top,width=r.right-r.left,height=r.bottom-r.top},clientBounds=new{x=origin.x,y=origin.y,width=c.right,height=c.bottom}}); return list.Count<200;
+      var cls=new StringBuilder(128);GetClassName(h,cls,128);
+      uint pid; GetWindowThreadProcessId(h,out pid); if(r.right>r.left&&r.bottom>r.top) list.Add(new{id=h.ToInt64().ToString(),title=s.ToString(),pid=pid,ownerId=GetWindow(h,4).ToInt64().ToString(),className=cls.ToString(),enabled=IsWindowEnabled(h),bounds=new{x=r.left,y=r.top,width=r.right-r.left,height=r.bottom-r.top},clientBounds=new{x=origin.x,y=origin.y,width=c.right,height=c.bottom}}); return list.Count<200;
     },IntPtr.Zero); return list.ToArray();
   }
 }
@@ -63,6 +68,27 @@ $handle=[IntPtr]([long]$payload.window.id)
 [uint32]$actualPid=0
 [void][TZDesktop]::GetWindowThreadProcessId($handle,[ref]$actualPid)
 if ($actualPid -ne $payload.window.pid) { throw 'Window has changed' }
+if ($payload.action -eq 'capture-dialog') {
+  $class=New-Object Text.StringBuilder 128
+  [void][TZDesktop]::GetClassName($handle,$class,128)
+  if ($class.ToString() -ne '#32770' -or [TZDesktop]::GetWindow($handle,4) -eq [IntPtr]::Zero -or ![TZDesktop]::IsWindowVisible($handle)) { throw 'Not a visible owned dialog' }
+  $rect=New-Object TZDesktop+RECT
+  [void][TZDesktop]::GetWindowRect($handle,[ref]$rect)
+  $width=$rect.right-$rect.left; $height=$rect.bottom-$rect.top
+  if ($width -le 0 -or $height -le 0 -or $width -gt 4096 -or $height -gt 4096) { throw 'Invalid dialog bounds' }
+  Add-Type -AssemblyName System.Drawing
+  $bitmap=New-Object Drawing.Bitmap $width,$height
+  $graphics=[Drawing.Graphics]::FromImage($bitmap)
+  $stream=New-Object IO.MemoryStream
+  try {
+    $dc=$graphics.GetHdc()
+    try { if (![TZDesktop]::PrintWindow($handle,$dc,2)) { throw 'Dialog capture refused' } }
+    finally { $graphics.ReleaseHdc($dc) }
+    $bitmap.Save($stream,[Drawing.Imaging.ImageFormat]::Png)
+    @{data=[Convert]::ToBase64String($stream.ToArray());bounds=@{x=$rect.left;y=$rect.top;width=$width;height=$height}} | ConvertTo-Json -Depth 3 -Compress
+  } finally { $stream.Dispose();$graphics.Dispose();$bitmap.Dispose() }
+  exit 0
+}
 [TZDesktop]::Focus($handle)
 Start-Sleep -Milliseconds 120
 if ([TZDesktop]::GetForegroundWindow() -ne $handle) { throw 'Could not focus the selected window' }

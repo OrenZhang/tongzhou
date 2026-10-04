@@ -1,7 +1,7 @@
 import { BrowserWindow, session } from 'electron';
 import type { Store } from './store';
 import type { Connector } from '../src/shared/types';
-import { serviceUrl } from './connectors';
+import { browserUrl } from './connectors';
 
 /** Profiles belong to Tongzhou. Never read another browser's cookie database. */
 export class BrowserProfiles {
@@ -29,7 +29,7 @@ export class BrowserProfiles {
   async open(id: string) {
     const c = this.store.get<Connector>('connector', id);
     if (!c.enabled) throw new Error('连接器已停用');
-    const url = serviceUrl(c.baseUrl);
+    const url = browserUrl(c.baseUrl);
     const previous = this.windows.get(id);
     if (previous && !previous.isDestroyed()) {
       previous.focus();
@@ -53,14 +53,14 @@ export class BrowserProfiles {
     this.windows.set(id, w);
     w.webContents.on('will-navigate', (e, target) => {
       try {
-        serviceUrl(target);
+        browserUrl(target);
       } catch {
         e.preventDefault();
       }
     });
     w.webContents.setWindowOpenHandler(({ url: target }) => {
       try {
-        serviceUrl(target);
+        browserUrl(target);
         void w.loadURL(target);
       } catch {
         /* reject executable schemes */

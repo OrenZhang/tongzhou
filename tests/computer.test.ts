@@ -1,8 +1,16 @@
 import { describe, it, expect, vi } from 'vitest';
 vi.mock('electron', () => ({ desktopCapturer: { getSources: vi.fn() }, systemPreferences: {} }));
 import { desktopCapturer } from 'electron';
-import { actionSchema, mapPoint, DesktopComputer } from '../electron/computer';
+import { actionSchema, mapPoint, DesktopComputer, observedWindow } from '../electron/computer';
 describe('computer tool boundaries', () => {
+  it('targets only the owned modal of a disabled window, never unrelated windows', () => {
+    const bounds = { x: 0, y: 0, width: 100, height: 100 };
+    const parent = { id: '1', pid: 10, title: 'App', enabled: false, bounds };
+    const modal = { id: '2', pid: 10, title: 'Confirm', ownerId: '1', enabled: true, bounds };
+    expect(observedWindow([parent, modal], '1')).toBe(modal);
+    expect(() => observedWindow([parent, { ...modal, pid: 20 }], '1')).toThrow('弹窗');
+    expect(observedWindow([{ ...parent, enabled: true }, modal], '1').id).toBe('1');
+  });
   it('maps screenshot coordinates to physical window coordinates including negative monitors', () => {
     const frame = {
       width: 1000,

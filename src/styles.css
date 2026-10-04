@@ -3535,3 +3535,13 @@ kbd {
     flex-basis: 70%;
   }
 }
+.follow-latest {
+  align-self: center;
+  margin: 0 auto 8px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  font-size: 12px;
+  padding: 5px 12px;
+}

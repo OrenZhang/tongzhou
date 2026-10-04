@@ -61,6 +61,7 @@ import { effectivePermission } from './shared/permissions';
 import { ConnectionsPanel } from './ConnectionsPanel';
 import { Appearance, useAppearance } from './Appearance';
 import { useDraft } from './useDraft';
+import { useConversationFollow } from './useConversationFollow';
 import { SessionNotification } from './NotificationControls';
 import { AuthBadge, Field, Mark, Modal, Spinner, ModelPicker } from './components';
 const empty: Snapshot = {
@@ -284,6 +285,7 @@ export default function App() {
     () => conversationTurns(sessionId, messages, data.runs, activity.events),
     [sessionId, messages, data.runs, activity.events],
   );
+  const conversationFollow = useConversationFollow(feed, sessionId, view === 'workspace', turns);
   const activateSession = (selected: Session) => {
     sessionRef.current = selected.id;
     setSessionId(selected.id);
@@ -431,29 +433,40 @@ export default function App() {
     }
   }, [view, api, authPanel, authProviderId]);
   useEffect(() => {
-    const el = feed.current;
-    if (
-      el &&
-      window.getSelection()?.isCollapsed !== false &&
-      el.scrollHeight - el.scrollTop - el.clientHeight < 300
-    )
-      el.scrollTo({ top: el.scrollHeight });
-  }, [messages, activity.events]);
-  useEffect(() => {
     if (!notice) return;
     const t = setTimeout(() => setNotice(''), 7000);
     return () => clearTimeout(t);
   }, [notice]);
   useEffect(() => {
-    if (project && view === 'workspace')
-      void (
-        contextTab === 'files'
-          ? api.listFiles(project.id, filePath).then(setEntries)
-          : api.diff(project.id).then(setDiff)
-      ).catch((e) => {
-        if (contextTab === 'diff') setDiff(String(e));
-        else report(e);
-      });
+    if (!project || view !== 'workspace') return;
+    let active = true;
+    let pending = false;
+    const update = async () => {
+      if (pending) return;
+      pending = true;
+      try {
+        if (contextTab === 'files') {
+          const result = await api.listFiles(project.id, filePath);
+          if (active) setEntries(result);
+        } else {
+          const result = await api.diff(project.id);
+          if (active) setDiff(result);
+        }
+      } catch (e) {
+        if (active) {
+          if (contextTab === 'diff') setDiff(String(e));
+          else report(e);
+        }
+      } finally {
+        pending = false;
+      }
+    };
+    void update();
+    const timer = running ? setInterval(() => void update(), 2500) : undefined;
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
   }, [project?.id, filePath, contextTab, view, running?.id]);
   const newSession = async (projectId?: string) => {
     await perform(async () => {
@@ -1211,6 +1224,15 @@ export default function App() {
                 )}
               </div>
               <div className="composer-wrap">
+                {!conversationFollow.following && turns.length > 0 && (
+                  <button
+                    className="follow-latest secondary"
+                    onClick={conversationFollow.resume}
+                    title="回到最新消息并继续跟随"
+                  >
+                    <ArrowDownToLine size={14} /> 回到最新
+                  </button>
+                )}
                 {activity.error && <p role="alert">思考摘要加载失败：{activity.error}</p>}
                 <PendingInputs key={sessionId} api={api} sessionId={sessionId} data={data} />
                 {selectedAgent && (
@@ -1646,7 +1668,7 @@ export default function App() {
                       providerId: '',
                       model: '',
                       permission: 'read-only',
-                      maxSteps: 16,
+                      maxSteps: 0,
                     })
                   }
                 >
@@ -1690,7 +1712,7 @@ export default function App() {
                     </span>
                     <span>
                       <Zap size={13} />
-                      最多 {a.maxSteps} 步
+                      {a.maxSteps === 0 ? '轮次不限' : `最多 ${a.maxSteps} 轮`}
                     </span>
                   </div>
                   <div className="card-footer">
@@ -1861,7 +1883,7 @@ export default function App() {
           <main className="page settings-page">
             <div className="page-heading">
               <h1>设置与优化</h1>
-              <p>同舟 0.5.6 · 开源多模型桌面工作台</p>
+              <p>同舟 0.5.7 · 开源多模型桌面工作台</p>
             </div>
             <Appearance value={appearance} onChange={setAppearance} />
             <section className="settings-card">
@@ -2183,7 +2205,7 @@ export default function App() {
               </Field>
               <Field
                 label="历史上下文"
-                hint="不设本地上限会发送完整文字历史；模型服务仍有实际容量限制。"
+                hint="长会话自动压缩历史并继续；完整记录留在本地。收到模型容量错误时会进一步整理，按连接和模型记住适合的阈值。"
               >
                 <select
                   value={providerEdit.contextChars === 0 ? 'unlimited' : 'compact'}
@@ -2194,8 +2216,8 @@ export default function App() {
                     })
                   }
                 >
-                  <option value="unlimited">不设本地上限</option>
-                  <option value="compact">自动整理历史</option>
+                  <option value="unlimited">自动压缩（不设手动上限）</option>
+                  <option value="compact">自定义压缩阈值</option>
                 </select>
               </Field>
               {providerEdit.contextChars !== 0 && (
@@ -2331,11 +2353,11 @@ export default function App() {
                 />
               </Field>
             </div>
-            <Field label="最大模型轮次（直接 API 模式）">
+            <Field label="最大模型轮次（0 为不限，仅直接 API 模式）">
               <input
                 type="number"
-                min={1}
-                max={40}
+                min={0}
+                max={1000}
                 value={agentEdit.maxSteps}
                 onChange={(e) => setAgentEdit({ ...agentEdit, maxSteps: Number(e.target.value) })}
               />
