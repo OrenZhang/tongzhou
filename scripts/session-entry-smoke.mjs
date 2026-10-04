@@ -13,6 +13,16 @@ try {
   const page = await app.firstWindow();
   page.on('pageerror', (e) => errors.push(e.message));
   await page.waitForSelector('.app-shell');
+  const builtins = await page.evaluate(async () =>
+    (await window.tongzhou.snapshot()).providers.map((p) => ({ id: p.id, enabled: p.enabled })),
+  );
+  assert.deepEqual(
+    builtins,
+    ['openai-codex', 'local', 'kimi-account', 'minimax-account'].map((id) => ({
+      id,
+      enabled: false,
+    })),
+  );
   assert.equal(await page.getByRole('button', { name: '工作空间', exact: true }).count(), 0);
   await page.getByRole('button', { name: '管理模型与订阅', exact: true }).waitFor();
   await page.getByRole('button', { name: /开启新会话/ }).click();

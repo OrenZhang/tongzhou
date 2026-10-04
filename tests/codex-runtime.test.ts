@@ -91,6 +91,7 @@ async function fixture() {
   const root = await mkdtemp(path.join(os.tmpdir(), 'tongzhou-codex-runtime-'));
   cleanup.push(() => rm(root, { recursive: true, force: true }));
   const store = new Store(':memory:', { encrypt: (v) => v, decrypt: (v) => v });
+  store.saveProvider({ ...store.providers().find((p) => p.id === 'openai-codex')!, enabled: true });
   cleanup.push(() => store.close());
   const runtime = new Runtime(store, root, () => {});
   cleanup.push(async () => {

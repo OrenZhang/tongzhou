@@ -693,6 +693,7 @@ function setup() {
       store.saveProvider({
         id: providerId,
         name: engine === 'kimi' ? 'Kimi · 账号授权' : 'MiniMax · 账号授权',
+        enabled: false,
         protocol: engine,
         auth: 'native',
         baseUrl: '',

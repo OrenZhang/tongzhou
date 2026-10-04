@@ -40,6 +40,7 @@ export class Store {
     if (!this.list<Provider>('provider').length) {
       this.put('provider', {
         id: 'openai-codex',
+        enabled: false,
         name: 'OpenAI · ChatGPT',
         protocol: 'codex',
         baseUrl: '',
@@ -50,6 +51,7 @@ export class Store {
       });
       this.put('provider', {
         id: 'local',
+        enabled: false,
         name: '本地模型',
         protocol: 'openai-chat',
         baseUrl: 'http://127.0.0.1:11434/v1',
