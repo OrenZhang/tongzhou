@@ -14,6 +14,9 @@ import {
 import { NativeAccount, nativeEngine } from './native-engine';
 import { Accounts } from './accounts';
 import { AccountBrowser } from './account-browser';
+import { NetworkProfiles } from './network-profiles';
+import { networkProfileSchema } from './network-config';
+import { accountProxyConfig } from './provider-network';
 import { networkKey } from '../src/shared/provider-network';
 import { Connectors, connectorSchema } from './connectors';
 import { BrowserProfiles } from './browser-profiles';
@@ -75,6 +78,7 @@ let store: Store;
 let runtime: Runtime;
 let accounts: Accounts;
 let accountBrowser: AccountBrowser;
+let networks: NetworkProfiles;
 let connectors: Connectors;
 let browserProfiles: BrowserProfiles;
 let channels: Channels;
@@ -135,6 +139,119 @@ function setup() {
     },
   });
   runtime = new Runtime(store, dataDir, emit, computer, clientCommands);
+  networks = new NetworkProfiles(
+    store,
+    dataDir,
+    () => runtime.changed(),
+    (id) => {
+      const ids = store
+        .providers()
+        .filter((p) => p.network?.mode === 'managed' && p.network.profileId === id)
+        .map((p) => p.id);
+      if (runtime.snapshot().runs.some((r) => ids.includes(r.providerId) && r.status === 'running'))
+        throw new Error('使用此网络的账号正在执行任务，请结束任务后再修改、切换或停止网络。');
+    },
+    (id) => {
+      for (const p of store
+        .providers()
+        .filter((p) => p.network?.mode === 'managed' && p.network.profileId === id)) {
+        accountBrowser?.close(p.id);
+        accounts?.resetCodex(p.id);
+      }
+    },
+  );
+  runtime.resolveNetwork = (network) => networks.resolve(network);
+  register(
+    'networkProfiles',
+    operation('网络配置', 'query', '列出内置网络状态与节点名称，不返回节点凭据'),
+    () => networks.list(),
+  );
+  register(
+    'saveNetworkProfile',
+    manual(
+      '网络配置',
+      '导入或更新加密网络配置',
+      'connections',
+      '配置及订阅包含凭据，只能由用户在设置中导入',
+      [networkProfileSchema],
+    ),
+    (input) => networks.save(input),
+  );
+  register(
+    'installNetworkCore',
+    manual('网络配置', '安装官方网络内核', 'connections', '由用户安装校验过的内核压缩包', [
+      z.boolean(),
+    ]),
+    async (offline) => {
+      if (z.boolean().parse(offline)) {
+        const chosen = await dialog.showOpenDialog({
+          title: '选择官方 Mihomo 压缩包',
+          properties: ['openFile'],
+          filters: [{ name: '内核压缩包', extensions: ['zip', 'gz'] }],
+        });
+        if (chosen.canceled) return '已取消';
+        await networks.core.installFile(chosen.filePaths[0]);
+      } else await networks.core.install();
+      runtime.changed();
+      return '网络内核已安装';
+    },
+  );
+  register(
+    'deleteNetworkProfile',
+    operation('网络配置', 'change', '删除未绑定账号的网络配置', [idSchema.describe('profileId')]),
+    (id) => networks.remove(idSchema.parse(id)),
+  );
+  register(
+    'refreshNetworkProfile',
+    operation('网络配置', 'change', '更新网络订阅', [idSchema.describe('profileId')]),
+    (id) => networks.refresh(idSchema.parse(id)),
+  );
+  register(
+    'startNetworkProfile',
+    operation('网络配置', 'change', '启动内置网络', [idSchema.describe('profileId')]),
+    (id) => networks.start(idSchema.parse(id)),
+  );
+  register(
+    'stopNetworkProfile',
+    operation('网络配置', 'change', '停止内置网络', [idSchema.describe('profileId')]),
+    (id) => networks.stop(idSchema.parse(id)),
+  );
+  register(
+    'selectNetworkNode',
+    operation('网络配置', 'change', '切换网络配置的出口节点', [
+      idSchema.describe('profileId'),
+      z.string().min(1).max(160).describe('node'),
+    ]),
+    (id, node) => networks.select(idSchema.parse(id), z.string().min(1).max(160).parse(node)),
+  );
+  register(
+    'testNetworkProfile',
+    operation('网络配置', 'change', '启动网络并测试 OpenAI 授权服务连通性，不执行登录', [
+      idSchema.describe('profileId'),
+    ]),
+    async (raw) => {
+      const id = idSchema.parse(raw);
+      const network = await networks.resolve({ mode: 'managed', profileId: id });
+      const s = session.fromPartition('tongzhou-network-test-' + id);
+      await s.setProxy(accountProxyConfig(network));
+      await s.closeAllConnections();
+      const start = Date.now();
+      try {
+        const response = await s.fetch('https://auth.openai.com/.well-known/openid-configuration', {
+          credentials: 'omit',
+          redirect: 'error',
+          signal: AbortSignal.timeout(15000),
+        });
+        await response.body?.cancel();
+        if (!response.ok) throw new Error();
+        const ms = Date.now() - start;
+        networks.recordLatency(id, ms);
+        return `网络可达（${ms} ms），未执行账号登录或模型推理。`;
+      } catch {
+        throw new Error('出口测试失败，请检查节点可用性、套餐及网络连接');
+      }
+    },
+  );
   const attachments = new Attachments(store, dataDir);
   register(
     'uploadAttachment',
@@ -544,7 +661,7 @@ function setup() {
         contextChars: 0,
       });
   }
-  accountBrowser = new AccountBrowser(store);
+  accountBrowser = new AccountBrowser(store, (network) => networks.resolve(network));
   accounts = new Accounts(store, runtime, dataDir, emit, (url, id) => accountBrowser.open(url, id));
   const accountFor = (raw: unknown, id?: unknown) =>
     accounts.native(
@@ -1134,6 +1251,7 @@ function setup() {
     ]),
     (raw) => {
       const input = providerSchema.parse(raw);
+      if (input.network?.mode === 'managed') networks.exists(input.network.profileId!);
       const before = store.providers().find((p) => p.id === input.id);
       const networkChanged = networkKey(before?.network) !== networkKey(input.network);
       if (
@@ -1702,9 +1820,12 @@ else {
     bots.dispose();
     mcpAuth.dispose();
     runtime.stop();
-    void runtime.waitForIdle().finally(() => {
-      store.close();
-      app.quit();
-    });
+    void runtime
+      .waitForIdle()
+      .then(() => networks.dispose())
+      .finally(() => {
+        store.close();
+        app.quit();
+      });
   });
 }

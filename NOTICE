@@ -28,3 +28,7 @@ MiniMax Code: https://github.com/MiniMax-AI/minimax-code
 Both official CLI distributions are unmodified runtime dependencies driven through ACP and documented login commands. Original license and third-party notice files remain in their package directories. Tongzhou is not affiliated with or endorsed by Moonshot AI or MiniMax.
 
 Node.js 22.23.3 is distributed through the node npm package. Copyright Node.js contributors, MIT and bundled third-party licenses; see build/node-LICENSE.txt for the original Node.js and bundled third-party license notices.
+
+Mihomo v1.19.32: https://github.com/MetaCubeX/mihomo/tree/v1.19.32
+Optional, independently executed network core downloaded directly from upstream by the user; no Mihomo binary is redistributed in Tongzhou packages. GPL-3.0; see docs/MIHOMO-LICENSE.txt. Source and official release archives: https://github.com/MetaCubeX/mihomo/releases/tag/v1.19.32.
+fflate 0.8.2 (MIT) is used to decode checksum-verified core archives; original license remains in its dependency distribution.

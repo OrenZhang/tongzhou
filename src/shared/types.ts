@@ -378,6 +378,15 @@ export interface TongzhouAPI {
   deleteProvider(id: string): Promise<void>;
   testProvider(id: string, model: string): Promise<string>;
   testProviderNetwork(id: string): Promise<string>;
+  networkProfiles(): Promise<import('./network-profile').NetworkOverview>;
+  saveNetworkProfile(input: import('./network-profile').NetworkProfileInput): Promise<void>;
+  deleteNetworkProfile(id: string): Promise<void>;
+  refreshNetworkProfile(id: string): Promise<void>;
+  startNetworkProfile(id: string): Promise<void>;
+  stopNetworkProfile(id: string): Promise<void>;
+  selectNetworkNode(id: string, node: string): Promise<void>;
+  testNetworkProfile(id: string): Promise<string>;
+  installNetworkCore(offline: boolean): Promise<string>;
   models(id: string): Promise<string[]>;
   saveAgent(agent: AgentProfile): Promise<AgentProfile>;
   deleteAgent(id: string): Promise<void>;

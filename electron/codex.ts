@@ -41,9 +41,11 @@ export class CodexClient extends EventEmitter {
     { resolve: (v: any) => void; reject: (e: Error) => void; timer: NodeJS.Timeout }
   >();
   private lastError = '';
+  private generation = 0;
   constructor(
     readonly home: string,
     private network?: ProviderNetwork,
+    private resolveNetwork?: (network?: ProviderNetwork) => Promise<ProviderNetwork | undefined>,
   ) {
     super();
   }
@@ -60,10 +62,13 @@ export class CodexClient extends EventEmitter {
     return starting;
   }
   private async initialize() {
+    const generation = this.generation;
+    const network = this.resolveNetwork ? await this.resolveNetwork(this.network) : this.network;
+    if (generation !== this.generation) throw new Error('Codex 已停止');
     mkdirSync(this.home, { recursive: true });
     const binary = codexBinary();
     const env: NodeJS.ProcessEnv = {
-      ...accountEnvironment(minimalEnv(), this.network),
+      ...accountEnvironment(minimalEnv(), network),
       CODEX_HOME: this.home,
     };
     // Windows binaries include rg and sandbox helpers alongside the CLI distribution.
@@ -169,6 +174,7 @@ export class CodexClient extends EventEmitter {
     this.emit('failure', error);
   }
   stop() {
+    this.generation++;
     const child = this.child;
     if (child?.pid) {
       child.stdin.end();

@@ -1,5 +1,13 @@
 import { build } from 'esbuild';
 await build({
+  entryPoints: ['electron/network-core-host.ts'],
+  outfile: 'dist-electron/network-core-host.cjs',
+  bundle: true,
+  platform: 'node',
+  format: 'cjs',
+  target: 'node22',
+});
+await build({
   entryPoints: ['electron/main.ts'],
   outfile: 'dist-electron/main.cjs',
   bundle: true,

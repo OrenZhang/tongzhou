@@ -3561,3 +3561,75 @@ kbd {
   font-size: 12px;
   overflow-wrap: anywhere;
 }
+
+/* Account-scoped network profiles share the application's light/dark tokens. */
+.network-core-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-muted);
+  margin: 18px 0;
+}
+.network-core-card > div:first-of-type {
+  flex: 1;
+  min-width: 0;
+}
+.network-core-card p {
+  margin: 6px 0;
+  font-size: 12px;
+}
+.network-core-card small {
+  overflow-wrap: anywhere;
+}
+.network-profile-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  gap: 14px;
+}
+.network-profile-card {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+  background: var(--surface);
+}
+.network-profile-card h3 {
+  margin: 0;
+}
+.network-profile-card .field {
+  margin: 14px 0;
+}
+.network-actions {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.network-config-editor {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+.network-file-input {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.network-file-input input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+@media (max-width: 800px) {
+  .network-core-card {
+    flex-wrap: wrap;
+  }
+}

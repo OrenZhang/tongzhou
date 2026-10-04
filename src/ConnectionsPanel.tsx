@@ -2,20 +2,25 @@ import { useState } from 'react';
 import { Modal } from './components';
 import { EmailFields, RuleConditions, defaultSmtp } from './NotificationControls';
 import { BotsPanel } from './BotsPanel';
+import { NetworkProfilesPanel } from './NetworkProfilesPanel';
 import { errorMessage } from './feedback';
-import { Globe2, Radio, History, Bot } from 'lucide-react';
+import { Globe2, Radio, History, Bot, Network } from 'lucide-react';
 import type { Channel, Connector, NotificationRule, Snapshot, TongzhouAPI } from './shared/types';
 
 export function ConnectionsPanel({
   api,
   data,
   refresh,
+  initialTab = 'accounts',
 }: {
   api: TongzhouAPI;
   data: Snapshot;
   refresh: () => Promise<void>;
+  initialTab?: 'accounts' | 'network';
 }) {
-  const [tab, setTab] = useState<'accounts' | 'channels' | 'bots' | 'records'>('accounts');
+  const [tab, setTab] = useState<'accounts' | 'channels' | 'bots' | 'records' | 'network'>(
+    initialTab,
+  );
   const [connector, setConnector] = useState<(Connector & { secret?: string }) | null>(null);
   const [channel, setChannel] = useState<
     (Channel & { webhook?: string; signingSecret?: string; password?: string }) | null
@@ -55,7 +60,7 @@ export function ConnectionsPanel({
   return (
     <section className="connections-extra">
       <nav className="section-tabs connection-tabs" aria-label="连接分类">
-        {(['accounts', 'channels', 'bots', 'records'] as const).map((name, i) => (
+        {(['accounts', 'channels', 'bots', 'network', 'records'] as const).map((name, i) => (
           <button
             className={tab === name ? 'active' : ''}
             aria-pressed={tab === name}
@@ -63,10 +68,10 @@ export function ConnectionsPanel({
             onClick={() => setTab(name)}
           >
             {(() => {
-              const Icon = [Globe2, Radio, Bot, History][i];
+              const Icon = [Globe2, Radio, Bot, Network, History][i];
               return <Icon size={15} />;
             })()}
-            {['服务与浏览器', '渠道通知', '机器人', '认证与发送记录'][i]}
+            {['服务与浏览器', '渠道通知', '机器人', '网络配置', '认证与发送记录'][i]}
           </button>
         ))}
       </nav>
@@ -76,6 +81,7 @@ export function ConnectionsPanel({
         </p>
       )}
       {tab === 'bots' && <BotsPanel data={data} api={api} refresh={refresh} />}
+      {tab === 'network' && <NetworkProfilesPanel api={api} />}
       {tab === 'accounts' && (
         <>
           <div className="collection-toolbar">

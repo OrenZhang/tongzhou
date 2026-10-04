@@ -1,6 +1,7 @@
 export interface ProviderNetwork {
-  mode: 'inherit' | 'direct' | 'proxy';
+  mode: 'inherit' | 'direct' | 'proxy' | 'managed';
   proxyUrl?: string;
+  profileId?: string;
 }
 export function normalizeProxyUrl(raw: string): string {
   const u = new URL(raw.trim());
@@ -19,6 +20,7 @@ export function normalizeProxyUrl(raw: string): string {
   return u.origin;
 }
 export function networkKey(value?: ProviderNetwork) {
+  if (value?.mode === 'managed') return 'managed:' + value.profileId;
   return value?.mode === 'proxy'
     ? 'proxy:' + normalizeProxyUrl(value.proxyUrl || '')
     : value?.mode || 'inherit';

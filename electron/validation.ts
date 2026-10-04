@@ -46,10 +46,18 @@ export const providerSchema = z
     clearSecret: z.boolean().optional(),
     network: z
       .object({
-        mode: z.enum(['inherit', 'direct', 'proxy']),
+        mode: z.enum(['inherit', 'direct', 'proxy', 'managed']),
         proxyUrl: z.string().max(2048).optional(),
+        profileId: id.optional(),
       })
       .transform((value, ctx) => {
+        if (value.mode === 'managed') {
+          if (!value.profileId) {
+            ctx.addIssue({ code: 'custom', message: '请选择内置网络配置', path: ['profileId'] });
+            return z.NEVER;
+          }
+          return { mode: value.mode, profileId: value.profileId };
+        }
         if (value.mode !== 'proxy') return { mode: value.mode };
         try {
           return { mode: value.mode, proxyUrl: normalizeProxyUrl(value.proxyUrl || '') };

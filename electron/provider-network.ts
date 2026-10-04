@@ -16,6 +16,7 @@ export function accountEnvironment(
   base: NodeJS.ProcessEnv,
   network?: ProviderNetwork,
 ): NodeJS.ProcessEnv {
+  if (network?.mode === 'managed') throw new Error('内置网络必须启动后再连接');
   const env = { ...base };
   if (!network || network.mode === 'inherit') return env;
   for (const key of Object.keys(env))
@@ -30,6 +31,7 @@ export function accountEnvironment(
   return env;
 }
 export function accountProxyConfig(network?: ProviderNetwork) {
+  if (network?.mode === 'managed') throw new Error('内置网络必须启动后再连接');
   if (!network || network.mode === 'inherit') return { mode: 'system' as const };
   if (network.mode === 'direct') return { mode: 'direct' as const };
   return {

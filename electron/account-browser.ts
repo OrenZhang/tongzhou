@@ -4,6 +4,7 @@ import { networkKey } from '../src/shared/provider-network';
 import { loginUrl } from './codex-auth';
 import type { Store } from './store';
 import type { Provider } from '../src/shared/types';
+import type { ProviderNetwork } from '../src/shared/provider-network';
 
 function safeNavigation(raw: string) {
   try {
@@ -23,7 +24,10 @@ export class AccountBrowser {
   private windows = new Map<string, BrowserWindow>();
   private generations = new Map<string, number>();
   private configured = new WeakSet<Session>();
-  constructor(private store: Store) {}
+  constructor(
+    private store: Store,
+    private resolveNetwork?: (network?: ProviderNetwork) => Promise<ProviderNetwork | undefined>,
+  ) {}
   private provider(id: string) {
     const p = this.store.get<Provider>('provider', id);
     if (p.protocol !== 'codex') throw new Error('网络设置仅适用于 ChatGPT 连接');
@@ -31,12 +35,15 @@ export class AccountBrowser {
   }
   async networkSession(id: string): Promise<Session> {
     const provider = this.provider(id);
+    const network = this.resolveNetwork
+      ? await this.resolveNetwork(provider.network)
+      : provider.network;
     // Include the network identity so an old async authorization can never reconfigure
     // a newly selected network. No persistent cookies or password API is exposed.
     const s = session.fromPartition(
-      'tongzhou-chatgpt-' + id + '-' + Buffer.from(networkKey(provider.network)).toString('hex'),
+      'tongzhou-chatgpt-' + id + '-' + Buffer.from(networkKey(network)).toString('hex'),
     );
-    await s.setProxy(accountProxyConfig(provider.network));
+    await s.setProxy(accountProxyConfig(network));
     s.setPermissionRequestHandler((_w, _permission, done) => done(false));
     s.setPermissionCheckHandler(() => false);
     if (!this.configured.has(s)) {

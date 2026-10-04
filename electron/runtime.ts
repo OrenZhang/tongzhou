@@ -39,6 +39,9 @@ import { mkdir, rm } from 'node:fs/promises';
 import { z } from 'zod';
 
 export class Runtime {
+  resolveNetwork?: (
+    network?: import('../src/shared/provider-network').ProviderNetwork,
+  ) => Promise<import('../src/shared/provider-network').ProviderNetwork | undefined>;
   projectUnavailable?: (id: string) => boolean;
   onLifecycle?: (
     run: Run,
@@ -370,6 +373,8 @@ export class Runtime {
       client = new CodexClient(
         engineHome(this.dataDir, 'codex', providerId),
         this.store.get<Provider>('provider', providerId).network,
+        (network) =>
+          this.resolveNetwork ? this.resolveNetwork(network) : Promise.resolve(network),
       );
       client.on('request', (r) => client!.reject(r.id, 'Login client does not execute tools'));
       this.accountClients.set(providerId, client);
@@ -382,6 +387,8 @@ export class Runtime {
       this.authClient = new CodexClient(
         path.join(this.dataDir, 'codex'),
         this.store.get<Provider>('provider', providerId).network,
+        (network) =>
+          this.resolveNetwork ? this.resolveNetwork(network) : Promise.resolve(network),
       );
       this.authClient.on('request', (r) =>
         this.authClient.reject(r.id, 'Login client does not execute tools'),
@@ -403,6 +410,7 @@ export class Runtime {
     this.authClient = new CodexClient(
       path.join(dataDir, 'codex'),
       store.providers().find((p) => p.id === 'openai-codex')?.network,
+      (network) => (this.resolveNetwork ? this.resolveNetwork(network) : Promise.resolve(network)),
     );
     this.authClient.on('request', (r) =>
       this.authClient.reject(r.id, 'Login client does not execute tools'),
@@ -1223,6 +1231,7 @@ export class Runtime {
     const client = new CodexClient(
       engineHome(this.dataDir, 'codex', input.providerId),
       this.store.get<Provider>('provider', input.providerId).network,
+      (network) => (this.resolveNetwork ? this.resolveNetwork(network) : Promise.resolve(network)),
     );
     this.clients.set(input.sessionId, client);
     let threadId = '';

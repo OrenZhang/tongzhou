@@ -17,3 +17,5 @@
 验证：单元测试覆盖 URL 校验、环境隔离、账号引擎参数和能力目录；`npm run test:account-proxy` 使用本地模拟代理与真实内置 Codex，验证设备授权请求进入指定代理、浏览器独立路由、本机回调直连和配置回显。模拟代理主动返回失败，不使用真实账号或发起付费推理；真人登录与模型推理需以实际网络和账号测试为准。
 
 参考：[Electron 独立 Session 与代理配置](https://www.electronjs.org/docs/latest/api/session)、[Codex shell 环境配置](https://learn.chatgpt.com/docs/config-file/config-reference)。
+
+内置网络配置现已单独实现：支持由同舟管理内核、导入节点并绑定账号，见 [内置网络配置](MANAGED_NETWORK.md)。原有独立代理地址功能仍可继续使用。

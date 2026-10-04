@@ -192,6 +192,9 @@ export default function App() {
   const api = window.tongzhou;
   const [data, setData] = useState<Snapshot>(empty);
   const [view, setView] = useState<View>('workspace');
+  const [connectionInitialTab, setConnectionInitialTab] = useState<'accounts' | 'network'>(
+    'accounts',
+  );
   const [sidebarOpen, setSidebarOpen] = useState(
     () => localStorage.getItem('tongzhou-sidebar') !== 'closed',
   );
@@ -1585,7 +1588,12 @@ export default function App() {
               <h1>连接中心</h1>
               <p>将服务授权交给同舟保管，让 Agent 使用能力，无需把密码或令牌交给模型。</p>
             </div>
-            <ConnectionsPanel api={api} data={data} refresh={refresh} />
+            <ConnectionsPanel
+              api={api}
+              data={data}
+              refresh={refresh}
+              initialTab={connectionInitialTab}
+            />
           </main>
         )}
         {view === 'extensions' && (
@@ -1972,7 +1980,10 @@ export default function App() {
                     : data.providers.find((p) => p.id === (authProviderId || 'openai-codex'))
                           ?.network?.mode === 'direct'
                       ? '不使用代理'
-                      : '默认网络'}
+                      : data.providers.find((p) => p.id === (authProviderId || 'openai-codex'))
+                            ?.network?.mode === 'managed'
+                        ? '内置网络配置'
+                        : '默认网络'}
                 </span>
                 <button
                   className="text-button"
@@ -2146,6 +2157,12 @@ export default function App() {
             )}
             {providerEdit.protocol === 'codex' && (
               <ProviderNetworkFields
+                api={api}
+                onManage={() => {
+                  setProviderEdit(null);
+                  setConnectionInitialTab('network');
+                  setView('connections');
+                }}
                 key={providerEdit.id}
                 value={providerEdit.network}
                 onChange={(network) => setProviderEdit({ ...providerEdit, network })}

@@ -1,18 +1,39 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import type { TongzhouAPI } from './shared/types';
+import type { NetworkProfile } from './shared/network-profile';
 import { Field } from './components';
 import type { ProviderNetwork } from './shared/provider-network';
 export function ProviderNetworkFields({
   value,
   onChange,
   onTest,
+  api,
+  onManage,
 }: {
   value?: ProviderNetwork;
   onChange: (value: ProviderNetwork) => void;
   onTest: () => Promise<string>;
+  api: TongzhouAPI;
+  onManage: () => void;
 }) {
   const [testing, setTesting] = useState(false),
     [result, setResult] = useState('');
   const mode = value?.mode || 'inherit';
+  const [profiles, setProfiles] = useState<NetworkProfile[]>([]);
+  useEffect(() => {
+    let live = true;
+    api
+      .networkProfiles()
+      .then((v) => {
+        if (live) setProfiles(v.profiles);
+      })
+      .catch(() => {
+        if (live) setResult('读取内置网络配置失败');
+      });
+    return () => {
+      live = false;
+    };
+  }, [api]);
   return (
     <div className="provider-network-fields">
       <Field
@@ -28,14 +49,41 @@ export function ProviderNetworkFields({
             onChange({
               mode: e.target.value as ProviderNetwork['mode'],
               ...(e.target.value === 'proxy' ? { proxyUrl: value?.proxyUrl || '' } : {}),
+              ...(e.target.value === 'managed' ? { profileId: value?.profileId || '' } : {}),
             });
           }}
         >
           <option value="inherit">默认网络（保持原设置）</option>
           <option value="proxy">独立代理</option>
+          <option value="managed">内置网络配置（同舟自动运行）</option>
           <option value="direct">不使用代理</option>
         </select>
       </Field>
+      {mode === 'managed' && (
+        <>
+          <Field label="选择网络配置" hint="使用时自动启动内核。配置更改不会修改系统网络。">
+            <select
+              aria-label="ChatGPT 内置网络配置"
+              value={value?.profileId || ''}
+              disabled={testing}
+              onChange={(e) => {
+                setResult('');
+                onChange({ mode: 'managed', profileId: e.target.value });
+              }}
+            >
+              <option value="">请选择…</option>
+              {profiles.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} · {p.selected}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <button type="button" className="text-button" disabled={testing} onClick={onManage}>
+            管理网络配置（设置 → 连接中心 → 网络配置）
+          </button>
+        </>
+      )}
       {mode === 'proxy' && (
         <Field
           label="HTTP / HTTPS 代理地址"
@@ -62,7 +110,11 @@ export function ProviderNetworkFields({
       <button
         className="secondary"
         type="button"
-        disabled={testing || (mode === 'proxy' && !value?.proxyUrl?.trim())}
+        disabled={
+          testing ||
+          (mode === 'proxy' && !value?.proxyUrl?.trim()) ||
+          (mode === 'managed' && !value?.profileId)
+        }
         onClick={async () => {
           setTesting(true);
           setResult('');
