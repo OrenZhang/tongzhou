@@ -9,7 +9,7 @@ export const workPluginCatalog = [
   {
     id: 'github',
     name: 'GitHub 仓库工具',
-    category: '可选 MCP',
+    category: '代码协作',
     description:
       '在会话中搜索仓库、查看代码、处理 Issue 和 Pull Request。可复用连接中心的 GitHub 账号。',
     url: 'https://api.githubcopilot.com/mcp/',
@@ -291,7 +291,7 @@ export function WorkPlugins({
                 <div className="service-card-heading row">
                   <Plug size={20} />
                   <h3>{p.name}</h3>
-                  <span className="tag">{p.category}</span>
+                  <span className="tag">应用 · {p.category}</span>
                 </div>
                 <p>{p.description}</p>
                 {connections.length > 1 && (

@@ -319,8 +319,9 @@ try {
     await capture(`${width}-core`);
     await page.getByRole('button', { name: /^内置与自定义/ }).click();
     await capture(`${width}-mcp`);
-    await page.getByRole('button', { name: /^Skills/ }).click();
+    await page.getByLabel('类型', { exact: true }).selectOption('skill');
     await capture(`${width}-skills`);
+    await page.getByLabel('类型', { exact: true }).selectOption('all');
     await nav('运行记录');
     await capture(`${width}-activity`);
     await nav('设置与优化');

@@ -160,7 +160,9 @@ try {
     async () =>
       !(await window.tongzhou.snapshot()).plugins.find((p) => p.id === 'tongzhou-system').enabled,
   );
-  await page.getByRole('button', { name: '添加 MCP', exact: true }).click();
+  assert.equal(await page.getByRole('button', { name: /^Skills/ }).count(), 0);
+  await page.getByRole('button', { name: '添加插件', exact: true }).click();
+  await page.getByRole('button', { name: '连接 MCP 服务', exact: true }).click();
   await page.getByLabel('插件名称', { exact: true }).fill('测试笔记插件');
   await page.getByLabel('启动命令', { exact: true }).fill(process.execPath);
   await page.getByLabel('启动参数', { exact: true }).fill(mcp);
@@ -168,9 +170,27 @@ try {
   await page.getByRole('button', { name: '保存并检查连接', exact: true }).click();
   await page.getByRole('dialog').getByText('read_note', { exact: true }).waitFor();
   await page.getByRole('button', { name: '保存插件', exact: true }).click();
-  await page.getByRole('button', { name: /^Skills/ }).click();
-  await page.getByRole('button', { name: '导入 Skill 文件夹', exact: true }).click();
+  await page.getByRole('button', { name: '添加插件', exact: true }).click();
+  await page.screenshot({ path: 'test-results/plugin-type-picker.png' });
+  await page.getByRole('button', { name: '导入 Skill 技能', exact: true }).click();
   await page.getByRole('heading', { name: 'sample-skill', exact: true }).waitFor();
+  const skillCard = page
+    .locator('.provider-card')
+    .filter({ has: page.getByRole('heading', { name: 'sample-skill', exact: true }) });
+  await skillCard.getByText('Skill 技能', { exact: true }).waitFor();
+  await page.getByLabel('类型', { exact: true }).selectOption('skill');
+  assert.equal(await page.locator('.provider-grid .provider-card:visible').count(), 1);
+  await skillCard.getByRole('checkbox').uncheck();
+  await page.waitForFunction(async () => !(await window.tongzhou.snapshot()).skills[0].enabled);
+  await skillCard.getByRole('checkbox').check();
+  await page.waitForFunction(async () => (await window.tongzhou.snapshot()).skills[0].enabled);
+  await skillCard.getByText('查看指令', { exact: true }).click();
+  await skillCard.locator('pre').waitFor();
+  assert.ok((await skillCard.locator('pre').innerText()).includes('Use concise answers.'));
+  await page.getByLabel('类型', { exact: true }).selectOption('mcp');
+  assert.equal(await page.getByRole('heading', { name: 'sample-skill', exact: true }).count(), 0);
+  assert.equal(await page.locator('.provider-grid .provider-card:visible').count(), 1);
+  await page.getByLabel('类型', { exact: true }).selectOption('all');
   assert.equal((await page.evaluate(() => window.tongzhou.snapshot())).agents.length, 0);
   await page.screenshot({ path: 'test-results/12-extensions.png' });
   const base = `http://127.0.0.1:${server.address().port}/v1`;
@@ -223,6 +243,12 @@ try {
   assert.equal(persisted.sessions[0].model, 'model-b');
   assert.equal(persisted.plugins.length, 3);
   assert.equal(persisted.skills.length, 1);
+  await page.getByRole('button', { name: '插件', exact: true }).click();
+  await page.getByRole('button', { name: /^内置与自定义/ }).click();
+  await skillCard.getByRole('button', { name: '移除', exact: true }).click();
+  await page.waitForFunction(async () => (await window.tongzhou.snapshot()).skills.length === 0);
+  await page.getByLabel('类型', { exact: true }).selectOption('skill');
+  await page.getByRole('heading', { name: '暂无此类型的插件', exact: true }).waitFor();
   console.log(
     'Extensions UI passed: MCP discovery, Skill import, global plugin switches, approval, projectless tools, same-session provider handoff and persistence.',
   );

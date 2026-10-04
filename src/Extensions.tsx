@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Plug, RefreshCw, Trash2, Upload } from 'lucide-react';
+import { Plus, Plug, RefreshCw, Trash2, BookOpen } from 'lucide-react';
 import { Field, Modal, Spinner } from './components';
 import { MultiValueInput } from './MultiValueInput';
 import {
@@ -25,7 +25,9 @@ export function Extensions({
   refresh: () => Promise<void>;
   report: (e: unknown) => void;
 }) {
-  const [tab, setTab] = useState<'core' | 'catalog' | 'mcp' | 'skills'>('core');
+  const [tab, setTab] = useState<'core' | 'catalog' | 'mcp'>('core');
+  const [adding, setAdding] = useState(false);
+  const [kind, setKind] = useState('all');
   const [loginUrl, setLoginUrl] = useState('');
   const [edit, setEdit] = useState<PluginInput | null>(null);
   const [busy, setBusy] = useState(false);
@@ -35,6 +37,11 @@ export function Extensions({
   );
   const [notice, setNotice] = useState('');
   const otherPlugins = (data.plugins ?? []).filter((p) => !workPluginDefinition(p));
+  const visiblePlugins = otherPlugins.filter(
+    (p) =>
+      kind === 'all' || kind === (builtinPlugins.some((b) => b.id === p.id) ? 'builtin' : 'mcp'),
+  );
+  const visibleSkills = kind === 'all' || kind === 'skill' ? (data.skills ?? []) : [];
   const perform = async (fn: () => Promise<unknown>) => {
     setBusy(true);
     setNotice('');
@@ -63,22 +70,20 @@ export function Extensions({
         <p>管理公共工具，统一启停能力，所有会话和 Agent 自动继承。切换模型不会切换你的会话记录。</p>
       </div>
       <nav className="section-tabs" aria-label="工具分类">
-        {(['core', 'catalog', 'mcp', 'skills'] as const).map((value, i) => (
+        {(['core', 'catalog', 'mcp'] as const).map((value, i) => (
           <button
             key={value}
             aria-pressed={tab === value}
             className={tab === value ? 'active' : ''}
             onClick={() => setTab(value)}
           >
-            {['核心能力', '工作插件', '内置与自定义', 'Skills'][i]}
+            {['核心能力', '工作插件', '内置与自定义'][i]}
             <span className="tab-count">
               {value === 'core'
                 ? 3
                 : value === 'catalog'
                   ? workPluginCatalog.length
-                  : value === 'mcp'
-                    ? otherPlugins.length
-                    : (data.skills ?? []).length}
+                  : otherPlugins.length + (data.skills ?? []).length}
             </span>
           </button>
         ))}
@@ -106,35 +111,37 @@ export function Extensions({
         <div className="section-heading">
           <div>
             <h2>内置与自定义</h2>
-            <p className="muted">内置工具和其他 MCP 服务；应用授权与启停请在“工作插件”中管理。</p>
+            <p className="muted">统一管理内置工具、MCP 服务和 Skill 技能，按类型区分。</p>
           </div>
           <button
             className="primary"
+            disabled={busy}
             onClick={() => {
               setNotice('');
-              setEdit({
-                id: crypto.randomUUID(),
-                name: '',
-                transport: 'stdio',
-                command: '',
-                args: [],
-                url: '',
-                enabled: true,
-                readOnlyTools: [],
-                secret: '',
-              });
+              setAdding(true);
             }}
           >
             <Plus size={16} />
-            添加 MCP
+            添加插件
           </button>
         </div>
+        <div className="plugin-list-filter">
+          <label htmlFor="plugin-kind">类型</label>
+          <select id="plugin-kind" value={kind} onChange={(e) => setKind(e.target.value)}>
+            <option value="all">全部类型</option>
+            <option value="builtin">内置工具</option>
+            <option value="mcp">MCP 服务</option>
+            <option value="skill">Skill 技能</option>
+          </select>
+        </div>
         <div className="provider-grid">
-          {otherPlugins.map((p) => (
+          {visiblePlugins.map((p) => (
             <article className="provider-card" key={p.id}>
               <div className="card-top">
                 <Plug />
-                <span className="tag">{p.enabled ? '已启用 · 按需连接' : '已停用'}</span>
+                <span className="tag">
+                  {builtinPlugins.some((b) => b.id === p.id) ? '内置工具' : 'MCP 服务'}
+                </span>
                 <label className="switch-control">
                   <input
                     type="checkbox"
@@ -158,6 +165,7 @@ export function Extensions({
                   (p.transport === 'http' ? p.url : [p.command, ...p.args].join(' '))}
               </p>
               <p className="muted">
+                {p.enabled ? '已启用' : '已停用'} ·{' '}
                 {(catalogs[p.id] ?? p.catalog)
                   ? `已发现 ${(catalogs[p.id] ?? p.catalog)!.length} 个工具`
                   : '点击连接检查工具目录'}
@@ -192,57 +200,40 @@ export function Extensions({
               </div>
             </article>
           ))}
-        </div>
-        {!otherPlugins.length && (
-          <p className="muted">
-            添加本机 stdio 或远程 Streamable HTTP 服务。插件全局启用后，各会话按需使用，无需在 Agent
-            中重复配置。
-          </p>
-        )}
-        {notice && (
-          <p role="status" className="extension-notice">
-            {notice}
-          </p>
-        )}
-      </div>
-      <div hidden={tab !== 'skills'}>
-        <div className="section-heading">
-          <h2>Skills</h2>
-          <button
-            className="secondary"
-            disabled={busy}
-            onClick={() => perform(() => api.importSkill())}
-          >
-            <Upload size={16} />
-            导入 Skill 文件夹
-          </button>
-        </div>
-        <p className="muted">
-          导入 SKILL.md 及附属文本，复制到同舟本地库。不会自动安装依赖或执行脚本；在 Agent
-          和会话中按需使用。
-        </p>
-        <div className="provider-grid">
-          {(data.skills ?? []).map((s) => (
-            <article className="provider-card" key={s.id}>
+          {visibleSkills.map((s) => (
+            <article className="provider-card" key={'skill:' + s.id}>
+              <div className="card-top">
+                <BookOpen />
+                <span className="tag">Skill 技能</span>
+                <label className="switch-control">
+                  <input
+                    type="checkbox"
+                    aria-label={`启用技能 ${s.name}`}
+                    checked={
+                      pendingToggle?.id === 'skill:' + s.id ? pendingToggle.enabled : s.enabled
+                    }
+                    disabled={busy}
+                    onChange={(e) => {
+                      const enabled = e.target.checked;
+                      setPendingToggle({ id: 'skill:' + s.id, enabled });
+                      void perform(() => api.saveSkill({ ...s, enabled })).finally(() =>
+                        setPendingToggle(null),
+                      );
+                    }}
+                  />
+                  <span aria-hidden="true" />
+                </label>
+              </div>
               <h3>{s.name}</h3>
               <p>{s.description}</p>
-              <p className="muted">{Object.keys(s.files).length} 个附属文本文件</p>
+              <p className="muted">
+                {s.enabled ? '已启用' : '已停用'} · {Object.keys(s.files).length} 个附属文本文件
+              </p>
               <details>
                 <summary>查看指令</summary>
                 <pre className="skill-preview">{s.instructions}</pre>
               </details>
               <div className="row wrap">
-                <label className="checkbox-line">
-                  <input
-                    type="checkbox"
-                    checked={s.enabled}
-                    disabled={busy}
-                    onChange={(e) =>
-                      perform(() => api.saveSkill({ ...s, enabled: e.target.checked }))
-                    }
-                  />
-                  启用
-                </label>
                 <button
                   className="text-button danger"
                   disabled={busy}
@@ -255,14 +246,68 @@ export function Extensions({
             </article>
           ))}
         </div>
-        {!(data.skills ?? []).length && (
+        {!visiblePlugins.length && !visibleSkills.length && (
           <div className="empty-state compact">
-            <Upload size={26} />
-            <h3>添加可复用的工作方法</h3>
-            <p>导入 Skill 文件夹，启用后在会话中按需使用。</p>
+            <Plug size={26} />
+            <h3>暂无此类型的插件</h3>
+            <p>点击“添加插件”，选择连接 MCP 服务或导入 Skill 技能。</p>
           </div>
         )}
+        {notice && (
+          <p role="status" className="extension-notice">
+            {notice}
+          </p>
+        )}
       </div>
+      {adding && (
+        <Modal title="添加插件" subtitle="选择要添加的类型" onClose={() => setAdding(false)}>
+          <div className="modal-content plugin-kind-options">
+            <button
+              className="plugin-kind-option"
+              aria-label="连接 MCP 服务"
+              onClick={() => {
+                setAdding(false);
+                setKind('all');
+                setEdit({
+                  id: crypto.randomUUID(),
+                  name: '',
+                  transport: 'stdio',
+                  command: '',
+                  args: [],
+                  url: '',
+                  enabled: true,
+                  readOnlyTools: [],
+                  secret: '',
+                });
+              }}
+            >
+              <Plug size={22} />
+              <span>
+                <strong>连接 MCP 服务</strong>
+                <small>添加远程服务或本机工具，供会话调用。</small>
+              </span>
+            </button>
+            <button
+              className="plugin-kind-option"
+              aria-label="导入 Skill 技能"
+              onClick={() => {
+                setAdding(false);
+                setKind('all');
+                void perform(async () => {
+                  const skill = await api.importSkill();
+                  if (skill) setNotice(`已导入技能「${skill.name}」`);
+                });
+              }}
+            >
+              <BookOpen size={22} />
+              <span>
+                <strong>导入 Skill 技能</strong>
+                <small>选择含 SKILL.md 的文件夹，添加可复用的工作方法。</small>
+              </span>
+            </button>
+          </div>
+        </Modal>
+      )}
       {edit && (
         <Modal
           title="管理 MCP 插件"

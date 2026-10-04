@@ -2275,6 +2275,49 @@ input[type='checkbox'] {
 .extensions-page .provider-card p {
   overflow-wrap: anywhere;
 }
+.plugin-list-filter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.plugin-list-filter select {
+  width: auto;
+  min-width: 140px;
+}
+.plugin-kind-options {
+  display: grid;
+  gap: 12px;
+}
+.plugin-kind-option {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  text-align: left;
+  white-space: normal;
+}
+.plugin-kind-option:hover {
+  background: var(--surface-muted);
+}
+.plugin-kind-option > svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.plugin-kind-option > span {
+  display: grid;
+  gap: 5px;
+}
+.plugin-kind-option small {
+  color: var(--muted);
+  font-weight: 400;
+}
 .tool-permissions {
   border: 1px solid var(--border, var(--border));
   border-radius: 12px;
