@@ -413,11 +413,13 @@ export function ChatMessage({ message: m, footer }: { message: Message; footer?:
       </div>
     );
   return (
-    <article className={'chat-message ' + m.role}>
-      <div className="message-avatar">{m.role === 'user' ? '你' : <Mark small />}</div>
+    <article
+      className={'chat-message ' + m.role}
+      aria-label={m.role === 'user' ? '你的消息' : '助手回复'}
+    >
       <div className="message-body">
         <div className="message-meta">
-          <strong>{m.role === 'user' ? '你' : (m.agent ?? '同舟')}</strong>
+          {m.role !== 'user' && m.agent && m.agent !== '同舟' && <strong>{m.agent}</strong>}
           {m.model && <span>{m.model}</span>}
           <time>
             {new Date(m.createdAt).toLocaleTimeString('zh-CN', {
@@ -428,11 +430,13 @@ export function ChatMessage({ message: m, footer }: { message: Message; footer?:
           {m.status === 'streaming' && <Spinner />}
           {m.status === 'interrupted' && <span>已中断</span>}
         </div>
-        <AttachmentCards items={m.attachments} />
-        <Markdown
-          text={m.content || (m.status === 'streaming' ? '正在思考…' : '')}
-          streaming={m.status === 'streaming'}
-        />
+        <div className="message-content">
+          <AttachmentCards items={m.attachments} />
+          <Markdown
+            text={m.content || (m.status === 'streaming' ? '正在思考…' : '')}
+            streaming={m.status === 'streaming'}
+          />
+        </div>
         {m.toolCalls?.map((t) => (
           <div className="tool-call" key={t.id}>
             <FileCode2 size={13} />

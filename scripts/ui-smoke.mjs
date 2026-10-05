@@ -289,6 +289,46 @@ try {
     await page.getByRole('button', { name: '返回会话', exact: true }).click();
     await page.locator(`[data-session-id="${sessions[0].id}"]`).click();
     await page.locator('.turn-final').waitFor();
+    assert.equal(await page.locator('.feed .brand-mark, .feed .message-avatar').count(), 0);
+    assert.equal(
+      await page.locator('.feed .message-meta').getByText('同舟', { exact: true }).count(),
+      0,
+    );
+    const chatLayout = await page.evaluate(() => {
+      const user = document.querySelector('.chat-message.user .message-content');
+      const assistant = document.querySelector('.chat-message.assistant .message-body');
+      const a = assistant.getBoundingClientRect(),
+        u = user.getBoundingClientRect();
+      return {
+        rightAligned: Math.abs(u.right - a.right) < 2,
+        indented: u.left > a.left,
+        fontWeight: getComputedStyle(assistant.querySelector('.markdown')).fontWeight,
+        selectable: getComputedStyle(user.querySelector('.markdown')).userSelect,
+      };
+    });
+    assert.deepEqual(chatLayout, {
+      rightAligned: true,
+      indented: true,
+      fontWeight: '400',
+      selectable: 'text',
+    });
+    const userActions = page.locator('.chat-message.user .message-actions').first();
+    await page.locator('.chat-message.user').first().hover();
+    await page.waitForFunction(
+      () =>
+        Number(
+          getComputedStyle(document.querySelector('.chat-message.user .message-actions')).opacity,
+        ) === 1,
+    );
+    await page.locator('.conversation-header').hover();
+    await userActions.getByRole('button', { name: '复制消息', exact: true }).focus();
+    await page.waitForFunction(
+      () =>
+        Number(
+          getComputedStyle(document.querySelector('.chat-message.user .message-actions')).opacity,
+        ) === 1,
+    );
+    await page.getByLabel('消息', { exact: true }).focus();
     assert.equal(await page.locator('.context-panel').count(), 0);
     const textSize = await page
       .locator('.turn-final .markdown')

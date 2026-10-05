@@ -140,6 +140,8 @@ try {
           ratio('--ink', '--canvas'),
           ratio('--muted', '--surface'),
           ratio('--on-accent', '--accent'),
+          ratio('--user-ink', '--user-bubble'),
+          ratio('--ink', '--surface'),
         ];
       });
       assert.ok(

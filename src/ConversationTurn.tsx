@@ -7,7 +7,7 @@ import {
   type TurnEntry,
   type ConversationTurn as Turn,
 } from './shared/turns';
-import { ChatMessage, Mark, Markdown } from './components';
+import { ChatMessage, Markdown } from './components';
 import { TurnProcess } from './RunActivity';
 import { AttachmentCards } from './Attachments';
 
@@ -62,6 +62,7 @@ export function ConversationTurn({ turn, ...actions }: Actions & { turn: Turn })
   const response = prompt ? turn.messages.slice(1) : turn.messages;
   const assistants = response.filter((m) => m.role === 'assistant');
   const assistant = assistants[0];
+  const agentName = assistant?.agent ?? turn.run?.agentName;
   const active = turn.run
     ? turn.run.status === 'running'
     : assistants.some((m) => m.status === 'streaming');
@@ -150,13 +151,10 @@ export function ConversationTurn({ turn, ...actions }: Actions & { turn: Turn })
         <ChatMessage message={prompt} footer={<MessageActions message={prompt} {...actions} />} />
       )}
       {hasResponse && (
-        <article className="chat-message assistant">
-          <div className="message-avatar">
-            <Mark small />
-          </div>
+        <article className={'chat-message assistant' + (active ? ' is-active' : '')}>
           <div className="message-body">
             <div className="message-meta">
-              <strong>{assistant?.agent ?? turn.run?.agentName ?? '同舟'}</strong>
+              {agentName && agentName !== '同舟' && <strong>{agentName}</strong>}
               {(assistant?.model || turn.run?.model) && (
                 <span>{assistant?.model ?? turn.run?.model}</span>
               )}
