@@ -498,6 +498,7 @@ export interface TongzhouAPI {
   saveAgent(agent: AgentProfile): Promise<AgentProfile>;
   deleteAgent(id: string): Promise<void>;
   addProject(): Promise<Project | null>;
+  deleteProject(id: string): Promise<string[]>;
   createSession(projectId?: string | null): Promise<Session>;
   updateSession(
     id: string,

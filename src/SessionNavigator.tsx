@@ -11,7 +11,7 @@ import {
   Search,
   Trash2,
 } from 'lucide-react';
-import type { Session, Snapshot } from './shared/types';
+import type { Project, Session, Snapshot } from './shared/types';
 import { projectFamilyId } from './shared/projects';
 
 export function SessionNavigator({
@@ -27,6 +27,7 @@ export function SessionNavigator({
   onSelect,
   onToggleArchive,
   onDelete,
+  onDeleteProject,
 }: {
   data: Snapshot;
   sessionId: string;
@@ -40,6 +41,7 @@ export function SessionNavigator({
   onSelect(session: Session): void;
   onToggleArchive(session: Session): void;
   onDelete(session: Session): void;
+  onDeleteProject(project: Project): void;
 }) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
     try {
@@ -211,6 +213,14 @@ export function SessionNavigator({
                     onClick={() => onNew(project.id)}
                   >
                     <Plus size={14} />
+                  </button>
+                  <button
+                    className="icon-button project-delete"
+                    title="删除项目"
+                    aria-label={`删除项目 ${project.name}`}
+                    onClick={() => onDeleteProject(project)}
+                  >
+                    <Trash2 size={14} />
                   </button>
                 </div>
                 {expanded && (

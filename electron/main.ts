@@ -332,6 +332,7 @@ function setup() {
     (url) => shell.openExternal(url),
   );
   const worktrees = new Worktrees(store, dataDir, () => runtime.changed());
+  let worktreeOperations = 0;
   runtime.projectUnavailable = (id) => worktrees.isRemoving(id);
   register(
     'listWorktrees',
@@ -345,14 +346,28 @@ function setup() {
       z.string().min(1).describe('branch'),
       z.string().min(1).describe('ref，如 HEAD'),
     ]),
-    (id, branch, ref) => worktrees.create(idSchema.parse(id), branch, ref),
+    async (id, branch, ref) => {
+      worktreeOperations++;
+      try {
+        return await worktrees.create(idSchema.parse(id), branch, ref);
+      } finally {
+        worktreeOperations--;
+      }
+    },
   );
   register(
     'removeWorktree',
     operation('项目与 Git', 'change', '移除同舟创建且无未保存或未推送更改的工作树', [
       idSchema.describe('worktreeProjectId'),
     ]),
-    (id) => worktrees.remove(idSchema.parse(id)),
+    async (id) => {
+      worktreeOperations++;
+      try {
+        return await worktrees.remove(idSchema.parse(id));
+      } finally {
+        worktreeOperations--;
+      }
+    },
   );
   register(
     'openProjectFolder',
@@ -1665,6 +1680,23 @@ function setup() {
       });
       runtime.changed();
       return project;
+    },
+  );
+  register(
+    'deleteProject',
+    manual(
+      '项目与 Git',
+      '删除项目及关联会话，保留磁盘文件',
+      'workspace',
+      '需要在项目删除对话框中确认范围',
+      [idSchema.describe('projectId')],
+    ),
+    (id) => {
+      if (worktreeOperations) throw new Error('正在处理工作树，请完成后再删除项目。');
+      const deleted = runtime.deleteProject(idSchema.parse(id));
+      for (const sessionId of deleted) channels.abort(sessionId);
+      feishu.sync();
+      return deleted;
     },
   );
   register(

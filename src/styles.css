@@ -604,6 +604,17 @@ svg {
   color: var(--muted);
   font-size: 11px;
 }
+.project-group-heading .project-delete:hover,
+.project-group-heading .project-delete:focus-visible {
+  color: var(--danger, #bc3434);
+  background: #bc343415;
+}
+.project-delete-path {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 12px;
+  user-select: text;
+}
 .project-sessions {
   margin-left: 12px;
   padding-left: 5px;

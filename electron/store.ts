@@ -408,7 +408,22 @@ export class Store {
   setCapability(name: 'computer' | 'management', enabled: boolean) {
     this.put('capabilityState', { id: 'global', ...this.capabilities(), [name]: enabled });
   }
-  deleteSession(id: string) {
+  deleteProject(projectIds: Set<string>, sessionIds: Set<string>) {
+    this.db.exec('BEGIN');
+    try {
+      for (const id of sessionIds)
+        if (this.list<Session>('session').some((s) => s.id === id)) this.deleteSession(id, true);
+      for (const id of projectIds) {
+        this.remove('worktree', id);
+        this.remove('project', id);
+      }
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+  deleteSession(id: string, inTransaction = false) {
     this.get<Session>('session', id);
     const ids = new Set([id]);
     for (let changed = true; changed; ) {
@@ -419,7 +434,7 @@ export class Store {
           changed = true;
         }
     }
-    this.db.exec('BEGIN');
+    if (!inTransaction) this.db.exec('BEGIN');
     try {
       for (const target of ids) {
         this.put('deletedSession', { id: target, deletedAt: Date.now() });
@@ -448,9 +463,9 @@ export class Store {
       for (const channel of this.list<any>('channel'))
         if (ids.has(channel.sessionId))
           this.put('channel', { ...channel, inbound: false, sessionId: undefined });
-      this.db.exec('COMMIT');
+      if (!inTransaction) this.db.exec('COMMIT');
     } catch (error) {
-      this.db.exec('ROLLBACK');
+      if (!inTransaction) this.db.exec('ROLLBACK');
       throw error;
     }
   }

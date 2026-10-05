@@ -1,4 +1,5 @@
 import { Knowledge } from './knowledge';
+import { projectDeletionTargets } from '../src/shared/projects';
 import { thinkingRequest, codexThinking, nativeThinking } from './thinking';
 import { IdleTimeout } from './idle-timeout';
 import { randomUUID } from 'node:crypto';
@@ -323,6 +324,39 @@ export class Runtime {
       }
     if (consumed) this.changed();
     return consumed;
+  }
+  deleteProject(id: string) {
+    this.store.get<Project>('project', id);
+    const { projectIds, sessionIds } = projectDeletionTargets(
+      this.store.list<Project>('project'),
+      this.store.list<Session>('session'),
+      id,
+    );
+    if ([...sessionIds].some((s) => this.deleting.has(s)))
+      throw new Error('正在处理项目内的会话删除，请稍后重试。');
+    if (
+      [...sessionIds].some((s) => this.active.has(s)) ||
+      this.store.list<Run>('run').some((r) => sessionIds.has(r.sessionId) && r.status === 'running')
+    )
+      throw new Error('项目仍有运行中的任务，请先停止任务再删除。');
+    if (
+      this.store
+        .list<{ id: string; sessionId: string; status: string }>('terminal')
+        .some((t) => sessionIds.has(t.sessionId) && t.status === 'running')
+    )
+      throw new Error('项目仍有运行中的终端，请先停止终端再删除（关闭面板不会停止进程）。');
+    if (
+      this.store
+        .list<PendingInput>('pendingInput')
+        .some((p) => sessionIds.has(p.sessionId) && ['queued', 'dispatching'].includes(p.status))
+    )
+      throw new Error('项目仍有排队中的任务，请先取消排队再删除。');
+    // Synchronous transaction: no new task or terminal can start between checks and deletion.
+    // Remove registrations only; never remove project or Git worktree directories from disk.
+    this.store.deleteProject(projectIds, sessionIds);
+    for (const s of sessionIds) this.codexChats.remove(s);
+    this.changed();
+    return [...sessionIds];
   }
   async deleteSession(id: string) {
     this.store.get<Session>('session', id);

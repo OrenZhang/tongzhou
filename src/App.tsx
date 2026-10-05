@@ -261,6 +261,8 @@ export default function App() {
   const [agentId, setAgentId] = useState('');
   const [inputMode, setInputMode] = useState<'supplement' | 'next' | 'restart'>('supplement');
   const [deleteId, setDeleteId] = useState('');
+  const [deleteProjectId, setDeleteProjectId] = useState('');
+  const [deleteProjectError, setDeleteProjectError] = useState('');
   const { draft, setDraft, clearDraft } = useDraft(sessionId);
   const attachments = useAttachmentDraft(sessionId, (error) => report(error));
   const attachmentPicker = useRef<HTMLInputElement>(null);
@@ -998,6 +1000,10 @@ export default function App() {
             void perform(() => api.updateSession(target.id, { archived: !target.archived }))
           }
           onDelete={(target) => setDeleteId(target.id)}
+          onDeleteProject={(target) => {
+            setDeleteProjectId(target.id);
+            setDeleteProjectError('');
+          }}
         />
         <div className="sidebar-bottom">
           <div className="local-status">
@@ -2689,6 +2695,75 @@ export default function App() {
             >
               保存 Agent
               <Check size={15} />
+            </button>
+          </div>
+        </Modal>
+      )}
+      {deleteProjectId && (
+        <Modal
+          title="删除项目"
+          onClose={() => {
+            if (!busy) setDeleteProjectId('');
+          }}
+          compact
+        >
+          <div className="modal-content confirmation-content">
+            <p>
+              确认删除项目“
+              <strong>{data.projects.find((p) => p.id === deleteProjectId)?.name}</strong>”？
+            </p>
+            <p className="project-delete-path">
+              {data.projects.find((p) => p.id === deleteProjectId)?.path}
+            </p>
+            <p className="muted">
+              项目内全部会话（含归档和内部子会话）、消息、运行记录和终端日志将一并删除，无法撤销。
+            </p>
+            <p>
+              <strong>磁盘上的项目文件与 Git 工作树目录会保留。</strong>
+              关联的隔离工作目录仅从同舟移除登记。
+            </p>
+            {deleteProjectError && (
+              <p className="task-error" role="alert">
+                {deleteProjectError}
+              </p>
+            )}
+          </div>
+          <div className="modal-footer">
+            <button className="secondary" disabled={busy} onClick={() => setDeleteProjectId('')}>
+              取消
+            </button>
+            <button
+              className="destructive-button"
+              disabled={busy}
+              onClick={() =>
+                void perform(async () => {
+                  setDeleteProjectError('');
+                  try {
+                    const deleted = await api.deleteProject(deleteProjectId);
+                    for (const id of deleted) clearDraft(id);
+                    if (deleted.includes(sessionId)) {
+                      setSessionId('');
+                      sessionRef.current = '';
+                      setMessages([]);
+                      setHasEarlier(false);
+                      localStorage.removeItem('tongzhou-last-session');
+                    }
+                    if (terminalPanel && deleted.includes(terminalPanel.sessionId))
+                      setTerminalPanel(null);
+                    if (deleted.includes(reviewSession)) {
+                      setReviewSession('');
+                      setReviewRun('');
+                    }
+                    setDeleteProjectId('');
+                    await refresh();
+                    setNotice('项目已删除，磁盘文件已保留');
+                  } catch (e) {
+                    setDeleteProjectError(String(e).replace(/^Error: /, ''));
+                  }
+                })
+              }
+            >
+              确认删除项目
             </button>
           </div>
         </Modal>
