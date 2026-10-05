@@ -179,9 +179,16 @@ try {
   const page = await app.firstWindow();
   page.setDefaultTimeout(20000);
   await page.waitForSelector('.app-shell');
-  await app.evaluate(({ BrowserWindow }) =>
-    BrowserWindow.getAllWindows().forEach((w) => w.setIgnoreMouseEvents(true)),
-  );
+  await app.evaluate(({ BrowserWindow }) => {
+    for (const w of BrowserWindow.getAllWindows()) {
+      // Hosted Windows desktops can occlude packaged apps. Keep the real xterm
+      // renderer painting during UI verification, even when the runner loses focus.
+      w.webContents.setBackgroundThrottling(false);
+      w.show();
+      w.focus();
+      w.setIgnoreMouseEvents(true);
+    }
+  });
   await page.locator(`[data-session-id="${session.id}"]`).click();
   await page.getByRole('button', { name: '运行记录', exact: true }).click();
   await page.locator('.table-row').first().click();
@@ -418,7 +425,12 @@ try {
         ?.evaluate(
           async (sessionId) => ({
             rendered: document.querySelector('.xterm-rows')?.textContent,
-            terminals: (await window.tongzhou.taskState(sessionId)).terminals,
+            visibility: document.visibilityState,
+            terminals: await Promise.all(
+              (await window.tongzhou.taskState(sessionId)).terminals.map((t) =>
+                window.tongzhou.readTerminal(sessionId, t.id),
+              ),
+            ),
           }),
           session.id,
         )
