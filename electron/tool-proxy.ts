@@ -1,3 +1,4 @@
+import { appFetch } from './request-identity';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
@@ -10,7 +11,7 @@ async function request(body: unknown, signal?: AbortSignal) {
   const url = new URL(process.env.TONGZHOU_TOOL_URL!);
   if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1')
     throw new Error('Invalid local bridge');
-  const response = await fetch(url, {
+  const response = await appFetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

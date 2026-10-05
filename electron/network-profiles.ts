@@ -1,3 +1,4 @@
+import { appFetch } from './request-identity';
 import { fork, type ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { createServer } from 'node:net';
@@ -128,11 +129,11 @@ export class NetworkProfiles {
     if (url.protocol !== 'https:' || url.username || url.password || url.hash)
       throw new Error('订阅地址必须为 HTTPS');
     try {
-      const response = await serviceFetch(url.href, {
-        signal: AbortSignal.timeout(30000),
-        redirect: 'error',
-        headers: { 'User-Agent': 'clash.meta/Tongzhou' },
-      });
+      const response = await serviceFetch(
+        url.href,
+        { signal: AbortSignal.timeout(30000), redirect: 'error' },
+        'clash.meta',
+      );
       return (await boundedBody(response, 2_000_000)).toString('utf8');
     } catch {
       throw new Error('订阅下载失败，请检查网络或地址。也可先导入本地配置文件；未覆盖原配置。');
@@ -203,7 +204,7 @@ export class NetworkProfiles {
     });
   }
   private async request(r: Running, endpoint: string, init?: RequestInit) {
-    const response = await fetch(`http://127.0.0.1:${r.controller}${endpoint}`, {
+    const response = await appFetch(`http://127.0.0.1:${r.controller}${endpoint}`, {
       ...init,
       headers: { Authorization: 'Bearer ' + r.secret, 'Content-Type': 'application/json' },
       signal: AbortSignal.timeout(2000),
@@ -437,7 +438,7 @@ export class NetworkProfiles {
               if (controller.signal.aborted) return { status: 'failed' };
               try {
                 const query = new URLSearchParams({ url, timeout: '6000', expected });
-                const response = await fetch(
+                const response = await appFetch(
                   `http://127.0.0.1:${r.controller}/proxies/${encodeURIComponent(name)}/delay?${query}`,
                   {
                     headers: { Authorization: 'Bearer ' + r.secret },

@@ -1,3 +1,4 @@
+import { appFetch } from './request-identity';
 import {
   WSClient as FeishuClient,
   EventDispatcher,
@@ -55,7 +56,7 @@ export function connectBot(
               });
               if (!text || controller.signal.aborted) return;
               const token = await feishuToken(b.appId, secret, b.domain, signal());
-              const r = await fetch(
+              const r = await appFetch(
                 feishuHost(b.domain) +
                   `/open-apis/im/v1/messages/${encodeURIComponent(m.message_id)}/reply`,
                 {
@@ -165,7 +166,7 @@ export function connectBot(
           url.pathname !== '/robot/sendBySession'
         )
           throw new Error('Invalid reply destination');
-        const r = await fetch(url, {
+        const r = await appFetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ msgtype: 'text', text: { content: text } }),

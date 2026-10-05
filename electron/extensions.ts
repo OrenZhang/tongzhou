@@ -1,3 +1,4 @@
+import { clientIdentity } from './request-identity';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -56,7 +57,7 @@ export function mcpName(id: string, name: string) {
 }
 
 export class PluginConnection {
-  readonly client = new Client({ name: 'tongzhou', version: '0.5.7' }, { capabilities: {} });
+  readonly client = new Client(clientIdentity, { capabilities: {} });
   private secretValues: string[] = [];
   constructor(
     readonly config: PluginConfig,

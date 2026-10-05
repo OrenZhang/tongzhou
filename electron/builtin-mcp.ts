@@ -1,3 +1,4 @@
+import { appFetch } from './request-identity';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
@@ -83,8 +84,8 @@ server.setRequestHandler(CallToolRequestSchema, async (req, extra) => {
   const url = new URL(raw);
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password)
     throw new Error('仅支持无凭据的 HTTP(S) 地址');
-  const response = await fetch(url, {
-    headers: { 'User-Agent': 'Tongzhou/0.5', Accept: 'text/html,text/plain,application/json' },
+  const response = await appFetch(url, {
+    headers: { Accept: 'text/html,text/plain,application/json' },
     signal: AbortSignal.any([extra.signal, AbortSignal.timeout(20000)]),
     redirect: 'error',
   });

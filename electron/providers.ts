@@ -1,3 +1,4 @@
+import { appFetch } from './request-identity';
 import { thinkingRequest } from './thinking';
 import { IdleTimeout } from './idle-timeout';
 import { randomUUID } from 'node:crypto';
@@ -434,13 +435,12 @@ async function completeRequest(input: CompletionInput): Promise<Completion> {
     idleAbort.abort(new Error('模型连接连续 5 分钟没有响应；已收到内容保留，可检查后继续。')),
   );
   try {
-    const response = await fetch(req.url, {
+    const response = await appFetch(req.url, {
       method: 'POST',
       headers: {
         ...headers(input.provider, secret),
         ...(go
           ? {
-              'User-Agent': 'Tongzhou/0.5',
               'x-opencode-session': input.messages.at(-1)?.sessionId ?? 'connection-test',
             }
           : {}),
@@ -643,7 +643,7 @@ async function completeRequest(input: CompletionInput): Promise<Completion> {
   }
 }
 export async function listModels(provider: Provider, secret: string): Promise<string[]> {
-  const response = await fetch(`${provider.baseUrl.replace(/\/$/, '')}/models`, {
+  const response = await appFetch(`${provider.baseUrl.replace(/\/$/, '')}/models`, {
     headers: headers(provider, secret),
     signal: AbortSignal.timeout(20000),
     redirect: 'error',

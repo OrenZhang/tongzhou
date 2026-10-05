@@ -1,3 +1,4 @@
+import { appFetch } from './request-identity';
 import { setTimeout as delay } from 'node:timers/promises';
 import { randomUUID } from 'node:crypto';
 import QRCode from 'qrcode';
@@ -14,7 +15,7 @@ export async function feishuToken(
   domain?: string,
   signal = AbortSignal.timeout(15000),
 ) {
-  const response = await fetch(
+  const response = await appFetch(
     feishuHost(domain) + '/open-apis/auth/v3/tenant_access_token/internal',
     {
       method: 'POST',
@@ -52,14 +53,13 @@ export class Feishu {
     this.pending.set(id, controller);
     let domain: 'feishu' | 'lark' = 'feishu';
     const request = async (params: Record<string, string>) => {
-      const r = await fetch(
+      const r = await appFetch(
         (domain === 'feishu' ? 'https://accounts.feishu.cn' : 'https://accounts.larksuite.com') +
           '/oauth/v1/app/registration',
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
-            'User-Agent': 'Tongzhou/0.5',
           },
           body: new URLSearchParams(params),
           redirect: 'error',

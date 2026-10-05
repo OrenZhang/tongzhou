@@ -1,3 +1,4 @@
+import { userAgent } from './request-identity';
 import { BrowserWindow, session, shell, type Session } from 'electron';
 import { accountProxyConfig } from './provider-network';
 import { networkKey } from '../src/shared/provider-network';
@@ -100,6 +101,7 @@ export class AccountBrowser {
     const started = Date.now();
     try {
       const response = await s.fetch('https://auth.openai.com/.well-known/openid-configuration', {
+        headers: { 'User-Agent': userAgent },
         method: 'GET',
         credentials: 'omit',
         cache: 'no-store',

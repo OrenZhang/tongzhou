@@ -115,8 +115,10 @@ describe('connection and channel services', () => {
     expect(await c.test('g1')).toContain('fixture-user');
     expect(fetch.mock.calls[0][1]).toMatchObject({
       redirect: 'error',
-      headers: { Authorization: 'Bearer fixture-token' },
     });
+    expect(new Headers(fetch.mock.calls[0][1]?.headers).get('authorization')).toBe(
+      'Bearer fixture-token',
+    );
     expect(c.list().find((x) => x.id === 'g2')?.status).toBe('configured');
     expect(JSON.stringify(c.list())).not.toContain('fixture-token');
     fetch.mockResolvedValue(new Response('{}', { status: 401 }));

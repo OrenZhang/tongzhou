@@ -1,3 +1,4 @@
+import { userAgent } from './request-identity';
 import { registerKnowledgeServices } from './knowledge-services';
 import { registerTaskServices } from './task-services';
 import { applyPendingRestore } from './data-maintenance';
@@ -297,6 +298,7 @@ function setup() {
       const start = Date.now();
       try {
         const response = await s.fetch('https://auth.openai.com/.well-known/openid-configuration', {
+          headers: { 'User-Agent': userAgent },
           credentials: 'omit',
           redirect: 'error',
           signal: AbortSignal.timeout(15000),

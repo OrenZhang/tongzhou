@@ -10,6 +10,7 @@ import {
   type CompletionInput,
 } from '../electron/providers';
 import type { Message, Protocol } from '../src/shared/types';
+import { userAgent } from '../electron/request-identity';
 const message: Message = { id: 'm', sessionId: 's', role: 'user', content: '你好', createdAt: 1 };
 function input(protocol: Protocol, baseUrl = 'http://127.0.0.1:1234/v1'): CompletionInput {
   return {
@@ -48,6 +49,7 @@ async function serve(events: string[], fn: (base: string, requests: any[]) => Pr
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
   try {
     await fn(`http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`, requests);
+    for (const request of requests) expect(request.headers['user-agent']).toBe(userAgent);
   } finally {
     await new Promise<void>((r) => server.close(() => r()));
   }
