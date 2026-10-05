@@ -77,28 +77,6 @@ export function DataMaintenance({ api }: { api: TongzhouAPI }) {
           清理孤立附件与检查点
         </button>
       </div>
-      <div className="task-toolbar">
-        <button
-          className="secondary"
-          disabled={busy}
-          onClick={() =>
-            void act(async () => {
-              const r = await api.checkRelease();
-              return `当前 ${r.current} · ${r.latest ? '最新发布 ' + r.latest : '暂无正式发布版本'}`;
-            })
-          }
-        >
-          检查版本
-        </button>
-        <button
-          className="text-button"
-          onClick={() =>
-            void api.openExternalLink('https://github.com/OrenZhang/tongzhou/releases')
-          }
-        >
-          打开发布页面
-        </button>
-      </div>
       {busy && <p role="status">正在处理，请稍候…</p>}
       {notice && <p role="status">{notice}</p>}
       {error && (

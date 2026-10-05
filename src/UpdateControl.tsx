@@ -89,6 +89,17 @@ export function UpdateControl({ api, settings = false }: { api: TongzhouAPI; set
             {label}
           </button>
         )}
+        <button
+          className="text-button"
+          onClick={() => {
+            setError('');
+            void api
+              .openExternalLink('https://github.com/OrenZhang/tongzhou/releases')
+              .catch((e) => setError(errorMessage(e)));
+          }}
+        >
+          打开发布页面
+        </button>
       </div>
     </section>
   );
