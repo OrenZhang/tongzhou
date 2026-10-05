@@ -2,6 +2,7 @@ import { KnowledgeCenter } from './KnowledgeCenter';
 import { ChoicePicker } from './ChoicePicker';
 import { ConnectionDiagnostics } from './ConnectionDiagnostics';
 import { TaskPanel, HistorySearch } from './TaskPanel';
+import { TerminalDock } from './TerminalDock';
 import { DataMaintenance } from './DataMaintenance';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -194,8 +195,12 @@ type View =
   | 'extensions'
   | 'knowledge';
 export default function App() {
-  const [taskOpen, setTaskOpen] = useState(false);
-  const [taskTab, setTaskTab] = useState<'task' | 'terminal'>('task');
+  const [terminalPanel, setTerminalPanel] = useState<{ sessionId: string; id: string } | null>(
+    null,
+  );
+  const [activityTab, setActivityTab] = useState<'runs' | 'review'>('runs');
+  const [reviewSession, setReviewSession] = useState('');
+  const [reviewRun, setReviewRun] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [accountStates, setAccountStates] = useState<
     Record<string, { connected: boolean; pending: boolean; error: boolean }>
@@ -1082,32 +1087,31 @@ export default function App() {
                   </div>
                   <div className="row">
                     <button
-                      className="secondary"
-                      disabled={busy || !!session.archived || !!session.knowledgeJob}
+                      className="terminal-entry"
+                      aria-expanded={terminalPanel?.sessionId === session.id}
+                      disabled={busy || !!session.knowledgeJob}
                       title={
                         project ? `打开项目终端：${project.path}` : '打开本会话独立工作目录的终端'
                       }
-                      onClick={() =>
+                      onClick={() => {
+                        if (terminalPanel?.sessionId === session.id) {
+                          setTerminalPanel(null);
+                          return;
+                        }
                         void perform(async () => {
                           const task = await api.taskState(session.id);
-                          if (!task.terminals.some((t) => t.status === 'running'))
-                            await api.startTerminal(session.id);
-                          setTaskTab('terminal');
-                          setTaskOpen(true);
-                        })
-                      }
-                    >
-                      <Terminal size={15} />
-                      终端
-                    </button>
-                    <button
-                      className="secondary"
-                      onClick={() => {
-                        setTaskTab('task');
-                        setTaskOpen(true);
+                          const saved = localStorage.getItem(`tongzhou-terminal-${session.id}`);
+                          const terminal =
+                            task.terminals.find((t) => t.id === saved) ??
+                            task.terminals.find((t) => t.status === 'running') ??
+                            task.terminals.at(-1) ??
+                            (session.archived ? undefined : await api.startTerminal(session.id));
+                          setTerminalPanel({ sessionId: session.id, id: terminal?.id ?? '' });
+                        });
                       }}
                     >
-                      任务与交付
+                      <Terminal size={16} />
+                      终端
                     </button>
                     <button
                       className="icon-button"
@@ -1549,6 +1553,16 @@ export default function App() {
                   />
                 )}
               </div>
+              {session && terminalPanel?.sessionId === session.id && (
+                <TerminalDock
+                  key={session.id}
+                  api={api}
+                  sessionId={session.id}
+                  initialId={terminalPanel.id}
+                  disabled={!!session.archived || !!session.knowledgeJob}
+                  onClose={() => setTerminalPanel(null)}
+                />
+              )}
             </main>
             {project && contextOpen && (
               <ProjectContext
@@ -1858,7 +1872,7 @@ export default function App() {
           <main className="page">
             <div className="page-heading">
               <h1>运行记录</h1>
-              <p>查看实际执行状态、模型和服务返回的 Token 用量。</p>
+              <p>查看执行状态与用量，按会话审阅任务记忆、改动和验证依据。</p>
             </div>
             <div className="stats-grid">
               {[
@@ -1879,107 +1893,185 @@ export default function App() {
                 </div>
               ))}
             </div>
-            <div className="collection-toolbar">
-              <label className="filter-input">
-                <Search size={15} />
-                <input
-                  aria-label="搜索运行记录"
-                  placeholder="搜索会话、Agent 或模型"
-                  value={runQuery}
-                  onChange={(e) => setRunQuery(e.target.value)}
-                />
-              </label>
-              <select
-                aria-label="筛选运行状态"
-                value={runFilter}
-                onChange={(e) => setRunFilter(e.target.value)}
+            <div className="task-tabs" role="tablist" aria-label="运行记录视图">
+              <button
+                role="tab"
+                aria-selected={activityTab === 'runs'}
+                onClick={() => setActivityTab('runs')}
               >
-                <option value="all">全部状态</option>
-                <option value="running">运行中</option>
-                <option value="completed">已完成</option>
-                <option value="failed">失败</option>
-                <option value="interrupted">已停止</option>
-              </select>
+                执行记录
+              </button>
+              <button
+                role="tab"
+                aria-selected={activityTab === 'review'}
+                onClick={() => {
+                  setReviewSession(reviewSession || sessionId || data.sessions[0]?.id || '');
+                  setActivityTab('review');
+                }}
+              >
+                任务与交付
+              </button>
             </div>
-            <div className="runs-table">
-              <div className="table-head">
-                <span>任务 / Agent</span>
-                <span>模型</span>
-                <span>状态</span>
-                <span>时间</span>
-                <span>Tokens</span>
-              </div>
-              {data.runs
-                .filter(
-                  (r) =>
-                    (runFilter === 'all' || r.status === runFilter) &&
-                    `${data.sessions.find((s) => s.id === r.sessionId)?.title ?? ''} ${r.agentName} ${r.model}`
-                      .toLowerCase()
-                      .includes(runQuery.toLowerCase()),
-                )
-                .map((r) => (
-                  <button
-                    className="table-row"
-                    key={r.id}
-                    onClick={() => {
-                      const selected = data.sessions.find((s) => s.id === r.sessionId);
-                      if (selected) activateSession(selected);
+            {activityTab === 'runs' ? (
+              <>
+                <div className="collection-toolbar">
+                  <label className="filter-input">
+                    <Search size={15} />
+                    <input
+                      aria-label="搜索运行记录"
+                      placeholder="搜索会话、Agent 或模型"
+                      value={runQuery}
+                      onChange={(e) => setRunQuery(e.target.value)}
+                    />
+                  </label>
+                  <select
+                    aria-label="筛选运行状态"
+                    value={runFilter}
+                    onChange={(e) => setRunFilter(e.target.value)}
+                  >
+                    <option value="all">全部状态</option>
+                    <option value="running">运行中</option>
+                    <option value="completed">已完成</option>
+                    <option value="failed">失败</option>
+                    <option value="interrupted">已停止</option>
+                  </select>
+                </div>
+                <div className="runs-table">
+                  <div className="table-head">
+                    <span>任务 / Agent</span>
+                    <span>模型</span>
+                    <span>状态</span>
+                    <span>时间</span>
+                    <span>Tokens</span>
+                  </div>
+                  {data.runs
+                    .filter(
+                      (r) =>
+                        (runFilter === 'all' || r.status === runFilter) &&
+                        `${data.sessions.find((s) => s.id === r.sessionId)?.title ?? ''} ${r.agentName} ${r.model}`
+                          .toLowerCase()
+                          .includes(runQuery.toLowerCase()),
+                    )
+                    .map((r) => (
+                      <button
+                        className="table-row"
+                        key={r.id}
+                        onClick={() => {
+                          const selected = data.sessions.find((s) => s.id === r.sessionId);
+                          if (selected) {
+                            setReviewSession(selected.id);
+                            setReviewRun(r.id);
+                            setActivityTab('review');
+                          }
+                        }}
+                      >
+                        <span>
+                          <strong>
+                            {data.sessions.find((s) => s.id === r.sessionId)?.title ?? '会话'}
+                          </strong>
+                          <small>{r.agentName}</small>
+                        </span>
+                        <span>{r.model}</span>
+                        <span>
+                          <i className={'status-pill ' + r.status}>{statusLabel(r.status)}</i>
+                        </span>
+                        <span>
+                          {new Date(r.startedAt).toLocaleString('zh-CN', {
+                            month: '2-digit',
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                        <span>
+                          {r.usageReported || r.inputTokens + r.outputTokens > 0
+                            ? r.inputTokens + r.outputTokens
+                            : '未上报'}
+                        </span>
+                      </button>
+                    ))}
+                  {data.runs.length > 0 &&
+                    !data.runs.some(
+                      (r) =>
+                        (runFilter === 'all' || r.status === runFilter) &&
+                        `${data.sessions.find((s) => s.id === r.sessionId)?.title ?? ''} ${r.agentName} ${r.model}`
+                          .toLowerCase()
+                          .includes(runQuery.toLowerCase()),
+                    ) && (
+                      <div className="empty-state compact">
+                        <Search size={24} />
+                        <p>没有符合条件的运行记录</p>
+                      </div>
+                    )}
+                  {!data.runs.length && (
+                    <div className="empty-state">
+                      <Activity size={32} />
+                      <h3>准备好启航</h3>
+                      <p>开始一项任务后，运行记录会出现在这里。</p>
+                      <button className="secondary" onClick={() => setView('workspace')}>
+                        回到会话
+                        <ArrowRight size={14} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <p className="footnote">
+                  用量来自上游返回；“—”表示未报告或零用量，不代表免费。协作汇总记录不重复计算子任务
+                  Token。
+                </p>
+              </>
+            ) : (
+              <section className="activity-review" aria-label="任务与交付审阅">
+                <div className="activity-review-heading">
+                  <label htmlFor="review-session">审阅会话</label>
+                  <select
+                    id="review-session"
+                    value={reviewSession}
+                    onChange={(e) => {
+                      setReviewSession(e.target.value);
+                      setReviewRun('');
                     }}
                   >
-                    <span>
-                      <strong>
-                        {data.sessions.find((s) => s.id === r.sessionId)?.title ?? '会话'}
-                      </strong>
-                      <small>{r.agentName}</small>
-                    </span>
-                    <span>{r.model}</span>
-                    <span>
-                      <i className={'status-pill ' + r.status}>{statusLabel(r.status)}</i>
-                    </span>
-                    <span>
-                      {new Date(r.startedAt).toLocaleString('zh-CN', {
-                        month: '2-digit',
-                        day: '2-digit',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </span>
-                    <span>
-                      {r.usageReported || r.inputTokens + r.outputTokens > 0
-                        ? r.inputTokens + r.outputTokens
-                        : '未上报'}
-                    </span>
-                  </button>
-                ))}
-              {data.runs.length > 0 &&
-                !data.runs.some(
-                  (r) =>
-                    (runFilter === 'all' || r.status === runFilter) &&
-                    `${data.sessions.find((s) => s.id === r.sessionId)?.title ?? ''} ${r.agentName} ${r.model}`
-                      .toLowerCase()
-                      .includes(runQuery.toLowerCase()),
-                ) && (
-                  <div className="empty-state compact">
-                    <Search size={24} />
-                    <p>没有符合条件的运行记录</p>
-                  </div>
-                )}
-              {!data.runs.length && (
-                <div className="empty-state">
-                  <Activity size={32} />
-                  <h3>准备好启航</h3>
-                  <p>开始一项任务后，运行记录会出现在这里。</p>
-                  <button className="secondary" onClick={() => setView('workspace')}>
-                    回到会话
-                    <ArrowRight size={14} />
+                    <option value="" disabled>
+                      选择会话
+                    </option>
+                    {data.sessions.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.title}
+                        {s.archived ? ' · 已归档' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    className="secondary"
+                    disabled={!reviewSession}
+                    onClick={() => {
+                      const target = data.sessions.find((s) => s.id === reviewSession);
+                      if (target) activateSession(target);
+                    }}
+                  >
+                    打开会话
                   </button>
                 </div>
-              )}
-            </div>
-            <p className="footnote">
-              用量来自上游返回；“—”表示未报告或零用量，不代表免费。协作汇总记录不重复计算子任务
-              Token。
-            </p>
+                {reviewSession ? (
+                  <TaskPanel
+                    key={reviewSession + ':' + reviewRun}
+                    api={api}
+                    sessionId={reviewSession}
+                    projectId={
+                      data.sessions.find((s) => s.id === reviewSession)?.projectId ?? undefined
+                    }
+                    initialRunId={reviewRun}
+                    onSelectSession={(id) => {
+                      const target = data.sessions.find((s) => s.id === id);
+                      if (target) activateSession(target);
+                    }}
+                  />
+                ) : (
+                  <p className="task-empty">选择会话后查看任务与交付记录。</p>
+                )}
+              </section>
+            )}
           </main>
         )}
         {view === 'settings' && (
@@ -2054,22 +2146,6 @@ export default function App() {
           </main>
         )}
       </div>
-      {taskOpen && sessionId && (
-        <TaskPanel
-          key={sessionId}
-          api={api}
-          sessionId={sessionId}
-          projectId={project?.id}
-          initialTab={taskTab}
-          terminalDisabled={!!session?.archived || !!session?.knowledgeJob}
-          onClose={() => setTaskOpen(false)}
-          onSelectSession={(id) => {
-            const target = data.sessions.find((s) => s.id === id);
-            if (target) activateSession(target);
-            setTaskOpen(false);
-          }}
-        />
-      )}
       {historyOpen && (
         <Modal title="搜索消息内容" wide onClose={() => setHistoryOpen(false)}>
           <div className="task-panel">

@@ -38,6 +38,8 @@ try {
   await page.waitForSelector('.app-shell');
   const open = async (sessionId) => {
     await page.locator(`[data-session-id="${sessionId}"]`).click();
+    const contextToggle = page.getByRole('button', { name: '收起项目面板', exact: true });
+    if (await contextToggle.count()) await contextToggle.click();
     assert.equal(
       await page
         .locator('.composer-actions')
@@ -49,7 +51,9 @@ try {
       .locator('.conversation-header')
       .getByRole('button', { name: '终端', exact: true })
       .click();
-    await page.getByRole('heading', { name: '会话终端', exact: true }).waitFor();
+    await page.getByRole('region', { name: '会话终端面板' }).waitFor();
+    assert.equal(await page.locator('.modal').count(), 0);
+    assert.equal(await page.locator('.conversation-header').getByText('任务与交付').count(), 0);
     await page.locator('.xterm').waitFor();
     return page.evaluate(
       async (id) =>
@@ -94,14 +98,71 @@ try {
   assert.equal(first.projectId, undefined);
   await write(ordinary.id, first, path.join(profile, 'chat-workspaces', ordinary.id));
   await page.screenshot({ path: 'test-results/ordinary-terminal.png' });
-  await page.getByRole('button', { name: '关闭', exact: true }).click();
+  await page.getByRole('button', { name: '关闭终端面板', exact: true }).click();
   const reopened = await open(ordinary.id);
   assert.equal(reopened.id, first.id);
   assert.equal(
     (await page.evaluate((id) => window.tongzhou.taskState(id), ordinary.id)).terminals.length,
     1,
   );
-  await page.getByRole('button', { name: '关闭', exact: true }).click();
+  await page.getByRole('button', { name: '新建终端', exact: true }).click();
+  await page.waitForFunction(
+    () => document.querySelectorAll('.terminal-tabs [role="tab"]').length === 2,
+  );
+  const tabs = page.getByRole('tablist', { name: '终端标签' }).getByRole('tab');
+  assert.equal(await tabs.nth(1).getAttribute('aria-selected'), 'true');
+  await tabs.first().click();
+  assert.equal(await tabs.first().getAttribute('aria-selected'), 'true');
+  await page.waitForFunction(() =>
+    document.querySelector('.xterm-rows')?.textContent.includes('cwd_verified'),
+  );
+  const geometry = await page.evaluate(() => ({
+    composer: document.querySelector('.composer-wrap').getBoundingClientRect().bottom,
+    dock: document.querySelector('.terminal-dock').getBoundingClientRect().top,
+  }));
+  assert.ok(geometry.dock >= geometry.composer - 1, 'terminal must be below composer');
+  const resizer = page.getByRole('separator', { name: '调整终端高度' });
+  const before = Number(await resizer.getAttribute('aria-valuenow'));
+  await resizer.focus();
+  await page.keyboard.press('ArrowUp');
+  assert.ok(Number(await resizer.getAttribute('aria-valuenow')) > before);
+  const bounds = await resizer.boundingBox();
+  await page.mouse.move(bounds.x + 20, bounds.y + 3);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + 20, bounds.y + 40);
+  await page.mouse.up();
+  assert.ok(Number(await resizer.getAttribute('aria-valuenow')) < before + 24);
+  await page.getByRole('button', { name: '折叠终端' }).click();
+  assert.equal(await page.locator('.xterm').count(), 0);
+  assert.equal(
+    (await page.evaluate((id) => window.tongzhou.taskState(id), ordinary.id)).terminals.filter(
+      (t) => t.status === 'running',
+    ).length,
+    2,
+  );
+  await page.getByRole('button', { name: '展开终端' }).click();
+  await page.locator('.xterm').waitFor();
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(async (theme) => {
+      const a = await window.tongzhou.getAppearance();
+      await window.tongzhou.setAppearance({
+        style: 'graphite',
+        font: 'system',
+        textSize: 14,
+        ...a,
+        theme,
+      });
+    }, theme);
+    await page.waitForFunction((theme) => document.documentElement.dataset.theme === theme, theme);
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1000, 720));
+    assert.equal(
+      await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),
+      false,
+    );
+    assert.ok(await page.locator('.composer textarea').isVisible());
+    await page.screenshot({ path: 'test-results/terminal-dock-' + theme + '.png' });
+  }
+  await page.getByRole('button', { name: '关闭终端面板', exact: true }).click();
   const another = await open(second.id);
   assert.notEqual(another.cwd, first.cwd);
   await assert.rejects(
@@ -109,7 +170,7 @@ try {
     /终端不属于/,
   );
   await page.getByRole('button', { name: '停止终端', exact: true }).click();
-  await page.getByRole('button', { name: '关闭', exact: true }).click();
+  await page.getByRole('button', { name: '关闭终端面板', exact: true }).click();
   const projectTerminal = await open(projectSession.id);
   await write(projectSession.id, projectTerminal, project);
   await page.getByRole('button', { name: '停止终端', exact: true }).click();
@@ -117,6 +178,26 @@ try {
     async ({ s, t }) => (await window.tongzhou.readTerminal(s, t)).status !== 'running',
     { s: projectSession.id, t: projectTerminal.id },
   );
+  await page.getByRole('button', { name: '关闭终端面板' }).click();
+  await page.getByRole('button', { name: '终端', exact: true }).click();
+  await page.locator('.xterm').waitFor();
+  assert.equal(
+    (await page.evaluate((id) => window.tongzhou.taskState(id), projectSession.id)).terminals
+      .length,
+    1,
+  );
+  await page.evaluate(
+    (id) => window.tongzhou.updateSession(id, { archived: true }),
+    projectSession.id,
+  );
+  await page.waitForFunction(
+    () => document.querySelector('[aria-label="新建终端"]')?.disabled === true,
+  );
+  await assert.rejects(
+    page.evaluate((id) => window.tongzhou.startTerminal(id), projectSession.id),
+    /归档/,
+  );
+  await page.screenshot({ path: 'test-results/terminal-dock-archived.png' });
   assert.deepEqual(errors, []);
   console.log(
     'Terminal entry passed: one-click PTY, actual keyboard commands in project and ordinary directories, reuse after closing, session isolation and stop.',

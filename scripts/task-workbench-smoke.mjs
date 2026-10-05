@@ -65,6 +65,24 @@ store.put('taskMemory', {
   sources: ['m1'],
   updatedAt: 1,
 });
+store.message({
+  id: 'e1',
+  sessionId: session.id,
+  role: 'tool',
+  content: '本轮验证结果',
+  toolName: 'run_command',
+  runId: 'r1',
+  createdAt: 3,
+});
+store.message({
+  id: 'e2',
+  sessionId: session.id,
+  role: 'tool',
+  content: '其他轮次验证',
+  toolName: 'read_file',
+  runId: 'other-run',
+  createdAt: 4,
+});
 const checkpoints = new ChangeCheckpoints(store, profile);
 await checkpoints.begin('r1', session.id, store.get('project', 'p'));
 await writeFile(path.join(project, 'file.txt'), 'agent changed content');
@@ -165,16 +183,26 @@ try {
     BrowserWindow.getAllWindows().forEach((w) => w.setIgnoreMouseEvents(true)),
   );
   await page.locator(`[data-session-id="${session.id}"]`).click();
-  await page.getByRole('button', { name: '任务与交付', exact: true }).click();
+  await page.getByRole('button', { name: '运行记录', exact: true }).click();
+  await page.locator('.table-row').first().click();
+  assert.equal(await page.locator('.modal').count(), 0);
   await page.getByRole('heading', { name: '任务记忆', exact: true }).waitFor();
+  assert.equal(await page.getByLabel('运行范围').inputValue(), 'r1');
   assert.match(await page.locator('.task-panel').innerText(), /保留既有 API/);
+  await page.getByRole('tab', { name: '验证记录', exact: true }).click();
+  assert.equal(await page.locator('.task-panel details').count(), 1);
+  await page.getByLabel('运行范围').selectOption('');
+  assert.equal(await page.locator('.task-panel details').count(), 2);
+  await page.getByLabel('运行范围').selectOption('r1');
+  checks.push('run row opens inline review; evidence follows selected run scope');
+  await page.screenshot({ path: 'test-results/activity-review.png' });
   await page.getByRole('tab', { name: '搜索历史', exact: true }).click();
   await page.getByRole('textbox', { name: '搜索消息内容' }).fill('中途约束');
   await page.getByRole('button', { name: '搜索', exact: true }).click();
   await page.locator('.history-hit').first().click();
   assert.match(await page.locator('.history-search pre').innerText(), /客户资料/);
   checks.push('history search and original source');
-  await page.getByRole('tab', { name: '本轮改动', exact: true }).click();
+  await page.getByRole('tab', { name: '改动审阅', exact: true }).click();
   await page.locator('.task-panel').getByRole('button', { name: 'file.txt', exact: true }).click();
   await page.waitForFunction(() =>
     document.querySelector('.task-patch')?.textContent.includes('-user content before task'),
@@ -210,8 +238,8 @@ try {
   assert.match(git('log', '-1', '--format=%s'), /fixture commit/);
   checks.push('staged review fingerprint rejects changed index and commits verified content');
 
-  await page.getByRole('tab', { name: '终端', exact: true }).click();
-  await page.getByRole('button', { name: '新建终端', exact: true }).click();
+  await page.getByRole('button', { name: '打开会话', exact: true }).click();
+  await page.getByRole('button', { name: '终端', exact: true }).click();
   await page.locator('.xterm').waitFor();
   const terminal = await page.evaluate(
     async (id) => (await window.tongzhou.taskState(id)).terminals[0],
@@ -276,11 +304,21 @@ try {
     assert.equal(
       await page.evaluate(
         () =>
-          document.querySelector('.modal').scrollWidth >
-          document.querySelector('.modal').clientWidth + 2,
+          document.querySelector('.terminal-dock').scrollWidth >
+          document.querySelector('.terminal-dock').clientWidth + 2,
       ),
       false,
     );
+    await page.getByRole('button', { name: '运行记录', exact: true }).click();
+    await page.getByRole('tab', { name: '任务与交付', exact: true }).click();
+    await page.getByRole('tab', { name: '任务记忆', exact: true }).click();
+    await page.getByRole('heading', { name: '任务记忆', exact: true }).waitFor();
+    await page.screenshot({ path: `test-results/activity-review-${dark ? 'dark' : 'light'}.png` });
+    assert.equal(
+      await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),
+      false,
+    );
+    await page.getByRole('button', { name: '打开会话', exact: true }).click();
   }
   const health = await page.evaluate(() =>
     window.tongzhou.diagnoseProvider('probe', 'fixture', true),
