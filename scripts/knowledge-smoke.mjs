@@ -97,7 +97,7 @@ try {
     return s.id;
   }, `http://127.0.0.1:${server.address().port}/v1`);
   await page.locator(`[data-session-id="${sessionId}"]`).click();
-  await page.getByRole('button', { name: '知识中心', exact: true }).click();
+  await page.getByRole('button', { name: '知识库', exact: true }).click();
   await page.getByRole('button', { name: '导入文件', exact: true }).click();
   await page.getByRole('heading', { name: '库存参考.md', exact: true }).waitFor();
   sourceId = await page.evaluate(
@@ -132,7 +132,7 @@ try {
   await page.waitForFunction(
     async () => !(await window.tongzhou.snapshot()).runs.some((r) => r.status === 'running'),
   );
-  await page.getByRole('button', { name: '知识中心', exact: true }).click();
+  await page.getByRole('button', { name: '知识库', exact: true }).click();
   await page.locator('.knowledge-item').filter({ hasText: '库存处理 Wiki' }).click();
   await page.getByText('AI 整理待核对', { exact: true }).waitFor();
   await page.getByRole('button', { name: '编辑', exact: true }).click();
@@ -158,11 +158,11 @@ try {
     (await window.tongzhou.knowledgeState()).documents.some((d) => d.kind === 'memory'),
   );
   assert.ok(requests.at(-1).messages[0].content.includes('订单确认后扣减库存'));
-  await page.getByRole('button', { name: '知识中心', exact: true }).click();
+  await page.getByRole('button', { name: '知识库', exact: true }).click();
   await page.getByRole('button', { name: '记忆', exact: true }).click();
   await page.locator('.knowledge-item').filter({ hasText: '知识联动测试' }).waitFor();
   await page.reload();
-  await page.getByRole('button', { name: '知识中心', exact: true }).click();
+  await page.getByRole('button', { name: '知识库', exact: true }).click();
   const state = await page.evaluate(() => window.tongzhou.knowledgeState());
   assert.equal(state.documents.filter((d) => d.kind === 'wiki').length, 1);
   assert.equal(state.documents.filter((d) => d.kind === 'memory').length, 1);

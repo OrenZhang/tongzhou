@@ -17,13 +17,13 @@ export function registerKnowledgeServices(
   const id = z.string().uuid();
   register(
     'knowledgeReferences',
-    operation('知识中心', 'query', '读取会话显式引用的有效资料 ID', [z.string()]),
+    operation('知识库', 'query', '读取会话显式引用的有效资料 ID', [z.string()]),
     (sessionId) => k.pins(sessionId).filter((doc) => k.get(doc).status !== 'archived'),
   );
   register(
     'knowledgeCollect',
     operation(
-      '知识中心',
+      '知识库',
       'change',
       '把指定会话最近已完成轮次收集为带来源的记忆；相同轮次不会重复收集',
       [z.string()],
@@ -44,7 +44,7 @@ export function registerKnowledgeServices(
   );
   register(
     'knowledgeState',
-    operation('知识中心', 'query', '查看本地资料、知识页、记忆和待复核事项', [
+    operation('知识库', 'query', '查看本地资料、知识页、记忆和待复核事项', [
       z.string().max(500).optional(),
       z.string().optional(),
       z.string().optional(),
@@ -53,12 +53,12 @@ export function registerKnowledgeServices(
   );
   register(
     'knowledgeRead',
-    operation('知识中心', 'query', '查看资料正文、版本与反向引用', [id]),
+    operation('知识库', 'query', '查看资料正文、版本与反向引用', [id]),
     (doc) => k.read(doc),
   );
   register(
     'knowledgeSave',
-    operation('知识中心', 'change', '保存手写资料或审核后的 Wiki；更新必须提供当前 version', [
+    operation('知识库', 'change', '保存手写资料或审核后的 Wiki；更新必须提供当前 version', [
       knowledgeInput,
     ]),
     (raw) => {
@@ -69,7 +69,7 @@ export function registerKnowledgeServices(
   );
   register(
     'knowledgeArchive',
-    operation('知识中心', 'change', '归档或恢复资料；归档后不会再注入会话上下文', [
+    operation('知识库', 'change', '归档或恢复资料；归档后不会再注入会话上下文', [
       id,
       z.boolean(),
     ]),
@@ -80,7 +80,7 @@ export function registerKnowledgeServices(
   );
   register(
     'knowledgeRestore',
-    operation('知识中心', 'change', '恢复指定历史版本，保留恢复前的版本', [
+    operation('知识库', 'change', '恢复指定历史版本，保留恢复前的版本', [
       id,
       z.number().int().positive(),
       z.number().int().positive(),
@@ -93,7 +93,7 @@ export function registerKnowledgeServices(
   );
   register(
     'knowledgeBind',
-    operation('知识中心', 'change', '为会话显式选择参考资料，空数组取消引用', [
+    operation('知识库', 'change', '为会话显式选择参考资料，空数组取消引用', [
       z.string(),
       z.array(id).max(20),
     ]),
@@ -104,7 +104,7 @@ export function registerKnowledgeServices(
   );
   register(
     'knowledgeSettings',
-    operation('知识中心', 'change', '设置自动收集与按需引用；关闭收集不会删除已有资料', [
+    operation('知识库', 'change', '设置自动收集与按需引用；关闭收集不会删除已有资料', [
       z.object({ autoCollect: z.boolean(), autoContext: z.boolean() }),
     ]),
     (value) => {
@@ -114,12 +114,12 @@ export function registerKnowledgeServices(
   );
   register(
     'knowledgeReindex',
-    operation('知识中心', 'change', '重建本地全文索引和 Markdown 目录'),
+    operation('知识库', 'change', '重建本地全文索引和 Markdown 目录'),
     () => k.reindex(),
   );
   register(
     'knowledgeImport',
-    manual('知识中心', '选择并导入本地文件', 'knowledge', '文件选择由用户在本地完成', [
+    manual('知识库', '选择并导入本地文件', 'knowledge', '文件选择由用户在本地完成', [
       z.string().optional(),
     ]),
     async (projectId) => {
@@ -145,7 +145,7 @@ export function registerKnowledgeServices(
   );
   register(
     'knowledgeOpenFolder',
-    manual('知识中心', '打开知识资料本地目录', 'knowledge', '文件管理器由用户打开'),
+    manual('知识库', '打开知识资料本地目录', 'knowledge', '文件管理器由用户打开'),
     async () => {
       const error = await shell.openPath(k.root);
       if (error) throw new Error(error);
@@ -153,7 +153,7 @@ export function registerKnowledgeServices(
   );
   register(
     'knowledgeOrganize',
-    operation('知识中心', 'change', '使用指定会话的连接创建独立整理任务，生成有来源的 Wiki 草稿', [
+    operation('知识库', 'change', '使用指定会话的连接创建独立整理任务，生成有来源的 Wiki 草稿', [
       z.string(),
       z.array(id).min(1).max(20),
     ]),

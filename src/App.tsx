@@ -604,7 +604,7 @@ export default function App() {
     { id: 'providers', label: '模型与订阅', icon: Network },
     { id: 'agents', label: 'Agent 团队', icon: Users },
     { id: 'extensions', label: '插件', icon: Terminal },
-    { id: 'knowledge', label: '知识中心', icon: BookOpen },
+    { id: 'knowledge', label: '知识库', icon: BookOpen },
     { id: 'activity', label: '运行记录', icon: Activity },
   ] as const;
   const selectModel = (connection: string, selectedModel: string) => {
@@ -1032,7 +1032,7 @@ export default function App() {
                     activity: '运行记录',
                     settings: '设置与优化',
                     extensions: '插件',
-                    knowledge: '知识中心',
+                    knowledge: '知识库',
                   }[view]}
             </strong>
           </div>

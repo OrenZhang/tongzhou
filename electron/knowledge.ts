@@ -130,7 +130,7 @@ export class Knowledge {
   private writeIndex() {
     const docs = this.all().filter((d) => d.status !== 'archived');
     const lines = [
-      '# 同舟知识中心',
+      '# 同舟知识库',
       '',
       '此目录由同舟管理。请在客户端编辑以保留索引和修订历史。Markdown 可复制到其他知识工具。',
       '',
@@ -502,7 +502,7 @@ export class Knowledge {
       {
         name: 'knowledge_search',
         description:
-          '搜索本地知识中心。范围为当前项目、当前会话、全局资料及用户显式引用的资料；返回来源 ID。',
+          '搜索本地知识库。范围为当前项目、当前会话、全局资料及用户显式引用的资料；返回来源 ID。',
         parameters: {
           type: 'object',
           properties: { query: { type: 'string' } },
@@ -510,7 +510,7 @@ export class Knowledge {
           additionalProperties: false,
         },
       },
-      '检索知识中心',
+      '检索知识库',
       async (args) => ({
         text: JSON.stringify(
           this.search(z.string().max(500).parse(args.query), sessionId).slice(0, 12),
@@ -571,7 +571,7 @@ export class Knowledge {
         async (args) => {
           const session = this.store.get<Session>('session', sessionId);
           if (!this.settings().autoCollect && !(session as any).knowledgeJob)
-            throw new Error('自动积累已关闭，请在知识中心开启后整理');
+            throw new Error('自动积累已关闭，请在知识库开启后整理');
           const parsed = knowledgeInput.parse({ ...args, kind: 'wiki', status: 'draft' });
           const sourceIds = [...parsed.sourceIds];
           for (const source of sourceIds)

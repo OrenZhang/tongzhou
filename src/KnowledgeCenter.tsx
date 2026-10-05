@@ -141,7 +141,7 @@ export function KnowledgeCenter({
           <div className="knowledge-eyebrow">
             <BookOpen size={14} /> LOCAL KNOWLEDGE
           </div>
-          <h1>知识中心</h1>
+          <h1>知识库</h1>
           <p>把资料、项目经验和会话发现，积累成可复用的知识。</p>
         </div>
         <div className="row">
