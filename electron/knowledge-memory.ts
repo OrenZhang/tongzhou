@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { z } from 'zod';
 import type { Knowledge } from './knowledge';
 import type { Store } from './store';
@@ -17,6 +17,10 @@ export const memoryDay = (timestamp: number) => {
   const d = new Date(timestamp);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
+export const memoryEntryKey = (e: MemoryEntry) =>
+  createHash('sha256')
+    .update(JSON.stringify([e.projectId || e.sessionId, e.category, e.subject, e.content]))
+    .digest('hex');
 export const cleanMemory = (value: string) =>
   redact(value).replace(
     /((?:password|passwd|api[_-]?key|access[_-]?token|refresh[_-]?token|secret|密码|密钥)\s*[=:：]\s*)["']?[^\s"',;，；]+/gi,
@@ -360,6 +364,7 @@ export class KnowledgeMemory {
         subject: cleanMemory(entry.subject),
         relation: cleanMemory(entry.relation),
         content: cleanMemory(entry.content),
+        quotes: entry.evidence.map((ev) => cleanMemory(ev.quote)),
         sources: [...new Map(sources.map((s) => [s.id, s])).values()],
         sessionId: candidates[0].sessionId,
         scopeLabel: candidates[0].projectId
@@ -378,6 +383,7 @@ export class KnowledgeMemory {
     const combined = [...(old?.memoryEntries ?? [])];
     for (const entry of entries)
       if (
+        !old?.forgottenMemoryKeys?.includes(memoryEntryKey(entry)) &&
         !combined.some(
           (e) =>
             e.projectId === entry.projectId &&
@@ -404,6 +410,7 @@ export class KnowledgeMemory {
           updatedAt: now,
           memoryDate: job.day,
           memoryEntries: combined,
+          forgottenMemoryKeys: old?.forgottenMemoryKeys,
           memoryCandidateIds: [
             ...new Set([...(old?.memoryCandidateIds ?? []), ...job.candidateIds]),
           ],

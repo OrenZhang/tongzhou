@@ -59,6 +59,7 @@ export interface MemoryEntry {
   sources: KnowledgeSource[];
   occurredAt: number;
   reviewedAt?: number;
+  quotes?: string[];
 }
 export interface KnowledgeReference {
   id: string;
@@ -85,6 +86,7 @@ export interface KnowledgeDocument {
   runId?: string;
   tags: string[];
   content: string;
+  assertions?: import('./ontology').KnowledgeAssertion[];
   sources: KnowledgeSource[];
   version: number;
   createdAt: number;
@@ -98,12 +100,13 @@ export interface KnowledgeDocument {
   memoryDate?: string;
   memoryEntries?: MemoryEntry[];
   memoryCandidateIds?: string[];
+  forgottenMemoryKeys?: string[];
   reviewedAt?: number;
   reviewedSourceVersions?: Record<string, number | null>;
 }
 export type KnowledgeSummary = Omit<
   KnowledgeDocument,
-  'content' | 'memoryEntries' | 'memoryCandidateIds'
+  'content' | 'memoryEntries' | 'memoryCandidateIds' | 'assertions' | 'forgottenMemoryKeys'
 > & { excerpt: string };
 export interface KnowledgeInput {
   id?: string;
@@ -116,6 +119,7 @@ export interface KnowledgeInput {
   tags?: string[];
   status?: KnowledgeStatus;
   sourceIds?: string[];
+  assertions?: import('./ontology').KnowledgeAssertion[];
 }
 export interface KnowledgeSettings {
   autoCollect: boolean;
@@ -138,6 +142,7 @@ export interface KnowledgeState {
 }
 export interface KnowledgeRead {
   document: KnowledgeDocument;
+  links: { target: string; id?: string; ambiguous: boolean }[];
   missingSourceIds: string[];
   revisions: { id: string; version: number; updatedAt: number }[];
   backlinks: KnowledgeSummary[];

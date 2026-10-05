@@ -8,6 +8,7 @@ import type { Root, RootContent } from 'hast';
 import { highlight } from './highlight';
 import { renderDiagram } from './diagram';
 import { Modal } from './components';
+import { remarkKnowledgeLinks } from './shared/knowledge-links';
 import 'katex/dist/katex.min.css';
 
 function plain(children: ReactNode): string {
@@ -242,16 +243,20 @@ export function MarkdownLink({
 export const Markdown = memo(function Markdown({
   text,
   streaming = false,
+  onKnowledgeLink,
 }: {
   text: string;
   streaming?: boolean;
+  onKnowledgeLink?: (target: string) => void;
 }) {
   const id = useId().replace(/[^a-z0-9]/gi, '');
   return (
     <div className="markdown">
       <ReactMarkdown
         skipHtml
-        remarkPlugins={[remarkGfm, remarkMath]}
+        remarkPlugins={
+          onKnowledgeLink ? [remarkGfm, remarkMath, remarkKnowledgeLinks] : [remarkGfm, remarkMath]
+        }
         remarkRehypeOptions={{
           clobberPrefix: 'md-' + id + '-',
           footnoteLabel: '注释',
@@ -261,11 +266,19 @@ export const Markdown = memo(function Markdown({
           [rehypeKatex, { trust: false, strict: 'ignore', throwOnError: false, maxExpand: 1000 }],
         ]}
         components={{
-          a: ({ href, id, children }) => (
-            <MarkdownLink href={href} id={id}>
-              {children}
-            </MarkdownLink>
-          ),
+          a: ({ href, id, children }) =>
+            onKnowledgeLink && href?.startsWith('#knowledge:') ? (
+              <button
+                className="knowledge-inline-link"
+                onClick={() => onKnowledgeLink(decodeURIComponent(href.slice(11)))}
+              >
+                {children}
+              </button>
+            ) : (
+              <MarkdownLink href={href} id={id}>
+                {children}
+              </MarkdownLink>
+            ),
           img: ({ src, alt }) => (
             <MarkdownLink href={typeof src === 'string' ? src : undefined}>
               [图片：{alt || '查看图片'}]

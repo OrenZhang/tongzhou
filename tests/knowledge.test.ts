@@ -43,6 +43,7 @@ describe('local knowledge lifecycle', () => {
     ]);
     expect(k.state('', undefined, undefined, null).documents.map((d) => d.id)).toEqual([
       unfiled.id,
+      source.id,
     ]);
     expect(k.state('', undefined, undefined, '*').documents.map((d) => d.id)).toEqual(
       expect.arrayContaining([unfiled.id, wiki.id]),
@@ -86,10 +87,10 @@ describe('local knowledge lifecycle', () => {
     const outer = k.saveFolder({ name: 'Outer' });
     expect(() => k.saveFolder({ ...parent, parentId: outer.id })).toThrow('8 层');
     expect(() =>
-      k.save({ title: '原文', kind: 'source', content: '原文', folderId: parent.id }),
-    ).toThrow('只有 Wiki');
+      k.save({ title: '记忆', kind: 'memory', content: '记忆', folderId: parent.id }),
+    ).toThrow('按日期');
     const source = k.save({ title: '原文', kind: 'source', content: '原文' });
-    expect(() => k.moveWiki(source.id, parent.id, source.version)).toThrow('只用于 Wiki');
+    expect(k.moveWiki(source.id, parent.id, source.version).folderId).toBe(parent.id);
     const changed = k.saveFolder({ ...outer, name: 'New outer' });
     expect(() => k.deleteFolder(changed.id, outer.version)).toThrow('目录已更新');
   });

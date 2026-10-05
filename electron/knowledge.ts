@@ -1,3 +1,6 @@
+import { assertionInput, buildKnowledgeGraph } from './knowledge-graph';
+import { entityTypes, relationTypes } from '../src/shared/ontology';
+import { knowledgeLinks } from '../src/shared/knowledge-links';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync, renameSync, existsSync, lstatSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
@@ -17,7 +20,7 @@ import type {
 } from '../src/shared/knowledge';
 import { knowledgeFolderBranch, knowledgeFolderPath } from '../src/shared/knowledge';
 import { projectFamilyId } from '../src/shared/projects';
-import { KnowledgeMemory, cleanMemory, memoryBody } from './knowledge-memory';
+import { KnowledgeMemory, cleanMemory, memoryBody, memoryEntryKey } from './knowledge-memory';
 import type { KnowledgeReference } from '../src/shared/knowledge';
 import { redact } from './validation';
 
@@ -32,6 +35,7 @@ export const knowledgeInput = z.object({
   projectId: z.string().min(1).optional(),
   tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
   status: z.enum(['ready', 'draft']).optional(),
+  assertions: z.array(assertionInput).max(100).optional(),
   sourceIds: z.array(id).max(30).default([]),
 });
 export const knowledgeFolderInput = z.object({
@@ -50,6 +54,8 @@ const summary = ({
   content,
   memoryEntries: _entries,
   memoryCandidateIds: _candidates,
+  assertions: _assertions,
+  forgottenMemoryKeys: _forgotten,
   ...doc
 }: KnowledgeDocument): KnowledgeSummary => ({
   ...doc,
@@ -111,6 +117,36 @@ export class Knowledge {
   settings(): KnowledgeSettings {
     return { autoCollect: this.store.list<any>('knowledgeSettings')[0]?.autoCollect !== false };
   }
+  editMemory(docId: string, version: number, entryId: string, content: string | null) {
+    const doc = this.get(docId);
+    if (doc.version !== version) throw new Error('记忆已更新，请重新打开');
+    const entry = doc.memoryEntries?.find((e) => e.id === entryId);
+    if (!entry || !doc.memoryDate) throw new Error('记忆条目不存在');
+    const value =
+      content === null ? null : cleanMemory(z.string().trim().min(1).max(3000).parse(content));
+    const entries = doc.memoryEntries!.flatMap((e) =>
+      e.id !== entryId
+        ? [e]
+        : value === null
+          ? []
+          : [{ ...e, content: value, reviewedAt: Date.now() }],
+    );
+    return this.persist(
+      {
+        ...doc,
+        memoryEntries: entries,
+        forgottenMemoryKeys: [
+          ...new Set([...(doc.forgottenMemoryKeys ?? []), memoryEntryKey(entry)]),
+        ],
+        sources: [...new Map(entries.flatMap((e) => e.sources).map((s) => [s.id, s])).values()],
+        content: memoryBody(doc.memoryDate, entries),
+        version: doc.version + 1,
+        updatedAt: Date.now(),
+        status: entries.every((e) => e.reviewedAt) ? 'ready' : 'draft',
+      },
+      doc,
+    );
+  }
   configure(value: KnowledgeSettings) {
     const settings = z.object({ autoCollect: z.boolean() }).parse(value);
     this.store.put('knowledgeSettings', { id: 'default', ...settings });
@@ -167,7 +203,7 @@ export class Knowledge {
   }
   moveWiki(docId: string, folderId: string | null, version: number) {
     const doc = this.get(docId);
-    if (doc.kind !== 'wiki') throw new Error('目录只用于 Wiki 知识页');
+    if (doc.kind === 'memory') throw new Error('每日记忆按日期管理');
     if (doc.version !== z.number().int().positive().parse(version))
       throw new Error('知识页已更新，请刷新后移动');
     if (folderId) this.store.get('knowledgeFolder', id.parse(folderId));
@@ -184,7 +220,7 @@ export class Knowledge {
     const branch = knowledgeFolderBranch(this.folders(), folder.id);
     // Keep pages and their source links. A deleted directory never deletes knowledge.
     for (const doc of this.all().filter(
-      (d) => d.kind === 'wiki' && d.folderId && branch.has(d.folderId),
+      (d) => d.kind !== 'memory' && d.folderId && branch.has(d.folderId),
     ))
       this.moveWiki(doc.id, null, doc.version);
     for (const folderId of branch) this.store.remove('knowledgeFolder', folderId);
@@ -211,7 +247,7 @@ export class Knowledge {
       });
       this.write(`revisions/${old.id}-${old.version}.json`, JSON.stringify(old, null, 2));
     }
-    const text = `---\n${JSON.stringify({ id: doc.id, title: doc.title, kind: doc.kind, version: doc.version, status: doc.status, projectId: doc.projectId, folderId: doc.folderId, sources: doc.sources }, null, 2)}\n---\n\n${doc.content}\n`;
+    const text = `---\n${JSON.stringify({ id: doc.id, title: doc.title, kind: doc.kind, version: doc.version, status: doc.status, projectId: doc.projectId, folderId: doc.folderId, sources: doc.sources, assertions: doc.assertions }, null, 2)}\n---\n\n${doc.content}\n`;
     if (doc.memoryDate) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(doc.memoryDate)) throw new Error('无效的记忆日期');
       const directory = path.join(this.root, 'memories', doc.memoryDate);
@@ -247,7 +283,10 @@ export class Knowledge {
       '',
     ];
     for (const kind of ['source', 'wiki', 'memory'] as const) {
-      lines.push(`## ${{ source: '原始资料', wiki: '知识 Wiki', memory: '会话记忆' }[kind]}`, '');
+      lines.push(
+        `## ${{ source: '原始资料', wiki: '知识 整理文档', memory: '会话记忆' }[kind]}`,
+        '',
+      );
       for (const doc of docs.filter((d) => d.kind === kind))
         lines.push(
           `- [${doc.title.replace(/[\[\]\r\n]/g, ' ')}](${doc.memoryDate ? `memories/${doc.memoryDate}/index.md` : `${folder(kind)}/${doc.id}.md`}) · ${doc.status} · v${doc.version}${doc.kind === 'wiki' ? ' · ' + (knowledgeFolderPath(folders, doc.folderId) || '未分类') : ''}`,
@@ -265,14 +304,14 @@ export class Knowledge {
     const old = p.id ? this.get(p.id) : undefined;
     const folderId = p.folderId === undefined ? old?.folderId : p.folderId || undefined;
     if (folderId) {
-      if (p.kind !== 'wiki') throw new Error('只有 Wiki 知识页可以选择目录');
+      if (p.kind === 'memory') throw new Error('每日记忆按日期管理');
       this.store.get('knowledgeFolder', folderId);
     }
     if (old?.memoryDate) throw new Error('每日记忆由后台 Agent 按条目整理，可核对收录或直接删除');
     if (old && p.version !== old.version)
       throw new Error('资料已被更新，请重新打开后再保存，避免覆盖新内容');
     if (old?.origin === 'import' && old.content !== p.content)
-      throw new Error('导入原文保留不变，请新建 Wiki 进行整理');
+      throw new Error('导入原文保留不变，请新建 整理文档 进行整理');
     if (old && old.kind !== p.kind) throw new Error('不能修改现有资料类型，请另建知识页');
     if (p.projectId) this.store.get('project', p.projectId);
     const sources: KnowledgeSource[] = p.sourceIds.map((sourceId) => {
@@ -282,11 +321,19 @@ export class Knowledge {
       if (source.status === 'archived') throw new Error('不能引用归档资料');
       return { id: source.id, title: source.title, version: source.version };
     });
+    const assertions = p.assertions ?? old?.assertions;
+    for (const a of assertions ?? []) {
+      if (a.sourceId && !p.sourceIds.includes(a.sourceId))
+        throw new Error('知识证据必须选自关联来源');
+      const evidence = a.sourceId ? this.get(a.sourceId).content : p.content;
+      if (!evidence.includes(a.quote)) throw new Error('证据摘录必须与来源原文一致');
+    }
     const now = Date.now();
     const doc: KnowledgeDocument = {
       ...old,
       ...p,
       folderId,
+      assertions,
       id: old?.id ?? randomUUID(),
       status: p.status ?? 'ready',
       origin: old?.origin ?? origin,
@@ -342,8 +389,18 @@ export class Knowledge {
   }
   read(docId: string) {
     const document = this.get(docId);
+    const docs = this.all().filter((d) => d.status !== 'archived');
+    const resolve = (target: string) => docs.filter((d) => d.id === target || d.title === target);
     return {
       document,
+      links: knowledgeLinks(document.content).map((target) => {
+        const matches = resolve(target);
+        return {
+          target,
+          id: matches.length === 1 ? matches[0].id : undefined,
+          ambiguous: matches.length > 1,
+        };
+      }),
       missingSourceIds: document.sources
         .filter((source) => !source.messageId && !this.all().some((d) => d.id === source.id))
         .map((source) => source.id),
@@ -353,7 +410,15 @@ export class Knowledge {
         .map((r) => ({ id: r.id, version: r.version, updatedAt: r.updatedAt }))
         .sort((a, b) => b.version - a.version),
       backlinks: this.all()
-        .filter((d) => d.status !== 'archived' && d.sources.some((s) => s.id === docId))
+        .filter(
+          (d) =>
+            d.status !== 'archived' &&
+            (d.sources.some((s) => s.id === docId) ||
+              knowledgeLinks(d.content).some((t) => {
+                const matches = resolve(t);
+                return matches.length === 1 && matches[0].id === docId;
+              })),
+        )
         .map(summary),
       outline: document.content.split('\n').flatMap((line, i) => {
         const m = /^(#{1,6})\s+(.+)/.exec(line);
@@ -377,7 +442,7 @@ export class Knowledge {
         kind: current.kind,
         memoryDate: current.memoryDate,
         folderId:
-          revision.kind === 'wiki' && this.folders().some((f) => f.id === revision.folderId)
+          revision.kind !== 'memory' && this.folders().some((f) => f.id === revision.folderId)
             ? revision.folderId
             : undefined,
         version: current.version + 1,
@@ -517,6 +582,11 @@ export class Knowledge {
     if (doc.version !== version) throw new Error('资料已更新，请重新打开后核对');
     if (doc.status === 'archived') throw new Error('请先恢复资料');
     if (doc.indexed === false) throw new Error('尚未提取正文，不能标记为已核对');
+    for (const a of doc.assertions ?? []) {
+      const evidence = a.sourceId ? this.get(a.sourceId).content : doc.content;
+      if (!evidence.includes(a.quote))
+        throw new Error('结构化知识的原文摘录已变化，请先编辑并核对证据');
+    }
     const sources = doc.sources.map((source) => {
       if (!source.version) return source;
       const current = this.all().find((d) => d.id === source.id && d.status !== 'archived');
@@ -633,7 +703,7 @@ export class Knowledge {
         .filter(
           (d) =>
             folderId === undefined ||
-            (d.kind === 'wiki' &&
+            (d.kind !== 'memory' &&
               (folderId === '*' ||
                 (folderId === null ? !d.folderId : !!d.folderId && branch!.has(d.folderId)))),
         )
@@ -662,6 +732,48 @@ export class Knowledge {
     }
     this.writeIndex();
     return { indexed: this.all().length };
+  }
+  graph(query = '', projectId?: string, sessionId?: string, offset = 0, limit = 100) {
+    if (sessionId)
+      sessionId = this.store.get<Session>('session', sessionId).knowledgeScopeSession ?? sessionId;
+    const all = this.all();
+    const stale = new Set<string>();
+    const projected = all
+      .map((d) => this.projectMemory(d, sessionId, projectId))
+      .filter((d): d is KnowledgeDocument => !!d);
+    for (const d of projected)
+      if (
+        d.sources.some(
+          (s) =>
+            (s.version &&
+              !all.some(
+                (o) => o.id === s.id && o.version === s.version && o.status !== 'archived',
+              )) ||
+            (s.sessionId && !this.store.list<Session>('session').some((v) => v.id === s.sessionId)),
+        )
+      )
+        stale.add(d.id);
+    for (let changed = true; changed; ) {
+      changed = false;
+      for (const d of projected)
+        if (!stale.has(d.id) && d.sources.some((s) => stale.has(s.id))) {
+          stale.add(d.id);
+          changed = true;
+        }
+    }
+    const docs = projected.filter(
+      (d) =>
+        d.status !== 'archived' &&
+        (!sessionId || this.accessible(d, sessionId)) &&
+        (d.memoryEntries || projectId === undefined || (d.projectId ?? '') === projectId),
+    );
+    return buildKnowledgeGraph(
+      docs,
+      stale,
+      z.string().max(500).parse(query),
+      z.number().int().min(0).parse(offset),
+      limit,
+    );
   }
   capture(run: Run) {
     return this.memory.enqueue(run);
@@ -792,13 +904,38 @@ export class Knowledge {
       {
         name: 'knowledge_folders',
         description:
-          '查看 Wiki 目录及目录 ID。目录用于主题组织，不改变知识页的项目权限。knowledge_write 可指定 folderId，省略时保留原目录，null 移入未分类。',
+          '查看 整理文档 目录及目录 ID。目录用于主题组织，不改变知识页的项目权限。knowledge_write 可指定 folderId，省略时保留原目录，null 移入未分类。',
         parameters: { type: 'object', properties: {}, additionalProperties: false },
       },
-      '查看 Wiki 目录',
+      '查看 整理文档 目录',
       async () => ({
         text: JSON.stringify(
           this.folders().map((f) => ({ ...f, path: knowledgeFolderPath(this.folders(), f.id) })),
+        ),
+      }),
+      false,
+    );
+    scope.add(
+      {
+        name: 'knowledge_graph',
+        description:
+          '按需查询知识与记忆中的实体、关系和事实。返回证据、核对状态、有效日期、来源失效与可能冲突；按 nextOffset 分页。需 knowledge_read 核对原文。不会自动注入。',
+        parameters: {
+          type: 'object',
+          properties: { query: { type: 'string' }, offset: { type: 'integer', minimum: 0 } },
+          additionalProperties: false,
+        },
+      },
+      '查询知识关系',
+      async (args) => ({
+        text: JSON.stringify(
+          this.graph(
+            z.string().max(500).default('').parse(args.query),
+            undefined,
+            sessionId,
+            z.number().int().min(0).default(0).parse(args.offset),
+            12,
+          ),
         ),
       }),
       false,
@@ -808,7 +945,7 @@ export class Knowledge {
         {
           name: 'knowledge_write',
           description:
-            '把可复用结论、未解决问题和来源整理为本地 Wiki 草稿。先搜索已有页；更新需提供 version。不得存密码或密钥，不得凭空声称已验证。不覆盖人工定稿；出现新证据时保留差异和待核对问题。sourceIds 使用 knowledge_search 返回的资料 ID；新知识仅在本轮会话时传空数组，系统会保存当前会话原文摘录作为来源。',
+            '把可复用结论、未解决问题和来源整理为本地 整理文档 草稿。先搜索已有页；更新需提供 version。不得存密码或密钥，不得凭空声称已验证。不覆盖人工定稿；出现新证据时保留差异和待核对问题。sourceIds 使用 knowledge_search 返回的资料 ID；新知识仅在本轮会话时传空数组，系统会保存当前会话原文摘录作为来源。',
           parameters: {
             type: 'object',
             properties: {
@@ -816,6 +953,28 @@ export class Knowledge {
               version: { type: 'integer' },
               title: { type: 'string' },
               content: { type: 'string' },
+              assertions: {
+                type: 'array',
+                maxItems: 100,
+                description:
+                  '可选的结构化知识。每项有原文摘录 quote；sourceId 必须在 sourceIds 中，省略时摘录来自本文。实体关系需要 objectType，文字属性不填。',
+                items: {
+                  type: 'object',
+                  properties: {
+                    subject: { type: 'string' },
+                    subjectType: { type: 'string', enum: Object.keys(entityTypes) },
+                    relation: { type: 'string', enum: Object.keys(relationTypes) },
+                    object: { type: 'string' },
+                    objectType: { type: 'string', enum: Object.keys(entityTypes) },
+                    sourceId: { type: 'string' },
+                    quote: { type: 'string' },
+                    validFrom: { type: 'string', description: 'YYYY-MM-DD' },
+                    validUntil: { type: 'string', description: 'YYYY-MM-DD' },
+                  },
+                  required: ['subject', 'subjectType', 'relation', 'object', 'quote'],
+                  additionalProperties: false,
+                },
+              },
               sourceIds: { type: 'array', items: { type: 'string' } },
               tags: { type: 'array', items: { type: 'string' } },
               folderId: {

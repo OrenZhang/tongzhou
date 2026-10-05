@@ -46,6 +46,16 @@ const server = createServer(async (req, res) => {
             content:
               '# 库存处理\n\n确认订单后扣减，退款完成后回补。\n\n## 待验证\n并发订单场景仍需要测试。',
             sourceIds: [sourceId],
+            assertions: [
+              {
+                subject: '订单',
+                subjectType: 'concept',
+                relation: 'fact',
+                object: '确认后扣减库存',
+                sourceId,
+                quote: '订单确认后扣减库存',
+              },
+            ],
             tags: ['订单', '库存'],
           })
         : {
@@ -183,6 +193,7 @@ try {
   await page.getByRole('button', { name: '核对并收录', exact: true }).click();
   await page.getByRole('button', { name: '确认已核对', exact: true }).click();
   await page.getByText('已核对并收录', { exact: true }).waitFor();
+
   for (const theme of ['light', 'dark']) {
     await page.evaluate((t) => (document.documentElement.dataset.theme = t), theme);
     await page.evaluate(() =>
@@ -216,16 +227,38 @@ try {
   assert.ok(knowledgeRun.knowledgeReferences.some((r) => r.id === sourceId && r.mode === 'tool'));
   await page.getByRole('button', { name: '智库', exact: true }).click();
   await page.getByLabel('搜索知识', { exact: true }).fill('');
+  await page.locator('.knowledge-maintenance > summary').click();
   await page.getByRole('button', { name: '立即整理', exact: true }).click();
   await page.waitForFunction(async () =>
     (await window.tongzhou.knowledgeState()).documents.some((d) => d.kind === 'memory'),
   );
-  await page.getByRole('button', { name: '每日记忆', exact: true }).click();
+  await page.getByRole('tab', { name: '知识与记忆', exact: false }).click();
+  await page
+    .locator('.knowledge-subnav')
+    .getByRole('button', { name: '每日记忆', exact: true })
+    .click();
   await page.locator('.knowledge-item').filter({ hasText: '每日记忆' }).click();
   await page.getByText('每日记忆已整理，等待核对', { exact: true }).waitFor();
   await page.getByRole('button', { name: '核对并收录', exact: true }).click();
   await page.getByRole('button', { name: '确认已核对', exact: true }).click();
   await page.getByText('已核对并收录', { exact: true }).waitFor();
+  await page.getByRole('tab', { name: '知识与记忆', exact: false }).click();
+  await page.locator('.ontology-fact').filter({ hasText: '订单' }).first().waitFor();
+  await page
+    .locator('.knowledge-subnav')
+    .getByRole('button', { name: '每日记忆', exact: true })
+    .click();
+  await page.locator('.knowledge-item').filter({ hasText: '每日记忆' }).click();
+  await page.locator('.ontology-editor > summary').click();
+  await page.getByRole('button', { name: '修正此条记忆', exact: true }).first().click();
+  await page
+    .getByLabel('修正记忆内容', { exact: true })
+    .fill('订单确认后扣减库存，退款完成后回补；并发条件待验证。');
+  await page.getByRole('button', { name: '核对并保存', exact: true }).click();
+  await page.getByText('记忆已更新', { exact: true }).waitFor();
+  await page.getByRole('button', { name: '移除此条记忆', exact: true }).first().click();
+  await page.getByRole('button', { name: '确认移除', exact: true }).click();
+  await page.waitForFunction(() => !document.querySelector('.knowledge-reader .ontology-editor'));
   await page.getByRole('button', { name: 'Agent 排查', exact: true }).click();
   await page.getByText('已排查知识来源，库存并发验证仍需补充。', { exact: true }).waitFor();
   await page.reload();
@@ -275,7 +308,7 @@ try {
   assert.ok((await readFile(importedFile, 'utf8')).includes('订单确认后扣减库存'));
   await page
     .locator('.knowledge-filters')
-    .getByRole('button', { name: 'Wiki', exact: true })
+    .getByRole('button', { name: '整理文档', exact: true })
     .click();
   await page.locator('.knowledge-item').filter({ hasText: '库存处理 Wiki' }).click();
   await page.getByText('来源已删除，需要复核', { exact: true }).waitFor();
@@ -292,7 +325,7 @@ try {
   await page.getByRole('button', { name: '智库', exact: true }).click();
   await page
     .locator('.knowledge-filters')
-    .getByRole('button', { name: 'Wiki', exact: true })
+    .getByRole('button', { name: '整理文档', exact: true })
     .click();
   await page.getByRole('button', { name: '新建目录', exact: true }).click();
   await page.getByLabel('目录名称', { exact: true }).fill('研发');
@@ -320,22 +353,22 @@ try {
   await page.getByRole('button', { name: '上级目录', exact: true }).click();
   await page.getByRole('menuitemradio', { name: '研发', exact: true }).click();
   await page.getByRole('button', { name: '保存目录', exact: true }).click();
-  await page.getByRole('button', { name: '全部 Wiki', exact: true }).click();
+  await page.getByRole('button', { name: '全部文档', exact: true }).click();
   await page.locator('.knowledge-item').filter({ hasText: '库存处理 Wiki' }).click();
   await page.getByRole('button', { name: '移动到目录', exact: true }).click();
-  await page.getByRole('button', { name: 'Wiki 目标目录', exact: true }).click();
+  await page.getByRole('button', { name: '文档目标目录', exact: true }).click();
   await page.getByRole('menuitemradio', { name: '研发 / 接口文档', exact: true }).click();
   await page.getByRole('button', { name: '确认移动', exact: true }).click();
-  await page.getByText('Wiki 已移动，正文与来源引用已保留', { exact: true }).waitFor();
+  await page.getByText('整理文档已移动，正文与来源引用已保留', { exact: true }).waitFor();
   await page
     .locator('.knowledge-document-heading')
     .getByText('研发 / 接口文档', { exact: true })
     .waitFor();
-  await page.getByRole('button', { name: '新建 Wiki', exact: true }).click();
+  await page.getByRole('button', { name: '新建整理文档', exact: true }).click();
   await page.getByLabel('知识标题', { exact: true }).fill('目录内新页');
   await page.getByLabel('知识正文', { exact: true }).fill('需要长期保留的接口经验。');
   assert.equal(
-    await page.getByRole('button', { name: 'Wiki 所属目录', exact: true }).textContent(),
+    await page.getByRole('button', { name: '文档所属目录', exact: true }).textContent(),
     '研发 / 接口文档',
   );
   await page.getByRole('button', { name: '保存资料', exact: true }).click();
@@ -364,7 +397,7 @@ try {
   await page.getByRole('button', { name: '智库', exact: true }).click();
   await page
     .locator('.knowledge-filters')
-    .getByRole('button', { name: 'Wiki', exact: true })
+    .getByRole('button', { name: '整理文档', exact: true })
     .click();
   await page.locator('.wiki-folder-name').filter({ hasText: '研发' }).click();
   await page.getByRole('button', { name: '管理目录 研发', exact: true }).click();

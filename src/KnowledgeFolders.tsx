@@ -122,9 +122,9 @@ export function KnowledgeFolders({
       });
   return (
     <>
-      <nav className="wiki-folders" aria-label="Wiki 目录">
+      <nav className="wiki-folders" aria-label="文档目录">
         <div className="wiki-folder-heading">
-          <strong>Wiki 目录</strong>
+          <strong>文档目录</strong>
           <button
             className="icon-button"
             aria-label="新建目录"
@@ -141,7 +141,7 @@ export function KnowledgeFolders({
           aria-pressed={selected === '*'}
           onClick={() => onSelect('*')}
         >
-          全部 Wiki
+          全部文档
         </button>
         <button
           className="wiki-folder-root"
@@ -155,7 +155,7 @@ export function KnowledgeFolders({
       </nav>
       {editing && (
         <Modal
-          title={editing.id ? '管理 Wiki 目录' : '新建 Wiki 目录'}
+          title={editing.id ? '管理文档目录' : '新建文档目录'}
           compact
           onClose={() => !busy && setEditing(undefined)}
         >
@@ -223,13 +223,13 @@ export function KnowledgeFolders({
         </Modal>
       )}
       {deleting && (
-        <Modal title="删除 Wiki 目录" compact onClose={() => !busy && setDeleting(undefined)}>
+        <Modal title="删除文档目录" compact onClose={() => !busy && setDeleting(undefined)}>
           <div className="modal-content confirmation-content">
             <p>
               删除“<strong>{deleting.name}</strong>”及其子目录？
             </p>
             <p className="muted">
-              目录中的 Wiki 页面全部保留，并移到“未分类”。原文、来源引用和历史版本不受影响。
+              目录中的 文档 页面全部保留，并移到“未分类”。原文、来源引用和历史版本不受影响。
             </p>
             {error && (
               <p role="alert" className="error">

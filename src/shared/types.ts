@@ -332,7 +332,18 @@ export interface TongzhouAPI {
   ): Promise<import('./knowledge').KnowledgeFolder>;
   knowledgeFolderDelete(id: string, version: number): Promise<void>;
   knowledgeMove(id: string, folderId: string | null, version: number): Promise<KnowledgeDocument>;
+  knowledgeGraph(
+    query?: string,
+    projectId?: string,
+    offset?: number,
+  ): Promise<import('./ontology').KnowledgeGraph>;
   knowledgeRead(id: string): Promise<KnowledgeRead>;
+  knowledgeMemoryEdit(
+    id: string,
+    version: number,
+    entryId: string,
+    content: string | null,
+  ): Promise<KnowledgeDocument>;
   knowledgeSave(input: KnowledgeInput): Promise<KnowledgeDocument>;
   knowledgeDelete(id: string, currentVersion: number): Promise<void>;
   knowledgeRestore(id: string, version: number, currentVersion: number): Promise<KnowledgeDocument>;
