@@ -11,6 +11,10 @@ const root = await mkdtemp(path.resolve('test-results/account-proxy-'));
 const hosts = [];
 const proxy = createServer((_req, res) => res.writeHead(502).end());
 proxy.on('connect', (req, socket) => {
+  // Clients may reset the deliberately rejected CONNECT tunnel.
+  socket.on('error', (error) => {
+    if (error.code !== 'ECONNRESET') throw error;
+  });
   hosts.push(req.url);
   socket.end('HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n');
 });

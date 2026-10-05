@@ -33,6 +33,13 @@ try {
       authenticated: engine === 'kimi',
     }));
   });
+  // Built-in connections default to disabled; this fixture explicitly opts in.
+  await page.evaluate(async () => {
+    const { providers } = await window.tongzhou.snapshot();
+    for (const provider of providers)
+      if (['codex', 'kimi', 'minimax'].includes(provider.protocol))
+        await window.tongzhou.saveProvider({ ...provider, enabled: true });
+  });
   await page.getByRole('button', { name: /^模型与订阅/ }).click();
   await page
     .locator('.provider-card')

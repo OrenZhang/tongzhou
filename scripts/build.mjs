@@ -1,4 +1,5 @@
 import { build } from 'esbuild';
+import './prepare-pty.mjs';
 await build({
   entryPoints: ['electron/node-request-identity.ts'],
   outfile: 'dist-electron/node-request-identity.cjs',
