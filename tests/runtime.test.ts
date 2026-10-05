@@ -78,6 +78,66 @@ const text = (content: string) => ({
   usage: { prompt_tokens: 10, completion_tokens: 4 },
 });
 describe('conversation input and lifecycle changes', () => {
+  it('consolidates queued memories through a restricted background agent without creating sidebar chats', async () => {
+    const f = await fixture((body) => {
+      if (!body.tools.some((t: any) => t.function.name === 'memory_commit'))
+        return [text('库存必须使用事务扣减，验证待完成。')];
+      expect(body.tools.map((t: any) => t.function.name).sort()).toEqual([
+        'memory_commit',
+        'memory_source',
+      ]);
+      if (body.messages.some((m: any) => m.role === 'tool')) return [text('每日记忆已整理')];
+      const prompt = body.messages.find((m: any) => m.role === 'user').content;
+      const candidateId = prompt.match(/"candidateId":"([^"]+)"/)[1];
+      return [
+        {
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: 'memory-result',
+                    function: {
+                      name: 'memory_commit',
+                      arguments: JSON.stringify({
+                        entries: [
+                          {
+                            category: 'decision',
+                            subject: '库存',
+                            relation: '扣减规则',
+                            content: '库存必须使用事务扣减；尚待验证',
+                            evidence: [{ candidateId, quote: '库存必须使用事务扣减' }],
+                          },
+                        ],
+                      }),
+                    },
+                  },
+                ],
+              },
+              finish_reason: 'tool_calls',
+            },
+          ],
+        },
+      ];
+    });
+    const session = f.store.createSession();
+    f.runtime.start({ ...f.input, sessionId: session.id, prompt: '库存必须使用事务扣减' });
+    await f.runtime.waitForIdle();
+    expect(f.runtime.knowledge.all()).toHaveLength(0);
+    expect(f.runtime.knowledge.memory.queueState().pending).toBe(1);
+    const before = f.runtime.snapshot().sessions.length;
+    expect(f.runtime.processMemory(true).started).toBe(true);
+    await f.runtime.waitForIdle();
+    expect(f.runtime.knowledge.all()[0].memoryEntries).toHaveLength(1);
+    expect(f.runtime.knowledge.memory.queueState()).toMatchObject({
+      pending: 0,
+      running: 0,
+      failed: 0,
+    });
+    expect(f.runtime.snapshot().sessions).toHaveLength(before);
+    expect(f.runtime.knowledge.memory.candidates()).toHaveLength(1);
+  });
   it('rejects disabled providers before starting a run, retaining secrets and history', async () => {
     const f = await fixture(() => [text('unexpected')]);
     const provider = f.store.providers().find((p) => p.id === 'fixture')!;
@@ -589,9 +649,13 @@ describe('agent execution lifecycle', () => {
     expect(
       f.requests.every((r) =>
         r.tools.every((t: any) =>
-          ['read_attachment', 'knowledge_search', 'knowledge_read', 'knowledge_write'].includes(
-            t.function.name,
-          ),
+          [
+            'read_attachment',
+            'knowledge_search',
+            'knowledge_read',
+            'knowledge_audit',
+            'knowledge_write',
+          ].includes(t.function.name),
         ),
       ),
     ).toBe(true);
@@ -652,7 +716,9 @@ describe('agent execution lifecycle', () => {
     expect(
       f.requests.every((r) =>
         r.tools.every((t: any) =>
-          ['read_attachment', 'knowledge_search', 'knowledge_read'].includes(t.function.name),
+          ['read_attachment', 'knowledge_search', 'knowledge_read', 'knowledge_audit'].includes(
+            t.function.name,
+          ),
         ),
       ),
     ).toBe(true);
@@ -775,6 +841,7 @@ describe('agent execution lifecycle', () => {
             'read_attachment',
             'knowledge_search',
             'knowledge_read',
+            'knowledge_audit',
           ].includes(t.function.name),
         ),
       ),

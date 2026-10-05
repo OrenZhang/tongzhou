@@ -181,6 +181,8 @@ export interface Message {
   visibleTool?: boolean;
 }
 export interface Session {
+  memoryJob?: string;
+  knowledgeScopeSession?: string;
   knowledgeJob?: boolean;
   permission?: PermissionMode;
   id: string;
@@ -195,6 +197,7 @@ export interface Session {
   archived: boolean;
 }
 export interface Run {
+  knowledgeReferences?: import('./knowledge').KnowledgeReference[];
   usageReported?: boolean;
   workspace?: { before: string; after?: string };
   id: string;
@@ -314,6 +317,16 @@ export interface ImportPreview {
   warnings: string[];
 }
 export interface TongzhouAPI {
+  knowledgeReview(id: string, version: number): Promise<KnowledgeDocument>;
+  knowledgeAudit(sessionId: string): Promise<string>;
+  knowledgeMemoryProcess(retry?: boolean): Promise<{ started: boolean }>;
+  knowledgeReferenceState(sessionId: string): Promise<{
+    references: import('./knowledge').KnowledgeReference[];
+    excluded: string[];
+    pinned: string[];
+    runId?: string;
+  }>;
+  knowledgeExclude(sessionId: string, id: string, excluded: boolean): Promise<void>;
   knowledgeReferences(sessionId: string): Promise<string[]>;
   knowledgeCollect(sessionId: string): Promise<{ collected: number }>;
   knowledgeState(query?: string, projectId?: string, sessionId?: string): Promise<KnowledgeState>;

@@ -49,6 +49,7 @@ export function KnowledgeCenter({
   const [selected, setSelected] = useState<KnowledgeRead>();
   const [edit, setEdit] = useState<KnowledgeInput>();
   const [deleting, setDeleting] = useState<KnowledgeDocument>();
+  const [reviewing, setReviewing] = useState<KnowledgeDocument>();
   const [preview, setPreview] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -149,6 +150,20 @@ export function KnowledgeCenter({
         <div className="row">
           <button
             className="secondary"
+            disabled={busy || !session}
+            title="只读排查当前会话可访问的知识"
+            onClick={() =>
+              void action(async () => {
+                const id = await api.knowledgeAudit(session!.id);
+                onSession((await api.snapshot()).sessions.find((s) => s.id === id)!);
+              })
+            }
+          >
+            <Search size={15} />
+            Agent 排查
+          </button>
+          <button
+            className="secondary"
             disabled={busy}
             onClick={() =>
               void action(async () => {
@@ -183,7 +198,7 @@ export function KnowledgeCenter({
               })
             }
           />
-          自动收集会话
+          后台整理每日记忆
         </label>
         <label>
           <input
@@ -202,16 +217,16 @@ export function KnowledgeCenter({
         <button
           className="text-button"
           disabled={busy || !session}
-          title="补收当前会话最近 100 个已完成轮次，不会重复入库"
+          title="把当前会话最近 100 个已完成轮次加入待整理队列，不直接生成记忆"
           onClick={() =>
             void action(async () => {
               const result = await api.knowledgeCollect(session!.id);
-              setNotice(`已收集 ${result.collected} 条会话记忆`);
+              setNotice(`已加入 ${result.collected} 个候选轮次，后台整理后归并到每日记忆`);
             })
           }
         >
           <History size={14} />
-          收集当前会话
+          补收当前会话
         </button>
         <button
           className="text-button"
@@ -233,6 +248,37 @@ export function KnowledgeCenter({
           }
         >
           <RefreshCw size={14} />
+        </button>
+      </div>
+      <div className="knowledge-memory-status">
+        <div>
+          <strong>每日记忆 · 空闲后整理</strong>
+          <p>
+            按本地日期每天一份，分类保留有证据的偏好、事实、决策、经验、待办和矛盾。复用来源会话的模型，会消耗该模型额度。
+          </p>
+          <small>
+            待整理 {state?.memoryQueue.pending ?? 0} · 整理中 {state?.memoryQueue.running ?? 0} ·
+            失败 {state?.memoryQueue.failed ?? 0}
+          </small>
+          {state?.memoryQueue.lastError && <p className="danger">{state.memoryQueue.lastError}</p>}
+          {state?.memoryQueue.lastResult && <p>{state.memoryQueue.lastResult}</p>}
+        </div>
+        <button
+          className="secondary"
+          disabled={busy || !state?.settings.autoCollect || !!state?.memoryQueue.running}
+          onClick={() =>
+            void action(async () => {
+              const result = await api.knowledgeMemoryProcess(true);
+              setNotice(
+                result.started
+                  ? '后台记忆 Agent 已开始整理一批候选资料'
+                  : '暂未启动：可能有其他任务运行、没有候选资料或连接不可用，请查看队列状态',
+              );
+            })
+          }
+        >
+          <Sparkles size={14} />
+          {state?.memoryQueue.failed ? '重试整理' : '立即整理'}
         </button>
       </div>
       {error && (
@@ -268,7 +314,7 @@ export function KnowledgeCenter({
                 ['all', '全部'],
                 ['source', '资料'],
                 ['wiki', 'Wiki'],
-                ['memory', '记忆'],
+                ['memory', '每日记忆'],
                 ['issues', '待整理'],
                 ['archived', '归档'],
               ] as const
@@ -331,6 +377,21 @@ export function KnowledgeCenter({
                 </button>
               </div>
               <div className="knowledge-document-actions">
+                {doc.status !== 'archived' &&
+                  (doc.status === 'draft' ||
+                    state?.issues.some((issue) => issue.id === doc.id)) && (
+                    <button
+                      className="primary"
+                      disabled={busy || doc.indexed === false}
+                      onClick={() => {
+                        setError('');
+                        setReviewing(doc);
+                      }}
+                    >
+                      <Check size={14} />
+                      核对并收录
+                    </button>
+                  )}
                 <button
                   className="secondary action-emphasis"
                   disabled={busy || !session || doc.status === 'archived'}
@@ -535,6 +596,52 @@ export function KnowledgeCenter({
           )}
         </main>
       </div>
+      {reviewing && (
+        <Modal title="核对并收录" compact onClose={() => !busy && setReviewing(undefined)}>
+          <div className="modal-content confirmation-content">
+            <p>
+              确认已阅读“<strong>{reviewing.title}</strong>”并对照来源核对内容？
+            </p>
+            <p className="muted">
+              收录后可参与按需引用。来源变更会再次提示复核；后台新增记忆仍会标记待核对。
+            </p>
+            {!!reviewing.sources.length && (
+              <ul>
+                {reviewing.sources.slice(0, 12).map((source) => (
+                  <li key={source.id}>
+                    {source.title}
+                    {source.version ? ` · v${source.version}` : ''}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {error && (
+              <p className="error" role="alert">
+                {error}
+              </p>
+            )}
+          </div>
+          <div className="modal-footer">
+            <button className="secondary" disabled={busy} onClick={() => setReviewing(undefined)}>
+              取消
+            </button>
+            <button
+              className="primary"
+              disabled={busy}
+              onClick={() =>
+                void action(async () => {
+                  await api.knowledgeReview(reviewing.id, reviewing.version);
+                  setSelected(await api.knowledgeRead(reviewing.id));
+                  setReviewing(undefined);
+                  setNotice('已核对并收录');
+                })
+              }
+            >
+              确认已核对
+            </button>
+          </div>
+        </Modal>
+      )}
       {deleting && (
         <Modal title="永久删除资料" compact onClose={() => !busy && setDeleting(undefined)}>
           <div className="modal-content confirmation-content">
@@ -714,14 +821,17 @@ export function KnowledgeReferences({
   sessionId: string;
   onOpen(): void;
 }) {
-  const [count, setCount] = useState(0);
+  const [value, setValue] = useState<Awaited<ReturnType<TongzhouAPI['knowledgeReferenceState']>>>();
+  const [opened, setOpened] = useState(false);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
   useEffect(() => {
     let active = true;
     const load = () =>
       void api
-        .knowledgeReferences(sessionId)
-        .then((s) => {
-          if (active) setCount(s.length);
+        .knowledgeReferenceState(sessionId)
+        .then((result) => {
+          if (active) setValue(result);
         })
         .catch(() => {});
     load();
@@ -734,13 +844,118 @@ export function KnowledgeReferences({
     };
   }, [sessionId]);
   return (
-    <button
-      className="text-button knowledge-reference-button"
-      onClick={onOpen}
-      title="选择参考资料或管理会话知识"
-    >
-      <BookOpen size={14} />
-      知识{count ? ` · ${count} 份参考` : ''}
-    </button>
+    <>
+      <button
+        className="text-button knowledge-reference-button"
+        onClick={() => setOpened(true)}
+        title="查看本轮实际引用、管理后续引用"
+      >
+        <BookOpen size={14} />
+        知识
+        {value?.references.length
+          ? ' · ' + value.references.length + ' 份引用'
+          : value?.pinned.length
+            ? ' · ' + value.pinned.length + ' 份已选'
+            : ''}
+      </button>
+      {opened && (
+        <Modal title="会话知识引用" onClose={() => setOpened(false)}>
+          <div className="modal-content knowledge-reference-list">
+            <p className="muted">
+              以下是最近一轮实际注入或通过工具读取的片段。排除操作从下一轮生效，不会撤回已发送内容；明确要求时
+              Agent 仍可通过工具读取。
+            </p>
+            {!value?.references.length && (
+              <p>本轮尚未引用知识。发送相关问题后，会在这里显示自动检索和工具读取的资料。</p>
+            )}
+            {value?.references.map((reference) => (
+              <article key={reference.id}>
+                <div className="row">
+                  <strong>{reference.title}</strong>
+                  <span className="muted">
+                    v{reference.version} ·{' '}
+                    {
+                      { explicit: '手动引用', automatic: '自动检索', tool: '工具读取' }[
+                        reference.mode
+                      ]
+                    }
+                  </span>
+                </div>
+                <details>
+                  <summary>查看实际片段</summary>
+                  <pre>{reference.excerpt}</pre>
+                </details>
+                <button
+                  className="text-button"
+                  disabled={busy}
+                  onClick={async () => {
+                    setBusy(true);
+                    setError('');
+                    try {
+                      await api.knowledgeExclude(
+                        sessionId,
+                        reference.id,
+                        !value.excluded.includes(reference.id),
+                      );
+                      setValue(await api.knowledgeReferenceState(sessionId));
+                    } catch (e) {
+                      setError(String(e));
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                >
+                  {value.excluded.includes(reference.id) ? '恢复后续引用' : '下轮不再注入'}
+                </button>
+              </article>
+            ))}
+            {!!value?.excluded.length && (
+              <details>
+                <summary>已排除 {value.excluded.length} 份资料</summary>
+                {value.excluded.map((id) => (
+                  <button
+                    className="text-button"
+                    key={id}
+                    disabled={busy}
+                    onClick={async () => {
+                      setBusy(true);
+                      try {
+                        await api.knowledgeExclude(sessionId, id, false);
+                        setValue(await api.knowledgeReferenceState(sessionId));
+                      } catch (e) {
+                        setError(String(e));
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                  >
+                    恢复引用 · {value.references.find((r) => r.id === id)?.title ?? id}
+                  </button>
+                ))}
+              </details>
+            )}
+            {error && (
+              <p className="error" role="alert">
+                {error}
+              </p>
+            )}
+          </div>
+          <div className="modal-footer">
+            <button
+              className="secondary"
+              onClick={() => {
+                setOpened(false);
+                onOpen();
+              }}
+            >
+              打开知识库管理引用
+            </button>
+            <button className="primary" onClick={() => setOpened(false)}>
+              完成
+            </button>
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }

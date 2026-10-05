@@ -16,6 +16,83 @@ export function registerKnowledgeServices(
   const k = runtime.knowledge;
   const id = z.string().uuid();
   register(
+    'knowledgeReview',
+    manual('知识库', '核对来源后收录当前版本', 'knowledge', '由用户阅读资料并确认核对', [
+      id,
+      z.number().int().positive(),
+    ]),
+    (doc, version) => {
+      const value = k.review(doc, version);
+      runtime.changed();
+      return value;
+    },
+  );
+  register(
+    'knowledgeReferenceState',
+    operation('知识库', 'query', '查看最近一轮实际知识引用及下轮排除项', [z.string()]),
+    (session) => k.referenceState(session),
+  );
+  register(
+    'knowledgeExclude',
+    operation('知识库', 'change', '设置本会话后续轮次不自动注入某份知识；工具仍可按用户要求读取', [
+      z.string(),
+      id,
+      z.boolean(),
+    ]),
+    (session, doc, excluded) => {
+      k.exclude(session, doc, excluded);
+      runtime.changed();
+    },
+  );
+  register(
+    'knowledgeMemoryProcess',
+    operation(
+      '知识库',
+      'change',
+      '空闲时立即启动一批后台记忆整理，可重试失败候选；使用来源会话模型',
+      [z.boolean().optional()],
+    ),
+    (retry) => runtime.processMemory(retry ?? true),
+  );
+  register(
+    'knowledgeAudit',
+    operation(
+      '知识库',
+      'change',
+      '创建独立只读任务，分页排查当前会话可访问知识的来源、冲突与缺口',
+      [z.string()],
+    ),
+    (fromSession) => {
+      const from = store.get<Session>('session', fromSession);
+      if (!from.providerId || !from.model) throw new Error('请先在会话中选择模型');
+      const created = store.createSession(from.projectId);
+      store.put('session', {
+        ...created,
+        title: '知识排查',
+        knowledgeJob: true,
+        knowledgeScopeSession: from.id,
+        permission: 'read-only',
+        providerId: from.providerId,
+        model: from.model,
+      });
+      try {
+        runtime.start({
+          sessionId: created.id,
+          providerId: from.providerId,
+          model: from.model,
+          agentId: created.agentId,
+          prompt:
+            '排查当前范围的知识库。先 knowledge_audit 按 nextOffset 遍历所有页，再 knowledge_read 读取相关正文与来源。检查重复主题、过时来源、相互矛盾的规则、缺失证据与待办。只输出带资料 ID 和原文依据的问题清单及建议；不要修改或收录。明确已读范围与未覆盖内容，不能把一页结果当成全库审查。',
+        });
+      } catch (error) {
+        store.put('session', { ...store.get<Session>('session', created.id), archived: true });
+        throw error;
+      }
+      runtime.changed();
+      return created.id;
+    },
+  );
+  register(
     'knowledgeReferences',
     operation('知识库', 'query', '读取会话显式引用的有效资料 ID', [z.string()]),
     (sessionId) => k.pins(sessionId).filter((doc) => k.get(doc).status !== 'archived'),
@@ -25,13 +102,13 @@ export function registerKnowledgeServices(
     operation(
       '知识库',
       'change',
-      '把指定会话最近已完成轮次收集为带来源的记忆；相同轮次不会重复收集',
+      '把指定会话最近已完成轮次加入后台记忆候选队列；相同轮次不会重复收集',
       [z.string()],
     ),
     (sessionId) => {
       store.get('session', sessionId);
       if (!k.settings().autoCollect) throw new Error('请先开启自动收集会话');
-      const before = k.all().length;
+      const before = k.memory.candidates().length;
       for (const run of store.sessionObjects<import('../src/shared/types').Run>(
         'run',
         sessionId,
@@ -39,7 +116,7 @@ export function registerKnowledgeServices(
       ))
         k.capture(run);
       runtime.changed();
-      return { collected: k.all().length - before };
+      return { collected: k.memory.candidates().length - before };
     },
   );
   register(
@@ -58,9 +135,18 @@ export function registerKnowledgeServices(
   );
   register(
     'knowledgeSave',
-    operation('知识库', 'change', '保存手写资料或审核后的 Wiki；更新必须提供当前 version', [
-      knowledgeInput,
-    ]),
+    operation(
+      '知识库',
+      'change',
+      '保存知识资料；Agent 只能保存 draft，更新必须提供当前 version，收录需用户核对',
+      [knowledgeInput],
+      {
+        guard: (args) => {
+          if ((args[0] as { status?: string }).status !== 'draft')
+            throw new Error('Agent 保存的内容必须为 draft；请由用户核对并收录');
+        },
+      },
+    ),
     (raw) => {
       const value = k.save(raw);
       runtime.changed();
@@ -90,11 +176,21 @@ export function registerKnowledgeServices(
   );
   register(
     'knowledgeRestore',
-    operation('知识库', 'change', '恢复指定历史版本，保留恢复前的版本', [
-      id,
-      z.number().int().positive(),
-      z.number().int().positive(),
-    ]),
+    operation(
+      '知识库',
+      'change',
+      '恢复指定历史版本，保留恢复前的版本；已收录版本需用户在界面恢复',
+      [id, z.number().int().positive(), z.number().int().positive()],
+      {
+        guard: (args) => {
+          const revision = store.get<{ status: string }>(
+            'knowledgeRevision',
+            `${args[0]}:${args[1]}`,
+          );
+          if (revision.status !== 'draft') throw new Error('请由用户在界面确认恢复已收录版本');
+        },
+      },
+    ),
     (doc, version, current) => {
       const value = k.restore(doc, version, current);
       runtime.changed();

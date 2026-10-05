@@ -436,6 +436,8 @@ export class Store {
           'taskMemory',
           'knowledgeBinding',
           'knowledgeDismissal',
+          'knowledgeCandidate',
+          'knowledgeContextPreference',
           'runChanges',
           'terminal',
         ])

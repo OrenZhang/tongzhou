@@ -1,4 +1,7 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+vi.mock('electron', () => ({ dialog: {}, shell: {} }));
+import { registerKnowledgeServices } from '../electron/knowledge-services';
+import { ClientCommands } from '../electron/client-commands';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -19,6 +22,42 @@ function fixture() {
   return { root, store, k };
 }
 describe('local knowledge lifecycle', () => {
+  it('prevents the client-management tool from marking its own work as human reviewed', async () => {
+    const { k, store } = fixture();
+    const session = store.createSession();
+    const commands = new ClientCommands();
+    registerKnowledgeServices(
+      (name, definition, handler) => commands.register(name, definition, handler),
+      store,
+      { knowledge: k, changed: () => {} } as any,
+    );
+    const handlers = new Map<string, any>();
+    commands.attach(
+      { add: (spec: any, _title: any, execute: any) => handlers.set(spec.name, execute) } as any,
+      false,
+      () => true,
+      session.id,
+    );
+    const change = handlers.get('client_change');
+    await expect(
+      change({
+        method: 'knowledgeSave',
+        args: [{ title: '自动确认', kind: 'wiki', content: '未核对', status: 'ready' }],
+      }),
+    ).rejects.toThrow('必须为 draft');
+    const saved = JSON.parse(
+      (
+        await change({
+          method: 'knowledgeSave',
+          args: [{ title: '草稿', kind: 'wiki', content: '待核对', status: 'draft' }],
+        })
+      ).text,
+    );
+    await expect(
+      change({ method: 'knowledgeReview', args: [saved.id, saved.version] }),
+    ).rejects.toThrow('不可通过');
+    expect(k.get(saved.id).status).toBe('draft');
+  });
   it('permanently deletes only archived versions, removes files and pins, and preserves dependent Wiki evidence', () => {
     const { k, root, store } = fixture();
     const session = store.createSession();
@@ -165,7 +204,23 @@ describe('local knowledge lifecycle', () => {
     const run = { id: 'r', sessionId: session.id, status: 'completed', startedAt: 1 } as Run;
     k.capture(run);
     k.capture(run);
-    expect(k.all()).toHaveLength(1);
+    expect(k.all()).toHaveLength(0);
+    expect(k.memory.candidates()).toHaveLength(1);
+    expect(k.memory.claim()).toBeUndefined();
+    const work = k.memory.claim(true)!;
+    expect(work.prompt).not.toContain('topsecret');
+    expect(work.prompt).not.toContain('abcd1234');
+    k.memory.commit(work.job.id, {
+      entries: [
+        {
+          category: 'todo',
+          subject: '库存',
+          relation: '待验证',
+          content: '尚未验证库存',
+          evidence: [{ candidateId: 'r', quote: '尚未验证库存' }],
+        },
+      ],
+    });
     const memory = k.all()[0];
     expect(memory.status).toBe('draft');
     expect(memory.sources[0].messageId).toBe('m');
@@ -185,6 +240,7 @@ describe('local knowledge lifecycle', () => {
     const { store, k } = fixture();
     const session = store.createSession();
     const source = k.save({ title: '原文', content: '版本是 1', kind: 'source' });
+    k.configure({ autoCollect: false, autoContext: true });
     const handlers = new Map<string, any>();
     const scope = {
       add: (spec: any, _title: any, execute: any) => handlers.set(spec.name, execute),

@@ -382,3 +382,47 @@
     max-height: 230px;
   }
 }
+.knowledge-memory-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin-bottom: 18px;
+  background: var(--surface);
+}
+.knowledge-memory-status p {
+  margin: 5px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.knowledge-memory-status small {
+  color: var(--muted);
+}
+.knowledge-memory-status button {
+  flex-shrink: 0;
+}
+.knowledge-reference-list article {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  margin: 10px 0;
+}
+.knowledge-reference-list pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 220px;
+  overflow: auto;
+  font: inherit;
+}
+.knowledge-reference-list details {
+  margin: 8px 0;
+}
+@media (max-width: 850px) {
+  .knowledge-memory-status {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
