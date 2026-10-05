@@ -1,3 +1,4 @@
+import { chooseOption } from './choice-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { createServer } from 'node:http';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
@@ -117,7 +118,7 @@ try {
     return window.tongzhou.createSession(project.id);
   }, `http://127.0.0.1:${server.address().port}/v1`);
   await page.locator(`[data-session-id="${session.id}"]`).click();
-  await page.getByLabel('当前连接', { exact: true }).selectOption('fixture');
+  await chooseOption(page, '当前连接', 'fixture');
   await page.getByLabel('消息', { exact: true }).fill('检查项目');
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
   const waitingTurn = page.locator('.conversation-turn').last();
@@ -157,6 +158,7 @@ try {
       elements.map((e) => e.dataset.entryKind).filter((kind) => kind !== 'phase'),
     );
   assert.deepEqual(ordered, [
+    'notice',
     'reasoning',
     'response',
     'reasoning',

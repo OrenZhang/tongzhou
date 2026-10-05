@@ -1,3 +1,4 @@
+import { chooseOption } from './choice-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { createServer } from 'node:http';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
@@ -83,7 +84,7 @@ try {
       }),
     `http://127.0.0.1:${server.address().port}/v1`,
   );
-  await page.getByLabel('当前连接', { exact: true }).selectOption('attachment-fixture');
+  await chooseOption(page, '当前连接', 'attachment-fixture');
   await page.getByLabel('消息', { exact: true }).focus();
   await app.evaluate(async ({ clipboard, ClipboardItem, nativeImage }) => {
     clipboard.clear();
@@ -116,7 +117,7 @@ try {
     2,
     'Attachment draft survives reload',
   );
-  await page.getByLabel('当前连接', { exact: true }).selectOption('attachment-fixture');
+  await chooseOption(page, '当前连接', 'attachment-fixture');
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
   await page.getByText('图片请求已接收', { exact: true }).waitFor();
   assert.equal(

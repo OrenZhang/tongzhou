@@ -21,6 +21,8 @@ export function historyChars(messages: Message[]): number {
       toolCallId: m.toolCallId,
       toolName: m.toolName,
       anthropicContent: m.anthropicContent,
+      reasoningContent: m.reasoningContent,
+      responseReasoning: m.responseReasoning,
     })),
   ).length;
 }

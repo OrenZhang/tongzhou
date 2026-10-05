@@ -1,3 +1,4 @@
+import { ChoicePicker } from './ChoicePicker';
 import { ConnectionDiagnostics } from './ConnectionDiagnostics';
 import { TaskPanel, HistorySearch } from './TaskPanel';
 import { DataMaintenance } from './DataMaintenance';
@@ -1372,26 +1373,22 @@ export default function App() {
                   />
                   <div className="composer-toolbar">
                     <div className="composer-controls">
-                      <select
-                        aria-label="当前连接"
+                      <ChoicePicker
+                        label="当前连接"
+                        compact
+                        searchable
                         value={providerReady ? providerId : ''}
-                        onChange={(e) => {
-                          selectModel(
-                            e.target.value,
-                            data.providers.find((p) => p.id === e.target.value)?.models[0] ?? '',
-                          );
-                        }}
+                        options={availableProviders.map((p) => ({
+                          value: p.id,
+                          label: p.name,
+                          detail: `${p.models.length} 个模型`,
+                        }))}
+                        placeholder={availableProviders.length ? '选择连接' : '暂无可用连接'}
+                        onChange={(id) =>
+                          selectModel(id, data.providers.find((p) => p.id === id)?.models[0] ?? '')
+                        }
                         disabled={!!running}
-                      >
-                        <option value="" disabled>
-                          {availableProviders.length ? '选择连接' : '暂无可用连接'}
-                        </option>
-                        {availableProviders.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name}
-                          </option>
-                        ))}
-                      </select>
+                      />
                       <ModelPicker
                         key={providerId}
                         label="当前模型"
@@ -2343,6 +2340,30 @@ export default function App() {
                   }
                 />
               </Field>
+            </details>
+            <details className="thinking-settings">
+              <summary>
+                高级：模型思考 ·{' '}
+                {providerEdit.thinkingEnabled !== false ? '默认开启' : '关闭（支持时）'}
+              </summary>
+              <Field
+                label="模型思考"
+                hint="默认开启，供使用此连接的会话共用；保存后从下一轮生效。仅控制模型生成行为，思考摘要由服务决定是否返回。"
+              >
+                <select
+                  aria-label="模型思考"
+                  value={providerEdit.thinkingEnabled !== false ? 'on' : 'off'}
+                  onChange={(e) =>
+                    setProviderEdit({ ...providerEdit, thinkingEnabled: e.target.value === 'on' })
+                  }
+                >
+                  <option value="on">开启（默认）</option>
+                  <option value="off">关闭（模型支持时）</option>
+                </select>
+              </Field>
+              <p className="muted">
+                始终思考的模型无法彻底关闭，会使用支持的最低强度。未识别的兼容模型和未提供开关的订阅引擎沿用服务默认，并在运行记录中说明。
+              </p>
             </details>
             <div className="form-grid">
               <Field

@@ -1,3 +1,4 @@
+import { chooseOption } from './choice-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { createServer } from 'node:http';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
@@ -149,7 +150,7 @@ try {
     };
   });
   await page.getByRole('button', { name: '返回会话', exact: true }).click();
-  await page.getByLabel('当前连接', { exact: true }).selectOption(provider.id);
+  await chooseOption(page, '当前连接', provider.id);
   await page.getByRole('button', { name: '当前模型', exact: true }).click();
   await page.getByRole('button', { name: 'fixture-model', exact: true }).click();
   await page.getByLabel('消息', { exact: true }).fill('你好，不打开项目聊天');
@@ -232,7 +233,7 @@ try {
   await page.locator('.welcome').getByRole('button', { name: '打开项目', exact: true }).click();
   await page.getByLabel('消息', { exact: true }).waitFor();
   await page.evaluate(async (p) => window.tongzhou.saveProvider({ ...p, models: [] }), provider);
-  await page.getByLabel('当前连接', { exact: true }).selectOption(provider.id);
+  await chooseOption(page, '当前连接', provider.id);
   await page.getByLabel('当前模型', { exact: true }).click();
   await page.getByRole('button', { name: '刷新模型列表', exact: true }).click();
   await page.waitForFunction(
@@ -287,7 +288,7 @@ try {
     sessionCount,
     'opening a project should not create a conversation',
   );
-  await page.getByLabel('会话权限', { exact: true }).selectOption('full-access');
+  await chooseOption(page, '会话权限', 'full-access');
   await page.waitForFunction(
     async (id) =>
       (await window.tongzhou.snapshot()).sessions.find((s) => s.id === id).permission ===
@@ -318,7 +319,7 @@ try {
   );
   await page.screenshot({ path: 'test-results/05-conversation.png' });
   await page.getByRole('button', { name: '设置与优化', exact: true }).click();
-  await page.getByLabel('全局默认权限', { exact: true }).selectOption('full-access');
+  await chooseOption(page, '全局默认权限', 'full-access');
   await page.waitForFunction(
     async () => (await window.tongzhou.snapshot()).defaultPermission === 'full-access',
   );
@@ -332,9 +333,9 @@ try {
   await page.screenshot({ path: 'test-results/permissions-settings.png' });
   await page.getByRole('button', { name: '返回会话', exact: true }).click();
   await page.getByText('当前：完全开放', { exact: true }).waitFor();
-  await page.getByLabel('会话权限', { exact: true }).selectOption('read-only');
+  await chooseOption(page, '会话权限', 'read-only');
   await page.getByText('当前：只读', { exact: true }).waitFor();
-  await page.getByLabel('会话权限', { exact: true }).selectOption('inherit');
+  await chooseOption(page, '会话权限', 'inherit');
   await page.getByText('当前：完全开放', { exact: true }).waitFor();
   await page.screenshot({ path: 'test-results/project-sessions-permissions.png' });
   await page.getByRole('button', { name: '运行记录', exact: true }).click();

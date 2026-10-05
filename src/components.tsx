@@ -294,6 +294,32 @@ export function ModelPicker({
             className="model-picker-panel"
             role="dialog"
             aria-label={`${label}选择`}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                setOpen(false);
+                trigger.current?.focus();
+              }
+              if (
+                !(e.target instanceof HTMLInputElement) &&
+                ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)
+              ) {
+                e.preventDefault();
+                const items = [
+                  ...(panel.current?.querySelectorAll<HTMLButtonElement>(
+                    '.model-picker-list button',
+                  ) ?? []),
+                ];
+                const index = items.indexOf(document.activeElement as HTMLButtonElement);
+                const next =
+                  e.key === 'Home'
+                    ? 0
+                    : e.key === 'End'
+                      ? items.length - 1
+                      : (index + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+                items[next]?.focus();
+              }
+            }}
           >
             <input
               autoFocus

@@ -186,11 +186,14 @@ export class Store {
   providers(): Provider[] {
     return this.list<Provider>('provider').map((p) => ({
       ...p,
+      thinkingEnabled: p.thinkingEnabled !== false,
       hasSecret: !!this.db.prepare('SELECT id FROM secrets WHERE id=?').get(p.id),
     }));
   }
   saveProvider(input: ProviderInput): Provider {
     const { secret, clearSecret, hasSecret: _, ...provider } = input;
+    provider.thinkingEnabled ??=
+      this.list<Provider>('provider').find((p) => p.id === input.id)?.thinkingEnabled ?? true;
     provider.enabled ??=
       this.list<Provider>('provider').find((p) => p.id === input.id)?.enabled ?? true;
     const encrypted = secret ? this.codec.encrypt(secret) : null;

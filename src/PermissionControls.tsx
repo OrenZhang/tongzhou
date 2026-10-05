@@ -1,11 +1,18 @@
+import { ChoicePicker } from './ChoicePicker';
+import { CheckCheck } from 'lucide-react';
 import type { PermissionMode, Run, Session, TongzhouAPI } from './shared/types';
 import { permissionLabels } from './shared/permissions';
 
-const options = Object.entries(permissionLabels).map(([value, label]) => (
-  <option key={value} value={value}>
-    {label}
-  </option>
-));
+const descriptions: Record<PermissionMode, string> = {
+  'read-only': '只查看和分析，不修改工作区',
+  ask: '执行需要授权的操作前询问',
+  'full-access': '自动批准已启用的工具操作',
+};
+const options = Object.entries(permissionLabels).map(([value, label]) => ({
+  value,
+  label,
+  detail: descriptions[value as PermissionMode],
+}));
 export function SessionPermission({
   session,
   defaultPermission,
@@ -24,22 +31,27 @@ export function SessionPermission({
   const actual = running?.config?.permission ?? effective;
   return (
     <div className={'session-permission ' + actual}>
-      <select
-        aria-label="会话权限"
-        title="设置此会话的执行权限"
+      <ChoicePicker
+        label="会话权限"
+        compact
         value={session.permission ?? 'inherit'}
-        onChange={(e) =>
+        options={[
+          {
+            value: 'inherit',
+            label: `继承全局 · ${permissionLabels[defaultPermission]}`,
+            detail: '跟随设置中的默认权限',
+          },
+          ...options,
+        ]}
+        onChange={(value) =>
           void api
             .setSessionPermission(
               session.id,
-              e.target.value === 'inherit' ? null : (e.target.value as PermissionMode),
+              value === 'inherit' ? null : (value as PermissionMode),
             )
             .catch(onError)
         }
-      >
-        <option value="inherit">继承全局 · {permissionLabels[defaultPermission]}</option>
-        {options}
-      </select>
+      />
       <span>
         {running
           ? `本轮：${permissionLabels[actual]} · 修改下轮生效`
@@ -62,15 +74,13 @@ export function GlobalPermission({
     <div className="global-permission">
       <div className="settings-row">
         <label htmlFor="global-permission">全局默认权限</label>
-        <select
+        <ChoicePicker
           id="global-permission"
+          label="全局默认权限"
           value={value}
-          onChange={(e) =>
-            void api.setDefaultPermission(e.target.value as PermissionMode).catch(onError)
-          }
-        >
-          {options}
-        </select>
+          options={options}
+          onChange={(next) => void api.setDefaultPermission(next as PermissionMode).catch(onError)}
+        />
       </div>
       <p>
         完全开放会自动批准已启用的文件、命令、插件和电脑工具。命令以当前系统用户权限执行；系统授权和插件开关仍然有效。只读
@@ -79,9 +89,10 @@ export function GlobalPermission({
       <div className="settings-row">
         <span>默认用于新会话及选择“继承全局”的会话。</span>
         <button
-          className="secondary"
+          className="secondary action-emphasis"
           onClick={() => void api.setDefaultPermission(value, true).catch(onError)}
         >
+          <CheckCheck size={15} />
           应用到全部会话
         </button>
       </div>

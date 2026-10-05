@@ -54,6 +54,85 @@ async function serve(events: string[], fn: (base: string, requests: any[]) => Pr
 }
 const event = (d: any) => 'data: ' + JSON.stringify(d) + '\n\n';
 describe('streaming protocol adapters', () => {
+  it.each(['openai-chat', 'openai-responses'] as const)(
+    'retains %s reasoning across a streamed tool roundtrip',
+    async (protocol) => {
+      const opaque = {
+        id: 'rs_1',
+        type: 'reasoning',
+        encrypted_content: 'opaque-state',
+        summary: [],
+      };
+      const events =
+        protocol === 'openai-chat'
+          ? [
+              event({
+                choices: [
+                  {
+                    delta: {
+                      reasoning_content: 'reasoning ',
+                      tool_calls: [
+                        { index: 0, id: 'c', function: { name: 'read_file', arguments: '{}' } },
+                      ],
+                    },
+                  },
+                ],
+              }),
+              event({
+                choices: [
+                  { delta: { reasoning_content: 'continued' }, finish_reason: 'tool_calls' },
+                ],
+              }),
+              'data: [DONE]\n\n',
+            ]
+          : [
+              event({ type: 'response.output_item.done', item: opaque }),
+              event({
+                type: 'response.output_item.added',
+                item: {
+                  id: 'fc',
+                  type: 'function_call',
+                  call_id: 'c',
+                  name: 'read_file',
+                  arguments: '',
+                },
+              }),
+              event({ type: 'response.function_call_arguments.delta', item_id: 'fc', delta: '{}' }),
+              event({ type: 'response.completed', response: { usage: {} } }),
+            ];
+      await serve(events, async (base, requests) => {
+        const req = input(protocol, base);
+        req.model = protocol === 'openai-chat' ? 'deepseek-chat' : 'gpt-5.2';
+        const result = await complete(req);
+        expect(result.toolCalls).toHaveLength(1);
+        req.messages.push(
+          {
+            ...message,
+            id: 'reply',
+            role: 'assistant',
+            content: result.text,
+            providerId: 'p',
+            model: req.model,
+            toolCalls: result.toolCalls,
+            reasoningContent: result.reasoningContent,
+            responseReasoning: result.responseReasoning,
+          },
+          {
+            ...message,
+            id: 'tool',
+            role: 'tool',
+            content: 'file content',
+            toolCallId: result.toolCalls[0].id,
+            toolName: 'read_file',
+          },
+        );
+        await complete(req);
+        if (protocol === 'openai-chat')
+          expect(requests[1].body.messages[2].reasoning_content).toBe('reasoning continued');
+        else expect(requests[1].body.input).toContainEqual(opaque);
+      });
+    },
+  );
   it('does not replay output or retry unrelated errors during compaction', async () => {
     for (const partial of [false, true]) {
       await serve(

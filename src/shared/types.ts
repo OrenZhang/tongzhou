@@ -18,6 +18,8 @@ export type Protocol =
   | 'codex';
 export type AuthMode = 'api-key' | 'bearer' | 'none' | 'chatgpt' | 'native';
 export interface Provider {
+  /** Missing on older connections means enabled. */
+  thinkingEnabled?: boolean;
   /** Existing connections without this field remain enabled. */
   enabled?: boolean;
   network?: import('./provider-network').ProviderNetwork;
@@ -163,6 +165,8 @@ export interface Message {
   agent?: string;
   toolCalls?: ToolCall[];
   anthropicContent?: Record<string, any>[];
+  reasoningContent?: string;
+  responseReasoning?: Record<string, any>[];
   toolCallId?: string;
   toolName?: string;
   status?: 'streaming' | 'complete' | 'interrupted' | 'error';
@@ -279,7 +283,7 @@ export interface RunEvent {
   runId: string;
   seq: number;
   time: number;
-  type: 'phase' | 'reasoning' | 'tool' | 'input';
+  type: 'phase' | 'reasoning' | 'tool' | 'input' | 'notice';
   text: string;
 }
 export interface PendingInput {

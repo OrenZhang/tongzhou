@@ -57,6 +57,18 @@ vi.mock('../electron/codex', async () => {
       }
       async request(method: string, params: any) {
         fake.calls.push({ method, params });
+        if (method === 'model/list')
+          return {
+            data: [
+              {
+                model: 'fixture-model',
+                supportedReasoningEfforts: [
+                  { reasoningEffort: 'none' },
+                  { reasoningEffort: 'medium' },
+                ],
+              },
+            ],
+          };
         if (method === 'account/read') return { account: { type: 'chatgpt' } };
         if (method === 'thread/start') return { thread: { id: 'thread-' + ++fake.next } };
         if (method === 'thread/resume') return { thread: { id: params.threadId } };
@@ -113,6 +125,19 @@ async function fixture() {
   };
 }
 describe('locked Codex resume and steer contracts', () => {
+  it('applies default thinking and changes the next turn without reusing stale settings', async () => {
+    const f = await fixture();
+    f.runtime.start(f.input);
+    await f.runtime.waitForIdle();
+    expect(fake.calls.filter((c) => c.method === 'turn/start').at(-1).params.effort).toBe('medium');
+    const p = f.store.providers().find((p) => p.id === f.input.providerId)!;
+    f.store.saveProvider({ ...p, thinkingEnabled: false });
+    f.runtime.start({ ...f.input, prompt: 'next' });
+    await f.runtime.waitForIdle();
+    expect(fake.calls.filter((c) => c.method === 'turn/start').at(-1).params.effort).toBe('none');
+    expect(fake.calls.filter((c) => c.method === 'thread/start')).toHaveLength(2);
+  });
+
   it('passes account-scoped networking to login and inference and resets only that account', async () => {
     const f = await fixture();
     const base = f.store.providers().find((p) => p.id === f.input.providerId)!;

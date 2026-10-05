@@ -1,3 +1,4 @@
+import { chooseOption } from './choice-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { createServer } from 'node:http';
 import { mkdir, mkdtemp, writeFile, readFile } from 'node:fs/promises';
@@ -71,7 +72,7 @@ try {
       }),
     `http://127.0.0.1:${server.address().port}/v1`,
   );
-  await page.getByLabel('当前连接', { exact: true }).selectOption('fixture');
+  await chooseOption(page, '当前连接', 'fixture');
   await page.getByLabel('消息', { exact: true }).fill('第一条');
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
   await page.getByText(/公开思考摘要：/).waitFor();

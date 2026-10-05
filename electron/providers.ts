@@ -1,3 +1,4 @@
+import { thinkingRequest } from './thinking';
 import { IdleTimeout } from './idle-timeout';
 import { randomUUID } from 'node:crypto';
 import type { Message, Provider, ToolCall } from '../src/shared/types';
@@ -15,6 +16,8 @@ export interface Completion {
   text: string;
   toolCalls: ToolCall[];
   anthropicContent?: Record<string, any>[];
+  reasoningContent?: string;
+  responseReasoning?: Record<string, any>[];
   inputTokens: number;
   outputTokens: number;
 }
@@ -92,6 +95,7 @@ export async function* sse(
 
 export function requestBody(input: CompletionInput) {
   const { provider: p, model, instructions, tools } = input;
+  const thinking = thinkingRequest(p, model).body;
   const history = input.historyPrepared
     ? input.messages
     : portableHistory(input.messages, p.contextChars);
@@ -121,6 +125,8 @@ export function requestBody(input: CompletionInput) {
         ...m,
         toolCalls: undefined,
         anthropicContent: undefined,
+        reasoningContent: undefined,
+        responseReasoning: undefined,
         content: [
           m.content,
           ...m.toolCalls.map(
@@ -149,7 +155,10 @@ export function requestBody(input: CompletionInput) {
         model,
         stream: true,
         stream_options: { include_usage: true },
-        max_tokens: p.maxOutputTokens,
+        ...(/^(gpt-[56]|o[134])/.test(model)
+          ? { max_completion_tokens: p.maxOutputTokens }
+          : { max_tokens: p.maxOutputTokens }),
+        ...thinking,
         messages: [
           { role: 'system', content: instructions },
           ...messages.map((m) => ({
@@ -164,6 +173,13 @@ export function requestBody(input: CompletionInput) {
                     })),
                   ]
                 : m.content || (m.toolCalls?.length ? null : ''),
+            ...(m.role === 'assistant' &&
+            m.providerId === p.id &&
+            m.model === model &&
+            !m.toolCalls?.some((t) => foreignCalls.has(t.id)) &&
+            m.reasoningContent
+              ? { reasoning_content: m.reasoningContent }
+              : {}),
             ...(m.toolCalls?.length
               ? {
                   tool_calls: m.toolCalls.map((t) => ({
@@ -202,6 +218,7 @@ export function requestBody(input: CompletionInput) {
         stream: true,
         store: false,
         max_output_tokens: p.maxOutputTokens,
+        ...thinking,
         input: messages.flatMap((m): any[] =>
           m.role === 'tool'
             ? [
@@ -219,6 +236,12 @@ export function requestBody(input: CompletionInput) {
                   : []),
               ]
             : [
+                ...(m.role === 'assistant' &&
+                m.providerId === p.id &&
+                m.model === model &&
+                !m.toolCalls?.some((t) => foreignCalls.has(t.id))
+                  ? (m.responseReasoning ?? [])
+                  : []),
                 ...(m.role === 'user' && imagesFor(m).length
                   ? [
                       {
@@ -294,6 +317,7 @@ export function requestBody(input: CompletionInput) {
         model,
         system: instructions,
         max_tokens: p.maxOutputTokens,
+        ...thinking,
         stream: true,
         messages: history,
         ...(tools.length
@@ -313,7 +337,7 @@ export function requestBody(input: CompletionInput) {
       url: `${base}/models/${encodeURIComponent(model.replace(/^models\//, ''))}:streamGenerateContent?alt=sse`,
       body: {
         systemInstruction: { parts: [{ text: instructions }] },
-        generationConfig: { maxOutputTokens: p.maxOutputTokens },
+        generationConfig: { maxOutputTokens: p.maxOutputTokens, ...thinking },
         contents: messages
           .map((m) => ({
             role: m.role === 'assistant' ? 'model' : 'user',
@@ -470,7 +494,11 @@ async function completeRequest(input: CompletionInput): Promise<Completion> {
       switch (input.provider.protocol) {
         case 'openai-chat': {
           const choice = d.choices?.[0];
-          if (choice?.delta?.reasoning_content) input.onReasoning?.(choice.delta.reasoning_content);
+          if (choice?.delta?.reasoning_content) {
+            result.reasoningContent =
+              (result.reasoningContent ?? '') + choice.delta.reasoning_content;
+            input.onReasoning?.(choice.delta.reasoning_content);
+          }
           delta(choice?.delta?.content ?? '');
           for (const t of choice?.delta?.tool_calls ?? []) {
             const key = String(t.index);
@@ -492,6 +520,8 @@ async function completeRequest(input: CompletionInput): Promise<Completion> {
           break;
         }
         case 'openai-responses': {
+          if (d.type === 'response.output_item.done' && d.item?.type === 'reasoning')
+            (result.responseReasoning ??= []).push(d.item);
           if (d.type === 'response.reasoning_summary_text.delta') input.onReasoning?.(d.delta);
           if (d.type === 'response.output_text.delta') delta(d.delta);
           if (d.type === 'response.output_item.added' && d.item?.type === 'function_call')

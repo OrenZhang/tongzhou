@@ -80,6 +80,12 @@ vi.mock('node:child_process', async () => {
                   options: [{ value: 'native-model', name: 'Friendly model' }],
                 },
                 { id: 'permissionMode', options: [{ value: 'default', name: 'Ask' }] },
+                {
+                  id: 'thinking',
+                  category: 'thought_level',
+                  currentValue: 'off',
+                  options: [{ value: 'off' }, { value: 'on' }],
+                },
               ],
             };
           }
@@ -279,6 +285,29 @@ describe('official native engine account integration', () => {
 });
 
 describe('ACP conversation execution', () => {
+  it('enables advertised thinking by default and applies off after a provider edit', async () => {
+    const f = fixture(false);
+    f.runtime.start(f.input);
+    await f.runtime.waitForIdle();
+    expect(
+      fake.calls
+        .filter((c) => c.method === 'session/set_config_option' && c.params.configId === 'thinking')
+        .at(-1).params.value,
+    ).toBe('on');
+    f.store.saveProvider({
+      ...f.store.providers().find((p) => p.id === 'native')!,
+      thinkingEnabled: false,
+    });
+    f.runtime.start({ ...f.input, prompt: 'continue' });
+    await f.runtime.waitForIdle();
+    expect(
+      fake.calls
+        .filter((c) => c.method === 'session/set_config_option' && c.params.configId === 'thinking')
+        .at(-1).params.value,
+    ).toBe('off');
+    expect(fake.calls.filter((c) => c.method === 'session/new')).toHaveLength(2);
+  });
+
   it('keeps native reasoning and tool boundaries between response segments', async () => {
     fake.updates = [
       { sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: '先检查' } },

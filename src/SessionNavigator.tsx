@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import {
   Archive,
   ArchiveRestore,
@@ -41,7 +41,19 @@ export function SessionNavigator({
   onToggleArchive(session: Session): void;
   onDelete(session: Session): void;
 }) {
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('tongzhou.sidebar.collapsed') ?? '{}');
+    } catch {
+      return {};
+    }
+  });
+  const groupsId = useId();
+  const projectsExpanded = !!query || !collapsed['section:projects'];
+  const ordinaryExpanded = !!query || !collapsed['section:ordinary'];
+  useEffect(() => {
+    localStorage.setItem('tongzhou.sidebar.collapsed', JSON.stringify(collapsed));
+  }, [collapsed]);
   const activeProject = projectFamilyId(
     data.projects,
     data.sessions.find((s) => s.id === sessionId)?.projectId,
@@ -133,13 +145,28 @@ export function SessionNavigator({
           onChange={(e) => onQuery(e.target.value)}
         />
       </div>
-      <div className="section-label">
-        项目空间
+      <div className="section-label collapsible-label">
+        <button
+          className="section-toggle"
+          aria-expanded={projectsExpanded}
+          aria-controls={`${groupsId}-projects`}
+          onClick={() => setCollapsed((old) => ({ ...old, 'section:projects': projectsExpanded }))}
+        >
+          <ChevronRight size={13} className={projectsExpanded ? 'expanded' : ''} />
+          项目空间
+          <small>
+            {
+              data.projects.filter(
+                (p) => !p.removed && projectFamilyId(data.projects, p.id) === p.id,
+              ).length
+            }
+          </small>
+        </button>
         <button aria-label="打开项目" title="添加项目" onClick={onOpenProject}>
           <Plus size={15} />
         </button>
       </div>
-      <div className="project-list">
+      <div id={`${groupsId}-projects`} className="project-list" hidden={!projectsExpanded}>
         {data.projects
           .filter(
             (p) =>
@@ -206,8 +233,33 @@ export function SessionNavigator({
           </button>
         )}
       </div>
-      <div className="section-label history-label">普通会话</div>
-      <div className="session-list ordinary-sessions">
+      <div className="section-label history-label collapsible-label">
+        <button
+          className="section-toggle"
+          aria-expanded={ordinaryExpanded}
+          aria-controls={`${groupsId}-ordinary`}
+          onClick={() => setCollapsed((old) => ({ ...old, 'section:ordinary': ordinaryExpanded }))}
+        >
+          <ChevronRight size={13} className={ordinaryExpanded ? 'expanded' : ''} />
+          普通会话
+          <small>{data.sessions.filter((s) => !s.projectId && matching(s)).length}</small>
+        </button>
+        <button
+          aria-label="新建普通会话"
+          title="新建普通会话"
+          onClick={() => {
+            setCollapsed((old) => ({ ...old, 'section:ordinary': false }));
+            onNew('');
+          }}
+        >
+          <Plus size={15} />
+        </button>
+      </div>
+      <div
+        id={`${groupsId}-ordinary`}
+        className="session-list ordinary-sessions"
+        hidden={!ordinaryExpanded}
+      >
         {data.sessions.filter((s) => !s.projectId && matching(s)).map(row)}
       </div>
       {!data.sessions.filter(matching).length && (

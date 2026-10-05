@@ -1,3 +1,4 @@
+import { chooseOption } from './choice-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
@@ -211,7 +212,7 @@ try {
       });
   }, base);
   await page.getByRole('button', { name: '返回会话', exact: true }).click();
-  await page.getByLabel('当前连接', { exact: true }).selectOption('fixture-a');
+  await chooseOption(page, '当前连接', 'fixture-a');
   await page.getByLabel('消息', { exact: true }).fill('读取测试笔记');
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
   const approval = page.getByRole('dialog', { name: '测试笔记插件 · read_note', exact: true });
@@ -220,10 +221,13 @@ try {
   await page.getByText('插件笔记已读取。', { exact: true }).waitFor();
   const before = await page.evaluate(() => window.tongzhou.snapshot());
   const id = before.sessions[0].id;
-  await page.getByLabel('当前连接', { exact: true }).selectOption('fixture-b');
+  await chooseOption(page, '当前连接', 'fixture-b');
   await page.getByRole('button', { name: '插件', exact: true }).click();
   await page.getByRole('button', { name: '返回会话', exact: true }).click();
-  assert.equal(await page.getByLabel('当前连接', { exact: true }).inputValue(), 'fixture-b');
+  assert.equal(
+    await page.getByLabel('当前连接', { exact: true }).getAttribute('data-value'),
+    'fixture-b',
+  );
   await page.getByLabel('消息', { exact: true }).fill('换个供应商继续');
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
   await page.getByText('切换成功，仍记得测试笔记。', { exact: true }).waitFor();

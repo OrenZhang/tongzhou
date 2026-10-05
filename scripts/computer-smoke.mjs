@@ -1,3 +1,4 @@
+import { chooseOption } from './choice-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { createServer } from 'node:http';
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
@@ -165,7 +166,7 @@ try {
     });
     await window.tongzhou.setCapability('computer', true);
   }, `http://127.0.0.1:${server.address().port}/v1`);
-  await page.getByLabel('当前连接', { exact: true }).selectOption('computer-fixture');
+  await chooseOption(page, '当前连接', 'computer-fixture');
   await page
     .getByLabel('消息', { exact: true })
     .fill('仅操作同舟电脑控制测试窗口，验证中文输入和快捷键');

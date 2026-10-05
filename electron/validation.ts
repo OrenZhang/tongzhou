@@ -9,6 +9,7 @@ export const providerSchema = z
   .object({
     id,
     enabled: z.boolean().optional(),
+    thinkingEnabled: z.boolean().optional(),
     name: z.string().trim().min(1).max(100),
     protocol: z.enum([
       'openai-chat',

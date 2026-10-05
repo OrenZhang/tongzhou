@@ -59,13 +59,31 @@ try {
   await page.waitForFunction(
     () => document.querySelector('[aria-label="当前连接"]').value === 'ready',
   );
+  await page.getByLabel('当前连接', { exact: true }).click();
   const options = await page
-    .getByLabel('当前连接', { exact: true })
-    .locator('option')
-    .evaluateAll((nodes) => nodes.map((n) => n.value).filter(Boolean));
+    .locator('.choice-panel [role="menuitemradio"]')
+    .evaluateAll((nodes) => nodes.map((n) => n.dataset.value));
+  await page.keyboard.press('Escape');
   assert.deepEqual(options.sort(), ['key-ready', 'ready']);
   await page.getByLabel('消息', { exact: true }).fill('保留这份草稿');
   await page.getByRole('button', { name: '模型与订阅', exact: true }).click();
+  await page.getByRole('button', { name: '编辑 可用服务', exact: true }).click();
+  await page.locator('.thinking-settings > summary').click();
+  assert.equal(await page.getByLabel('模型思考', { exact: true }).inputValue(), 'on');
+  await page.getByLabel('模型思考', { exact: true }).selectOption('off');
+  await page.getByRole('button', { name: '保存连接', exact: true }).click();
+  assert.equal(
+    (await page.evaluate(() => window.tongzhou.snapshot())).providers.find((p) => p.id === 'ready')
+      .thinkingEnabled,
+    false,
+  );
+  await page.getByRole('button', { name: '编辑 可用服务', exact: true }).click();
+  await page.locator('.thinking-settings > summary').click();
+  assert.equal(await page.getByLabel('模型思考', { exact: true }).inputValue(), 'off');
+  await page.getByLabel('模型思考', { exact: true }).selectOption('on');
+  await page.locator('.thinking-settings').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: 'test-results/model-thinking-settings.png' });
+  await page.getByRole('button', { name: '保存连接', exact: true }).click();
   // Status text and controls must stay in the two-row layout, including when
   // the endpoint column is hidden. Horizontal-overflow checks alone miss this.
   const originalTheme = await page.locator('html').getAttribute('data-theme');
@@ -117,7 +135,7 @@ try {
   );
   await page.getByRole('button', { name: '返回会话', exact: true }).click();
   await page.getByText('可用服务：已停用', { exact: true }).waitFor();
-  assert.equal(await page.getByLabel('当前连接', { exact: true }).inputValue(), '');
+  assert.equal(await page.getByLabel('当前连接', { exact: true }).getAttribute('data-value'), '');
   assert.equal(
     await page.getByRole('button', { name: '发送消息', exact: true }).isDisabled(),
     true,
@@ -138,6 +156,55 @@ try {
     () => document.querySelector('[aria-label="当前连接"]').value === 'ready',
   );
   await page.screenshot({ path: 'test-results/session-entry.png' });
+  for (const section of ['项目空间', '普通会话']) {
+    const toggle = page.getByRole('button', { name: new RegExp(`^${section}`) });
+    await toggle.click();
+    assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
+  }
+  await page.reload();
+  await page.waitForSelector('.app-shell');
+  assert.equal(
+    await page.getByRole('button', { name: /^普通会话/ }).getAttribute('aria-expanded'),
+    'false',
+  );
+  await page.getByLabel('搜索会话', { exact: true }).fill('恢复');
+  await page.locator(`[data-session-id="${id}"]`).waitFor();
+  await page.getByLabel('搜索会话', { exact: true }).fill('');
+  assert.equal(
+    await page.getByRole('button', { name: /^普通会话/ }).getAttribute('aria-expanded'),
+    'false',
+  );
+  await page.getByRole('button', { name: /^普通会话/ }).click();
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate((theme) => (document.documentElement.dataset.theme = theme), theme);
+    await page.getByRole('button', { name: '当前连接', exact: true }).click();
+    await page.getByLabel('搜索当前连接', { exact: true }).fill('可用');
+    assert.equal(await page.locator('.choice-panel [role="menuitemradio"]').count(), 1);
+    await page.keyboard.press('ArrowDown');
+    assert.equal(
+      await page.evaluate(() => document.activeElement.getAttribute('role')),
+      'menuitemradio',
+    );
+    const box = await page.locator('.choice-panel').boundingBox();
+    const viewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+    assert.ok(
+      box.x >= 0 &&
+        box.y >= 0 &&
+        box.x + box.width <= viewport.width &&
+        box.y + box.height <= viewport.height,
+    );
+    await page
+      .locator('.choice-panel')
+      .evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
+    await page.screenshot({ path: `test-results/choice-menu-${theme}.png` });
+    await page.keyboard.press('Escape');
+    assert.equal(
+      await page
+        .getByRole('button', { name: '当前连接', exact: true })
+        .getAttribute('aria-expanded'),
+      'false',
+    );
+  }
   await page.evaluate((id) => window.tongzhou.updateSession(id, { archived: true }), id);
   await page.reload();
   await page.waitForSelector('.welcome');

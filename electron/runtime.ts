@@ -1,3 +1,4 @@
+import { thinkingRequest, codexThinking, nativeThinking } from './thinking';
 import { IdleTimeout } from './idle-timeout';
 import { randomUUID } from 'node:crypto';
 import { Attachments } from './attachments';
@@ -922,6 +923,10 @@ export class Runtime {
         agent: agent.name,
         status: 'streaming',
       });
+      if (step === 0) {
+        const note = thinkingRequest(provider, input.model).note;
+        if (note) this.progress(run, 'notice', note);
+      }
       const result = await complete({
         provider,
         secret,
@@ -959,6 +964,8 @@ export class Runtime {
       this.finishText(message, result.text);
       message.toolCalls = result.toolCalls;
       message.anthropicContent = result.anthropicContent;
+      message.reasoningContent = result.reasoningContent;
+      message.responseReasoning = result.responseReasoning;
       message.status = 'complete';
       this.message({ ...message });
       run.inputTokens += result.inputTokens;
@@ -1034,6 +1041,7 @@ export class Runtime {
       agent.instructions,
       agent.permission,
       provider.contextChars,
+      provider.thinkingEnabled !== false,
       scope.specs,
     ]);
     const previous = this.nativeChats.get(input.sessionId);
@@ -1148,8 +1156,9 @@ export class Runtime {
         const catalog = modelCatalog(session);
         if (!catalog.models.includes(input.model))
           throw new Error('此账号当前不支持所选模型，请刷新模型列表后重新选择。');
+        let modelState = session;
         if (catalog.optionId)
-          await client.request('session/set_config_option', {
+          modelState = await client.request('session/set_config_option', {
             sessionId: engineSessionId,
             configId: catalog.optionId,
             value: input.model,
@@ -1159,6 +1168,13 @@ export class Runtime {
             sessionId: engineSessionId,
             modelId: input.model,
           });
+        const thinkingNote = await nativeThinking(
+          client,
+          engineSessionId,
+          modelState?.configOptions ? modelState : session,
+          provider.thinkingEnabled !== false,
+        );
+        if (thinkingNote) this.progress(run, 'notice', thinkingNote);
         const modeId = 'default';
         if (!session.modes?.availableModes?.some((m: any) => m.id === modeId))
           throw new Error('此引擎未提供所需的权限模式，请升级内置引擎。');
@@ -1279,6 +1295,7 @@ export class Runtime {
     const fingerprint = JSON.stringify([
       input.providerId,
       networkKey(provider.network),
+      provider.thinkingEnabled !== false,
       input.model,
       cwd,
       agent.instructions,
@@ -1539,6 +1556,12 @@ export class Runtime {
         ? this.attachments.images(this.attachments.resolve(input.attachmentIds))
         : history.filter((m) => m.role === 'user').flatMap((m) => m.images ?? []);
       this.progress(run, 'phase', '等待模型响应');
+      const catalog = await client.request('model/list', { includeHidden: false });
+      const modelInfo = catalog.data?.find(
+        (m: any) => m.model === input.model || m.id === input.model,
+      );
+      const thinking = codexThinking(modelInfo, provider.thinkingEnabled !== false);
+      if (thinking.note) this.progress(run, 'notice', thinking.note);
       await client.request('turn/start', {
         threadId,
         input: [
@@ -1552,6 +1575,7 @@ export class Runtime {
           ...userImages.map((i) => ({ type: 'image', url: `data:${i.mimeType};base64,${i.data}` })),
         ],
         model: input.model,
+        ...(thinking.effort ? { effort: thinking.effort, summary: 'auto' } : {}),
       });
       if (signal.aborted) abort();
       await done;
