@@ -8,7 +8,7 @@ permissions:
   contents: read
 concurrency:
   group: publish-release
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   package:
     if: github.ref == 'refs/heads/release' || startsWith(github.ref, 'refs/tags/v')
@@ -94,4 +94,5 @@ jobs:
             echo "Version already published. Bump package.json; releases are immutable."
             exit 1
           fi
-          gh release create "v$VERSION" release-assets/* --target "$GITHUB_SHA" --title "同舟 v$VERSION" --notes-file docs/RELEASE_NOTES.md --latest
+          gh release create "v$VERSION" release-assets/* --target "$GITHUB_SHA" --title "同舟 v$VERSION" --notes-file docs/RELEASE_NOTES.md --draft
+          gh release edit "v$VERSION" --draft=false --latest
