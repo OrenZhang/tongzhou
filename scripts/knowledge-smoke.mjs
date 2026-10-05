@@ -169,9 +169,45 @@ try {
   const catalog = await page.evaluate(() => window.tongzhou.clientMethods());
   assert.ok(catalog.methods.some((m) => m.name === 'knowledgeRead'));
   assert.ok((await readFile(path.join(state.root, 'index.md'), 'utf8')).includes('库存处理 Wiki'));
+  await page.getByLabel('搜索知识', { exact: true }).fill('');
+  await page
+    .locator('.knowledge-filters')
+    .getByRole('button', { name: '全部', exact: true })
+    .click();
+  await page.locator('.knowledge-item').filter({ hasText: '库存参考.md' }).click();
+  assert.equal(await page.getByRole('button', { name: '永久删除', exact: true }).count(), 0);
+  await page
+    .locator('.knowledge-document-actions')
+    .getByRole('button', { name: '归档', exact: true })
+    .click();
+  await page
+    .locator('.knowledge-filters')
+    .getByRole('button', { name: '归档', exact: true })
+    .click();
+  await page.locator('.knowledge-item').filter({ hasText: '库存参考.md' }).click();
+  await page.getByRole('button', { name: '永久删除', exact: true }).click();
+  await page.getByRole('button', { name: '取消', exact: true }).click();
+  assert.equal((await page.evaluate(() => window.tongzhou.knowledgeState())).archived.length, 1);
+  await page.getByRole('button', { name: '永久删除', exact: true }).click();
+  await page.getByRole('button', { name: '确认永久删除', exact: true }).click();
+  await page.getByText('资料已永久删除', { exact: true }).waitFor();
+  assert.equal((await page.evaluate(() => window.tongzhou.knowledgeState())).archived.length, 0);
+  assert.ok((await readFile(importedFile, 'utf8')).includes('订单确认后扣减库存'));
+  await page
+    .locator('.knowledge-filters')
+    .getByRole('button', { name: 'Wiki', exact: true })
+    .click();
+  await page.locator('.knowledge-item').filter({ hasText: '库存处理 Wiki' }).click();
+  await page.getByText('来源已删除，需要复核', { exact: true }).waitFor();
+  assert.equal(
+    await page.getByRole('button', { name: '库存参考.md · 来源已删除' }).isDisabled(),
+    true,
+  );
+  await page.reload();
+  assert.equal((await page.evaluate(() => window.tongzhou.knowledgeState())).archived.length, 0);
   assert.deepEqual(errors, []);
   console.log(
-    'Knowledge desktop passed: import, notes, revisions, model tool synthesis, source links, scoped context, auto capture, reload, client catalog, light/dark.',
+    'Knowledge desktop passed: import, notes, revisions, model tool synthesis, source links, scoped context, auto capture, reload, client catalog, light/dark, archive deletion with confirmation and missing source indicators.',
   );
 } finally {
   await app.close();

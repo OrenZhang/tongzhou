@@ -55,6 +55,7 @@ export interface KnowledgeState {
 }
 export interface KnowledgeRead {
   document: KnowledgeDocument;
+  missingSourceIds: string[];
   revisions: { id: string; version: number; updatedAt: number }[];
   backlinks: KnowledgeSummary[];
   outline: { title: string; line: number; level: number }[];

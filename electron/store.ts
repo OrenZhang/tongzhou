@@ -435,6 +435,7 @@ export class Store {
           'contextCheckpoint',
           'taskMemory',
           'knowledgeBinding',
+          'knowledgeDismissal',
           'runChanges',
           'terminal',
         ])

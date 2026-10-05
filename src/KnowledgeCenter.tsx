@@ -15,6 +15,7 @@ import {
   Search,
   Sparkles,
   Upload,
+  Trash2,
 } from 'lucide-react';
 import type { Session, Snapshot, TongzhouAPI } from './shared/types';
 import type {
@@ -47,6 +48,7 @@ export function KnowledgeCenter({
   const [kind, setKind] = useState<KnowledgeKind | 'all' | 'issues' | 'archived'>('all');
   const [selected, setSelected] = useState<KnowledgeRead>();
   const [edit, setEdit] = useState<KnowledgeInput>();
+  const [deleting, setDeleting] = useState<KnowledgeDocument>();
   const [preview, setPreview] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -385,6 +387,16 @@ export function KnowledgeCenter({
                   <Archive size={14} />
                   {doc.status === 'archived' ? '恢复资料' : '归档'}
                 </button>
+                {doc.status === 'archived' && (
+                  <button
+                    className="text-button danger"
+                    disabled={busy}
+                    onClick={() => setDeleting(doc)}
+                  >
+                    <Trash2 size={14} />
+                    永久删除
+                  </button>
+                )}
               </div>
               {!!state?.issues.some((i) => i.id === doc.id) && (
                 <div className="knowledge-review-note">
@@ -433,9 +445,17 @@ export function KnowledgeCenter({
                       {source.title} · 原会话
                     </button>
                   ) : (
-                    <button className="text-button" key={index} onClick={() => open(source.id)}>
+                    <button
+                      className="text-button"
+                      key={index}
+                      disabled={selected.missingSourceIds.includes(source.id)}
+                      onClick={() => open(source.id)}
+                    >
                       <FileText size={13} />
-                      {source.title} · v{source.version}
+                      {source.title} ·{' '}
+                      {selected.missingSourceIds.includes(source.id)
+                        ? '来源已删除'
+                        : `v${source.version}`}
                     </button>
                   ),
                 )}
@@ -515,6 +535,44 @@ export function KnowledgeCenter({
           )}
         </main>
       </div>
+      {deleting && (
+        <Modal title="永久删除资料" compact onClose={() => !busy && setDeleting(undefined)}>
+          <div className="modal-content confirmation-content">
+            <p>
+              确认永久删除“<strong>{deleting.title}</strong>”？
+            </p>
+            <p className="muted">
+              这份资料的正文、知识库中的上传原件和全部修订历史将被删除，无法通过恢复资料撤销。原始上传位置的文件不受影响。
+            </p>
+            <p className="muted">会话引用将被取消；引用它的其他知识页仍保留，并标记来源已删除。</p>
+            {deleting.runId && <p className="muted">这条会话记忆不会再次自动收集。</p>}
+            {error && (
+              <p className="error" role="alert">
+                {error}
+              </p>
+            )}
+          </div>
+          <div className="modal-footer">
+            <button className="secondary" disabled={busy} onClick={() => setDeleting(undefined)}>
+              取消
+            </button>
+            <button
+              className="destructive-button"
+              disabled={busy}
+              onClick={() =>
+                void action(async () => {
+                  await api.knowledgeDelete(deleting.id, deleting.version);
+                  setSelected(undefined);
+                  setDeleting(undefined);
+                  setNotice('资料已永久删除');
+                })
+              }
+            >
+              {busy ? '删除中…' : '确认永久删除'}
+            </button>
+          </div>
+        </Modal>
+      )}
       {edit && (
         <Modal
           title={edit.id ? '编辑知识资料' : '新建笔记'}

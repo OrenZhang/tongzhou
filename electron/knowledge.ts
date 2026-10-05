@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdirSync, writeFileSync, renameSync, existsSync, lstatSync } from 'node:fs';
+import { mkdirSync, writeFileSync, renameSync, existsSync, lstatSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
 import type { Store } from './store';
@@ -159,6 +159,8 @@ export class Knowledge {
     if (old && old.kind !== p.kind) throw new Error('不能修改现有资料类型，请另建知识页');
     if (p.projectId) this.store.get('project', p.projectId);
     const sources: KnowledgeSource[] = p.sourceIds.map((sourceId) => {
+      const previous = old?.sources.find((s) => s.id === sourceId && s.version);
+      if (previous && !this.all().some((d) => d.id === sourceId)) return previous;
       const source = this.get(sourceId);
       if (source.status === 'archived') throw new Error('不能引用归档资料');
       return { id: source.id, title: source.title, version: source.version };
@@ -224,6 +226,9 @@ export class Knowledge {
     const document = this.get(docId);
     return {
       document,
+      missingSourceIds: document.sources
+        .filter((source) => !source.messageId && !this.all().some((d) => d.id === source.id))
+        .map((source) => source.id),
       revisions: this.store
         .list<any>('knowledgeRevision')
         .filter((r) => r.documentId === docId)
@@ -269,6 +274,72 @@ export class Knowledge {
       },
       old,
     );
+  }
+  delete(docId: string, currentVersion: number) {
+    const doc = this.get(docId);
+    if (doc.status !== 'archived') throw new Error('请先归档资料，再永久删除');
+    if (doc.version !== z.number().int().positive().parse(currentVersion))
+      throw new Error('资料已更新，请重新打开后删除');
+    const revisions = this.store.list<KnowledgeDocument & { documentId: string }>(
+      'knowledgeRevision',
+    );
+    const ownRevisions = revisions.filter((r) => r.documentId === doc.id);
+    const otherDocuments = [
+      ...this.all().filter((d) => d.id !== doc.id),
+      ...revisions.filter((r) => r.documentId !== doc.id),
+    ];
+    const files = [
+      `${folder(doc.kind)}/${doc.id}.md`,
+      ...ownRevisions.map(
+        (r) => `revisions/${doc.id}-${z.number().int().positive().parse(r.version)}.json`,
+      ),
+      ...[...new Set([doc, ...ownRevisions].map((d) => d.blob).filter((b): b is string => !!b))]
+        .filter((blob) => !otherDocuments.some((d) => d.blob === blob))
+        .map((blob) => {
+          if (!/^[0-9a-f-]{36}\.[a-z0-9]{1,8}$/.test(blob)) throw new Error('无效的知识原件路径');
+          return `files/${blob}`;
+        }),
+    ].map((relative) => {
+      const target = path.resolve(this.root, relative);
+      const within = path.relative(path.resolve(this.root), target);
+      if (within.startsWith('..') || path.isAbsolute(within)) throw new Error('无效的知识文件路径');
+      for (let part = target; ; part = path.dirname(part)) {
+        if (existsSync(part) && lstatSync(part).isSymbolicLink())
+          throw new Error('知识目录不能使用符号链接');
+        if (part === path.resolve(this.root)) break;
+      }
+      return target;
+    });
+    // Validate every path before removing any file. Missing files are safe to retry.
+    for (const file of files) {
+      try {
+        unlinkSync(file);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
+    }
+    this.store.db.exec('BEGIN');
+    try {
+      this.store.remove('knowledge', doc.id);
+      for (const revision of ownRevisions) this.store.remove('knowledgeRevision', revision.id);
+      this.store.db.prepare('DELETE FROM knowledge_search WHERE id=?').run(doc.id);
+      for (const binding of this.store.list<{ id: string; documentIds: string[] }>(
+        'knowledgeBinding',
+      )) {
+        if (binding.documentIds.includes(doc.id))
+          this.store.put('knowledgeBinding', {
+            ...binding,
+            documentIds: binding.documentIds.filter((id) => id !== doc.id),
+          });
+      }
+      if (doc.runId)
+        this.store.put('knowledgeDismissal', { id: doc.runId, sessionId: doc.sessionId });
+      this.store.db.exec('COMMIT');
+    } catch (error) {
+      this.store.db.exec('ROLLBACK');
+      throw error;
+    }
+    this.writeIndex();
   }
   pins(sessionId: string): string[] {
     return (
@@ -360,7 +431,11 @@ export class Knowledge {
               ),
           )
         )
-          reasons.push('来源已更新或归档，需要复核');
+          reasons.push(
+            d.sources.some((s) => s.version && !docs.some((other) => other.id === s.id))
+              ? '来源已删除，需要复核'
+              : '来源已更新或归档，需要复核',
+          );
         return reasons.map((reason) => ({ id: d.id, title: d.title, reason }));
       });
     return {
@@ -451,6 +526,7 @@ export class Knowledge {
   }
   capture(run: Run) {
     if (!this.settings().autoCollect || run.status !== 'completed') return;
+    if (this.store.list<{ id: string }>('knowledgeDismissal').some((d) => d.id === run.id)) return;
     const session = this.store.get<Session>('session', run.sessionId);
     if ((session as any).knowledgeJob) return;
     const messages = this.store

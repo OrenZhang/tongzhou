@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Store } from '../electron/store';
@@ -19,6 +19,61 @@ function fixture() {
   return { root, store, k };
 }
 describe('local knowledge lifecycle', () => {
+  it('permanently deletes only archived versions, removes files and pins, and preserves dependent Wiki evidence', () => {
+    const { k, root, store } = fixture();
+    const session = store.createSession();
+    const source = k.importFile('原文.txt', Buffer.from('source evidence'));
+    const wiki = k.save({
+      title: '引用知识',
+      content: 'source evidence',
+      kind: 'wiki',
+      sourceIds: [source.id],
+    });
+    k.bind(session.id, [source.id, wiki.id]);
+    expect(() => k.delete(source.id, source.version)).toThrow('先归档');
+    const archived = k.archive(source.id, true);
+    expect(() => k.delete(source.id, source.version)).toThrow('资料已更新');
+    const files = [
+      path.join(k.root, 'sources', `${source.id}.md`),
+      path.join(k.root, 'files', source.blob!),
+      path.join(k.root, 'revisions', `${source.id}-1.json`),
+    ];
+    expect(files.every(existsSync)).toBe(true);
+    k.delete(source.id, archived.version);
+    expect(() => k.get(source.id)).toThrow('已删除');
+    expect(files.some(existsSync)).toBe(false);
+    expect(store.list('knowledgeRevision')).toHaveLength(0);
+    expect(k.pins(session.id)).toEqual([wiki.id]);
+    expect(k.read(wiki.id).missingSourceIds).toEqual([source.id]);
+    expect(k.state().issues.some((i) => i.id === wiki.id && i.reason.includes('来源已删除'))).toBe(
+      true,
+    );
+    expect(k.context(session.id, 'source')).toContain(wiki.id); // Explicit pin still permitted.
+    k.bind(session.id, []);
+    expect(k.context(session.id, 'source')).toBe('');
+    expect(k.save({ ...wiki, content: '补充核对说明', sourceIds: [source.id] }).sources[0].id).toBe(
+      source.id,
+    );
+    expect(k.search('source').some((d) => d.id === source.id)).toBe(false);
+    expect(readFileSync(path.join(root, 'knowledge/index.md'), 'utf8')).not.toContain(source.id);
+    expect(
+      store.db.prepare('SELECT id FROM knowledge_search WHERE id=?').get(source.id),
+    ).toBeUndefined();
+  });
+  it('refuses a replaced vault folder before deleting any files', () => {
+    const { k, root } = fixture();
+    const source = k.importFile('原文.txt', Buffer.from('evidence'));
+    const archived = k.archive(source.id, true);
+    const outside = path.join(root, 'outside');
+    mkdirSync(outside);
+    const revisions = path.join(k.root, 'revisions');
+    rmSync(revisions, { recursive: true });
+    symlinkSync(outside, revisions, 'junction');
+    expect(() => k.delete(source.id, archived.version)).toThrow('符号链接');
+    expect(existsSync(path.join(k.root, 'sources', `${source.id}.md`))).toBe(true);
+    expect(existsSync(path.join(k.root, 'files', source.blob!))).toBe(true);
+    expect(k.get(source.id).status).toBe('archived');
+  });
   it('imports immutable originals, deduplicates by hash and indexes Chinese and English', () => {
     const { k, root } = fixture();
     const d = k.importFile(
@@ -118,9 +173,13 @@ describe('local knowledge lifecycle', () => {
     expect(memory.content).not.toContain('abcd1234');
     expect(memory.content).toContain('尚未验证');
     expect(k.context(session.id, '库存')).toBe('');
+    const archived = k.archive(memory.id, true);
+    k.delete(memory.id, archived.version);
+    k.capture(run);
+    expect(k.all()).toHaveLength(0);
     k.configure({ autoCollect: false, autoContext: true });
     k.capture({ ...run, id: 'another' });
-    expect(k.all()).toHaveLength(1);
+    expect(k.all()).toHaveLength(0);
   });
   it('enforces agent write scope and protects manual knowledge from automatic replacement', async () => {
     const { store, k } = fixture();

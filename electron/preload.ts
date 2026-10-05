@@ -9,6 +9,7 @@ const api: TongzhouAPI = {
   knowledgeRead: (...args) => call('knowledgeRead', ...args),
   knowledgeSave: (...args) => call('knowledgeSave', ...args),
   knowledgeArchive: (...args) => call('knowledgeArchive', ...args),
+  knowledgeDelete: (...args) => call('knowledgeDelete', ...args),
   knowledgeRestore: (...args) => call('knowledgeRestore', ...args),
   knowledgeBind: (...args) => call('knowledgeBind', ...args),
   knowledgeSettings: (...args) => call('knowledgeSettings', ...args),
