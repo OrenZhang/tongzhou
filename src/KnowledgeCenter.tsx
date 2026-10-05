@@ -379,7 +379,12 @@ export function KnowledgeCenter({
             {visible.length} 项结果 · 共 {state?.total ?? 0} 份资料
           </small>
         </aside>
-        <main className="knowledge-reader">
+        <main
+          className="knowledge-reader"
+          key={doc?.id ?? 'empty'}
+          tabIndex={0}
+          aria-label="知识内容"
+        >
           {doc ? (
             <>
               <div className="knowledge-document-heading">
