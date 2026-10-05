@@ -27,6 +27,7 @@ export default function TerminalView({
     const fit = new FitAddon();
     terminal.loadAddon(fit);
     terminal.open(host.current!);
+    terminal.focus();
     let alive = true,
       offset = 0,
       busy = false;

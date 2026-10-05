@@ -203,20 +203,7 @@ export function KnowledgeCenter({
           />
           后台整理每日记忆
         </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={state?.settings.autoContext ?? true}
-            disabled={!state || busy}
-            onChange={(e) =>
-              void action(async () => {
-                await api.knowledgeSettings({ ...state!.settings, autoContext: e.target.checked });
-              })
-            }
-          />
-          按需引用知识
-        </label>
-        <span>本地存储 · 来源可追溯</span>
+        <span>Agent 按需检索 · 来源可追溯</span>
         <button
           className="text-button"
           disabled={busy || !session}
@@ -425,27 +412,6 @@ export function KnowledgeCenter({
                     </button>
                   )}
                 <button
-                  className="secondary action-emphasis"
-                  disabled={busy || !session || doc.status === 'archived'}
-                  title={session ? `引用到：${session.title}` : '先打开一个会话，再选择参考资料'}
-                  onClick={() =>
-                    void action(async () => {
-                      const pinned = state?.pinned ?? [];
-                      const selected = pinned.includes(doc.id);
-                      await api.knowledgeBind(
-                        session!.id,
-                        selected ? pinned.filter((id) => id !== doc.id) : [...pinned, doc.id],
-                      );
-                      setNotice(
-                        selected ? '已取消此会话引用' : `已引用到「${session!.title}」，下一轮生效`,
-                      );
-                    })
-                  }
-                >
-                  <Link2 size={14} />
-                  {state?.pinned.includes(doc.id) ? '取消会话引用' : '引用到当前会话'}
-                </button>
-                <button
                   className="secondary"
                   disabled={busy || !session || doc.status === 'archived' || doc.indexed === false}
                   title={
@@ -611,7 +577,7 @@ export function KnowledgeCenter({
                 <div>
                   <Link2 size={19} />
                   <strong>用于任务</strong>
-                  <span>检索、引用到会话</span>
+                  <span>Agent 按任务检索、阅读</span>
                 </div>
               </div>
               <button className="primary" onClick={() => startEdit()}>
@@ -619,8 +585,8 @@ export function KnowledgeCenter({
                 写第一条笔记
               </button>
               <small>
-                文本文件可全文检索；其他文件保存原件并标记为待提取。AI
-                草稿需核对，确认后才参与自动上下文引用。
+                文本文件可全文检索；其他文件保存原件并标记为待提取。AI 草稿需核对。Agent
+                会根据任务自行检索和阅读所需内容。
               </small>
             </div>
           )}
@@ -633,7 +599,7 @@ export function KnowledgeCenter({
               确认已阅读“<strong>{reviewing.title}</strong>”并对照来源核对内容？
             </p>
             <p className="muted">
-              收录后可参与按需引用。来源变更会再次提示复核；后台新增记忆仍会标记待核对。
+              核对状态会供 Agent 查阅时参考。来源变更会再次提示复核；后台新增记忆仍会标记待核对。
             </p>
             {!!reviewing.sources.length && (
               <ul>
@@ -681,7 +647,9 @@ export function KnowledgeCenter({
             <p className="muted">
               这份资料的正文、智库中的上传原件和全部修订历史将被删除，删除后无法撤销。原始上传位置的文件不受影响。
             </p>
-            <p className="muted">会话引用将被取消；引用它的其他知识页仍保留，并标记来源已删除。</p>
+            <p className="muted">
+              删除后 Agent 无法再检索此内容；引用它的其他知识页仍保留，并标记来源已删除。
+            </p>
             {deleting.memoryDate ? (
               <p className="muted">删除后，后台不会重新生成这一天的记忆。</p>
             ) : deleting.runId ? (
@@ -873,7 +841,7 @@ export function KnowledgeCenter({
                     setEdit({ ...edit, status: e.target.checked ? 'ready' : 'draft' })
                   }
                 />
-                已核对内容，允许按需引用到会话
+                已核对内容与来源
               </label>
             )}
             {error && (
@@ -905,153 +873,5 @@ export function KnowledgeCenter({
         </Modal>
       )}
     </section>
-  );
-}
-
-export function KnowledgeReferences({
-  api,
-  sessionId,
-  onOpen,
-}: {
-  api: TongzhouAPI;
-  sessionId: string;
-  onOpen(): void;
-}) {
-  const [value, setValue] = useState<Awaited<ReturnType<TongzhouAPI['knowledgeReferenceState']>>>();
-  const [opened, setOpened] = useState(false);
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    let active = true;
-    const load = () =>
-      void api
-        .knowledgeReferenceState(sessionId)
-        .then((result) => {
-          if (active) setValue(result);
-        })
-        .catch(() => {});
-    load();
-    const off = api.onEvent((e) => {
-      if (e.type === 'changed') load();
-    });
-    return () => {
-      active = false;
-      off();
-    };
-  }, [sessionId]);
-  return (
-    <>
-      <button
-        className="text-button knowledge-reference-button"
-        onClick={() => setOpened(true)}
-        title="查看本轮实际引用、管理后续引用"
-      >
-        <BookOpen size={14} />
-        知识
-        {value?.references.length
-          ? ' · ' + value.references.length + ' 份引用'
-          : value?.pinned.length
-            ? ' · ' + value.pinned.length + ' 份已选'
-            : ''}
-      </button>
-      {opened && (
-        <Modal title="会话知识引用" onClose={() => setOpened(false)}>
-          <div className="modal-content knowledge-reference-list">
-            <p className="muted">
-              以下是最近一轮实际注入或通过工具读取的片段。排除操作从下一轮生效，不会撤回已发送内容；明确要求时
-              Agent 仍可通过工具读取。
-            </p>
-            {!value?.references.length && (
-              <p>本轮尚未引用知识。发送相关问题后，会在这里显示自动检索和工具读取的资料。</p>
-            )}
-            {value?.references.map((reference) => (
-              <article key={reference.id}>
-                <div className="row">
-                  <strong>{reference.title}</strong>
-                  <span className="muted">
-                    v{reference.version} ·{' '}
-                    {
-                      { explicit: '手动引用', automatic: '自动检索', tool: '工具读取' }[
-                        reference.mode
-                      ]
-                    }
-                  </span>
-                </div>
-                <details>
-                  <summary>查看实际片段</summary>
-                  <pre>{reference.excerpt}</pre>
-                </details>
-                <button
-                  className="text-button"
-                  disabled={busy}
-                  onClick={async () => {
-                    setBusy(true);
-                    setError('');
-                    try {
-                      await api.knowledgeExclude(
-                        sessionId,
-                        reference.id,
-                        !value.excluded.includes(reference.id),
-                      );
-                      setValue(await api.knowledgeReferenceState(sessionId));
-                    } catch (e) {
-                      setError(String(e));
-                    } finally {
-                      setBusy(false);
-                    }
-                  }}
-                >
-                  {value.excluded.includes(reference.id) ? '恢复后续引用' : '下轮不再注入'}
-                </button>
-              </article>
-            ))}
-            {!!value?.excluded.length && (
-              <details>
-                <summary>已排除 {value.excluded.length} 份资料</summary>
-                {value.excluded.map((id) => (
-                  <button
-                    className="text-button"
-                    key={id}
-                    disabled={busy}
-                    onClick={async () => {
-                      setBusy(true);
-                      try {
-                        await api.knowledgeExclude(sessionId, id, false);
-                        setValue(await api.knowledgeReferenceState(sessionId));
-                      } catch (e) {
-                        setError(String(e));
-                      } finally {
-                        setBusy(false);
-                      }
-                    }}
-                  >
-                    恢复引用 · {value.references.find((r) => r.id === id)?.title ?? id}
-                  </button>
-                ))}
-              </details>
-            )}
-            {error && (
-              <p className="error" role="alert">
-                {error}
-              </p>
-            )}
-          </div>
-          <div className="modal-footer">
-            <button
-              className="secondary"
-              onClick={() => {
-                setOpened(false);
-                onOpen();
-              }}
-            >
-              打开智库管理引用
-            </button>
-            <button className="primary" onClick={() => setOpened(false)}>
-              完成
-            </button>
-          </div>
-        </Modal>
-      )}
-    </>
   );
 }

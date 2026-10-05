@@ -20,7 +20,8 @@ export interface HistoryMatch {
 export interface TerminalRecord {
   id: string;
   sessionId: string;
-  projectId: string;
+  projectId?: string;
+  cwd?: string;
   title: string;
   status: 'running' | 'exited' | 'interrupted';
   startedAt: number;
@@ -40,6 +41,7 @@ export interface RunChanges {
   files: { path: string; before: string | null; after: string | null; restored?: boolean }[];
 }
 export interface TaskState {
+  cwd: string;
   memory: TaskMemory | null;
   runs: import('./types').Run[];
   terminals: Omit<TerminalRecord, 'output'>[];

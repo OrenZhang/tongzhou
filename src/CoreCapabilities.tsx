@@ -295,7 +295,7 @@ export function CoreCapabilities({
           <Terminal />
           <div>
             <h3>项目文件与终端</h3>
-            <p>关联项目后，Agent 可以读取代码、修改文件和运行命令。</p>
+            <p>项目会话可读取代码、修改文件和运行命令；普通会话也可在自己的工作目录使用终端。</p>
           </div>
         </div>
         <p className="capability-note">

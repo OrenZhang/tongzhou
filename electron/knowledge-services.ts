@@ -69,23 +69,6 @@ export function registerKnowledgeServices(
     },
   );
   register(
-    'knowledgeReferenceState',
-    operation('智库', 'query', '查看最近一轮实际知识引用及下轮排除项', [z.string()]),
-    (session) => k.referenceState(session),
-  );
-  register(
-    'knowledgeExclude',
-    operation('智库', 'change', '设置本会话后续轮次不自动注入某份知识；工具仍可按用户要求读取', [
-      z.string(),
-      id,
-      z.boolean(),
-    ]),
-    (session, doc, excluded) => {
-      k.exclude(session, doc, excluded);
-      runtime.changed();
-    },
-  );
-  register(
     'knowledgeMemoryProcess',
     operation(
       '智库',
@@ -129,11 +112,6 @@ export function registerKnowledgeServices(
       runtime.changed();
       return created.id;
     },
-  );
-  register(
-    'knowledgeReferences',
-    operation('智库', 'query', '读取会话显式引用的有效资料 ID', [z.string()]),
-    (sessionId) => k.pins(sessionId).filter((doc) => k.get(doc).status !== 'archived'),
   );
   register(
     'knowledgeCollect',
@@ -232,21 +210,13 @@ export function registerKnowledgeServices(
     },
   );
   register(
-    'knowledgeBind',
-    operation('智库', 'change', '为会话显式选择参考资料，空数组取消引用', [
-      z.string(),
-      z.array(id).max(20),
-    ]),
-    (session, docs) => {
-      k.bind(session, docs);
-      runtime.changed();
-    },
-  );
-  register(
     'knowledgeSettings',
-    operation('智库', 'change', '设置自动收集与按需引用；关闭收集不会删除已有资料', [
-      z.object({ autoCollect: z.boolean(), autoContext: z.boolean() }),
-    ]),
+    operation(
+      '智库',
+      'change',
+      '设置后台记忆收集；智库由 Agent 按需检索，关闭收集不会删除已有资料',
+      [z.object({ autoCollect: z.boolean() })],
+    ),
     (value) => {
       k.configure(value);
       runtime.changed();

@@ -10,16 +10,20 @@ export function TaskPanel({
   api,
   sessionId,
   projectId,
+  initialTab = 'task',
+  terminalDisabled = false,
   onClose,
   onSelectSession,
 }: {
   api: TongzhouAPI;
   sessionId: string;
   projectId?: string;
+  initialTab?: 'task' | 'terminal';
+  terminalDisabled?: boolean;
   onClose: () => void;
   onSelectSession: (id: string) => void;
 }) {
-  const [tab, setTab] = useState('task'),
+  const [tab, setTab] = useState<string>(initialTab),
     [state, setState] = useState<TaskState>(),
     [error, setError] = useState(''),
     [notice, setNotice] = useState(''),
@@ -39,7 +43,12 @@ export function TaskPanel({
     const load = () =>
       api.taskState(sessionId).then(
         (s) => {
-          if (alive) setState(s);
+          if (alive) {
+            setState(s);
+            setTerminal(
+              (current) => current || s.terminals.find((t) => t.status === 'running')?.id || '',
+            );
+          }
         },
         (e) => {
           if (alive) report(e);
@@ -69,7 +78,7 @@ export function TaskPanel({
   const last = state?.runs[0];
   return (
     <Modal
-      title="任务与交付"
+      title={initialTab === 'terminal' ? '会话终端' : '任务与交付'}
       subtitle="任务记忆、持久终端、改动和验证记录集中在这里。"
       wide
       onClose={onClose}
@@ -193,7 +202,7 @@ export function TaskPanel({
               </select>
               <button
                 className="primary"
-                disabled={busy || !projectId}
+                disabled={busy || terminalDisabled}
                 onClick={() =>
                   void act(async () => {
                     const t = await api.startTerminal(sessionId);
@@ -215,7 +224,12 @@ export function TaskPanel({
                 </button>
               )}
             </div>
-            {!projectId && <p className="muted">打开项目后可以使用终端。</p>}
+            <p className="task-directory">
+              <span>{projectId ? '项目目录' : '会话目录'}</span>
+              <code>
+                {state?.terminals.find((t) => t.id === terminal)?.cwd ?? state?.cwd ?? '正在读取…'}
+              </code>
+            </p>
             {terminal ? (
               <Suspense fallback={<p>正在打开终端…</p>}>
                 <TerminalView

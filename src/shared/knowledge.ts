@@ -119,7 +119,6 @@ export interface KnowledgeInput {
 }
 export interface KnowledgeSettings {
   autoCollect: boolean;
-  autoContext: boolean;
 }
 export interface KnowledgeState {
   root: string;
@@ -128,7 +127,6 @@ export interface KnowledgeState {
   folders: KnowledgeFolder[];
   total: number;
   issues: { id: string; title: string; reason: string }[];
-  pinned: string[];
   memoryQueue: {
     pending: number;
     running: number;

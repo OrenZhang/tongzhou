@@ -320,14 +320,6 @@ export interface TongzhouAPI {
   knowledgeReview(id: string, version: number): Promise<KnowledgeDocument>;
   knowledgeAudit(sessionId: string): Promise<string>;
   knowledgeMemoryProcess(retry?: boolean): Promise<{ started: boolean }>;
-  knowledgeReferenceState(sessionId: string): Promise<{
-    references: import('./knowledge').KnowledgeReference[];
-    excluded: string[];
-    pinned: string[];
-    runId?: string;
-  }>;
-  knowledgeExclude(sessionId: string, id: string, excluded: boolean): Promise<void>;
-  knowledgeReferences(sessionId: string): Promise<string[]>;
   knowledgeCollect(sessionId: string): Promise<{ collected: number }>;
   knowledgeState(
     query?: string,
@@ -344,7 +336,6 @@ export interface TongzhouAPI {
   knowledgeSave(input: KnowledgeInput): Promise<KnowledgeDocument>;
   knowledgeDelete(id: string, currentVersion: number): Promise<void>;
   knowledgeRestore(id: string, version: number, currentVersion: number): Promise<KnowledgeDocument>;
-  knowledgeBind(sessionId: string, documentIds: string[]): Promise<void>;
   knowledgeSettings(value: KnowledgeSettings): Promise<void>;
   knowledgeReindex(): Promise<{ indexed: number }>;
   knowledgeImport(projectId?: string): Promise<{ imported: KnowledgeDocument[]; errors: string[] }>;

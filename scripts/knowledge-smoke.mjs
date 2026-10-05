@@ -66,6 +66,10 @@ const server = createServer(async (req, res) => {
       typeof m.content === 'string' &&
       m.content.startsWith('你是同舟后台记忆整理 Agent'),
   )?.content;
+  if (!organize && !memoryPrompt) {
+    if (!tools.length) output = call('knowledge_search', { query: '库存扣减' });
+    else if (tools.length === 1) output = call('knowledge_read', { id: sourceId });
+  }
   if (memoryPrompt) {
     const candidateId = memoryPrompt.match(/"candidateId":"([^"]+)"/)[1];
     output = tools.length
@@ -146,8 +150,7 @@ try {
     async () =>
       (await window.tongzhou.knowledgeState()).documents.find((d) => d.title === '库存参考.md').id,
   );
-  await page.getByRole('button', { name: '引用到当前会话', exact: true }).click();
-  await page.getByRole('button', { name: '取消会话引用', exact: true }).waitFor();
+  assert.equal(await page.getByRole('button', { name: '引用到当前会话', exact: true }).count(), 0);
   await page.getByRole('button', { name: '新建笔记', exact: true }).click();
   await page.getByLabel('知识标题', { exact: true }).fill('团队实践');
   await page
@@ -199,13 +202,18 @@ try {
   await page.waitForFunction(
     async () => (await window.tongzhou.knowledgeState()).memoryQueue.pending === 1,
   );
-  assert.ok(requests.at(-1).messages[0].content.includes('订单确认后扣减库存'));
-  await page.locator('.knowledge-reference-button').click();
-  await page.getByRole('heading', { name: '会话知识引用', exact: true }).waitFor();
-  await page.getByRole('button', { name: '下轮不再注入', exact: true }).first().click();
-  await page.getByRole('button', { name: '恢复后续引用', exact: true }).first().waitFor();
-  await page.getByRole('button', { name: '恢复后续引用', exact: true }).first().click();
-  await page.getByRole('button', { name: '完成', exact: true }).click();
+  assert.ok(!requests.at(-1).messages[0].content.includes('订单确认后扣减库存'));
+  assert.ok(
+    requests
+      .at(-1)
+      .messages.some((m) => m.role === 'tool' && m.content.includes('订单确认后扣减库存')),
+  );
+  assert.equal(await page.locator('.knowledge-reference-button').count(), 0);
+  const knowledgeRun = await page.evaluate(
+    async (id) => (await window.tongzhou.snapshot()).runs.find((r) => r.sessionId === id),
+    sessionId,
+  );
+  assert.ok(knowledgeRun.knowledgeReferences.some((r) => r.id === sourceId && r.mode === 'tool'));
   await page.getByRole('button', { name: '智库', exact: true }).click();
   await page.getByLabel('搜索知识', { exact: true }).fill('');
   await page.getByRole('button', { name: '立即整理', exact: true }).click();
@@ -228,6 +236,11 @@ try {
   const catalog = await page.evaluate(() => window.tongzhou.clientMethods());
   assert.ok(catalog.methods.some((m) => m.name === 'knowledgeRead'));
   assert.ok(!catalog.methods.some((m) => m.name === 'knowledgeArchive'));
+  assert.ok(
+    !catalog.methods.some((m) =>
+      ['knowledgeBind', 'knowledgeExclude', 'knowledgeReferenceState'].includes(m.name),
+    ),
+  );
   assert.equal(catalog.methods.find((m) => m.name === 'knowledgeReview').access, 'manual');
   assert.ok(!(await page.locator('[data-session-id]').filter({ hasText: '后台记忆整理' }).count()));
   assert.ok((await readFile(path.join(state.root, 'index.md'), 'utf8')).includes('库存处理 Wiki'));

@@ -90,6 +90,21 @@
   padding: 10px;
   overflow: hidden;
 }
+.task-directory {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 12px 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.task-directory span {
+  flex-shrink: 0;
+}
+.task-directory code {
+  overflow-wrap: anywhere;
+  user-select: text;
+}
 .task-terminal .xterm {
   height: 100%;
 }

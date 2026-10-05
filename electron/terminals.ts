@@ -2,6 +2,8 @@ import { fork, type ChildProcess } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
+import { mkdir } from 'node:fs/promises';
+import { sessionWorkspace } from './session-workspace';
 import { z } from 'zod';
 import { projectCommandEnv } from './workspace';
 import type { Store } from './store';
@@ -18,6 +20,7 @@ export class Terminals {
   constructor(
     private store: Store,
     private changed: () => void,
+    private dataDir: string,
     private host = path
       .join(__dirname, 'terminal-host.cjs')
       .replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep),
@@ -32,6 +35,9 @@ export class Terminals {
       .sessionObjects<TerminalRecord>('terminal', sessionId, 50)
       .map((t) => this.active.get(t.id)?.record ?? t);
   }
+  cwd(sessionId: string) {
+    return sessionWorkspace(this.store, this.dataDir, sessionId);
+  }
   private owned(sessionId: string, id: string) {
     const record = this.active.get(id)?.record ?? this.store.get<TerminalRecord>('terminal', id);
     if (record.sessionId !== sessionId) throw new Error('终端不属于当前会话');
@@ -40,9 +46,14 @@ export class Terminals {
   async start(sessionId: string, title = '终端', command = '') {
     if (this.disposed) throw new Error('客户端正在退出');
     const session = this.store.get<Session>('session', sessionId);
-    if (!session.projectId || session.archived) throw new Error('请在未归档的项目会话中打开终端');
-    const project = this.store.get<Project>('project', session.projectId);
-    if (project.removed) throw new Error('项目已移除');
+    if (session.archived) throw new Error('请先恢复已归档的会话');
+    if (session.knowledgeJob) throw new Error('知识整理任务不使用终端，请在普通会话中打开');
+    const project = session.projectId
+      ? this.store.get<Project>('project', session.projectId)
+      : undefined;
+    if (project?.removed) throw new Error('项目已移除');
+    const cwd = this.cwd(sessionId);
+    if (!project) await mkdir(cwd, { recursive: true });
     if (
       this.active.size >= 12 ||
       [...this.active.values()].filter((t) => t.record.sessionId === sessionId).length >= 4
@@ -62,7 +73,8 @@ export class Terminals {
     const record: TerminalRecord = {
       id: randomUUID(),
       sessionId,
-      projectId: project.id,
+      projectId: project?.id,
+      cwd,
       title: title.slice(0, 80),
       status: 'running',
       startedAt: Date.now(),
@@ -132,7 +144,7 @@ export class Terminals {
       });
       child.send({
         type: 'start',
-        cwd: project.path,
+        cwd,
         env: projectCommandEnv(),
         shell: process.platform === 'win32' ? 'powershell.exe' : process.env.SHELL || '/bin/sh',
         args: process.platform === 'win32' ? ['-NoLogo', '-NoProfile'] : ['-i'],

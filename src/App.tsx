@@ -1,4 +1,4 @@
-import { KnowledgeCenter, KnowledgeReferences } from './KnowledgeCenter';
+import { KnowledgeCenter } from './KnowledgeCenter';
 import { ChoicePicker } from './ChoicePicker';
 import { ConnectionDiagnostics } from './ConnectionDiagnostics';
 import { TaskPanel, HistorySearch } from './TaskPanel';
@@ -195,6 +195,7 @@ type View =
   | 'knowledge';
 export default function App() {
   const [taskOpen, setTaskOpen] = useState(false);
+  const [taskTab, setTaskTab] = useState<'task' | 'terminal'>('task');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [accountStates, setAccountStates] = useState<
     Record<string, { connected: boolean; pending: boolean; error: boolean }>
@@ -1080,7 +1081,32 @@ export default function App() {
                     )}
                   </div>
                   <div className="row">
-                    <button className="secondary" onClick={() => setTaskOpen(true)}>
+                    <button
+                      className="secondary"
+                      disabled={busy || !!session.archived || !!session.knowledgeJob}
+                      title={
+                        project ? `打开项目终端：${project.path}` : '打开本会话独立工作目录的终端'
+                      }
+                      onClick={() =>
+                        void perform(async () => {
+                          const task = await api.taskState(session.id);
+                          if (!task.terminals.some((t) => t.status === 'running'))
+                            await api.startTerminal(session.id);
+                          setTaskTab('terminal');
+                          setTaskOpen(true);
+                        })
+                      }
+                    >
+                      <Terminal size={15} />
+                      终端
+                    </button>
+                    <button
+                      className="secondary"
+                      onClick={() => {
+                        setTaskTab('task');
+                        setTaskOpen(true);
+                      }}
+                    >
                       任务与交付
                     </button>
                     <button
@@ -1407,13 +1433,6 @@ export default function App() {
                       />
                     </div>
                     <div className="row composer-actions">
-                      {sessionId && (
-                        <KnowledgeReferences
-                          api={api}
-                          sessionId={sessionId}
-                          onOpen={() => setView('knowledge')}
-                        />
-                      )}
                       <button
                         className="icon-button"
                         aria-label="添加图片或文件"
@@ -2041,6 +2060,8 @@ export default function App() {
           api={api}
           sessionId={sessionId}
           projectId={project?.id}
+          initialTab={taskTab}
+          terminalDisabled={!!session?.archived || !!session?.knowledgeJob}
           onClose={() => setTaskOpen(false)}
           onSelectSession={(id) => {
             const target = data.sessions.find((s) => s.id === id);

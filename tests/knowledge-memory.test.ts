@@ -88,10 +88,10 @@ describe('daily memory consolidation', () => {
       () => {},
     );
     expect((await handlers.get('knowledge_read')({ id: day.id })).text).not.toContain('乙方');
-    expect(k.context(a.session.id, '订单')).toBe('');
+    expect(k.search('订单', a.session.id)[0].status).toBe('draft');
     k.review(day.id, day.version);
-    expect(k.context(a.session.id, '订单')).toContain('甲方');
-    expect(k.context(a.session.id, '订单')).not.toContain('乙方');
+    expect((await handlers.get('knowledge_read')({ id: day.id })).text).toContain('甲方');
+    expect((await handlers.get('knowledge_read')({ id: day.id })).text).not.toContain('乙方');
     const c = enqueue('c', '订单错误码固定为 ORDER_INVALID', 'a');
     commit(c.run.id, '订单错误码固定为 ORDER_INVALID');
     const updated = k.get(day.id);
@@ -182,7 +182,7 @@ describe('daily memory consolidation', () => {
       ),
     ).toContain('事务更新');
   });
-  it('retrieves follow-ups with recent context, reports exact excerpts, excludes references and paginates audits', () => {
+  it('retrieves knowledge on explicit searches and paginates audits', () => {
     const { k, store } = fixture();
     const session = store.createSession();
     const doc = k.save({
@@ -197,13 +197,7 @@ describe('daily memory consolidation', () => {
       content: '库存扣减需要注意什么？',
       createdAt: 1,
     });
-    const result = k.contextDetails(session.id, '那之前怎么处理的？');
-    expect(result.references[0].id).toBe(doc.id);
-    expect(result.references[0].excerpt).toContain('数据库事务');
-    k.exclude(session.id, doc.id, true);
-    expect(k.context(session.id, '库存')).toBe('');
-    k.exclude(session.id, doc.id, false);
-    expect(k.context(session.id, '库存')).toContain(doc.id);
+    expect(k.search('库存事务', session.id)[0]).toMatchObject({ id: doc.id, excerpt: doc.content });
     for (let i = 0; i < 104; i++)
       k.save({ title: '盘点资料' + i, content: '检查分页', kind: 'source' });
     const ids: string[] = [];

@@ -160,6 +160,7 @@ describe('local knowledge lifecycle', () => {
   it('directly deletes current versions, removes files and pins, and preserves dependent Wiki evidence', () => {
     const { k, root, store } = fixture();
     const session = store.createSession();
+    store.put('session', { ...session, knowledgeJob: true });
     const source = k.importFile('原文.txt', Buffer.from('source evidence'));
     const wiki = k.save({
       title: '引用知识',
@@ -185,9 +186,9 @@ describe('local knowledge lifecycle', () => {
     expect(k.state().issues.some((i) => i.id === wiki.id && i.reason.includes('来源已删除'))).toBe(
       true,
     );
-    expect(k.context(session.id, 'source')).toContain(wiki.id); // Explicit pin still permitted.
+    expect(k.search('source', session.id).some((d) => d.id === wiki.id)).toBe(true);
     k.bind(session.id, []);
-    expect(k.context(session.id, 'source')).toBe('');
+    expect(k.pins(session.id)).toEqual([]);
     expect(k.save({ ...wiki, content: '补充核对说明', sourceIds: [source.id] }).sources[0].id).toBe(
       source.id,
     );
@@ -271,7 +272,7 @@ describe('local knowledge lifecycle', () => {
     migrated.delete(draft.id, migrated.get(draft.id).version);
     expect(() => migrated.get(draft.id)).toThrow('已删除');
   });
-  it('isolates projects and ordinary-session memories, and honors explicit references and deletion', () => {
+  it('isolates projects and ordinary-session memories, and ignores legacy conversation pins', () => {
     const { k, store } = fixture();
     store.put('project', { id: 'a', name: 'A', path: '/a' });
     store.put('project', { id: 'b', name: 'B', path: '/b' });
@@ -295,13 +296,14 @@ describe('local knowledge lifecycle', () => {
     expect(k.search('', b.id).map((d) => d.id)).not.toContain(local.id);
     expect(k.search('', other.id).map((d) => d.id)).not.toContain(memory.id);
     expect(k.search('', ordinary.id).map((d) => d.id)).toContain(memory.id);
-    expect(k.context(b.id, '秘密实现')).not.toContain('秘密实现');
+    expect(k.search('秘密实现', b.id)).toHaveLength(0);
     k.bind(b.id, [local.id]);
-    expect(k.context(b.id, 'Hello')).toContain('秘密实现');
-    k.configure({ autoCollect: false, autoContext: false });
-    expect(k.context(b.id, '共享')).not.toContain(global.id);
+    expect(k.search('秘密实现', b.id)).toHaveLength(0);
+    expect(k.pins(b.id)).toEqual([]);
+    k.configure({ autoCollect: false });
+    expect(k.search('共享', b.id).some((d) => d.id === global.id)).toBe(true);
     k.delete(local.id, local.version);
-    expect(k.context(b.id, 'Hello')).toBe('');
+    expect(k.search('秘密实现', a.id)).toHaveLength(0);
   });
   it('captures completed turns once, preserves sources and redacts obvious credential assignments', () => {
     const { store, k } = fixture();
@@ -348,11 +350,11 @@ describe('local knowledge lifecycle', () => {
     expect(memory.content).not.toContain('topsecret');
     expect(memory.content).not.toContain('abcd1234');
     expect(memory.content).toContain('尚未验证');
-    expect(k.context(session.id, '库存')).toBe('');
+    expect(k.search('库存', session.id)[0].status).toBe('draft');
     k.delete(memory.id, memory.version);
     k.capture(run);
     expect(k.all()).toHaveLength(0);
-    k.configure({ autoCollect: false, autoContext: true });
+    k.configure({ autoCollect: false });
     k.capture({ ...run, id: 'another' });
     expect(k.all()).toHaveLength(0);
   });
@@ -360,7 +362,7 @@ describe('local knowledge lifecycle', () => {
     const { store, k } = fixture();
     const session = store.createSession();
     const source = k.save({ title: '原文', content: '版本是 1', kind: 'source' });
-    k.configure({ autoCollect: false, autoContext: true });
+    k.configure({ autoCollect: false });
     const handlers = new Map<string, any>();
     const scope = {
       add: (spec: any, _title: any, execute: any) => handlers.set(spec.name, execute),

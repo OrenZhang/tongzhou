@@ -52,6 +52,7 @@ export function registerTaskServices(
           status: m.status,
         }));
       return {
+        cwd: runtime.terminals.cwd(id),
         memory: runtime.memories.read(id),
         runs: store.sessionObjects<Run>('run', id, 30).reverse(),
         terminals: runtime.terminals.list(id).map(({ output, ...t }) => t),
@@ -120,7 +121,9 @@ export function registerTaskServices(
   );
   register(
     'startTerminal',
-    operation('任务与终端', 'change', '在项目会话中创建持久交互终端', [session]),
+    operation('任务与终端', 'change', '在项目目录或普通会话独立工作目录中创建持久交互终端', [
+      session,
+    ]),
     (id) => runtime.terminals.start(idSchema.parse(id)),
   );
   register(

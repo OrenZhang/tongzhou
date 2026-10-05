@@ -78,6 +78,70 @@ const text = (content: string) => ({
   usage: { prompt_tokens: 10, completion_tokens: 4 },
 });
 describe('conversation input and lifecycle changes', () => {
+  it('does not preload knowledge even with legacy settings and pins; the agent searches and reads it through tools', async () => {
+    let docId = '';
+    const f = await fixture((body) => {
+      const results = body.messages.filter((m: any) => m.role === 'tool');
+      if (results.length >= 2) return [text('已读取库存规则')];
+      return [
+        {
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: 'knowledge-' + results.length,
+                    function: {
+                      name: results.length ? 'knowledge_read' : 'knowledge_search',
+                      arguments: JSON.stringify(
+                        results.length ? { id: docId } : { query: '库存规则' },
+                      ),
+                    },
+                  },
+                ],
+              },
+              finish_reason: 'tool_calls',
+            },
+          ],
+        },
+      ];
+    });
+    const doc = f.runtime.knowledge.save({
+      title: '库存规则',
+      kind: 'source',
+      content: 'UNIQUE_KNOWLEDGE_EVIDENCE：库存扣减必须使用事务。',
+    });
+    docId = doc.id;
+    f.store.put('knowledgeSettings', { id: 'default', autoCollect: false, autoContext: true });
+    f.store.put('knowledgeBinding', {
+      id: f.input.sessionId,
+      sessionId: f.input.sessionId,
+      documentIds: [doc.id],
+    });
+    f.runtime.start({ ...f.input, prompt: '查询库存规则' });
+    await f.runtime.waitForIdle();
+    expect(JSON.stringify(f.requests[0].messages)).not.toContain('UNIQUE_KNOWLEDGE_EVIDENCE');
+    expect(
+      f.requests.every(
+        (request) =>
+          !request.messages
+            .filter((m: any) => m.role === 'system')
+            .some((m: any) => m.content.includes('UNIQUE_KNOWLEDGE_EVIDENCE')),
+      ),
+    ).toBe(true);
+    expect(
+      f.requests
+        .at(-1)
+        .messages.some(
+          (m: any) => m.role === 'tool' && m.content.includes('UNIQUE_KNOWLEDGE_EVIDENCE'),
+        ),
+    ).toBe(true);
+    expect(f.store.list<Run>('run')[0].knowledgeReferences).toEqual([
+      expect.objectContaining({ id: doc.id, mode: 'tool', excerpt: doc.content }),
+    ]);
+    expect(f.runtime.knowledge.settings()).toEqual({ autoCollect: false });
+  });
   it('consolidates queued memories through a restricted background agent without creating sidebar chats', async () => {
     const f = await fixture((body) => {
       if (!body.tools.some((t: any) => t.function.name === 'memory_commit'))
@@ -656,6 +720,10 @@ describe('agent execution lifecycle', () => {
             'knowledge_audit',
             'knowledge_folders',
             'knowledge_write',
+            'terminal_read',
+            'terminal_start',
+            'terminal_write',
+            'terminal_stop',
           ].includes(t.function.name),
         ),
       ),
@@ -723,6 +791,7 @@ describe('agent execution lifecycle', () => {
             'knowledge_read',
             'knowledge_audit',
             'knowledge_folders',
+            'terminal_read',
           ].includes(t.function.name),
         ),
       ),
