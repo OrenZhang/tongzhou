@@ -239,6 +239,9 @@ try {
   checks.push('staged review fingerprint rejects changed index and commits verified content');
 
   await page.getByRole('button', { name: '打开会话', exact: true }).click();
+  await app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0].setContentSize(1008, 650),
+  );
   await page.getByRole('button', { name: '终端', exact: true }).click();
   await page.locator('.xterm').waitFor();
   const terminal = await page.evaluate(
@@ -258,11 +261,9 @@ try {
     process.platform === 'win32'
       ? "Write-Output ('终端' + '交互通过')\r"
       : "printf '终端%s\\n' '交互通过'\r";
-  await page.evaluate(async ({ id, t, command }) => window.tongzhou.writeTerminal(id, t, command), {
-    id: session.id,
-    t: terminal.id,
-    command,
-  });
+  const terminalInput = page.locator('.xterm-helper-textarea');
+  await terminalInput.pressSequentially(command.trimEnd(), { delay: 10 });
+  await terminalInput.press('Enter');
   await page.waitForFunction(
     async ({ id, t }) =>
       (await window.tongzhou.readTerminal(id, t)).output.includes('终端交互通过'),
@@ -409,6 +410,23 @@ try {
   );
   console.log(checks);
 } catch (e) {
+  await writeFile(
+    'test-results/task-terminal-report.json',
+    JSON.stringify(
+      await app
+        .windows()[0]
+        ?.evaluate(
+          async (sessionId) => ({
+            rendered: document.querySelector('.xterm-rows')?.textContent,
+            terminals: (await window.tongzhou.taskState(sessionId)).terminals,
+          }),
+          session.id,
+        )
+        .catch(() => null),
+      null,
+      2,
+    ),
+  );
   await app
     .windows()[0]
     ?.screenshot({ path: 'test-results/task-workbench-failure.png' })
