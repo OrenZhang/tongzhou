@@ -452,7 +452,7 @@ export function Extensions({
             </label>
             <Field
               label="允许只读 Agent 使用的工具名（每行一个）"
-              hint="仅填写你已确认不会修改状态的工具。不会自动信任服务声称的只读属性。"
+              hint="仅填写你已确认不会修改状态的工具。GitHub/GitLab 官方端点也会识别工具的只读标记；其他插件须显式填写。"
             >
               <textarea
                 rows={2}

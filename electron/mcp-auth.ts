@@ -12,6 +12,15 @@ import type {
 import type { PluginConfig } from '../src/shared/types';
 import type { Store } from './store';
 import { serviceFetch } from './service-network';
+import { codeHost } from '../src/shared/code-hosting';
+
+export function pluginOAuthScope(config: PluginConfig) {
+  return codeHost(config) === 'gitlab'
+    ? 'mcp'
+    : codeHost(config) === 'github'
+      ? 'repo read:user'
+      : undefined;
+}
 export const mcpRedirect = 'http://127.0.0.1:17438/mcp/callback';
 interface Saved {
   url: string;
@@ -105,6 +114,7 @@ export class PluginOAuthProvider implements OAuthClientProvider {
       grant_types: ['authorization_code', 'refresh_token'],
       response_types: ['code'],
       token_endpoint_auth_method: method,
+      ...(codeHost(this.config) === 'gitlab' ? { scope: 'mcp' } : {}),
     };
   }
   state() {
@@ -321,10 +331,7 @@ export class McpAuth {
           (await this.request(provider, {
             serverUrl: config.url,
             authorizationCode: code,
-            scope:
-              new URL(config.url).hostname === 'api.githubcopilot.com'
-                ? 'repo read:user'
-                : undefined,
+            scope: pluginOAuthScope(config),
             fetchFn: requestFetch,
           })) !== 'AUTHORIZED'
         )
@@ -371,8 +378,7 @@ export class McpAuth {
       const result = await this.request(provider, {
         serverUrl: config.url,
         fetchFn: requestFetch,
-        scope:
-          new URL(config.url).hostname === 'api.githubcopilot.com' ? 'repo read:user' : undefined,
+        scope: pluginOAuthScope(config),
       });
       controller.signal.throwIfAborted();
       if (result === 'AUTHORIZED') {

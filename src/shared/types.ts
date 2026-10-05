@@ -64,6 +64,8 @@ export interface AgentProfile {
   computerEnabled?: boolean;
 }
 export interface PluginConfig {
+  /** Live account binding; credentials stay in the main process. */
+  connectorId?: string;
   authMode?: 'headers' | 'oauth';
   oauthClientId?: string;
   oauthIssuer?: string;
@@ -79,8 +81,14 @@ export interface PluginConfig {
   enabled: boolean;
   readOnlyTools: string[];
   hasSecret?: boolean;
-  catalog?: { name: string; description: string; inputSchema: Record<string, any> }[];
+  catalog?: PluginTool[];
   checkedAt?: number;
+}
+export interface PluginTool {
+  name: string;
+  description: string;
+  inputSchema: Record<string, any>;
+  annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean };
 }
 export interface PluginInput extends PluginConfig {
   oauthClientSecret?: string;

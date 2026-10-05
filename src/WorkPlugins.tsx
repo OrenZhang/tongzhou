@@ -4,6 +4,7 @@ import { Modal } from './components';
 import { MarkdownLink } from './RichMarkdown';
 import { errorMessage } from './feedback';
 import type { PluginConfig, PluginInput, Snapshot, TongzhouAPI } from './shared/types';
+import { codeHost, codeHostDescription, githubMcpUrl, gitlabMcpUrl } from './shared/code-hosting';
 export const figmaDesktopUrl = 'http://127.0.0.1:3845/mcp';
 export const workPluginCatalog = [
   {
@@ -11,10 +12,20 @@ export const workPluginCatalog = [
     name: 'GitHub 仓库工具',
     category: '代码协作',
     description:
-      '在会话中搜索仓库、查看代码、处理 Issue 和 Pull Request。可复用连接中心的 GitHub 账号。',
-    url: 'https://api.githubcopilot.com/mcp/',
+      '完整官方工具集：仓库、Issue、PR、Actions、日志、构建产物、发布与项目。可绑定已有 GitHub 账号，Agent 按需发现和调用。',
+    url: githubMcpUrl,
     authMode: 'headers' as const,
     docs: 'https://github.com/github/github-mcp-server/blob/main/docs/host-integration.md',
+  },
+  {
+    id: 'gitlab',
+    name: 'GitLab 仓库工具',
+    category: '代码协作',
+    description:
+      '完整官方工具集：项目、Issue、Merge Request、CI/CD、Wiki 与安全工具。支持 GitLab.com 和自建实例，使用浏览器授权。',
+    url: gitlabMcpUrl,
+    authMode: 'oauth' as const,
+    docs: 'https://docs.gitlab.com/user/model_context_protocol/mcp_server/',
   },
   {
     id: 'figma',
@@ -47,7 +58,10 @@ export const workPluginCatalog = [
 export function workPluginDefinition(plugin: PluginConfig) {
   return plugin.transport === 'http'
     ? workPluginCatalog.find(
-        (p) => plugin.url === p.url || (p.id === 'figma' && plugin.url === figmaDesktopUrl),
+        (p) =>
+          plugin.url === p.url ||
+          p.id === codeHost(plugin) ||
+          (p.id === 'figma' && plugin.url === figmaDesktopUrl),
       )
     : undefined;
 }
@@ -58,33 +72,38 @@ export function OAuthFields({
   edit: PluginInput;
   onChange: (p: PluginInput) => void;
 }) {
-  const github = edit.url === workPluginCatalog[0].url;
+  const github = codeHost(edit) === 'github';
+  const gitlab = codeHost(edit) === 'gitlab';
   const issuer = github
     ? 'https://github.com/login/oauth'
     : edit.url === 'https://mcp.figma.com/mcp'
       ? 'https://api.figma.com'
-      : '';
+      : codeHost(edit) === 'gitlab'
+        ? new URL(edit.url).origin
+        : '';
   return (
     <>
-      <label>
-        认证方式
-        <select
-          aria-label="认证方式"
-          value={edit.authMode ?? 'headers'}
-          onChange={(e) =>
-            onChange({
-              ...edit,
-              authMode: e.target.value as 'headers' | 'oauth',
-              oauthIssuer: edit.oauthIssuer || (e.target.value === 'oauth' ? issuer : ''),
-              secret: '',
-              clearSecret: true,
-            })
-          }
-        >
-          <option value="headers">访问令牌 / 请求头</option>
-          <option value="oauth">浏览器 OAuth 授权</option>
-        </select>
-      </label>
+      {!gitlab && (
+        <label>
+          认证方式
+          <select
+            aria-label="认证方式"
+            value={edit.authMode ?? 'headers'}
+            onChange={(e) =>
+              onChange({
+                ...edit,
+                authMode: e.target.value as 'headers' | 'oauth',
+                oauthIssuer: edit.oauthIssuer || (e.target.value === 'oauth' ? issuer : ''),
+                secret: '',
+                clearSecret: true,
+              })
+            }
+          >
+            <option value="headers">访问令牌 / 请求头</option>
+            <option value="oauth">浏览器 OAuth 授权</option>
+          </select>
+        </label>
+      )}
       {edit.authMode === 'oauth' && (
         <details>
           <summary>
@@ -182,6 +201,52 @@ export function PluginAuthStatus({ plugin }: { plugin?: PluginConfig }) {
     </div>
   );
 }
+
+function PluginToolList({ plugin }: { plugin: PluginConfig }) {
+  const [query, setQuery] = useState('');
+  const [page, setPage] = useState(0);
+  const tools = (plugin.catalog ?? []).filter((t) =>
+    (t.name + ' ' + t.description).toLowerCase().includes(query.toLowerCase()),
+  );
+  const last = Math.max(0, Math.ceil(tools.length / 20) - 1);
+  const current = Math.min(page, last);
+  return (
+    <details>
+      <summary>{plugin.catalog?.length ?? 0} 个已发现工具 · Agent 按需搜索调用</summary>
+      <input
+        aria-label={`${plugin.name} 工具搜索`}
+        placeholder="搜索工具名称或用途"
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setPage(0);
+        }}
+      />
+      <div className="plugin-tool-list">
+        {tools.slice(current * 20, (current + 1) * 20).map((t) => (
+          <p key={t.name}>
+            <strong>{t.name}</strong>
+            <span>{t.description.slice(0, 180)}</span>
+          </p>
+        ))}
+        {!tools.length && <p>没有匹配的工具</p>}
+      </div>
+      {tools.length > 20 && (
+        <div className="row">
+          <button disabled={current === 0} onClick={() => setPage(current - 1)}>
+            上一页
+          </button>
+          <span>
+            {current + 1} / {last + 1}
+          </span>
+          <button disabled={current === last} onClick={() => setPage(current + 1)}>
+            下一页
+          </button>
+        </div>
+      )}
+    </details>
+  );
+}
 export function WorkPlugins({
   data,
   api,
@@ -202,6 +267,7 @@ export function WorkPlugins({
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState('');
   const [source, setSource] = useState('');
+  const [editingService, setEditingService] = useState('');
   const [githubMode, setGithubMode] = useState<'saved' | 'token' | 'oauth'>('token');
   const githubAccounts = (data.connectors ?? []).filter(
     (c) =>
@@ -227,6 +293,12 @@ export function WorkPlugins({
   const current = edit ? data.plugins?.find((p) => p.id === edit.id) : undefined;
   const save = async () => {
     if (!edit) return;
+    if (editingService === 'gitlab' && codeHost(edit) !== 'gitlab')
+      throw new Error('请输入有效的 GitLab HTTPS 实例地址');
+    if (codeHost(edit) === 'github' && githubMode === 'token' && current?.connectorId && !token)
+      throw new Error(
+        '从已绑定账号切换为独立令牌时，请输入访问令牌；继续使用账号请选择「已保存的 GitHub 账号」。',
+      );
     if (
       edit.url === workPluginCatalog[0].url &&
       githubMode === 'saved' &&
@@ -235,10 +307,9 @@ export function WorkPlugins({
       throw new Error('请选择已保存的 GitHub 账号，或切换到访问令牌。');
     await api.savePlugin({
       ...edit,
+      connectorId: codeHost(edit) === 'github' && githubMode === 'saved' ? source : undefined,
       secret: token ? JSON.stringify({ Authorization: 'Bearer ' + token }) : undefined,
     });
-    if (source && edit.authMode !== 'oauth' && edit.url === workPluginCatalog[0].url)
-      await api.useGithubConnector(edit.id, source);
     setEdit((old) =>
       old?.id === edit.id
         ? {
@@ -258,7 +329,10 @@ export function WorkPlugins({
       <div className="collection-toolbar">
         <div>
           <h2>工作插件</h2>
-          <p>统一管理应用的授权、启停和工具。这里的连接不会在其他分类重复显示。</p>
+          <p>
+            连接后，各个 Agent
+            引擎共享工具目录，按需搜索和调用。账号授权与会话权限共同决定可执行的操作。
+          </p>
         </div>
         <div className="search-box">
           <Search size={14} />
@@ -354,8 +428,10 @@ export function WorkPlugins({
                     onClick={() => {
                       setNotice('');
                       setLoginUrl('');
-                      const mode =
-                        installed?.authMode === 'oauth' && installed.oauthClientId
+                      setEditingService(p.id);
+                      const mode = installed?.connectorId
+                        ? 'saved'
+                        : installed?.authMode === 'oauth' && installed.oauthClientId
                           ? 'oauth'
                           : installed?.hasSecret
                             ? 'token'
@@ -386,12 +462,41 @@ export function WorkPlugins({
                       );
                       setToken('');
                       setSource(
-                        p.id === 'github' && mode === 'saved' ? (githubAccounts[0]?.id ?? '') : '',
+                        p.id === 'github' && mode === 'saved'
+                          ? (installed?.connectorId ?? githubAccounts[0]?.id ?? '')
+                          : '',
                       );
                     }}
                   >
                     {installed ? '管理连接' : '配置插件'}
                   </button>
+                  {installed && (
+                    <button
+                      className="text-button"
+                      disabled={busy}
+                      onClick={() => {
+                        setEditingService(p.id);
+                        setNotice('');
+                        setLoginUrl('');
+                        setToken('');
+                        setGithubMode(githubAccounts.length ? 'saved' : 'token');
+                        setSource(p.id === 'github' ? (githubAccounts[0]?.id ?? '') : '');
+                        setEdit({
+                          id: crypto.randomUUID(),
+                          name: p.name,
+                          transport: 'http',
+                          url: p.url,
+                          command: '',
+                          args: [],
+                          enabled: false,
+                          readOnlyTools: [],
+                          authMode: p.authMode,
+                        });
+                      }}
+                    >
+                      添加连接
+                    </button>
+                  )}
                   {installed && (
                     <>
                       <button
@@ -418,19 +523,7 @@ export function WorkPlugins({
                     </>
                   )}
                 </div>
-                {installed?.catalog && (
-                  <details>
-                    <summary>{installed.catalog.length} 个可用工具</summary>
-                    <div className="plugin-tool-list">
-                      {installed.catalog.map((t) => (
-                        <p key={t.name}>
-                          <strong>{t.name}</strong>
-                          <span>{t.description.slice(0, 180)}</span>
-                        </p>
-                      ))}
-                    </div>
-                  </details>
-                )}
+                {installed?.catalog && <PluginToolList plugin={installed} />}
               </article>
             );
           })}
@@ -454,6 +547,71 @@ export function WorkPlugins({
             {notice && notice !== current?.oauthError && (
               <p role="status" className="info-strip">
                 {notice}
+              </p>
+            )}
+            {editingService === 'gitlab' && (
+              <>
+                <label>
+                  GitLab 实例地址
+                  <input
+                    aria-label="GitLab 实例地址"
+                    type="url"
+                    required
+                    value={edit.url.replace(/\/api\/v4\/mcp\/?$/, '')}
+                    placeholder="https://gitlab.com"
+                    onChange={(e) =>
+                      setEdit({
+                        ...edit,
+                        url: e.target.value.replace(/\/$/, '') + '/api/v4/mcp',
+                        authMode: 'oauth',
+                        oauthClientId: '',
+                        oauthIssuer: '',
+                        oauthClientSecret: '',
+                        clearSecret: true,
+                      })
+                    }
+                  />
+                </label>
+                {(data.connectors ?? []).some((c) => c.kind === 'gitlab') && (
+                  <label>
+                    使用已有 GitLab 站点
+                    <select
+                      aria-label="使用已有 GitLab 站点"
+                      value=""
+                      onChange={(e) => {
+                        if (e.target.value)
+                          setEdit({
+                            ...edit,
+                            url: e.target.value.replace(/\/$/, '') + '/api/v4/mcp',
+                            authMode: 'oauth',
+                            oauthClientId: '',
+                            oauthIssuer: '',
+                            oauthClientSecret: '',
+                            clearSecret: true,
+                          });
+                      }}
+                    >
+                      <option value="">选择站点（仍需独立授权）</option>
+                      {(data.connectors ?? [])
+                        .filter((c) => c.kind === 'gitlab')
+                        .map((c) => (
+                          <option key={c.id} value={c.baseUrl}>
+                            {c.name} · {c.baseUrl}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                )}
+                <p>
+                  GitLab 官方 MCP 使用浏览器 OAuth 授权。请先在 GitLab 群组或自建实例中开启 MCP
+                  访问；工具范围取决于实例版本和账号权限。已有 Git 令牌不会自动用于 MCP。
+                </p>
+              </>
+            )}
+            {codeHost(edit) && (
+              <p>
+                {codeHostDescription(codeHost(edit)!)}{' '}
+                工具将在会话中按需发现，也可点击「保存并检查」预览完整目录。
               </p>
             )}
             {(edit.url === 'https://mcp.figma.com/mcp' || edit.url === figmaDesktopUrl) && (
@@ -543,7 +701,7 @@ export function WorkPlugins({
                     </label>
                     <p>
                       {githubAccounts.length
-                        ? '保存时将此账号的凭据用于仓库工具，无需重复输入。账号更新认证后，可在这里重新保存以同步。'
+                        ? '插件直接绑定此账号，无需重复输入。账号更新认证后自动使用新凭据；移除或停用账号后停止调用。'
                         : '还没有可用的 GitHub 账号。可在连接中心添加，或选择访问令牌。'}
                     </p>
                     <button
@@ -580,6 +738,7 @@ export function WorkPlugins({
                 <label>
                   访问令牌（留空保留）
                   <input
+                    aria-label="访问令牌（留空保留）"
                     type="password"
                     autoComplete="new-password"
                     value={token}

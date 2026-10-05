@@ -566,7 +566,9 @@ export class Runtime {
         .filter((p) => ['queued', 'paused', 'dispatching'].includes(p.status)),
       plugins: this.store.list<any>('plugin').map((p) => ({
         ...p,
-        hasSecret: this.store.hasSecret('plugin_' + p.id),
+        hasSecret: this.store.hasSecret(
+          p.connectorId ? 'connector_' + p.connectorId : 'plugin_' + p.id,
+        ),
         hasOAuthClientSecret: this.store.hasSecret('plugin_oauth_client_' + p.id),
       })),
       skills: this.store.list('skill'),
@@ -803,7 +805,8 @@ export class Runtime {
           if (run.config) run.config.instructions = agent.instructions;
         }
         this.progress(run, 'phase', '准备工具');
-        if (!session.knowledgeJob) await scope.prepare(this.store, agent, this.computer);
+        if (!session.knowledgeJob)
+          await scope.prepare(this.store, agent, this.computer, project ?? undefined);
         if (session.memoryJob)
           this.knowledge.memory.attach(scope, session.memoryJob, () => this.changed());
         else {

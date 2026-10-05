@@ -69,6 +69,78 @@ it('reports GitHub registration requirements before opening a browser or binding
     oauthError: expect.stringContaining('不支持自动注册'),
   });
 });
+it('authorizes a self-managed GitLab MCP with mcp scope, discovery, public DCR and PKCE', async () => {
+  const s = store();
+  const origin = 'https://gitlab.fixture.example';
+  const p = { ...plugin, url: origin + '/api/v4/mcp' };
+  s.put('plugin', p);
+  let opened = '',
+    challenge = '',
+    tokenScope = '';
+  setServiceTransport(async (input, init) => {
+    const u = new URL(String(input));
+    const json = (body: unknown, status = 200) =>
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    if (u.pathname.includes('oauth-protected-resource'))
+      return json({ resource: p.url, authorization_servers: [origin], scopes_supported: ['mcp'] });
+    if (u.pathname.includes('oauth-authorization-server'))
+      return json({
+        issuer: origin,
+        authorization_endpoint: origin + '/oauth/authorize',
+        token_endpoint: origin + '/oauth/token',
+        registration_endpoint: origin + '/oauth/register',
+        response_types_supported: ['code'],
+        code_challenge_methods_supported: ['S256'],
+        scopes_supported: ['mcp'],
+        token_endpoint_auth_methods_supported: ['none'],
+      });
+    if (u.pathname === '/oauth/register') {
+      const body = JSON.parse(String(init?.body));
+      expect(body.scope).toBe('mcp');
+      expect(body.token_endpoint_auth_method).toBe('none');
+      return json({ ...body, client_id: 'gitlab-fixture-client' }, 201);
+    }
+    if (u.pathname === '/oauth/token') {
+      const body = new URLSearchParams(String(init?.body));
+      expect(body.get('redirect_uri')).toBe(mcpRedirect);
+      expect(createHash('sha256').update(body.get('code_verifier')!).digest('base64url')).toBe(
+        challenge,
+      );
+      tokenScope = 'mcp';
+      return json({
+        access_token: 'gitlab-oauth-fixture-secret',
+        refresh_token: 'gitlab-refresh-fixture',
+        token_type: 'Bearer',
+        scope: 'mcp',
+      });
+    }
+    return json({}, 404);
+  });
+  const service = new McpAuth(
+    s,
+    () => {},
+    async (url) => {
+      opened = url;
+    },
+  );
+  cleanups.push(() => service.dispose());
+  await service.login(p.id);
+  const authorization = new URL(opened);
+  expect(authorization.origin).toBe(origin);
+  expect(authorization.searchParams.get('scope')).toBe('mcp');
+  challenge = authorization.searchParams.get('code_challenge')!;
+  expect(challenge).toBeTruthy();
+  const callback = new URL(mcpRedirect);
+  callback.searchParams.set('state', authorization.searchParams.get('state')!);
+  callback.searchParams.set('code', 'fixture-code');
+  expect((await fetch(callback)).status).toBe(200);
+  expect(tokenScope).toBe('mcp');
+  expect(s.get<PluginConfig>('plugin', p.id).oauthStatus).toBe('authorized');
+  expect(JSON.stringify(s.list('plugin'))).not.toContain('gitlab-oauth-fixture-secret');
+});
 it('reports Figma registration rejection with an actionable error without leaking a response body', async () => {
   const s = store();
   s.put('plugin', { ...plugin, url: 'https://mcp.figma.com/mcp' });

@@ -118,6 +118,7 @@ export const agentSchema = z.object({
 });
 export const pluginSchema = z
   .object({
+    connectorId: id.optional(),
     authMode: z.enum(['headers', 'oauth']).optional(),
     oauthClientId: z.string().trim().max(300).optional(),
     oauthIssuer: z.string().max(2000).optional(),
@@ -130,7 +131,7 @@ export const pluginSchema = z
     args: z.array(z.string().max(4096)).max(100),
     url: z.string().max(2048),
     enabled: z.boolean(),
-    readOnlyTools: z.array(z.string().min(1).max(200)).max(200),
+    readOnlyTools: z.array(z.string().min(1).max(200)).max(2000),
     secret: z.string().max(20000).optional(),
     clearSecret: z.boolean().optional(),
   })

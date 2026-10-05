@@ -347,10 +347,14 @@ try {
     .locator('.work-plugins')
     .getByRole('button', { name: '管理连接', exact: true })
     .click();
-  assert.equal(await dialog.getByLabel('认证来源', { exact: true }).inputValue(), 'token');
+  assert.equal(await dialog.getByLabel('认证来源', { exact: true }).inputValue(), 'saved');
+  assert.equal(githubPlugin.connectorId, connector.id);
   await dialog.getByText('✓ 凭据已保存', { exact: true }).waitFor();
   await dialog.getByLabel('认证来源', { exact: true }).selectOption('oauth');
   await dialog.getByLabel('认证来源', { exact: true }).selectOption('token');
+  await dialog
+    .getByLabel('访问令牌（留空保留）', { exact: true })
+    .fill('fixture-github-independent-token');
   await dialog.getByRole('button', { name: '保存连接', exact: true }).click();
   await dialog.waitFor({ state: 'hidden' });
   assert.ok(
@@ -373,6 +377,49 @@ try {
     .waitFor();
   assert.ok(!(await dialog.innerText()).includes('Error invoking remote method'));
   await capture('github-oauth-requirements');
+  await dialog.getByRole('button', { name: '关闭', exact: true }).click();
+  await page.getByLabel('搜索工作插件', { exact: true }).fill('GitLab');
+  await page
+    .locator('.work-plugins')
+    .getByRole('button', { name: '配置插件', exact: true })
+    .click();
+  assert.equal(
+    await dialog.getByLabel('GitLab 实例地址', { exact: true }).inputValue(),
+    'https://gitlab.com',
+  );
+  await dialog
+    .getByLabel('GitLab 实例地址', { exact: true })
+    .fill('https://gitlab.fixture.example');
+  assert.equal(await dialog.getByRole('button', { name: '浏览器授权', exact: true }).count(), 1);
+  assert.equal(await dialog.getByLabel('访问令牌（留空保留）', { exact: true }).count(), 0);
+  await capture('gitlab-self-managed');
+  await dialog.getByRole('button', { name: '保存连接', exact: true }).click();
+  await dialog.waitFor({ state: 'hidden' });
+  const gitlabPlugin = await page.evaluate(async () =>
+    (await window.tongzhou.snapshot()).plugins.find((p) => p.name === 'GitLab 仓库工具'),
+  );
+  assert.equal(gitlabPlugin.url, 'https://gitlab.fixture.example/api/v4/mcp');
+  assert.equal(gitlabPlugin.authMode, 'oauth');
+  assert.equal(gitlabPlugin.enabled, false);
+  await page
+    .locator('.work-plugins')
+    .getByRole('button', { name: '添加连接', exact: true })
+    .click();
+  assert.equal(
+    await dialog.getByLabel('GitLab 实例地址', { exact: true }).inputValue(),
+    'https://gitlab.com',
+  );
+  await dialog.getByRole('button', { name: '保存连接', exact: true }).click();
+  await dialog.waitFor({ state: 'hidden' });
+  await page.getByLabel('GitLab 仓库工具 连接', { exact: true }).selectOption(gitlabPlugin.id);
+  await page
+    .locator('.work-plugins')
+    .getByRole('button', { name: '管理连接', exact: true })
+    .click();
+  assert.equal(
+    await dialog.getByLabel('GitLab 实例地址', { exact: true }).inputValue(),
+    'https://gitlab.fixture.example',
+  );
   await dialog.getByRole('button', { name: '关闭', exact: true }).click();
   await page.getByLabel('搜索工作插件', { exact: true }).fill('');
   checks.push(

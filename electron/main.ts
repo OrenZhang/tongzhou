@@ -58,7 +58,9 @@ import { Attachments, attachmentUploadSchema } from './attachments';
 import { ClientCommands, operation, manual, type ClientOperation } from './client-commands';
 import { DesktopComputer } from './computer';
 import { computerDiagnostic } from './computer-diagnostic';
-import { PluginConnection, importSkillDirectory } from './extensions';
+import { PluginConnection, importSkillDirectory, pluginTool } from './extensions';
+import { pluginSecret, pluginCredentialVersion } from './code-hosting';
+import { codeHost } from '../src/shared/code-hosting';
 import {
   agentSchema,
   idSchema,
@@ -1019,11 +1021,14 @@ function setup() {
       requireIdle();
       const { secret, clearSecret, oauthClientSecret, clearOAuthClientSecret, ...config } =
         pluginSchema.parse(raw);
+      if (secret || clearSecret || config.authMode === 'oauth') config.connectorId = undefined;
+      if (config.connectorId) pluginSecret(store, config);
       const previous = store.list<PluginConfig>('plugin').find((p) => p.id === config.id);
       const identityChanged =
         !!previous &&
         (pluginAuthIdentity(previous) !== pluginAuthIdentity(config) ||
           previous.command !== config.command ||
+          previous.connectorId !== config.connectorId ||
           JSON.stringify(previous.args) !== JSON.stringify(config.args));
       const clientSecretChanged = !!oauthClientSecret || !!clearOAuthClientSecret;
       if (identityChanged || clearSecret || clientSecretChanged) mcpAuth.logout(config.id);
@@ -1043,7 +1048,11 @@ function setup() {
         previous.url === config.url &&
         JSON.stringify(previous.args) === JSON.stringify(config.args);
       if (identityChanged) store.saveSecret('plugin_' + config.id, undefined, true);
-      store.saveSecret('plugin_' + config.id, secret, clearSecret || config.authMode === 'oauth');
+      store.saveSecret(
+        'plugin_' + config.id,
+        secret,
+        clearSecret || config.authMode === 'oauth' || !!config.connectorId,
+      );
       store.put('plugin', {
         ...config,
         oauthStatus:
@@ -1082,17 +1091,17 @@ function setup() {
     async (raw) => {
       requireIdle();
       const p = store.get<PluginConfig>('plugin', idSchema.parse(raw));
-      const c = new PluginConnection(p, store.secret('plugin_' + p.id), pluginOAuth(store, p));
+      const credentials = pluginCredentialVersion(store, p);
+      const c = new PluginConnection(p, pluginSecret(store, p), pluginOAuth(store, p));
       try {
         const signal = AbortSignal.timeout(30000);
         await c.connect(signal);
-        const catalog = (await c.tools(signal)).map((t) => ({
-          name: t.name,
-          description: t.description ?? '',
-          inputSchema: t.inputSchema,
-        }));
+        const catalog = (await c.tools(signal)).map(pluginTool);
         const current = store.get<PluginConfig>('plugin', p.id);
-        if (JSON.stringify(current) !== JSON.stringify(p))
+        if (
+          JSON.stringify(current) !== JSON.stringify(p) ||
+          pluginCredentialVersion(store, p) !== credentials
+        )
           throw new Error('插件配置已变更，请重新检查');
         store.put('plugin', { ...p, catalog, checkedAt: Date.now() });
         runtime.changed();
@@ -1137,7 +1146,7 @@ function setup() {
       const p = store.get<PluginConfig>('plugin', idSchema.parse(rawPlugin));
       const c = connectors.list().find((c) => c.id === idSchema.parse(rawConnector));
       if (
-        p.url !== 'https://api.githubcopilot.com/mcp/' ||
+        codeHost(p) !== 'github' ||
         p.transport !== 'http' ||
         p.authMode === 'oauth' ||
         c?.kind !== 'github' ||
@@ -1147,8 +1156,9 @@ function setup() {
         throw new Error('仅可将启用的 GitHub 官方站点账号连接到官方 GitHub MCP');
       const token = store.secret('connector_' + c.id);
       if (!token) throw new Error('此 GitHub 账号尚未保存访问令牌');
-      store.saveSecret('plugin_' + p.id, JSON.stringify({ Authorization: 'Bearer ' + token }));
-      store.put('plugin', { ...p, catalog: undefined, checkedAt: undefined });
+      // Resolve the current account token at execution time, including future refreshes/logout.
+      store.saveSecret('plugin_' + p.id, undefined, true);
+      store.put('plugin', { ...p, connectorId: c.id, catalog: undefined, checkedAt: undefined });
       runtime.invalidateNative();
       runtime.changed();
     },
