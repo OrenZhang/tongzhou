@@ -53,6 +53,7 @@ try {
   await page.getByRole('button', { name: '删除项目 待删除项目', exact: true }).click();
   await page.getByRole('button', { name: '确认删除项目' }).click();
   await page.getByRole('alert').filter({ hasText: '运行中的终端' }).waitFor();
+  assert.ok(!(await page.getByRole('alert').innerText()).includes('invoking remote method'));
   await page.evaluate(({ s, t }) => window.tongzhou.stopTerminal(s, t), {
     s: session.id,
     t: terminal.id,

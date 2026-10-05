@@ -1,4 +1,5 @@
 import { KnowledgeCenter } from './KnowledgeCenter';
+import { errorMessage } from './feedback';
 import { ChoicePicker } from './ChoicePicker';
 import { ConnectionDiagnostics } from './ConnectionDiagnostics';
 import { TaskPanel, HistorySearch } from './TaskPanel';
@@ -1001,6 +1002,7 @@ export default function App() {
           }
           onDelete={(target) => setDeleteId(target.id)}
           onDeleteProject={(target) => {
+            setNotice('');
             setDeleteProjectId(target.id);
             setDeleteProjectError('');
           }}
@@ -2758,7 +2760,7 @@ export default function App() {
                     await refresh();
                     setNotice('项目已删除，磁盘文件已保留');
                   } catch (e) {
-                    setDeleteProjectError(String(e).replace(/^Error: /, ''));
+                    setDeleteProjectError(errorMessage(e));
                   }
                 })
               }
