@@ -380,6 +380,12 @@ code,
 }
 .message-footer .message-model {
   min-width: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.chat-message:hover .message-model,
+.chat-message:focus-within .message-model {
+  opacity: 1;
 }
 .composer {
   border-radius: 18px;
@@ -410,6 +416,7 @@ code,
 }
 @media (hover: none) {
   .message-actions,
+  .message-footer .message-model,
   .chat-message.user .message-meta,
   .chat-message.assistant .message-meta time {
     opacity: 1;
