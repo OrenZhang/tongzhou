@@ -153,19 +153,6 @@ export function ConversationTurn({ turn, ...actions }: Actions & { turn: Turn })
       {hasResponse && (
         <article className={'chat-message assistant' + (active ? ' is-active' : '')}>
           <div className="message-body">
-            <div className="message-meta">
-              {agentName && agentName !== '同舟' && <strong>{agentName}</strong>}
-              {(assistant?.model || turn.run?.model) && (
-                <span>{assistant?.model ?? turn.run?.model}</span>
-              )}
-              <time>
-                {new Date(
-                  assistant?.createdAt ?? turn.run?.startedAt ?? first?.createdAt ?? 0,
-                ).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-              </time>
-              {status === 'interrupted' && <span>已中断</span>}
-              {(status === 'failed' || status === 'error') && <span>未完成</span>}
-            </div>
             <TurnProcess
               events={turn.events}
               run={turn.run}
@@ -205,8 +192,27 @@ export function ConversationTurn({ turn, ...actions }: Actions & { turn: Turn })
               .map((m) => (
                 <ChatMessage key={m.id} message={m} />
               ))}
-            {!active && endpoint && text && (
-              <MessageActions message={{ ...endpoint, content: text }} {...actions} />
+            {!active && (
+              <div className="message-footer">
+                {endpoint && text && (
+                  <MessageActions message={{ ...endpoint, content: text }} {...actions} />
+                )}
+                <div className="message-meta">
+                  {agentName && agentName !== '同舟' && <strong>{agentName}</strong>}
+                  {(assistant?.model || turn.run?.model) && (
+                    <span className="message-model" title={assistant?.model ?? turn.run?.model}>
+                      {assistant?.model ?? turn.run?.model}
+                    </span>
+                  )}
+                  <time>
+                    {new Date(
+                      assistant?.createdAt ?? turn.run?.startedAt ?? first?.createdAt ?? 0,
+                    ).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                  </time>
+                  {status === 'interrupted' && <span>已中断</span>}
+                  {(status === 'failed' || status === 'error') && <span>未完成</span>}
+                </div>
+              </div>
             )}
           </div>
         </article>

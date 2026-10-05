@@ -355,6 +355,26 @@ code,
   height: 26px;
   min-width: 26px;
 }
+.message-footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 10px;
+}
+.message-footer .message-actions {
+  margin: 0;
+}
+.chat-message.assistant .message-footer .message-meta {
+  min-width: 0;
+  max-width: 100%;
+  height: auto;
+  min-height: 26px;
+  margin: 0;
+}
+.message-footer .message-model {
+  min-width: 0;
+}
 .composer {
   border-radius: 18px;
   border-color: var(--control-border);

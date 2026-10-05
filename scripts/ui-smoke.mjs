@@ -289,6 +289,18 @@ try {
     await page.getByRole('button', { name: '返回会话', exact: true }).click();
     await page.locator(`[data-session-id="${sessions[0].id}"]`).click();
     await page.locator('.turn-final').waitFor();
+    assert.equal(
+      await page.locator('.chat-message.assistant > .message-body > .message-meta').count(),
+      0,
+    );
+    await page
+      .locator('.message-footer .message-model')
+      .getByText('deepseek-chat', { exact: true })
+      .waitFor();
+    const responseBottom =
+      (await page.locator('.turn-final').first().boundingBox()).y +
+      (await page.locator('.turn-final').first().boundingBox()).height;
+    assert.ok((await page.locator('.message-footer').first().boundingBox()).y >= responseBottom);
     assert.equal(await page.locator('.feed .brand-mark, .feed .message-avatar').count(), 0);
     assert.equal(
       await page.locator('.feed .message-meta').getByText('同舟', { exact: true }).count(),
