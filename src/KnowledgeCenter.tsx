@@ -146,12 +146,13 @@ export function KnowledgeCenter({
           },
     );
   };
-  const visible = (state?.documents ?? []).filter(
-    (d) =>
-      (section === 'documents' ? d.kind !== 'memory' : d.kind === 'memory') &&
-      (kind === 'all' ||
-        (kind === 'issues' && state?.issues.some((i) => i.id === d.id)) ||
-        d.kind === kind),
+  const scopedDocuments = (state?.documents ?? []).filter((d) =>
+    section === 'documents' ? d.kind !== 'memory' : d.kind === 'memory',
+  );
+  const issueIds = new Set(state?.issues.map((issue) => issue.id) ?? []);
+  const pendingCount = scopedDocuments.filter((d) => issueIds.has(d.id)).length;
+  const visible = scopedDocuments.filter(
+    (d) => kind === 'all' || (kind === 'issues' && issueIds.has(d.id)) || d.kind === kind,
   );
   const doc = selected?.document;
   const scopeOptions = [
@@ -424,14 +425,36 @@ export function KnowledgeCenter({
                   ['issues', '待整理'],
                 ] as const
               ).map(([value, label]) => (
-                <button key={value} aria-pressed={kind === value} onClick={() => setKind(value)}>
+                <button
+                  key={value}
+                  aria-pressed={kind === value}
+                  title={
+                    value === 'source'
+                      ? '原始想法、手写笔记和上传原件'
+                      : value === 'wiki'
+                        ? '从资料或会话提炼的结论，保留来源与核对状态'
+                        : value === 'issues'
+                          ? '当前范围内需要核对或补充的资料数量，每份只计一次'
+                          : undefined
+                  }
+                  onClick={() => setKind(value)}
+                >
                   {label}
-                  {value === 'issues' && !!state?.issues.length && (
-                    <small>{state.issues.length}</small>
-                  )}
+                  {value === 'issues' && pendingCount > 0 && <small>{pendingCount}</small>}
                 </button>
               ))}
             </div>
+            {section === 'documents' && (
+              <p className="knowledge-kind-hint">
+                {kind === 'wiki'
+                  ? '整理文档：从资料或会话提炼结论，保留来源与核对状态。'
+                  : kind === 'source'
+                    ? '笔记与原件：你写下的想法、上传的文件，以及原始参考内容。'
+                    : kind === 'issues'
+                      ? '显示当前范围内需要核对、补充来源或提取正文的资料。'
+                      : '笔记保留原始内容；整理文档沉淀带来源的结论。'}
+              </p>
+            )}
             {section === 'documents' && (
               <KnowledgeFolders
                 api={api}

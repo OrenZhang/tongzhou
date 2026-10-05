@@ -1,7 +1,7 @@
 .knowledge-page {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
   min-height: 0;
 }
 .knowledge-page > * {
@@ -19,8 +19,8 @@
 .knowledge-navigation > button {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 18px;
+  gap: 8px;
+  padding: 8px 12px;
   border-radius: 8px;
   color: var(--muted);
   text-align: left;
@@ -76,8 +76,12 @@
 .ontology-entity {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 6px 8px;
+  min-height: 30px;
+  font-size: 12px;
+  line-height: 1.35;
   border-radius: 8px;
   text-align: left;
   width: 100%;
@@ -89,10 +93,35 @@
 }
 .ontology-entity small {
   display: block;
-  margin-top: 5px;
+  margin-top: 2px;
   font-size: 11px;
   color: var(--muted);
   overflow-wrap: anywhere;
+}
+.ontology-entity > span:not(.ontology-node) {
+  min-width: 0;
+}
+.ontology-entity-name {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.ontology-entity > svg {
+  flex-shrink: 0;
+}
+.ontology-entity .ontology-entity-count {
+  margin: 0 0 0 auto;
+}
+.ontology-layout .knowledge-library {
+  gap: 5px;
+}
+.knowledge-kind-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
 }
 .ontology-node {
   width: 8px;
@@ -106,9 +135,9 @@
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
-  padding-bottom: 18px;
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--border);
-  margin-bottom: 20px;
+  margin-bottom: 14px;
 }
 .ontology-heading h2 {
   margin: 0 0 8px;
@@ -122,8 +151,8 @@
 .ontology-fact {
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 16px;
-  margin-bottom: 12px;
+  padding: 12px;
+  margin-bottom: 8px;
   background: var(--surface);
 }
 .ontology-fact-meta {
@@ -156,7 +185,7 @@
   align-items: baseline;
   flex-wrap: wrap;
   gap: 10px;
-  margin: 14px 0;
+  margin: 10px 0;
   font-size: 14px;
   overflow-wrap: anywhere;
 }
@@ -299,8 +328,8 @@
 .knowledge-library {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px;
+  gap: 8px;
+  padding: 12px;
   background: var(--surface-muted);
   border-right: 1px solid var(--border);
   min-height: 0;
@@ -324,18 +353,23 @@
   width: 100%;
   border: 0;
   box-shadow: none;
-  padding: 9px 0;
+  padding: 6px 0;
   background: transparent;
+  font-size: 12px;
+}
+.knowledge-library .choice-trigger {
+  min-height: 30px;
+  padding: 5px 9px;
   font-size: 12px;
 }
 .knowledge-filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 3px;
 }
 .knowledge-filters button,
 .knowledge-edit-tabs button {
-  padding: 5px 8px;
+  padding: 4px 6px;
   border-radius: 6px;
   font-size: 12px;
   color: var(--secondary-text);
@@ -467,8 +501,8 @@
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 8px;
-  padding: 12px;
+  gap: 5px;
+  padding: 8px 10px;
   text-align: left;
   border: 1px solid transparent;
   border-radius: 10px;
@@ -484,6 +518,7 @@
   overflow-wrap: anywhere;
 }
 .knowledge-item p {
+  margin: 0;
   font-size: 11px;
   line-height: 1.6;
   color: var(--secondary-text);

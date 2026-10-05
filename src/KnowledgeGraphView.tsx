@@ -82,19 +82,19 @@ export function KnowledgeGraphView({
           onClick={() => setEntity('')}
         >
           <Network size={16} />
-          <span>
-            全部实体<small>已加载 {graph?.entities.length ?? 0} 个</small>
-          </span>
+          <span>全部实体</span>
+          <small className="ontology-entity-count">{graph?.entities.length ?? 0}</small>
         </button>
         {graph?.entities.map((e) => (
           <button
             className={'ontology-entity' + (entity === e.id ? ' selected' : '')}
             key={e.id}
+            title={`${e.name} · ${entityTypes[e.type]} · ${scopeName(e.scope)}`}
             onClick={() => setEntity(e.id)}
           >
             <span className="ontology-node" />
             <span>
-              {e.name}
+              <span className="ontology-entity-name">{e.name}</span>
               <small>
                 {entityTypes[e.type]} · {scopeName(e.scope)}
               </small>
