@@ -271,21 +271,30 @@ try {
   const terminalInput = page.locator('.xterm-helper-textarea');
   await terminalInput.pressSequentially(command.trimEnd(), { delay: 10 });
   await terminalInput.press('Enter');
-  await page.waitForFunction(
-    async ({ id, t }) =>
-      (await window.tongzhou.readTerminal(id, t)).output.includes('终端交互通过'),
-    { id: session.id, t: terminal.id },
-    { timeout: 30000 },
-  );
+  // waitForFunction considers the Promise itself truthy in this Playwright
+  // version. Poll resolved IPC values outside the renderer instead.
+  const terminalStarted = Date.now();
+  const waitForTerminal = async (predicate, timeout = 90000) => {
+    const deadline = Date.now() + timeout;
+    let record;
+    do {
+      record = await page.evaluate(({ s, t }) => window.tongzhou.readTerminal(s, t), {
+        s: session.id,
+        t: terminal.id,
+      });
+      if (predicate(record)) return;
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    } while (Date.now() < deadline);
+    throw new Error('Terminal condition timed out: ' + JSON.stringify(record));
+  };
+  await waitForTerminal((record) => record.output.includes('终端交互通过'));
+  console.log('Interactive command output ms:', Date.now() - terminalStarted);
   await page.waitForFunction(() =>
     document.querySelector('.xterm-rows')?.textContent.includes('终端交互通过'),
   );
   await page.screenshot({ path: 'test-results/task-terminal.png' });
   await page.getByRole('button', { name: '停止终端', exact: true }).click();
-  await page.waitForFunction(
-    async ({ id, t }) => (await window.tongzhou.readTerminal(id, t)).status !== 'running',
-    { id: session.id, t: terminal.id },
-  );
+  await waitForTerminal((record) => record.status !== 'running', 15000);
   checks.push('real PTY Unicode input, persistent log and stop');
   const background = await page.evaluate((id) => window.tongzhou.startTerminal(id), session.id);
   await page.evaluate(() => window.tongzhou.emergencyStop());
