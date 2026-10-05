@@ -65,7 +65,9 @@ jobs:
         if: failure()
         with:
           name: release-diagnostics-${{ matrix.os }}
-          path: test-results/
+          path: |
+            test-results/*.png
+            test-results/*report.json
           retention-days: 7
   publish:
     needs: package

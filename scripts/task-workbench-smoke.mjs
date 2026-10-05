@@ -246,6 +246,14 @@ try {
     session.id,
   );
   assert.equal(terminal.status, 'running');
+  // Wait for the interactive shell's first prompt before injecting a command;
+  // on clean Windows runners PowerShell/PSReadLine initializes after PTY ready.
+  if (process.platform === 'win32')
+    await page.waitForFunction(
+      () => /PS [^\r\n]*>/.test(document.querySelector('.xterm-rows')?.textContent ?? ''),
+      undefined,
+      { timeout: 30000 },
+    );
   const command =
     process.platform === 'win32'
       ? "Write-Output ('终端' + '交互通过')\r"

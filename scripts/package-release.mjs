@@ -1,3 +1,6 @@
+// Actions exposes unconfigured Secrets as empty strings; builder treats an empty
+// CSC_LINK as a file path, so omit it when no certificate was configured.
+if (!process.env.CSC_LINK?.trim()) delete process.env.CSC_LINK;
 const signedMac = process.platform === 'darwin' && !!process.env.CSC_LINK;
 if (
   signedMac &&
