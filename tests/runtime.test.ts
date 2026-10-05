@@ -654,6 +654,7 @@ describe('agent execution lifecycle', () => {
             'knowledge_search',
             'knowledge_read',
             'knowledge_audit',
+            'knowledge_folders',
             'knowledge_write',
           ].includes(t.function.name),
         ),
@@ -716,9 +717,13 @@ describe('agent execution lifecycle', () => {
     expect(
       f.requests.every((r) =>
         r.tools.every((t: any) =>
-          ['read_attachment', 'knowledge_search', 'knowledge_read', 'knowledge_audit'].includes(
-            t.function.name,
-          ),
+          [
+            'read_attachment',
+            'knowledge_search',
+            'knowledge_read',
+            'knowledge_audit',
+            'knowledge_folders',
+          ].includes(t.function.name),
         ),
       ),
     ).toBe(true);
@@ -842,6 +847,7 @@ describe('agent execution lifecycle', () => {
             'knowledge_search',
             'knowledge_read',
             'knowledge_audit',
+            'knowledge_folders',
           ].includes(t.function.name),
         ),
       ),

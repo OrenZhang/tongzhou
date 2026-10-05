@@ -19,7 +19,7 @@ const allowed = (name: string) =>
   name === 'tongzhou.db' ||
   /^attachments\/[a-f0-9-]{36}$/.test(name) ||
   /^checkpoints\/[a-f0-9]{64}$/.test(name) ||
-  /^knowledge\/(?:index\.md|memories\/\d{4}-\d{2}-\d{2}\/index\.md|(?:sources|wiki|memories)\/[a-f0-9-]{36}\.md|revisions\/[a-f0-9-]{36}-[0-9]+\.json|files\/[a-f0-9-]{36}\.[a-z0-9]{1,8})$/.test(
+  /^knowledge\/(?:index\.md|folders\.json|memories\/\d{4}-\d{2}-\d{2}\/index\.md|(?:sources|wiki|memories)\/[a-f0-9-]{36}\.md|revisions\/[a-f0-9-]{36}-[0-9]+\.json|files\/[a-f0-9-]{36}\.[a-z0-9]{1,8})$/.test(
     name,
   );
 const maxBytes = 256 * 1024 * 1024;

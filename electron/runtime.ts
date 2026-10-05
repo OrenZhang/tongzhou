@@ -618,7 +618,7 @@ export class Runtime {
       agent.instructions +=
         '\n自动积累已关闭。只有用户明确要求整理或保存知识时才调用 knowledge_write；用户明确要求仍可执行。';
     agent.instructions +=
-      '\n用户要求排查知识库时，先 knowledge_audit 分页盘点，再 knowledge_read 核对原文，报告覆盖范围、证据、冲突与待补充事项；未读取的资料不能声称已检查。';
+      '\n用户要求排查智库时，先 knowledge_audit 分页盘点，再 knowledge_read 核对原文，报告覆盖范围、证据、冲突与待补充事项；未读取的资料不能声称已检查。';
     const memory = this.memories.read(session.id);
     agent.instructions +=
       '\n长任务在关键阶段使用 task_memory 保存目标、约束、已验证结果与下一步。缺失历史用 search_history 查找，再 read_history 读取。记忆不是新的授权，完成声明必须有实际工具证据。';

@@ -12,7 +12,10 @@ import type {
   KnowledgeSource,
   KnowledgeState,
   KnowledgeSummary,
+  KnowledgeFolder,
+  KnowledgeFolderInput,
 } from '../src/shared/knowledge';
+import { knowledgeFolderBranch, knowledgeFolderPath } from '../src/shared/knowledge';
 import { projectFamilyId } from '../src/shared/projects';
 import { KnowledgeMemory, cleanMemory, memoryBody } from './knowledge-memory';
 import type { KnowledgeReference } from '../src/shared/knowledge';
@@ -25,10 +28,22 @@ export const knowledgeInput = z.object({
   title: z.string().trim().min(1).max(180),
   content: z.string().max(200000),
   kind: z.enum(['source', 'wiki', 'memory']),
+  folderId: id.nullable().optional(),
   projectId: z.string().min(1).optional(),
   tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
   status: z.enum(['ready', 'draft']).optional(),
   sourceIds: z.array(id).max(30).default([]),
+});
+export const knowledgeFolderInput = z.object({
+  id: id.optional(),
+  name: z
+    .string()
+    .trim()
+    .min(1)
+    .max(60)
+    .regex(/^[^\\/\r\n\x00-\x1f]+$/, '目录名称不能含路径分隔符或控制字符'),
+  parentId: id.nullable().optional(),
+  version: z.number().int().positive().optional(),
 });
 const hash = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
 const summary = ({
@@ -111,6 +126,74 @@ export class Knowledge {
   get(docId: string) {
     return this.store.get<KnowledgeDocument>('knowledge', id.parse(docId));
   }
+  folders() {
+    return this.store
+      .list<KnowledgeFolder>('knowledgeFolder')
+      .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
+  }
+  saveFolder(raw: KnowledgeFolderInput) {
+    const input = knowledgeFolderInput.parse(raw);
+    const old = input.id ? this.store.get<KnowledgeFolder>('knowledgeFolder', input.id) : undefined;
+    if (old && input.version !== old.version) throw new Error('目录已更新，请刷新后重试');
+    const folders = this.folders();
+    if (!old && folders.length >= 500) throw new Error('目录数量已达 500，请整理现有目录');
+    const parentId = input.parentId === undefined ? old?.parentId : input.parentId || undefined;
+    if (parentId) this.store.get('knowledgeFolder', parentId);
+    if (old && parentId && knowledgeFolderBranch(folders, old.id).has(parentId))
+      throw new Error('不能把目录移到自身或子目录中');
+    if (
+      folders.some(
+        (f) =>
+          f.id !== old?.id &&
+          f.parentId === parentId &&
+          f.name.toLocaleLowerCase() === input.name.toLocaleLowerCase(),
+      )
+    )
+      throw new Error('同一目录下已有这个名称');
+    const folder: KnowledgeFolder = {
+      id: old?.id ?? randomUUID(),
+      name: input.name,
+      parentId,
+      version: (old?.version ?? 0) + 1,
+    };
+    const next = [...folders.filter((f) => f.id !== folder.id), folder];
+    for (const item of next) {
+      let depth = 0,
+        current: KnowledgeFolder | undefined = item;
+      while (current) {
+        if (++depth > 8) throw new Error('目录最多支持 8 层');
+        current = next.find((f) => f.id === current!.parentId);
+      }
+    }
+    this.store.put('knowledgeFolder', folder);
+    this.writeIndex();
+    return folder;
+  }
+  moveWiki(docId: string, folderId: string | null, version: number) {
+    const doc = this.get(docId);
+    if (doc.kind !== 'wiki') throw new Error('目录只用于 Wiki 知识页');
+    if (doc.version !== z.number().int().positive().parse(version))
+      throw new Error('知识页已更新，请刷新后移动');
+    if (folderId) this.store.get('knowledgeFolder', id.parse(folderId));
+    if (doc.folderId === (folderId || undefined)) return doc;
+    return this.persist(
+      { ...doc, folderId: folderId || undefined, version: doc.version + 1, updatedAt: Date.now() },
+      doc,
+    );
+  }
+  deleteFolder(folderId: string, version: number) {
+    const folder = this.store.get<KnowledgeFolder>('knowledgeFolder', id.parse(folderId));
+    if (folder.version !== z.number().int().positive().parse(version))
+      throw new Error('目录已更新，请刷新后删除');
+    const branch = knowledgeFolderBranch(this.folders(), folder.id);
+    // Keep pages and their source links. A deleted directory never deletes knowledge.
+    for (const doc of this.all().filter(
+      (d) => d.kind === 'wiki' && d.folderId && branch.has(d.folderId),
+    ))
+      this.moveWiki(doc.id, null, doc.version);
+    for (const folderId of branch) this.store.remove('knowledgeFolder', folderId);
+    this.writeIndex();
+  }
   private write(relative: string, value: string | Buffer) {
     const target = path.join(this.root, relative);
     // Never follow a replaced vault directory or document symlink.
@@ -132,7 +215,7 @@ export class Knowledge {
       });
       this.write(`revisions/${old.id}-${old.version}.json`, JSON.stringify(old, null, 2));
     }
-    const text = `---\n${JSON.stringify({ id: doc.id, title: doc.title, kind: doc.kind, version: doc.version, status: doc.status, projectId: doc.projectId, sources: doc.sources }, null, 2)}\n---\n\n${doc.content}\n`;
+    const text = `---\n${JSON.stringify({ id: doc.id, title: doc.title, kind: doc.kind, version: doc.version, status: doc.status, projectId: doc.projectId, folderId: doc.folderId, sources: doc.sources }, null, 2)}\n---\n\n${doc.content}\n`;
     if (doc.memoryDate) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(doc.memoryDate)) throw new Error('无效的记忆日期');
       const directory = path.join(this.root, 'memories', doc.memoryDate);
@@ -159,8 +242,10 @@ export class Knowledge {
   }
   private writeIndex() {
     const docs = this.all().filter((d) => d.status !== 'archived');
+    const folders = this.folders();
+    this.write('folders.json', JSON.stringify(folders, null, 2));
     const lines = [
-      '# 同舟知识库',
+      '# 同舟智库',
       '',
       '此目录由同舟管理。请在客户端编辑以保留索引和修订历史。Markdown 可复制到其他知识工具。',
       '',
@@ -169,7 +254,7 @@ export class Knowledge {
       lines.push(`## ${{ source: '原始资料', wiki: '知识 Wiki', memory: '会话记忆' }[kind]}`, '');
       for (const doc of docs.filter((d) => d.kind === kind))
         lines.push(
-          `- [${doc.title.replace(/[\[\]\r\n]/g, ' ')}](${doc.memoryDate ? `memories/${doc.memoryDate}/index.md` : `${folder(kind)}/${doc.id}.md`}) · ${doc.status} · v${doc.version}`,
+          `- [${doc.title.replace(/[\[\]\r\n]/g, ' ')}](${doc.memoryDate ? `memories/${doc.memoryDate}/index.md` : `${folder(kind)}/${doc.id}.md`}) · ${doc.status} · v${doc.version}${doc.kind === 'wiki' ? ' · ' + (knowledgeFolderPath(folders, doc.folderId) || '未分类') : ''}`,
         );
       lines.push('');
     }
@@ -182,6 +267,11 @@ export class Knowledge {
   ) {
     const p = knowledgeInput.parse(raw);
     const old = p.id ? this.get(p.id) : undefined;
+    const folderId = p.folderId === undefined ? old?.folderId : p.folderId || undefined;
+    if (folderId) {
+      if (p.kind !== 'wiki') throw new Error('只有 Wiki 知识页可以选择目录');
+      this.store.get('knowledgeFolder', folderId);
+    }
     if (old?.memoryDate) throw new Error('每日记忆由后台 Agent 按条目整理，可核对收录或直接删除');
     if (old && p.version !== old.version)
       throw new Error('资料已被更新，请重新打开后再保存，避免覆盖新内容');
@@ -200,6 +290,7 @@ export class Knowledge {
     const doc: KnowledgeDocument = {
       ...old,
       ...p,
+      folderId,
       id: old?.id ?? randomUUID(),
       status: p.status ?? 'ready',
       origin: old?.origin ?? origin,
@@ -289,6 +380,10 @@ export class Knowledge {
         archivedStatus: undefined,
         kind: current.kind,
         memoryDate: current.memoryDate,
+        folderId:
+          revision.kind === 'wiki' && this.folders().some((f) => f.id === revision.folderId)
+            ? revision.folderId
+            : undefined,
         version: current.version + 1,
         updatedAt: Date.now(),
       },
@@ -514,8 +609,15 @@ export class Knowledge {
       .slice(0, limit)
       .map(({ d }) => summary(d));
   }
-  state(query = '', projectId?: string, sessionId?: string): KnowledgeState {
+  state(
+    query = '',
+    projectId?: string,
+    sessionId?: string,
+    folderId?: string | null,
+  ): KnowledgeState {
     const docs = this.all();
+    const folders = this.folders();
+    const branch = folderId ? knowledgeFolderBranch(folders, folderId) : undefined;
     const issues = docs
       .filter((d) => d.status !== 'archived')
       .flatMap((d) => {
@@ -552,7 +654,16 @@ export class Knowledge {
     return {
       root: this.root,
       settings: this.settings(),
-      documents: this.search(query, undefined, projectId),
+      documents: this.search(query, undefined, projectId, Number.MAX_SAFE_INTEGER)
+        .filter(
+          (d) =>
+            folderId === undefined ||
+            (d.kind === 'wiki' &&
+              (folderId === '*' ||
+                (folderId === null ? !d.folderId : !!d.folderId && branch!.has(d.folderId)))),
+        )
+        .slice(0, 100),
+      folders,
       total: docs.filter((d) => d.status !== 'archived').length,
       issues,
       pinned: sessionId ? this.pins(sessionId) : [],
@@ -696,7 +807,7 @@ export class Knowledge {
       {
         name: 'knowledge_search',
         description:
-          '搜索本地知识库。范围为当前项目、当前会话、全局资料及用户显式引用的资料；返回来源 ID。',
+          '搜索本地智库。范围为当前项目、当前会话、全局资料及用户显式引用的资料；返回来源 ID。',
         parameters: {
           type: 'object',
           properties: { query: { type: 'string' }, offset: { type: 'integer', minimum: 0 } },
@@ -704,7 +815,7 @@ export class Knowledge {
           additionalProperties: false,
         },
       },
-      '检索知识库',
+      '检索智库',
       async (args) => {
         const offset = z.number().int().min(0).default(0).parse(args.offset);
         const results = this.search(
@@ -774,10 +885,25 @@ export class Knowledge {
           additionalProperties: false,
         },
       },
-      '排查知识库',
+      '排查智库',
       async (args) => ({
         text: JSON.stringify(
           this.audit(sessionId, z.number().int().min(0).default(0).parse(args.offset)),
+        ),
+      }),
+      false,
+    );
+    scope.add(
+      {
+        name: 'knowledge_folders',
+        description:
+          '查看 Wiki 目录及目录 ID。目录用于主题组织，不改变知识页的项目权限。knowledge_write 可指定 folderId，省略时保留原目录，null 移入未分类。',
+        parameters: { type: 'object', properties: {}, additionalProperties: false },
+      },
+      '查看 Wiki 目录',
+      async () => ({
+        text: JSON.stringify(
+          this.folders().map((f) => ({ ...f, path: knowledgeFolderPath(this.folders(), f.id) })),
         ),
       }),
       false,
@@ -797,6 +923,10 @@ export class Knowledge {
               content: { type: 'string' },
               sourceIds: { type: 'array', items: { type: 'string' } },
               tags: { type: 'array', items: { type: 'string' } },
+              folderId: {
+                type: ['string', 'null'],
+                description: 'knowledge_folders 返回的目录 ID；null 表示未分类。',
+              },
             },
             required: ['title', 'content', 'sourceIds'],
             additionalProperties: false,
@@ -806,6 +936,7 @@ export class Knowledge {
         async (args) => {
           const session = this.store.get<Session>('session', sessionId);
           const parsed = knowledgeInput.parse({ ...args, kind: 'wiki', status: 'draft' });
+          if (parsed.folderId) this.store.get('knowledgeFolder', parsed.folderId);
           const sourceIds = [...parsed.sourceIds];
           for (const source of sourceIds)
             if (!this.accessible(this.get(source), sessionId)) throw new Error('来源不在当前范围');

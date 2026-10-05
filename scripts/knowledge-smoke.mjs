@@ -86,7 +86,7 @@ const server = createServer(async (req, res) => {
     (m) =>
       m.role === 'user' &&
       typeof m.content === 'string' &&
-      m.content.startsWith('排查当前范围的知识库'),
+      m.content.startsWith('排查当前范围的智库'),
   );
   if (audit)
     output =
@@ -139,7 +139,7 @@ try {
     return s.id;
   }, `http://127.0.0.1:${server.address().port}/v1`);
   await page.locator(`[data-session-id="${sessionId}"]`).click();
-  await page.getByRole('button', { name: '知识库', exact: true }).click();
+  await page.getByRole('button', { name: '智库', exact: true }).click();
   await page.getByRole('button', { name: '导入文件', exact: true }).click();
   await page.getByRole('heading', { name: '库存参考.md', exact: true }).waitFor();
   sourceId = await page.evaluate(
@@ -174,7 +174,7 @@ try {
   await page.waitForFunction(
     async () => !(await window.tongzhou.snapshot()).runs.some((r) => r.status === 'running'),
   );
-  await page.getByRole('button', { name: '知识库', exact: true }).click();
+  await page.getByRole('button', { name: '智库', exact: true }).click();
   await page.locator('.knowledge-item').filter({ hasText: '库存处理 Wiki' }).click();
   await page.getByText('AI 整理待核对', { exact: true }).waitFor();
   await page.getByRole('button', { name: '核对并收录', exact: true }).click();
@@ -206,7 +206,7 @@ try {
   await page.getByRole('button', { name: '恢复后续引用', exact: true }).first().waitFor();
   await page.getByRole('button', { name: '恢复后续引用', exact: true }).first().click();
   await page.getByRole('button', { name: '完成', exact: true }).click();
-  await page.getByRole('button', { name: '知识库', exact: true }).click();
+  await page.getByRole('button', { name: '智库', exact: true }).click();
   await page.getByLabel('搜索知识', { exact: true }).fill('');
   await page.getByRole('button', { name: '立即整理', exact: true }).click();
   await page.waitForFunction(async () =>
@@ -221,7 +221,7 @@ try {
   await page.getByRole('button', { name: 'Agent 排查', exact: true }).click();
   await page.getByText('已排查知识来源，库存并发验证仍需补充。', { exact: true }).waitFor();
   await page.reload();
-  await page.getByRole('button', { name: '知识库', exact: true }).click();
+  await page.getByRole('button', { name: '智库', exact: true }).click();
   const state = await page.evaluate(() => window.tongzhou.knowledgeState());
   assert.equal(state.documents.filter((d) => d.kind === 'wiki').length, 1);
   assert.equal(state.documents.filter((d) => d.kind === 'memory').length, 1);
@@ -276,9 +276,113 @@ try {
       (d) => d.id === sourceId,
     ),
   );
+  await page.getByRole('button', { name: '智库', exact: true }).click();
+  await page
+    .locator('.knowledge-filters')
+    .getByRole('button', { name: 'Wiki', exact: true })
+    .click();
+  await page.getByRole('button', { name: '新建目录', exact: true }).click();
+  await page.getByLabel('目录名称', { exact: true }).fill('研发');
+  await page.getByRole('button', { name: '保存目录', exact: true }).click();
+  await page.locator('.wiki-folder-name').filter({ hasText: '研发' }).waitFor();
+  await page.getByRole('button', { name: '新建目录', exact: true }).click();
+  await page.getByLabel('目录名称', { exact: true }).fill('API');
+  await page.getByRole('button', { name: '保存目录', exact: true }).click();
+  await page.getByRole('button', { name: '管理目录 API', exact: true }).click();
+  await page.getByLabel('目录名称', { exact: true }).fill('接口文档');
+  await page.getByRole('button', { name: '保存目录', exact: true }).click();
+  await page.getByRole('button', { name: '折叠目录 研发', exact: true }).click();
+  assert.equal(await page.locator('.wiki-folder-name').filter({ hasText: '接口文档' }).count(), 0);
+  await page.getByRole('button', { name: '展开目录 研发', exact: true }).click();
+  await page.getByRole('button', { name: '管理目录 接口文档', exact: true }).click();
+  await page.getByRole('button', { name: '上级目录', exact: true }).click();
+  await page.getByRole('menuitemradio', { name: '顶层目录', exact: true }).click();
+  await page.getByRole('button', { name: '保存目录', exact: true }).click();
+  await page.waitForFunction(
+    async () =>
+      !(await window.tongzhou.knowledgeState()).folders.find((f) => f.name === '接口文档')
+        ?.parentId,
+  );
+  await page.getByRole('button', { name: '管理目录 接口文档', exact: true }).click();
+  await page.getByRole('button', { name: '上级目录', exact: true }).click();
+  await page.getByRole('menuitemradio', { name: '研发', exact: true }).click();
+  await page.getByRole('button', { name: '保存目录', exact: true }).click();
+  await page.getByRole('button', { name: '全部 Wiki', exact: true }).click();
+  await page.locator('.knowledge-item').filter({ hasText: '库存处理 Wiki' }).click();
+  await page.getByRole('button', { name: '移动到目录', exact: true }).click();
+  await page.getByRole('button', { name: 'Wiki 目标目录', exact: true }).click();
+  await page.getByRole('menuitemradio', { name: '研发 / 接口文档', exact: true }).click();
+  await page.getByRole('button', { name: '确认移动', exact: true }).click();
+  await page.getByText('Wiki 已移动，正文与来源引用已保留', { exact: true }).waitFor();
+  await page
+    .locator('.knowledge-document-heading')
+    .getByText('研发 / 接口文档', { exact: true })
+    .waitFor();
+  await page.getByRole('button', { name: '新建 Wiki', exact: true }).click();
+  await page.getByLabel('知识标题', { exact: true }).fill('目录内新页');
+  await page.getByLabel('知识正文', { exact: true }).fill('需要长期保留的接口经验。');
+  assert.equal(
+    await page.getByRole('button', { name: 'Wiki 所属目录', exact: true }).textContent(),
+    '研发 / 接口文档',
+  );
+  await page.getByRole('button', { name: '保存资料', exact: true }).click();
+  await page.getByRole('heading', { name: '目录内新页', exact: true }).waitFor();
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate((t) => (document.documentElement.dataset.theme = t), theme);
+    await page.evaluate(() =>
+      Promise.all(
+        document
+          .getAnimations()
+          .filter((a) => a.effect?.getTiming().iterations !== Infinity)
+          .map((a) => a.finished.catch(() => {})),
+      ),
+    );
+    await page.screenshot({ path: `test-results/wiki-folders-${theme}.png`, fullPage: true });
+  }
+  const folderState = await page.evaluate(() => window.tongzhou.knowledgeState());
+  const wikiBefore = folderState.documents.find((d) => d.title === '库存处理 Wiki');
+  assert.ok(wikiBefore.folderId);
+  const folderBefore = folderState.folders.find((f) => f.name === '研发');
+  await page.reload();
+  assert.deepEqual(
+    (await page.evaluate(() => window.tongzhou.knowledgeState())).folders,
+    folderState.folders,
+  );
+  await page.getByRole('button', { name: '智库', exact: true }).click();
+  await page
+    .locator('.knowledge-filters')
+    .getByRole('button', { name: 'Wiki', exact: true })
+    .click();
+  await page.locator('.wiki-folder-name').filter({ hasText: '研发' }).click();
+  await page.getByRole('button', { name: '管理目录 研发', exact: true }).click();
+  await page.getByRole('button', { name: '删除目录', exact: true }).click();
+  await page.getByRole('button', { name: '取消', exact: true }).click();
+  assert.ok(
+    (await page.evaluate(() => window.tongzhou.knowledgeState())).folders.some(
+      (f) => f.id === folderBefore.id,
+    ),
+  );
+  await page.getByRole('button', { name: '管理目录 研发', exact: true }).click();
+  await page.getByRole('button', { name: '删除目录', exact: true }).click();
+  await page.getByRole('button', { name: '确认删除目录', exact: true }).click();
+  await page.waitForFunction(
+    async () => (await window.tongzhou.knowledgeState()).folders.length === 0,
+  );
+  const wikiAfter = await page.evaluate((id) => window.tongzhou.knowledgeRead(id), wikiBefore.id);
+  assert.equal(wikiAfter.document.folderId, undefined);
+  assert.deepEqual(wikiAfter.document.sources, wikiBefore.sources);
+  assert.equal(
+    (await page.evaluate(() => window.tongzhou.knowledgeState())).documents.filter(
+      (d) => d.kind === 'wiki',
+    ).length,
+    2,
+  );
+  const finalCatalog = await page.evaluate(() => window.tongzhou.clientMethods());
+  for (const name of ['knowledgeFolderSave', 'knowledgeFolderDelete', 'knowledgeMove'])
+    assert.ok(finalCatalog.methods.some((m) => m.name === name));
   assert.deepEqual(errors, []);
   console.log(
-    'Knowledge desktop passed: import, notes, revisions, model tool synthesis, source links, scoped context, auto capture, reload, client catalog, light/dark, direct deletion with confirmation and missing source indicators.',
+    'Knowledge desktop passed: import, notes, revisions, model tool synthesis, source links, scoped context, auto capture, reload, client catalog, light/dark, direct deletion, Wiki folder create/rename/move/collapse/delete, page moves and preservation.',
   );
 } finally {
   await app.close();

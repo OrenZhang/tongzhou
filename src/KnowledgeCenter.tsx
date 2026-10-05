@@ -25,10 +25,12 @@ import type {
   KnowledgeState,
 } from './shared/knowledge';
 import { ChoicePicker } from './ChoicePicker';
+import { KnowledgeFolders, wikiFolderOptions } from './KnowledgeFolders';
+import { knowledgeFolderPath } from './shared/knowledge';
 import { Field, Markdown, Modal } from './components';
 import './knowledge.css';
 
-const labels = { source: '资料', wiki: 'Wiki', memory: '记忆' };
+const labels = { source: '资料来源', wiki: 'Wiki', memory: '记忆' };
 const statuses = { ready: '已收录', draft: '待核对', archived: '已归档' };
 export function KnowledgeCenter({
   api,
@@ -45,6 +47,8 @@ export function KnowledgeCenter({
   const [query, setQuery] = useState('');
   const [project, setProject] = useState('*');
   const [kind, setKind] = useState<KnowledgeKind | 'all' | 'issues'>('all');
+  const [folder, setFolder] = useState('*');
+  const [moving, setMoving] = useState<{ doc: KnowledgeDocument; folderId: string }>();
   const [selected, setSelected] = useState<KnowledgeRead>();
   const [edit, setEdit] = useState<KnowledgeInput>();
   const [deleting, setDeleting] = useState<KnowledgeDocument>();
@@ -61,6 +65,7 @@ export function KnowledgeCenter({
       query,
       project === '*' ? undefined : project,
       sessionId || undefined,
+      kind === 'wiki' ? folder || null : undefined,
     );
     if (token === request.current) setState(value);
   };
@@ -70,7 +75,7 @@ export function KnowledgeCenter({
       clearTimeout(timer);
       request.current++;
     };
-  }, [query, project, sessionId, data.runs]);
+  }, [query, project, sessionId, data.runs, kind, folder]);
   const action = async (fn: () => Promise<void>) => {
     setBusy(true);
     setError('');
@@ -103,6 +108,7 @@ export function KnowledgeCenter({
             title: doc.title,
             content: doc.content,
             kind: doc.kind,
+            folderId: doc.folderId,
             projectId: doc.projectId,
             tags: doc.tags,
             status: doc.status,
@@ -111,7 +117,8 @@ export function KnowledgeCenter({
         : {
             title: '',
             content: '',
-            kind: 'source',
+            kind: kind === 'wiki' ? 'wiki' : 'source',
+            folderId: kind === 'wiki' && folder !== '*' ? folder || null : undefined,
             projectId: project !== '*' && project ? project : undefined,
             tags: [],
             sourceIds: [],
@@ -140,7 +147,7 @@ export function KnowledgeCenter({
           <div className="knowledge-eyebrow">
             <BookOpen size={14} /> LOCAL KNOWLEDGE
           </div>
-          <h1>知识库</h1>
+          <h1>智库</h1>
           <p>把资料、项目经验和会话发现，积累成可复用的知识。</p>
         </div>
         <div className="row">
@@ -178,7 +185,7 @@ export function KnowledgeCenter({
           </button>
           <button className="primary" onClick={() => startEdit()}>
             <Plus size={16} />
-            新建笔记
+            {kind === 'wiki' ? '新建 Wiki' : '新建笔记'}
           </button>
         </div>
       </header>
@@ -299,7 +306,7 @@ export function KnowledgeCenter({
             />
           </label>
           <ChoicePicker
-            label="知识空间"
+            label="知识范围"
             value={project}
             options={scopeOptions}
             onChange={setProject}
@@ -308,7 +315,7 @@ export function KnowledgeCenter({
             {(
               [
                 ['all', '全部'],
-                ['source', '资料'],
+                ['source', '资料来源'],
                 ['wiki', 'Wiki'],
                 ['memory', '每日记忆'],
                 ['issues', '待整理'],
@@ -322,6 +329,26 @@ export function KnowledgeCenter({
               </button>
             ))}
           </div>
+          {kind === 'wiki' && (
+            <KnowledgeFolders
+              api={api}
+              folders={state?.folders ?? []}
+              selected={folder}
+              onSelect={(id) => {
+                setFolder(id);
+                setSelected(undefined);
+              }}
+              onChanged={async () => {
+                setSelected(undefined);
+                await refresh();
+              }}
+            />
+          )}
+          {kind === 'source' && (
+            <p className="knowledge-section-hint">
+              保存上传原件、参考文件与会话原文。提炼后的结论放进 Wiki，并关联这里的来源。
+            </p>
+          )}
           <div className="knowledge-list" aria-label="知识资料列表">
             {visible.map((d) => (
               <button
@@ -362,6 +389,11 @@ export function KnowledgeCenter({
                     {statuses[doc.status]} · v{doc.version}
                   </span>
                   <h2>{doc.title}</h2>
+                  {doc.kind === 'wiki' && (
+                    <p className="knowledge-section-hint">
+                      {knowledgeFolderPath(state?.folders ?? [], doc.folderId) || '未分类'}
+                    </p>
+                  )}
                 </div>
                 <button
                   className="icon-button"
@@ -428,6 +460,19 @@ export function KnowledgeCenter({
                   <button className="text-button" onClick={() => startEdit(doc)}>
                     <NotebookPen size={14} />
                     {doc.origin === 'import' ? '编辑信息' : '编辑'}
+                  </button>
+                )}
+                {doc.kind === 'wiki' && (
+                  <button
+                    className="text-button"
+                    disabled={busy}
+                    onClick={() => {
+                      setError('');
+                      setMoving({ doc, folderId: doc.folderId ?? '' });
+                    }}
+                  >
+                    <FolderOpen size={14} />
+                    移动到目录
                   </button>
                 )}
                 <button
@@ -629,7 +674,7 @@ export function KnowledgeCenter({
               确认永久删除“<strong>{deleting.title}</strong>”？
             </p>
             <p className="muted">
-              这份资料的正文、知识库中的上传原件和全部修订历史将被删除，删除后无法撤销。原始上传位置的文件不受影响。
+              这份资料的正文、智库中的上传原件和全部修订历史将被删除，删除后无法撤销。原始上传位置的文件不受影响。
             </p>
             <p className="muted">会话引用将被取消；引用它的其他知识页仍保留，并标记来源已删除。</p>
             {deleting.memoryDate ? (
@@ -664,9 +709,54 @@ export function KnowledgeCenter({
           </div>
         </Modal>
       )}
+      {moving && (
+        <Modal title="移动 Wiki" compact onClose={() => !busy && setMoving(undefined)}>
+          <div className="modal-content wiki-folder-editor">
+            <p>{moving.doc.title}</p>
+            <Field label="目标目录">
+              <ChoicePicker
+                label="Wiki 目标目录"
+                searchable
+                value={moving.folderId}
+                options={wikiFolderOptions(state?.folders ?? [])}
+                onChange={(folderId) => setMoving({ ...moving, folderId })}
+              />
+            </Field>
+            {error && (
+              <p className="error" role="alert">
+                {error}
+              </p>
+            )}
+          </div>
+          <div className="modal-footer">
+            <button className="secondary" disabled={busy} onClick={() => setMoving(undefined)}>
+              取消
+            </button>
+            <button
+              className="primary"
+              disabled={busy || moving.folderId === (moving.doc.folderId ?? '')}
+              onClick={() =>
+                void action(async () => {
+                  const moved = await api.knowledgeMove(
+                    moving.doc.id,
+                    moving.folderId || null,
+                    moving.doc.version,
+                  );
+                  setSelected(await api.knowledgeRead(moved.id));
+                  if (kind === 'wiki') setFolder(moved.folderId ?? '');
+                  setMoving(undefined);
+                  setNotice('Wiki 已移动，正文与来源引用已保留');
+                })
+              }
+            >
+              确认移动
+            </button>
+          </div>
+        </Modal>
+      )}
       {edit && (
         <Modal
-          title={edit.id ? '编辑知识资料' : '新建笔记'}
+          title={edit.id ? '编辑知识资料' : edit.kind === 'wiki' ? '新建 Wiki' : '新建笔记'}
           wide
           onClose={() => !busy && setEdit(undefined)}
         >
@@ -685,10 +775,16 @@ export function KnowledgeCenter({
                   value={edit.kind}
                   disabled={!!edit.id}
                   options={[
-                    { value: 'source', label: '资料 / 手写笔记' },
+                    { value: 'source', label: '资料来源 / 原始笔记' },
                     { value: 'wiki', label: 'Wiki 知识页' },
                   ]}
-                  onChange={(kind) => setEdit({ ...edit, kind: kind as KnowledgeKind })}
+                  onChange={(kind) =>
+                    setEdit({
+                      ...edit,
+                      kind: kind as KnowledgeKind,
+                      folderId: kind === 'wiki' ? edit.folderId : undefined,
+                    })
+                  }
                 />
               </Field>
               <Field label="归属空间">
@@ -699,6 +795,17 @@ export function KnowledgeCenter({
                   onChange={(projectId) => setEdit({ ...edit, projectId: projectId || undefined })}
                 />
               </Field>
+              {edit.kind === 'wiki' && (
+                <Field label="Wiki 目录">
+                  <ChoicePicker
+                    label="Wiki 所属目录"
+                    searchable
+                    value={edit.folderId ?? ''}
+                    options={wikiFolderOptions(state?.folders ?? [])}
+                    onChange={(folderId) => setEdit({ ...edit, folderId: folderId || null })}
+                  />
+                </Field>
+              )}
               <Field label="标签">
                 <MultiValueInput
                   label="知识标签"
@@ -932,7 +1039,7 @@ export function KnowledgeReferences({
                 onOpen();
               }}
             >
-              打开知识库管理引用
+              打开智库管理引用
             </button>
             <button className="primary" onClick={() => setOpened(false)}>
               完成

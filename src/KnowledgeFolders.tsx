@@ -1,0 +1,262 @@
+import { useState } from 'react';
+import {
+  ChevronDown,
+  ChevronRight,
+  Folder,
+  FolderPlus,
+  MoreHorizontal,
+  Trash2,
+} from 'lucide-react';
+import { ChoicePicker } from './ChoicePicker';
+import { Field, Modal } from './components';
+import type { TongzhouAPI } from './shared/types';
+import {
+  knowledgeFolderBranch,
+  knowledgeFolderPath,
+  type KnowledgeFolder,
+  type KnowledgeFolderInput,
+} from './shared/knowledge';
+
+export function wikiFolderOptions(folders: KnowledgeFolder[], rootLabel = '未分类') {
+  return [
+    { value: '', label: rootLabel },
+    ...folders
+      .map((folder) => ({ value: folder.id, label: knowledgeFolderPath(folders, folder.id) }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'zh-CN')),
+  ];
+}
+
+export function KnowledgeFolders({
+  api,
+  folders,
+  selected,
+  onSelect,
+  onChanged,
+}: {
+  api: TongzhouAPI;
+  folders: KnowledgeFolder[];
+  selected: string;
+  onSelect(id: string): void;
+  onChanged(): Promise<void>;
+}) {
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [editing, setEditing] = useState<KnowledgeFolderInput>();
+  const [deleting, setDeleting] = useState<KnowledgeFolder>();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const begin = (value: KnowledgeFolderInput) => {
+    setError('');
+    setEditing(value);
+  };
+  const perform = async (action: () => Promise<void>) => {
+    setBusy(true);
+    setError('');
+    try {
+      await action();
+      await onChanged();
+    } catch (e) {
+      setError(
+        (e instanceof Error ? e.message : String(e)).replace(
+          /^Error invoking remote method '[^']+': (Error: )?/,
+          '',
+        ),
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  const branch = editing?.id ? knowledgeFolderBranch(folders, editing.id) : new Set<string>();
+  const tree = (parentId?: string, depth = 0): React.ReactNode =>
+    folders
+      .filter((f) => f.parentId === parentId)
+      .map((folder) => {
+        const children = folders.some((f) => f.parentId === folder.id);
+        const closed = collapsed.has(folder.id);
+        return (
+          <div key={folder.id}>
+            <div
+              className="wiki-folder-row"
+              data-selected={selected === folder.id}
+              style={{ paddingLeft: depth * 12 }}
+            >
+              {children ? (
+                <button
+                  className="icon-button wiki-folder-toggle"
+                  aria-label={`${closed ? '展开' : '折叠'}目录 ${folder.name}`}
+                  aria-expanded={!closed}
+                  onClick={() =>
+                    setCollapsed((previous) => {
+                      const next = new Set(previous);
+                      if (closed) next.delete(folder.id);
+                      else next.add(folder.id);
+                      return next;
+                    })
+                  }
+                >
+                  {closed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+                </button>
+              ) : (
+                <span className="wiki-folder-spacer" />
+              )}
+              <button
+                className="wiki-folder-name"
+                aria-pressed={selected === folder.id}
+                title={knowledgeFolderPath(folders, folder.id)}
+                onClick={() => onSelect(folder.id)}
+              >
+                <Folder size={14} />
+                <span>{folder.name}</span>
+              </button>
+              <button
+                className="icon-button wiki-folder-manage"
+                aria-label={`管理目录 ${folder.name}`}
+                title="重命名、移动或删除目录"
+                onClick={() => begin({ ...folder, parentId: folder.parentId ?? null })}
+              >
+                <MoreHorizontal size={15} />
+              </button>
+            </div>
+            {children && !closed && tree(folder.id, depth + 1)}
+          </div>
+        );
+      });
+  return (
+    <>
+      <nav className="wiki-folders" aria-label="Wiki 目录">
+        <div className="wiki-folder-heading">
+          <strong>Wiki 目录</strong>
+          <button
+            className="icon-button"
+            aria-label="新建目录"
+            title="新建目录"
+            onClick={() =>
+              begin({ name: '', parentId: selected && selected !== '*' ? selected : null })
+            }
+          >
+            <FolderPlus size={15} />
+          </button>
+        </div>
+        <button
+          className="wiki-folder-root"
+          aria-pressed={selected === '*'}
+          onClick={() => onSelect('*')}
+        >
+          全部 Wiki
+        </button>
+        <button
+          className="wiki-folder-root"
+          aria-pressed={selected === ''}
+          onClick={() => onSelect('')}
+        >
+          未分类
+        </button>
+        <div className="wiki-folder-tree">{tree()}</div>
+        {!folders.length && <p className="muted">按项目或主题新建目录，逐步整理知识页。</p>}
+      </nav>
+      {editing && (
+        <Modal
+          title={editing.id ? '管理 Wiki 目录' : '新建 Wiki 目录'}
+          compact
+          onClose={() => !busy && setEditing(undefined)}
+        >
+          <div className="modal-content wiki-folder-editor">
+            <Field label="目录名称">
+              <input
+                autoFocus
+                aria-label="目录名称"
+                maxLength={60}
+                value={editing.name}
+                onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+              />
+            </Field>
+            <Field label="上级目录">
+              <ChoicePicker
+                label="上级目录"
+                value={editing.parentId ?? ''}
+                searchable
+                options={wikiFolderOptions(
+                  folders.filter((f) => !branch.has(f.id)),
+                  '顶层目录',
+                )}
+                onChange={(parentId) => setEditing({ ...editing, parentId: parentId || null })}
+              />
+            </Field>
+            {error && (
+              <p role="alert" className="error">
+                {error}
+              </p>
+            )}
+          </div>
+          <div className="modal-footer">
+            {editing.id && (
+              <button
+                className="text-button danger"
+                disabled={busy}
+                onClick={() => {
+                  setDeleting(folders.find((f) => f.id === editing.id));
+                  setEditing(undefined);
+                  setError('');
+                }}
+              >
+                <Trash2 size={14} />
+                删除目录
+              </button>
+            )}
+            <button className="secondary" disabled={busy} onClick={() => setEditing(undefined)}>
+              取消
+            </button>
+            <button
+              className="primary"
+              disabled={busy || !editing.name.trim()}
+              onClick={() =>
+                void perform(async () => {
+                  const folder = await api.knowledgeFolderSave(editing);
+                  setEditing(undefined);
+                  setCollapsed(new Set());
+                  onSelect(folder.id);
+                })
+              }
+            >
+              {busy ? '保存中…' : '保存目录'}
+            </button>
+          </div>
+        </Modal>
+      )}
+      {deleting && (
+        <Modal title="删除 Wiki 目录" compact onClose={() => !busy && setDeleting(undefined)}>
+          <div className="modal-content confirmation-content">
+            <p>
+              删除“<strong>{deleting.name}</strong>”及其子目录？
+            </p>
+            <p className="muted">
+              目录中的 Wiki 页面全部保留，并移到“未分类”。原文、来源引用和历史版本不受影响。
+            </p>
+            {error && (
+              <p role="alert" className="error">
+                {error}
+              </p>
+            )}
+          </div>
+          <div className="modal-footer">
+            <button className="secondary" disabled={busy} onClick={() => setDeleting(undefined)}>
+              取消
+            </button>
+            <button
+              className="destructive-button"
+              disabled={busy}
+              onClick={() =>
+                void perform(async () => {
+                  await api.knowledgeFolderDelete(deleting.id, deleting.version);
+                  if (knowledgeFolderBranch(folders, deleting.id).has(selected)) onSelect('');
+                  setDeleting(undefined);
+                })
+              }
+            >
+              {busy ? '删除中…' : '确认删除目录'}
+            </button>
+          </div>
+        </Modal>
+      )}
+    </>
+  );
+}

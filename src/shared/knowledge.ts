@@ -1,4 +1,41 @@
 export type KnowledgeKind = 'source' | 'wiki' | 'memory';
+export interface KnowledgeFolder {
+  id: string;
+  name: string;
+  parentId?: string;
+  version: number;
+}
+export interface KnowledgeFolderInput {
+  id?: string;
+  name: string;
+  parentId?: string | null;
+  version?: number;
+}
+export function knowledgeFolderPath(folders: KnowledgeFolder[], id?: string | null): string {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  while (id && !seen.has(id)) {
+    seen.add(id);
+    const folder = folders.find((f) => f.id === id);
+    if (!folder) break;
+    names.unshift(folder.name);
+    id = folder.parentId;
+  }
+  return names.join(' / ');
+}
+export function knowledgeFolderBranch(folders: KnowledgeFolder[], id: string): Set<string> {
+  const branch = new Set([id]);
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (const folder of folders) {
+      if (folder.parentId && branch.has(folder.parentId) && !branch.has(folder.id)) {
+        branch.add(folder.id);
+        changed = true;
+      }
+    }
+  }
+  return branch;
+}
 // archived is retained only for reading legacy data and revisions.
 export type KnowledgeStatus = 'ready' | 'draft' | 'archived';
 export type MemoryCategory = 'preference' | 'fact' | 'decision' | 'lesson' | 'todo' | 'conflict';
@@ -41,6 +78,7 @@ export interface KnowledgeDocument {
   id: string;
   title: string;
   kind: KnowledgeKind;
+  folderId?: string;
   status: KnowledgeStatus;
   projectId?: string;
   sessionId?: string;
@@ -73,6 +111,7 @@ export interface KnowledgeInput {
   title: string;
   content: string;
   kind: KnowledgeKind;
+  folderId?: string | null;
   projectId?: string;
   tags?: string[];
   status?: KnowledgeStatus;
@@ -86,6 +125,7 @@ export interface KnowledgeState {
   root: string;
   settings: KnowledgeSettings;
   documents: KnowledgeSummary[];
+  folders: KnowledgeFolder[];
   total: number;
   issues: { id: string; title: string; reason: string }[];
   pinned: string[];

@@ -22,6 +22,105 @@ function fixture() {
   return { root, store, k };
 }
 describe('local knowledge lifecycle', () => {
+  it('organizes nested Wiki folders without changing scope or losing pages when a directory is deleted', () => {
+    const { k, store, root } = fixture();
+    store.put('project', { id: 'private', name: 'Private', path: '/private' });
+    const ordinary = store.createSession();
+    const parent = k.saveFolder({ name: '研发' });
+    const child = k.saveFolder({ name: '接口', parentId: parent.id });
+    const source = k.importFile('原文.txt', Buffer.from('原始接口定义'));
+    const wiki = k.save({
+      title: '接口规则',
+      kind: 'wiki',
+      content: '接口规则正文',
+      folderId: child.id,
+      projectId: 'private',
+      sourceIds: [source.id],
+    });
+    const unfiled = k.save({ title: '其他规则', kind: 'wiki', content: '其他', status: 'draft' });
+    expect(k.state('', undefined, undefined, parent.id).documents.map((d) => d.id)).toEqual([
+      wiki.id,
+    ]);
+    expect(k.state('', undefined, undefined, null).documents.map((d) => d.id)).toEqual([
+      unfiled.id,
+    ]);
+    expect(k.state('', undefined, undefined, '*').documents.map((d) => d.id)).toEqual(
+      expect.arrayContaining([unfiled.id, wiki.id]),
+    );
+    expect(k.search('', ordinary.id).some((d) => d.id === wiki.id)).toBe(false);
+    const renamed = k.saveFolder({ ...child, name: 'API', parentId: null });
+    expect(k.get(wiki.id).folderId).toBe(child.id);
+    expect(k.state('', undefined, undefined, parent.id).documents).toHaveLength(0);
+    expect(() => k.saveFolder({ ...child, name: '过期改名' })).toThrow('目录已更新');
+    const moved = k.moveWiki(wiki.id, parent.id, wiki.version);
+    expect(moved).toMatchObject({
+      content: wiki.content,
+      sources: wiki.sources,
+      projectId: 'private',
+      status: 'ready',
+    });
+    expect(() => k.moveWiki(wiki.id, null, wiki.version)).toThrow('知识页已更新');
+    expect(k.search('', ordinary.id).some((d) => d.id === wiki.id)).toBe(false);
+    k.saveFolder({ ...renamed, parentId: parent.id });
+    k.deleteFolder(parent.id, parent.version);
+    expect(k.folders()).toHaveLength(0);
+    const retained = k.get(wiki.id);
+    expect(retained.folderId).toBeUndefined();
+    expect(retained.content).toBe(wiki.content);
+    expect(retained.sources).toEqual(wiki.sources);
+    expect(k.restore(wiki.id, 1, retained.version).folderId).toBeUndefined();
+    expect(new Knowledge(store, root).get(wiki.id).content).toBe(wiki.content);
+    expect(existsSync(path.join(k.root, 'wiki', `${wiki.id}.md`))).toBe(true);
+  });
+  it('rejects invalid directory trees and folder assignments', () => {
+    const { k } = fixture();
+    const parent = k.saveFolder({ name: 'Root' });
+    const child = k.saveFolder({ name: 'Child', parentId: parent.id });
+    expect(() => k.saveFolder({ name: 'root' })).toThrow('已有这个名称');
+    expect(() => k.saveFolder({ name: '../invalid' })).toThrow();
+    expect(() => k.saveFolder({ ...parent, parentId: child.id })).toThrow('自身或子目录');
+    let deepest = child;
+    for (let i = 3; i <= 8; i++)
+      deepest = k.saveFolder({ name: `Level ${i}`, parentId: deepest.id });
+    expect(() => k.saveFolder({ name: 'too deep', parentId: deepest.id })).toThrow('8 层');
+    const outer = k.saveFolder({ name: 'Outer' });
+    expect(() => k.saveFolder({ ...parent, parentId: outer.id })).toThrow('8 层');
+    expect(() =>
+      k.save({ title: '原文', kind: 'source', content: '原文', folderId: parent.id }),
+    ).toThrow('只有 Wiki');
+    const source = k.save({ title: '原文', kind: 'source', content: '原文' });
+    expect(() => k.moveWiki(source.id, parent.id, source.version)).toThrow('只用于 Wiki');
+    const changed = k.saveFolder({ ...outer, name: 'New outer' });
+    expect(() => k.deleteFolder(changed.id, outer.version)).toThrow('目录已更新');
+  });
+  it('lets scoped knowledge tools discover folders and save a draft in them', async () => {
+    const { k, store } = fixture();
+    const session = store.createSession();
+    const folder = k.saveFolder({ name: '模型知识' });
+    const source = k.save({ title: '模型原文', content: '模型原文', kind: 'source' });
+    const handlers = new Map<string, any>();
+    k.attach(
+      { add: (spec: any, _title: any, execute: any) => handlers.set(spec.name, execute) } as any,
+      session.id,
+      false,
+      () => {},
+    );
+    expect(JSON.parse((await handlers.get('knowledge_folders')({})).text)[0].id).toBe(folder.id);
+    const saved = JSON.parse(
+      (
+        await handlers.get('knowledge_write')({
+          title: '模型说明',
+          content: '模型说明',
+          sourceIds: [source.id],
+          folderId: folder.id,
+        })
+      ).text,
+    );
+    expect(saved).toMatchObject({ folderId: folder.id, status: 'draft', kind: 'wiki' });
+    expect(k.save({ ...k.get(saved.id), content: '补充', sourceIds: [source.id] }).folderId).toBe(
+      folder.id,
+    );
+  });
   it('prevents the client-management tool from marking its own work as human reviewed', async () => {
     const { k, store } = fixture();
     const session = store.createSession();
@@ -320,6 +419,13 @@ describe('local knowledge lifecycle', () => {
   it('includes the knowledge files and index in encrypted backup and restores the vault', () => {
     const { root, store, k } = fixture();
     const d = k.importFile('guide.txt', Buffer.from('persistent knowledge'));
+    const folder = k.saveFolder({ name: '参考目录' });
+    const wiki = k.save({
+      title: '参考 Wiki',
+      kind: 'wiki',
+      content: 'persistent wiki',
+      folderId: folder.id,
+    });
     const maintenance = new DataMaintenance(store, root);
     const bytes = maintenance.backup('long-backup-password');
     const target = mkdtempSync(path.join(tmpdir(), 'tongzhou-vault-restore-'));
@@ -330,5 +436,16 @@ describe('local knowledge lifecycle', () => {
       'persistent knowledge',
     );
     expect(readFileSync(path.join(target, 'knowledge', 'index.md'), 'utf8')).toContain('guide.txt');
+    expect(
+      JSON.parse(readFileSync(path.join(target, 'knowledge', 'folders.json'), 'utf8')),
+    ).toEqual([folder]);
+    const restoredStore = new Store(path.join(target, 'tongzhou.db'), {
+      encrypt: (s) => s,
+      decrypt: (s) => s,
+    });
+    clean.push(() => restoredStore.close());
+    const restored = new Knowledge(restoredStore, target);
+    expect(restored.folders()).toEqual([folder]);
+    expect(restored.get(wiki.id).folderId).toBe(folder.id);
   });
 });

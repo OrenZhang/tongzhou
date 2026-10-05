@@ -329,7 +329,17 @@ export interface TongzhouAPI {
   knowledgeExclude(sessionId: string, id: string, excluded: boolean): Promise<void>;
   knowledgeReferences(sessionId: string): Promise<string[]>;
   knowledgeCollect(sessionId: string): Promise<{ collected: number }>;
-  knowledgeState(query?: string, projectId?: string, sessionId?: string): Promise<KnowledgeState>;
+  knowledgeState(
+    query?: string,
+    projectId?: string,
+    sessionId?: string,
+    folderId?: string | null,
+  ): Promise<KnowledgeState>;
+  knowledgeFolderSave(
+    input: import('./knowledge').KnowledgeFolderInput,
+  ): Promise<import('./knowledge').KnowledgeFolder>;
+  knowledgeFolderDelete(id: string, version: number): Promise<void>;
+  knowledgeMove(id: string, folderId: string | null, version: number): Promise<KnowledgeDocument>;
   knowledgeRead(id: string): Promise<KnowledgeRead>;
   knowledgeSave(input: KnowledgeInput): Promise<KnowledgeDocument>;
   knowledgeDelete(id: string, currentVersion: number): Promise<void>;

@@ -109,6 +109,115 @@
   overflow: auto;
   max-height: 660px;
 }
+.knowledge-section-hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.wiki-folders {
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 0;
+  font-size: 12px;
+}
+.wiki-folder-heading,
+.wiki-folder-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+.wiki-folder-heading {
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.wiki-folder-heading strong {
+  font-size: 12px;
+  font-weight: 550;
+}
+.wiki-folder-tree {
+  max-height: 260px;
+  overflow: auto;
+}
+.wiki-folder-row {
+  border-radius: 6px;
+}
+.wiki-folder-name {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+  min-width: 0;
+  padding: 7px 0;
+  text-align: left;
+  color: var(--secondary-text);
+}
+.wiki-folder-name span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wiki-folder-name svg {
+  flex: none;
+  color: var(--muted);
+}
+.wiki-folder-row .icon-button {
+  width: 24px;
+  height: 26px;
+  padding: 3px;
+  flex: none;
+}
+.wiki-folder-row .wiki-folder-toggle,
+.wiki-folder-spacer {
+  width: 14px;
+  flex: none;
+}
+.wiki-folder-root {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  border-radius: 6px;
+  color: var(--secondary-text);
+}
+.wiki-folder-row:hover,
+.wiki-folder-root:hover {
+  background: var(--surface);
+}
+.wiki-folder-row[data-selected='true'],
+.wiki-folder-root[aria-pressed='true'] {
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 var(--accent);
+}
+.wiki-folder-row[data-selected='true'] .wiki-folder-name,
+.wiki-folder-root[aria-pressed='true'] {
+  color: var(--accent);
+  font-weight: 550;
+}
+.wiki-folder-manage {
+  opacity: 0;
+}
+.wiki-folder-row:hover .wiki-folder-manage,
+.wiki-folder-row:focus-within .wiki-folder-manage,
+.wiki-folder-row[data-selected='true'] .wiki-folder-manage {
+  opacity: 1;
+}
+.wiki-folders > p {
+  margin: 8px 4px;
+  line-height: 1.6;
+}
+.wiki-folder-editor {
+  display: grid;
+  gap: 16px;
+}
+@media (hover: none) {
+  .wiki-folder-manage {
+    opacity: 1;
+  }
+}
 .knowledge-item {
   display: flex;
   flex-direction: column;
