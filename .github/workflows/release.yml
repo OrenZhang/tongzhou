@@ -7,11 +7,22 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: publish-release
+  group: publish-release-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  eligibility:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify release branch ancestry and version
+        run: node scripts/release-version.mjs
   package:
-    if: github.ref == 'refs/heads/release' || startsWith(github.ref, 'refs/tags/v')
+    needs: eligibility
     strategy:
       fail-fast: false
       matrix:
@@ -27,7 +38,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: node scripts/release-version.mjs
       - run: npm test
       - run: npm run build
       - run: npm run test:desktop
@@ -72,6 +82,9 @@ jobs:
   publish:
     needs: package
     runs-on: ubuntu-latest
+    concurrency:
+      group: publish-release-assets
+      cancel-in-progress: false
     permissions:
       contents: write
     steps:
