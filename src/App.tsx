@@ -611,7 +611,7 @@ export default function App() {
   };
   const nav = [
     { id: 'providers', label: '模型与订阅', icon: Network },
-    { id: 'agents', label: 'Agent 团队', icon: Users },
+    { id: 'agents', label: 'Agent', icon: Users },
     { id: 'extensions', label: '插件', icon: Terminal },
     { id: 'knowledge', label: '智库', icon: BookOpen },
     { id: 'activity', label: '运行记录', icon: Activity },
@@ -1042,7 +1042,7 @@ export default function App() {
                 : {
                     providers: '模型与订阅',
                     connections: '连接中心',
-                    agents: 'Agent 团队',
+                    agents: 'Agent',
                     activity: '运行记录',
                     settings: '设置与优化',
                     extensions: '插件',
@@ -1779,8 +1779,8 @@ export default function App() {
             <div className="page-heading">
               <div className="page-title-row">
                 <div>
-                  <h1>Agent 团队</h1>
-                  <p>按需启用专属角色，普通聊天无需选择 Agent。</p>
+                  <h1>Agent</h1>
+                  <p>内置 Agent 处理专门任务，也可以创建自己的角色。普通聊天无需选择 Agent。</p>
                 </div>
                 <button
                   className="primary"
@@ -1810,59 +1810,107 @@ export default function App() {
                   <p>普通聊天无需 Agent。需要固定指令、模型或职责时，再创建一个。</p>
                 </div>
               )}
-              {data.agents.map((a, i) => (
-                <article className="agent-card" key={a.id}>
-                  <div className="card-top">
-                    <span className={'agent-avatar tone-' + (i % 3)}>
-                      <Bot size={25} />
-                    </span>
-                    <span className="tag">
-                      {a.permission === 'read-only' ? '只读分析' : '审批后执行'}
-                    </span>
-                    <button
-                      className="icon-button"
-                      aria-label={'编辑 ' + a.name}
-                      onClick={() => setAgentEdit(a)}
-                    >
-                      <SlidersHorizontal size={17} />
-                    </button>
-                  </div>
-                  <h3>{a.name}</h3>
-                  <p>{a.description}</p>
-                  <div className="agent-instructions">{a.instructions}</div>
-                  <div className="agent-detail">
-                    <span>
-                      <Layers3 size={13} />
-                      {a.model || '继承会话模型'}
-                    </span>
-                    <span>
-                      <Zap size={13} />
-                      {a.maxSteps === 0 ? '轮次不限' : `最多 ${a.maxSteps} 轮`}
-                    </span>
-                  </div>
-                  <div className="card-footer">
-                    <span>
-                      {data.providers.find((p) => p.id === a.providerId)?.name ?? '继承会话连接'}
-                    </span>
-                    <button
-                      aria-label={`使用 ${a.name}`}
-                      disabled={!!running}
-                      onClick={() => {
-                        setAgentId(a.id);
-                        if (a.providerId) setProviderId(a.providerId);
-                        if (a.model) setModel(a.model);
-                        setView('workspace');
-                      }}
-                    >
-                      用于当前会话
-                    </button>
-                    <button onClick={() => setAgentEdit(a)}>
-                      配置
-                      <ArrowRight size={13} />
-                    </button>
-                  </div>
-                </article>
-              ))}
+              {data.agents
+                .filter((a) => a.builtin)
+                .map((a) => (
+                  <article className="agent-card" key={a.id}>
+                    <div className="card-top">
+                      <span className="agent-avatar tone-0">
+                        <BookOpen size={25} />
+                      </span>
+                      <span className="tag">
+                        内置 · {a.builtin === 'memory-organizer' ? '记忆整理' : '知识整理'}
+                        {a.customized ? ' · 已自定义' : ''}
+                      </span>
+                    </div>
+                    <h3>{a.name}</h3>
+                    <p>{a.description}</p>
+                    <div className="agent-instructions">
+                      {a.builtin === 'memory-organizer'
+                        ? '后台收集候选 → 核对原文 → 按日分类归并 → 持续补充'
+                        : '阅读来源 → 查重与补充 → 生成草稿 → 人工核对收录'}
+                    </div>
+                    <div className="agent-detail">
+                      <span>
+                        <Layers3 size={13} />
+                        {a.model || (a.providerId ? '使用指定连接的默认模型' : '继承来源会话模型')}
+                      </span>
+                      <span>
+                        <ShieldCheck size={13} />
+                        {a.builtin === 'memory-organizer' ? '仅处理本批记忆来源' : '仅整理知识资料'}
+                      </span>
+                    </div>
+                    <div className="card-footer">
+                      <span>
+                        {a.builtin === 'memory-organizer'
+                          ? '跟随智库的后台记忆整理开关'
+                          : '在智库选择资料后启动'}
+                      </span>
+                      <button onClick={() => setView('knowledge')}>
+                        前往智库
+                        <ArrowRight size={13} />
+                      </button>
+                      <button className="primary" onClick={() => setAgentEdit(a)}>
+                        配置
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              {data.agents
+                .filter((a) => !a.builtin)
+                .map((a, i) => (
+                  <article className="agent-card" key={a.id}>
+                    <div className="card-top">
+                      <span className={'agent-avatar tone-' + (i % 3)}>
+                        <Bot size={25} />
+                      </span>
+                      <span className="tag">
+                        {a.permission === 'read-only' ? '只读分析' : '审批后执行'}
+                      </span>
+                      <button
+                        className="icon-button"
+                        aria-label={'编辑 ' + a.name}
+                        onClick={() => setAgentEdit(a)}
+                      >
+                        <SlidersHorizontal size={17} />
+                      </button>
+                    </div>
+                    <h3>{a.name}</h3>
+                    <p>{a.description}</p>
+                    <div className="agent-instructions">{a.instructions}</div>
+                    <div className="agent-detail">
+                      <span>
+                        <Layers3 size={13} />
+                        {a.model || '继承会话模型'}
+                      </span>
+                      <span>
+                        <Zap size={13} />
+                        {a.maxSteps === 0 ? '轮次不限' : `最多 ${a.maxSteps} 轮`}
+                      </span>
+                    </div>
+                    <div className="card-footer">
+                      <span>
+                        {data.providers.find((p) => p.id === a.providerId)?.name ?? '继承会话连接'}
+                      </span>
+                      <button
+                        aria-label={`使用 ${a.name}`}
+                        disabled={!!running}
+                        onClick={() => {
+                          setAgentId(a.id);
+                          if (a.providerId) setProviderId(a.providerId);
+                          if (a.model) setModel(a.model);
+                          setView('workspace');
+                        }}
+                      >
+                        用于当前会话
+                      </button>
+                      <button onClick={() => setAgentEdit(a)}>
+                        配置
+                        <ArrowRight size={13} />
+                      </button>
+                    </div>
+                  </article>
+                ))}
             </div>
             <div className="section-note">
               <Users size={20} />
@@ -2580,7 +2628,11 @@ export default function App() {
       {agentEdit && (
         <Modal
           title="配置 Agent"
-          subtitle="角色配置可以独立选择模型，也可以继承当前会话。"
+          subtitle={
+            agentEdit.builtin
+              ? '调整内置 Agent 的整理方式与模型；执行范围固定，保存后用于下一次任务。'
+              : '角色配置可以独立选择模型，也可以继承当前会话。'
+          }
           onClose={() => setAgentEdit(null)}
         >
           <div className="modal-content">
@@ -2592,18 +2644,29 @@ export default function App() {
                 />
               </Field>
               <Field label="执行权限">
-                <select
-                  value={agentEdit.permission}
-                  onChange={(e) =>
-                    setAgentEdit({
-                      ...agentEdit,
-                      permission: e.target.value as 'ask' | 'read-only',
-                    })
-                  }
-                >
-                  <option value="read-only">只读分析</option>
-                  <option value="ask">修改与命令需审批</option>
-                </select>
+                {agentEdit.builtin ? (
+                  <input
+                    readOnly
+                    value={
+                      agentEdit.builtin === 'memory-organizer'
+                        ? '本批记忆来源与记忆提交（固定）'
+                        : '知识资料读取与草稿整理（固定）'
+                    }
+                  />
+                ) : (
+                  <select
+                    value={agentEdit.permission}
+                    onChange={(e) =>
+                      setAgentEdit({
+                        ...agentEdit,
+                        permission: e.target.value as 'ask' | 'read-only',
+                      })
+                    }
+                  >
+                    <option value="read-only">只读分析</option>
+                    <option value="ask">修改与命令需审批</option>
+                  </select>
+                )}
               </Field>
             </div>
             <Field label="职责描述">
@@ -2620,7 +2683,14 @@ export default function App() {
               />
             </Field>
             <div className="form-grid">
-              <Field label="模型连接">
+              <Field
+                label="模型连接"
+                hint={
+                  agentEdit.builtin
+                    ? '默认继承来源会话。指定其他连接但未选模型时，使用该连接的第一个模型。'
+                    : undefined
+                }
+              >
                 <select
                   value={agentEdit.providerId}
                   onChange={(e) =>
@@ -2658,7 +2728,14 @@ export default function App() {
                 />
               </Field>
             </div>
-            <Field label="最大模型轮次（0 为不限，仅直接 API 模式）">
+            <Field
+              label="最大模型轮次（0 为不限，仅直接 API 模式）"
+              hint={
+                agentEdit.builtin === 'memory-organizer'
+                  ? '默认 8 轮；后台单次任务仍有 3 分钟时限，失败可在智库重试。'
+                  : undefined
+              }
+            >
               <input
                 type="number"
                 min={0}
@@ -2671,7 +2748,7 @@ export default function App() {
           <div className="modal-footer">
             {data.agents.some((a) => a.id === agentEdit.id) && (
               <button
-                className="text-button danger"
+                className={agentEdit.builtin ? 'text-button' : 'text-button danger'}
                 onClick={() =>
                   perform(async () => {
                     await api.deleteAgent(agentEdit.id);
@@ -2680,8 +2757,8 @@ export default function App() {
                   })
                 }
               >
-                <Trash2 size={14} />
-                删除
+                {agentEdit.builtin ? <RefreshCw size={14} /> : <Trash2 size={14} />}
+                {agentEdit.builtin ? '恢复默认' : '删除'}
               </button>
             )}
             <span className="spacer" />
@@ -2817,32 +2894,34 @@ export default function App() {
           onClose={() => setTeamOpen(false)}
         >
           <div className="modal-content team-options">
-            {data.agents.map((a) => (
-              <label key={a.id}>
-                <input
-                  type="checkbox"
-                  checked={teamIds.includes(a.id)}
-                  onChange={(e) =>
-                    setTeamIds(
-                      e.target.checked
-                        ? [...teamIds, a.id].slice(0, 3)
-                        : teamIds.filter((id) => id !== a.id),
-                    )
-                  }
-                />
-                <span className="mini-icon">
-                  <Bot size={18} />
-                </span>
-                <div>
-                  <strong>{a.name}</strong>
-                  <p>
-                    {a.model || model} ·{' '}
-                    {data.providers.find((p) => p.id === a.providerId)?.name || provider?.name}
-                  </p>
-                </div>
-                <span className="tag">只读</span>
-              </label>
-            ))}
+            {data.agents
+              .filter((a) => !a.builtin)
+              .map((a) => (
+                <label key={a.id}>
+                  <input
+                    type="checkbox"
+                    checked={teamIds.includes(a.id)}
+                    onChange={(e) =>
+                      setTeamIds(
+                        e.target.checked
+                          ? [...teamIds, a.id].slice(0, 3)
+                          : teamIds.filter((id) => id !== a.id),
+                      )
+                    }
+                  />
+                  <span className="mini-icon">
+                    <Bot size={18} />
+                  </span>
+                  <div>
+                    <strong>{a.name}</strong>
+                    <p>
+                      {a.model || model} ·{' '}
+                      {data.providers.find((p) => p.id === a.providerId)?.name || provider?.name}
+                    </p>
+                  </div>
+                  <span className="tag">只读</span>
+                </label>
+              ))}
           </div>
           <div className="modal-footer">
             <span className="muted">每位 Agent 独立产生模型用量</span>

@@ -1,3 +1,4 @@
+import { seedKnowledge } from './knowledge-fixture.mjs';
 import { _electron as electron } from 'playwright';
 import { mkdir, mkdtemp } from 'node:fs/promises';
 import path from 'node:path';
@@ -9,30 +10,31 @@ const env = { ...process.env, TONGZHOU_USER_DATA: path.join(root, 'profile') };
 delete env.ELECTRON_RUN_AS_NODE;
 delete env.TONGZHOU_DEV_URL;
 const executablePath = process.env.TONGZHOU_SMOKE_EXECUTABLE;
+const ids = await seedKnowledge(path.join(root, 'profile'), async (api) => {
+  const long = await api.knowledgeSave({
+    title: '长内容滚动回归',
+    kind: 'wiki',
+    content:
+      Array.from(
+        { length: 70 },
+        (_, i) =>
+          `## 第 ${i + 1} 节\n\n这是需要完整阅读的知识正文，包含来源、使用条件与详细步骤。\n\n- 检查来源\n- 核对上下文\n`,
+      ).join('\n') + '\n末尾验证标记：正文完整可读。',
+  });
+  const short = await api.knowledgeSave({
+    title: '短页滚动回归',
+    kind: 'wiki',
+    content: '短页从顶部显示。',
+  });
+  return { long: long.id, short: short.id };
+});
 const app = await electron.launch({ executablePath, args: executablePath ? [] : ['.'], env });
 try {
   const page = await app.firstWindow();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.waitForSelector('.app-shell');
-  const ids = await page.evaluate(async () => {
-    const long = await window.tongzhou.knowledgeSave({
-      title: '长内容滚动回归',
-      kind: 'wiki',
-      content:
-        Array.from(
-          { length: 70 },
-          (_, i) =>
-            `## 第 ${i + 1} 节\n\n这是需要完整阅读的知识正文，包含来源、使用条件与详细步骤。\n\n- 检查来源\n- 核对上下文\n`,
-        ).join('\n') + '\n末尾验证标记：正文完整可读。',
-    });
-    const short = await window.tongzhou.knowledgeSave({
-      title: '短页滚动回归',
-      kind: 'wiki',
-      content: '短页从顶部显示。',
-    });
-    return { long: long.id, short: short.id };
-  });
+
   await page.getByRole('button', { name: '智库', exact: true }).click();
   for (const [width, height] of [
     [1440, 960],

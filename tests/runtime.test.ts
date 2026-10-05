@@ -7,6 +7,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { Store } from '../electron/store';
 import { Runtime } from '../electron/runtime';
+import { KNOWLEDGE_ORGANIZER_ID } from '../src/shared/builtin-agents';
 import { Attachments } from '../electron/attachments';
 import type { ComputerAdapter } from '../electron/extensions';
 import { mcpName } from '../electron/extensions';
@@ -78,6 +79,31 @@ const text = (content: string) => ({
   usage: { prompt_tokens: 10, completion_tokens: 4 },
 });
 describe('conversation input and lifecycle changes', () => {
+  it('exposes the built-in organizer and confines it to knowledge jobs', async () => {
+    const f = await fixture(() => [text('已查看资料')]);
+    expect(f.runtime.snapshot().agents.filter((a) => a.builtin)).toHaveLength(2);
+    const input = { ...f.input, agentId: KNOWLEDGE_ORGANIZER_ID };
+    expect(() => f.runtime.start(input)).toThrow('请从智库选择资料');
+    expect(f.store.list('run')).toHaveLength(0);
+    const session = f.store.get<any>('session', input.sessionId);
+    f.store.put('session', { ...session, knowledgeJob: true });
+    f.store.put('skill', {
+      id: 'unrelated',
+      name: '外部技能',
+      enabled: true,
+      description: '不要进入知识整理上下文',
+    });
+    f.runtime.start(input);
+    await f.runtime.waitForIdle();
+    const run = f.store.list<Run>('run')[0];
+    expect(run).toMatchObject({ status: 'completed', agentName: '知识整理' });
+    expect(run.config?.instructions).toContain('内置知识整理 Agent');
+    expect(run.config?.instructions).not.toContain('不要进入知识整理上下文');
+    const tools = f.requests[0].tools.map((t: any) => t.function.name);
+    expect(tools).toContain('knowledge_write');
+    expect(tools).not.toContain('run_command');
+    expect(tools.some((name: string) => /^(terminal_|client_|computer_)/.test(name))).toBe(false);
+  });
   it('does not preload knowledge even with legacy settings and pins; the agent searches and reads it through tools', async () => {
     let docId = '';
     const f = await fixture((body) => {

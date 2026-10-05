@@ -117,8 +117,11 @@ try {
     0,
   );
   await page.screenshot({ path: 'test-results/02-connections.png' });
-  await page.getByRole('button', { name: 'Agent 团队', exact: true }).click();
-  assert.equal((await page.evaluate(() => window.tongzhou.snapshot())).agents.length, 0);
+  await page.getByRole('button', { name: 'Agent', exact: true }).click();
+  assert.equal(
+    (await page.evaluate(() => window.tongzhou.snapshot())).agents.filter((a) => !a.builtin).length,
+    0,
+  );
   await page.getByRole('button', { name: '创建 Agent', exact: true }).click();
   await page.getByLabel('名称', { exact: true }).fill('代码审查');
   await page.getByLabel('执行权限', { exact: true }).selectOption('read-only');

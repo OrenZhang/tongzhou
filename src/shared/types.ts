@@ -49,6 +49,8 @@ export interface ProviderInput extends Provider {
 export type PermissionMode = 'read-only' | 'ask' | 'full-access';
 export interface AgentProfile {
   id: string;
+  builtin?: 'knowledge-organizer' | 'memory-organizer';
+  customized?: boolean;
   name: string;
   description: string;
   instructions: string;

@@ -192,7 +192,10 @@ try {
   assert.equal(await page.getByRole('heading', { name: 'sample-skill', exact: true }).count(), 0);
   assert.equal(await page.locator('.provider-grid .provider-card:visible').count(), 1);
   await page.getByLabel('类型', { exact: true }).selectOption('all');
-  assert.equal((await page.evaluate(() => window.tongzhou.snapshot())).agents.length, 0);
+  assert.equal(
+    (await page.evaluate(() => window.tongzhou.snapshot())).agents.filter((a) => !a.builtin).length,
+    0,
+  );
   await page.screenshot({ path: 'test-results/12-extensions.png' });
   const base = `http://127.0.0.1:${server.address().port}/v1`;
   await page.evaluate(async (base) => {

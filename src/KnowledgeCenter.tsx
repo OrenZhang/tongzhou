@@ -137,7 +137,7 @@ export function KnowledgeCenter({
         : {
             title: '',
             content: '',
-            kind: kind === 'wiki' ? 'wiki' : 'source',
+            kind: 'source',
             folderId: folder !== '*' ? folder || null : undefined,
             projectId: project !== '*' && project ? project : undefined,
             tags: [],
@@ -212,7 +212,7 @@ export function KnowledgeCenter({
           </button>
           <button className="primary" onClick={() => startEdit()}>
             <Plus size={16} />
-            {kind === 'wiki' ? '新建整理文档' : '新建笔记'}
+            新建笔记
           </button>
         </div>
       </header>
@@ -432,7 +432,7 @@ export function KnowledgeCenter({
                     value === 'source'
                       ? '原始想法、手写笔记和上传原件'
                       : value === 'wiki'
-                        ? '从资料或会话提炼的结论，保留来源与核对状态'
+                        ? '由知识整理 Agent 提炼的文档，保留来源与核对状态'
                         : value === 'issues'
                           ? '当前范围内需要核对或补充的资料数量，每份只计一次'
                           : undefined
@@ -447,7 +447,7 @@ export function KnowledgeCenter({
             {section === 'documents' && (
               <p className="knowledge-kind-hint">
                 {kind === 'wiki'
-                  ? '整理文档：从资料或会话提炼结论，保留来源与核对状态。'
+                  ? '整理文档：由知识整理 Agent 生成。先选择笔记或原件，点击“让 Agent 整理”；生成后可人工修正、核对并收录。'
                   : kind === 'source'
                     ? '笔记与原件：你写下的想法、上传的文件，以及原始参考内容。'
                     : kind === 'issues'
@@ -558,7 +558,7 @@ export function KnowledgeCenter({
                     title={
                       !session
                         ? '请先在会话中选择模型'
-                        : '用当前会话模型生成整理文档与结构化知识草稿'
+                        : '使用知识整理 Agent 的配置生成整理文档与结构化知识草稿'
                     }
                     onClick={() =>
                       void action(async () => {
@@ -975,7 +975,7 @@ export function KnowledgeCenter({
       )}
       {edit && (
         <Modal
-          title={edit.id ? '编辑知识资料' : edit.kind === 'wiki' ? '新建整理文档' : '新建笔记'}
+          title={edit.id ? '编辑知识资料' : '新建笔记'}
           wide
           onClose={() => !busy && setEdit(undefined)}
         >
@@ -989,20 +989,15 @@ export function KnowledgeCenter({
                 />
               </Field>
               <Field label="类型">
-                <ChoicePicker
-                  label="知识类型"
-                  value={edit.kind}
-                  disabled={!!edit.id}
-                  options={[
-                    { value: 'source', label: '资料来源 / 原始笔记' },
-                    { value: 'wiki', label: '整理文档' },
-                  ]}
-                  onChange={(kind) =>
-                    setEdit({
-                      ...edit,
-                      kind: kind as KnowledgeKind,
-                      folderId: edit.folderId,
-                    })
+                <input
+                  aria-label="知识类型"
+                  readOnly
+                  value={
+                    edit.kind === 'wiki'
+                      ? '整理文档 · Agent 生成'
+                      : edit.kind === 'memory'
+                        ? '每日记忆'
+                        : '笔记与原件'
                   }
                 />
               </Field>

@@ -130,6 +130,47 @@ try {
   const page = await app.firstWindow();
   page.on('pageerror', (e) => errors.push(e.message));
   await page.waitForSelector('.app-shell');
+  await page.getByRole('button', { name: 'Agent', exact: true }).click();
+  const builtin = page.locator('.agent-card').filter({ hasText: '内置 · 知识整理' });
+  await builtin.getByRole('heading', { name: '知识整理', exact: true }).waitFor();
+  await page.screenshot({ path: 'test-results/knowledge-agent-card.png' });
+  await builtin.getByRole('button', { name: '配置', exact: true }).click();
+  await page
+    .getByLabel('角色指令', { exact: true })
+    .fill('知识配置测试：整理可复用结论，并保留来源。');
+  await page.getByRole('button', { name: '保存 Agent', exact: true }).click();
+  await page.reload();
+  await page.getByRole('button', { name: 'Agent', exact: true }).click();
+  await builtin.getByRole('button', { name: '配置', exact: true }).click();
+  assert.match(await page.getByLabel('角色指令', { exact: true }).inputValue(), /知识配置测试/);
+  await page.getByRole('button', { name: '恢复默认', exact: true }).click();
+  const reset = await page.evaluate(async () =>
+    (await window.tongzhou.snapshot()).agents.find((a) => a.builtin === 'knowledge-organizer'),
+  );
+  assert.equal(reset.customized, false);
+  assert.match(reset.instructions, /内置知识整理 Agent/);
+  const memoryCard = page.locator('.agent-card').filter({ hasText: '内置 · 记忆整理' });
+  await memoryCard.getByRole('button', { name: '配置', exact: true }).click();
+  await page
+    .getByLabel('角色指令', { exact: true })
+    .fill('记忆配置测试：优先整理工程经验与开发决策。');
+  await page.getByLabel('最大模型轮次（0 为不限，仅直接 API 模式）', { exact: true }).fill('6');
+  await page.getByRole('button', { name: '保存 Agent', exact: true }).click();
+  const protection = await page.evaluate(async () => {
+    try {
+      await window.tongzhou.knowledgeSave({
+        title: '手动新建整理文档',
+        kind: 'wiki',
+        content: '正文',
+      });
+      return 'unexpected success';
+    } catch (error) {
+      return String(error);
+    }
+  });
+  assert.match(protection, /由知识整理 Agent 生成/);
+  await builtin.getByRole('button', { name: '前往智库', exact: true }).click();
+  await page.getByRole('heading', { name: '智库', exact: true }).waitFor();
   await app.evaluate(({ dialog }, file) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [file] });
   }, importedFile);
@@ -144,6 +185,13 @@ try {
       maxOutputTokens: 8192,
       contextChars: 0,
     });
+    for (const agent of (await window.tongzhou.snapshot()).agents.filter((a) => a.builtin)) {
+      await window.tongzhou.saveAgent({
+        ...agent,
+        providerId: 'knowledge-fixture',
+        model: agent.builtin === 'memory-organizer' ? 'memory-model' : 'organizer-model',
+      });
+    }
     const s = await window.tongzhou.createSession();
     await window.tongzhou.updateSession(s.id, {
       providerId: 'knowledge-fixture',
@@ -186,6 +234,13 @@ try {
     .waitFor();
   await page.waitForFunction(
     async () => !(await window.tongzhou.snapshot()).runs.some((r) => r.status === 'running'),
+  );
+  const organized = await page.evaluate(() => window.tongzhou.snapshot());
+  const organizeSession = organized.sessions.find((s) => s.knowledgeJob);
+  assert.equal(organizeSession.agentId, 'builtin-knowledge-organizer');
+  assert.equal(
+    organized.runs.find((r) => r.sessionId === organizeSession.id).agentName,
+    '知识整理',
   );
   await page.getByRole('button', { name: '智库', exact: true }).click();
   await page.locator('.knowledge-item').filter({ hasText: '库存处理 Wiki' }).click();
@@ -239,6 +294,18 @@ try {
     .click();
   await page.locator('.knowledge-item').filter({ hasText: '每日记忆' }).click();
   await page.getByText('每日记忆已整理，等待核对', { exact: true }).waitFor();
+  const memoryRequest = requests.find((r) => r.model === 'memory-model');
+  assert.ok(memoryRequest);
+  assert.ok(
+    memoryRequest.messages.some((m) => m.role === 'system' && m.content.includes('记忆配置测试')),
+  );
+  assert.ok(requests.some((r) => r.model === 'organizer-model'));
+  const memoryRun = await page.evaluate(async () =>
+    (await window.tongzhou.snapshot()).runs.find((r) => r.agentName === '记忆整理'),
+  );
+  assert.equal(memoryRun.config.maxSteps, 6);
+  assert.equal(memoryRun.config.permission, 'read-only');
+
   await page.getByRole('button', { name: '核对并收录', exact: true }).click();
   await page.getByRole('button', { name: '确认已核对', exact: true }).click();
   await page.getByText('已核对并收录', { exact: true }).waitFor();
@@ -364,8 +431,10 @@ try {
     .locator('.knowledge-document-heading')
     .getByText('研发 / 接口文档', { exact: true })
     .waitFor();
-  await page.getByRole('button', { name: '新建整理文档', exact: true }).click();
+  await page.getByRole('button', { name: '新建笔记', exact: true }).click();
   await page.getByLabel('知识标题', { exact: true }).fill('目录内新页');
+  assert.equal(await page.getByLabel('知识类型', { exact: true }).inputValue(), '笔记与原件');
+  assert.equal(await page.getByLabel('知识类型', { exact: true }).getAttribute('readonly'), '');
   await page.getByLabel('知识正文', { exact: true }).fill('需要长期保留的接口经验。');
   assert.equal(
     await page.getByRole('button', { name: '文档所属目录', exact: true }).textContent(),
@@ -386,6 +455,7 @@ try {
     await page.screenshot({ path: `test-results/wiki-folders-${theme}.png`, fullPage: true });
   }
   const folderState = await page.evaluate(() => window.tongzhou.knowledgeState());
+  assert.equal(folderState.documents.find((d) => d.title === '目录内新页').kind, 'source');
   const wikiBefore = folderState.documents.find((d) => d.title === '库存处理 Wiki');
   assert.ok(wikiBefore.folderId);
   const folderBefore = folderState.folders.find((f) => f.name === '研发');
@@ -421,7 +491,7 @@ try {
     (await page.evaluate(() => window.tongzhou.knowledgeState())).documents.filter(
       (d) => d.kind === 'wiki',
     ).length,
-    2,
+    1,
   );
   const finalCatalog = await page.evaluate(() => window.tongzhou.clientMethods());
   for (const name of ['knowledgeFolderSave', 'knowledgeFolderDelete', 'knowledgeMove'])

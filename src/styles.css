@@ -1618,6 +1618,18 @@ svg {
   white-space: nowrap;
   min-height: 28px;
 }
+.agent-card .card-footer {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.agent-card .card-footer > span {
+  flex-basis: 100%;
+}
+.agent-card .card-footer button.primary {
+  color: var(--on-accent);
+  padding: 5px 12px;
+  border-radius: 7px;
+}
 .add-card {
   display: flex;
   flex-direction: column;

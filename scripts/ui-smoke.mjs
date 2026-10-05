@@ -365,7 +365,7 @@ try {
       await page.getByRole('button', { name: label, exact: true }).click();
       await capture(`${width}-${name}`);
     }
-    await nav('Agent 团队');
+    await nav('Agent');
     await capture(`${width}-agents`);
     await nav('插件');
     await capture(`${width}-core`);

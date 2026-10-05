@@ -1,5 +1,7 @@
 import { userAgent } from './request-identity';
 import { registerKnowledgeServices } from './knowledge-services';
+import { builtinAgent } from '../src/shared/builtin-agents';
+import { saveAgentProfile } from './agents';
 import { registerTaskServices } from './task-services';
 import { applyPendingRestore } from './data-maintenance';
 import {
@@ -1635,20 +1637,23 @@ function setup() {
     'saveAgent',
     operation('Agent', 'change', '新增或修改 Agent 角色配置', [agentSchema]),
     (raw) => {
-      const a = agentSchema.parse(raw);
-      if (a.providerId) store.get('provider', a.providerId);
-      for (const id of a.pluginIds ?? []) store.get('plugin', id);
-      for (const id of a.skillIds ?? []) store.get('skill', id);
-      store.put('agent', a);
+      const a = saveAgentProfile(store, raw);
       runtime.changed();
       return a;
     },
   );
   register(
     'deleteAgent',
-    operation('Agent', 'change', '删除 Agent 角色', [idSchema.describe('agentId')]),
+    operation('Agent', 'change', '删除自定义 Agent；内置 Agent 恢复默认配置', [
+      idSchema.describe('agentId'),
+    ]),
     (raw) => {
       const id = idSchema.parse(raw);
+      if (builtinAgent(id)) {
+        store.remove('agentOverride', id);
+        runtime.changed();
+        return;
+      }
       store.remove('agent', id);
       for (const s of store.list<Session>('session'))
         if (s.agentId === id) store.put('session', { ...s, agentId: '' });

@@ -1,3 +1,4 @@
+import { seedKnowledge } from './knowledge-fixture.mjs';
 import { _electron as electron } from 'playwright';
 import { mkdir, mkdtemp } from 'node:fs/promises';
 import path from 'node:path';
@@ -8,49 +9,49 @@ const env = { ...process.env, TONGZHOU_USER_DATA: profile };
 delete env.ELECTRON_RUN_AS_NODE;
 delete env.TONGZHOU_DEV_URL;
 const executablePath = process.env.TONGZHOU_SMOKE_EXECUTABLE;
+const ids = await seedKnowledge(profile, async (api) => {
+  await api.knowledgeSave({
+    title: '每日记忆待核对',
+    kind: 'memory',
+    status: 'draft',
+    content: '这是记忆，不应计入文档的待整理数量。',
+  });
+  const folder = await api.knowledgeFolderSave({ name: '已整理' });
+  await api.knowledgeSave({
+    title: '阅读笔记',
+    kind: 'source',
+    folderId: folder.id,
+    content: '原始想法已记录。',
+  });
+  const doc = await api.knowledgeSave({
+    title: '待补充来源的结论',
+    kind: 'wiki',
+    status: 'draft',
+    content: '待补充来源的结论',
+  });
+  await api.knowledgeSave({
+    title: '实体资料',
+    kind: 'source',
+    content: '长期使用中文。',
+    assertions: [
+      {
+        subject: '本地知识库是否为空的检索与核对方法',
+        subjectType: 'concept',
+        relation: 'preference',
+        object: '长期使用中文',
+        quote: '长期使用中文。',
+      },
+    ],
+  });
+  return { doc: doc.id };
+});
 const app = await electron.launch({ executablePath, args: executablePath ? [] : ['.'], env });
 try {
   const page = await app.firstWindow();
   await page.waitForSelector('.app-shell');
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  const ids = await page.evaluate(async () => {
-    const api = window.tongzhou;
-    await api.knowledgeSave({
-      title: '每日记忆待核对',
-      kind: 'memory',
-      status: 'draft',
-      content: '这是记忆，不应计入文档的待整理数量。',
-    });
-    const folder = await api.knowledgeFolderSave({ name: '已整理' });
-    await api.knowledgeSave({
-      title: '阅读笔记',
-      kind: 'source',
-      folderId: folder.id,
-      content: '原始想法已记录。',
-    });
-    const doc = await api.knowledgeSave({
-      title: '待补充来源的结论',
-      kind: 'wiki',
-      status: 'draft',
-      content: '待补充来源的结论',
-    });
-    await api.knowledgeSave({
-      title: '实体资料',
-      kind: 'source',
-      content: '长期使用中文。',
-      assertions: [
-        {
-          subject: '本地知识库是否为空的检索与核对方法',
-          subjectType: 'concept',
-          relation: 'preference',
-          object: '长期使用中文',
-          quote: '长期使用中文。',
-        },
-      ],
-    });
-    return { doc: doc.id };
-  });
+
   await page.getByRole('button', { name: '智库', exact: true }).click();
   const pending = page.locator('.knowledge-filters').getByRole('button', { name: /^待整理/ });
   await page.waitForFunction(
@@ -85,7 +86,10 @@ try {
     .waitFor();
   await page.getByRole('button', { name: '整理文档', exact: true }).click();
   await page
-    .getByText('整理文档：从资料或会话提炼结论，保留来源与核对状态。', { exact: true })
+    .getByText(
+      '整理文档：由知识整理 Agent 生成。先选择笔记或原件，点击“让 Agent 整理”；生成后可人工修正、核对并收录。',
+      { exact: true },
+    )
     .waitFor();
   await page.getByRole('tab', { name: /知识与记忆/ }).click();
   await page.locator('.ontology-entity').nth(1).waitFor();

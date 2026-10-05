@@ -1,9 +1,10 @@
 import type { AgentProfile } from '../src/shared/types';
 import type { Store } from './store';
+import { agentProfile } from './agents';
 
 /** Execution defaults are not a persisted Agent or a prescribed workflow. */
 export function resolveAgent(store: Store, id?: string): AgentProfile {
-  if (id) return structuredClone(store.get<AgentProfile>('agent', id));
+  if (id) return agentProfile(store, id);
   return {
     id: '',
     name: '同舟',

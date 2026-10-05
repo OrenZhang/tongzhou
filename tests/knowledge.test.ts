@@ -7,6 +7,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Store } from '../electron/store';
 import { Knowledge } from '../electron/knowledge';
+import { KNOWLEDGE_ORGANIZER_ID } from '../src/shared/builtin-agents';
+import { resolveAgent } from '../electron/context';
 import { DataMaintenance, applyPendingRestore } from '../electron/data-maintenance';
 import type { Run } from '../src/shared/types';
 const clean: (() => void)[] = [];
@@ -22,6 +24,59 @@ function fixture() {
   return { root, store, k };
 }
 describe('local knowledge lifecycle', () => {
+  it('reserves new organized documents for Agent tools while allowing human corrections', () => {
+    const { k, store } = fixture();
+    const handlers = new Map<string, any>();
+    registerKnowledgeServices((name, _definition, handler) => handlers.set(name, handler), store, {
+      knowledge: k,
+      changed: () => {},
+    } as any);
+    const save = handlers.get('knowledgeSave');
+    expect(() => save({ title: '手动整理文档', kind: 'wiki', content: '正文' })).toThrow(
+      '由知识整理 Agent 生成',
+    );
+    const source = save({ title: '原始笔记', kind: 'source', content: '正文' });
+    expect(() => save({ ...source, kind: 'wiki' })).toThrow('不能修改现有资料类型');
+    const old = k.save(
+      { title: '已有整理文档', kind: 'wiki', content: '旧正文', status: 'draft' },
+      'agent',
+    );
+    const corrected = save({ ...old, content: '人工修正', status: 'draft' });
+    expect(corrected).toMatchObject({ id: old.id, kind: 'wiki', content: '人工修正', version: 2 });
+  });
+  it('uses the built-in organizer with the chosen connection instead of the conversation role', () => {
+    const { k, store } = fixture();
+    const from = store.createSession();
+    store.put('session', {
+      ...from,
+      providerId: 'fixture',
+      model: 'mock',
+      agentId: 'custom-reviewer',
+    });
+    const source = k.save({ title: '笔记', kind: 'source', content: '原文' });
+    const handlers = new Map<string, any>();
+    const start = vi.fn();
+    registerKnowledgeServices((name, _definition, handler) => handlers.set(name, handler), store, {
+      knowledge: k,
+      changed: () => {},
+      start,
+    } as any);
+    const id = handlers.get('knowledgeOrganize')(from.id, [source.id]);
+    expect(store.get('session', id)).toMatchObject({
+      knowledgeJob: true,
+      agentId: KNOWLEDGE_ORGANIZER_ID,
+      providerId: 'fixture',
+      model: 'mock',
+    });
+    expect(start).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: id, agentId: KNOWLEDGE_ORGANIZER_ID }),
+    );
+    const agent = resolveAgent(store, KNOWLEDGE_ORGANIZER_ID);
+    expect(agent.builtin).toBe('knowledge-organizer');
+    agent.instructions = '改变本轮副本';
+    expect(resolveAgent(store, KNOWLEDGE_ORGANIZER_ID).instructions).not.toBe(agent.instructions);
+    expect(store.list('agent')).toHaveLength(0);
+  });
   it('organizes nested Wiki folders without changing scope or losing pages when a directory is deleted', () => {
     const { k, store, root } = fixture();
     store.put('project', { id: 'private', name: 'Private', path: '/private' });
@@ -149,7 +204,7 @@ describe('local knowledge lifecycle', () => {
       (
         await change({
           method: 'knowledgeSave',
-          args: [{ title: '草稿', kind: 'wiki', content: '待核对', status: 'draft' }],
+          args: [{ title: '草稿', kind: 'source', content: '待核对', status: 'draft' }],
         })
       ).text,
     );

@@ -311,7 +311,7 @@ export class Knowledge {
     if (old && p.version !== old.version)
       throw new Error('资料已被更新，请重新打开后再保存，避免覆盖新内容');
     if (old?.origin === 'import' && old.content !== p.content)
-      throw new Error('导入原文保留不变，请新建 整理文档 进行整理');
+      throw new Error('导入原文保留不变，请使用“让 Agent 整理”生成整理文档');
     if (old && old.kind !== p.kind) throw new Error('不能修改现有资料类型，请另建知识页');
     if (p.projectId) this.store.get('project', p.projectId);
     const sources: KnowledgeSource[] = p.sourceIds.map((sourceId) => {
