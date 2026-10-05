@@ -15,6 +15,8 @@ vi.mock('electron', () => ({
             get: vi.fn(async () => [{ name: 'session', value: 'private-cookie' }]),
             flushStore: vi.fn(async () => {}),
           },
+          on: vi.fn(),
+          removeListener: vi.fn(),
           clearStorageData: vi.fn(async () => {}),
           clearCache: vi.fn(async () => {}),
           setPermissionRequestHandler: vi.fn(),

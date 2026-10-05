@@ -72,7 +72,12 @@ export class NativeClient extends EventEmitter {
   private sequence = 0;
   private pending = new Map<
     number,
-    { resolve(value: any): void; reject(error: Error): void; timer: NodeJS.Timeout }
+    {
+      resolve(value: any): void;
+      reject(error: Error): void;
+      timer: NodeJS.Timeout;
+      prompt?: boolean;
+    }
   >();
   constructor(
     readonly kind: NativeEngine,
@@ -105,6 +110,7 @@ export class NativeClient extends EventEmitter {
         } catch {
           continue;
         }
+        for (const p of this.pending.values()) if (p.prompt) p.timer.refresh();
         if (msg.method) this.emit(msg.id === undefined ? 'notification' : 'request', msg);
         else {
           const pending = this.pending.get(msg.id);
@@ -168,9 +174,9 @@ export class NativeClient extends EventEmitter {
       const id = ++this.sequence;
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error(`${this.kind} ${method} 请求超时`));
+        reject(new Error(`${this.kind} ${method} 等待活动超时`));
       }, timeout);
-      this.pending.set(id, { resolve, reject, timer });
+      this.pending.set(id, { resolve, reject, timer, prompt: method === 'session/prompt' });
       this.child.stdin.write(
         JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n',
         (error) => {

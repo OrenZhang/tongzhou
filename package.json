@@ -43,7 +43,8 @@
     "test:computer": "node scripts/computer-smoke.mjs",
     "test:live": "node scripts/live-coding-smoke.mjs",
     "test:package": "node scripts/package-smoke.mjs",
-    "test:latency": "node scripts/chat-latency-smoke.mjs"
+    "test:latency": "node scripts/chat-latency-smoke.mjs",
+    "test:task-workbench": "node scripts/task-workbench-smoke.mjs"
   },
   "dependencies": {
     "@iarna/toml": "^2.2.5",
@@ -54,14 +55,18 @@
     "@openai/codex": "0.160.0",
     "@vscode/ripgrep": "1.18.0",
     "@wecom/aibot-node-sdk": "1.0.7",
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/xterm": "6.0.0",
+    "diff": "9.0.0",
     "dingtalk-stream": "2.1.6-beta.1",
     "dompurify": "3.4.16",
-    "fflate": "^0.8.2",
+    "fflate": "0.8.3",
     "katex": "0.19.0",
     "lowlight": "3.3.0",
     "lucide-react": "^0.468.0",
     "mermaid": "12.1.0",
     "node": "22.23.3",
+    "node-pty": "1.1.0",
     "nodemailer": "10.0.13",
     "qrcode": "1.5.4",
     "react": "^19.2.0",
@@ -111,7 +116,8 @@
       "build/computer/**/*",
       "dist-electron/tool-proxy.cjs",
       "dist-electron/network-core-host.cjs",
-      "dist-electron/builtin-mcp.cjs"
+      "dist-electron/builtin-mcp.cjs",
+      "dist-electron/terminal-host.cjs"
     ],
     "win": {
       "icon": "build/icon.ico",

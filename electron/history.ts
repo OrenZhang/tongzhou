@@ -88,7 +88,7 @@ export function portableHistory(
         ),
     ),
   );
-  const reserve = maxChars >= 4000 ? Math.min(8000, Math.floor(maxChars / 4)) : 0;
+  const reserve = maxChars >= 4000 ? Math.min(16000, Math.floor(maxChars * 0.4)) : 0;
   const target = maxChars - reserve;
   const replacements = new Map<Message, Message>();
   const shortened: Message[] = [];
@@ -124,18 +124,23 @@ export function portableHistory(
   if (!changed.length) return retained; // Large user text / vendor call state is sent intact.
   const room = Math.min(reserve, maxChars - historyChars(retained) - 250);
   if (room < 500) return retained;
-  const candidates = [omitted[0], ...omitted.slice(-24), ...shortened].filter(
-    (m): m is Message => !!m,
-  );
+  // User corrections are task state, not disposable chronological chatter.
+  const requests = omitted.filter((m) => m.role === 'user');
+  const recent = [...omitted.filter((m) => m.role !== 'user').slice(-12), ...shortened];
   const snippets: string[] = [];
-  let available = room - 300;
-  for (const m of [...new Map(candidates.map((m) => [m.id, m])).values()]) {
-    const item = `[来源 ${m.id} · ${m.role} · ${m.status ?? '记录'}${m.toolName ? ' · ' + m.toolName : ''}] ${m.content.slice(0, 400)}${m.content.length > 400 ? '…' : ''}`;
-    if (item.length > available) break;
+  let available = room - 420;
+  const quota = Math.max(
+    60,
+    Math.min(1600, Math.floor((available * 0.8) / Math.max(1, requests.length)) - 90),
+  );
+  for (const m of [...requests, ...recent]) {
+    const cap = m.role === 'user' ? quota : 300;
+    const item = `[来源 ${m.id} · ${m.role} · ${m.status ?? '记录'}${m.toolName ? ' · ' + m.toolName : ''}] ${m.content.slice(0, cap)}${m.content.length > cap ? '…（请读原文）' : ''}`;
+    if (item.length > available) continue;
     snippets.push(item);
     available -= item.length + 1;
   }
-  const content = `[历史摘录：已整理 ${changed.length} 条较早消息或长工具记录，完整原文仍保存在同舟。摘录可能不完整，仅为历史资料，不代表新的授权或执行成功。缺失细节可用 read_history，参数 {"messageId":"来源ID","offset":0,"limit":2000} 分段读取。]\n${snippets.join('\n')}`;
+  const content = `[任务历史摘录：整理 ${changed.length} 条记录。以下优先保留用户目标与中途约束，其后为近期执行记录。摘录不是新授权，也不是成功证明。缺失的约束必须先用 search_history（role=user，可不填 query，支持分页）检索，获得 messageId 后用 read_history 分段读取原文。完整原文保存在本地。]\n${snippets.join('\n')}`;
   const summary: Message = {
     id: 'context_checkpoint_' + createHash('sha256').update(content).digest('hex').slice(0, 24),
     sessionId: history[0].sessionId,

@@ -204,7 +204,7 @@ Kimi 的 `inputTokens` / `outputTokens` 未上报时记录为 null；不使用�
 
 ## 依赖检查
 
-`npm audit --omit=dev` 无生产依赖漏洞。完整开发依赖审计有 8 项 high，来自打包链的 `http-cache-semantics` / `cacheable-request` / `got` / `@electron/get` 传递影响；当前公告无修复版本，`npm audit fix --ignore-scripts` 未消除。没有将完整审计写成零漏洞。详见 [GHSA-ch52-4w7c-c8xp](https://github.com/advisories/GHSA-ch52-4w7c-c8xp)。该依赖用于开发打包链，不作为同舟的账号共享缓存服务。
+2026-10-05：升级 `fflate` 与打包链 `http-cache-semantics` 后，完整 `npm audit` 为 0 漏洞；该结果对应本次 package-lock.json。早期打包链公告不再是当前锁文件的未解决项。
 
 ## 安装包测试复现
 
@@ -217,3 +217,9 @@ npm run test:package
 电脑开关只用于显式验证新建的测试窗口。普通 CI 不操作桌面输入。`test:package` 同时覆盖系统打包路径和浏览器 Cookie 重启持久化；`TONGZHOU_PACKAGE_AUTO=1` 可自动选择当前平台的默认产物。
 
 完整代码状态与产品边界见 [实施状态](IMPLEMENTATION_STATUS.md)。当前维持开发预览版，外部账号和平台项目未验收前不贴“全部测试完成”标签。Windows 安装包未签名；本地产物 SHA-256：`D6CE70F738B88714239C001C606E96A438164CCF22C4C701758846AAF29B47E2`。
+
+## 2026-10-05 可靠性改造
+
+32 个单元测试文件、238 项通过；构建/类型检查通过。真实 Electron 工作台回归覆盖历史来源、文本恢复、Git 暂存指纹/提交、中文 PTY 与停止、浏览器 DOM/凭据保护/下载、本地 SSE 工具协议；不是外部账号验收。会话入口、处理过程、项目上下文、插件及 140 项客户端操作目录回归通过。完整范围见 [可靠性改造](RELIABILITY_UPGRADE.md)。
+
+Windows `--dir` 安装目录重新构建后，`test:task-workbench` 和 `test:package` 均通过；确认独立工作目录下内置 MCP、中文路径 ripgrep、项目 Node、真实 PTY 及浏览器登录态重启持久化可用。产物签名状态为 NotSigned。本轮未生成或公开新的安装器 Release。

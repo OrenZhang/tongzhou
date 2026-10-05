@@ -43,3 +43,13 @@ await build({
   format: 'cjs',
   target: 'node22',
 });
+
+await build({
+  entryPoints: ['electron/terminal-host.ts'],
+  outfile: 'dist-electron/terminal-host.cjs',
+  bundle: true,
+  platform: 'node',
+  format: 'cjs',
+  target: 'node22',
+  external: ['node-pty'],
+});

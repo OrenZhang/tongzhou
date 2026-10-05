@@ -1,3 +1,4 @@
+import { IdleTimeout } from './idle-timeout';
 import { randomUUID } from 'node:crypto';
 import type { Message, Provider, ToolCall } from '../src/shared/types';
 import { redact } from './validation';
@@ -44,6 +45,7 @@ export function headers(provider: Provider, secret: string): Record<string, stri
 }
 export async function* sse(
   body: ReadableStream<Uint8Array>,
+  onActivity?: () => void,
 ): AsyncGenerator<{ event: string; data: string }> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
@@ -64,6 +66,7 @@ export async function* sse(
   try {
     while (true) {
       const { value, done } = await reader.read();
+      onActivity?.();
       buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
       buffer = buffer.replace(/\r\n/g, '\n');
       if (buffer.length > 8_000_000) throw new Error('模型响应事件过大');
@@ -402,204 +405,212 @@ async function completeRequest(input: CompletionInput): Promise<Completion> {
     };
   const req = requestBody(input);
   const secret = input.secret;
-  const response = await fetch(req.url, {
-    method: 'POST',
-    headers: {
-      ...headers(input.provider, secret),
-      ...(go
-        ? {
-            'User-Agent': 'Tongzhou/0.5',
-            'x-opencode-session': input.messages.at(-1)?.sessionId ?? 'connection-test',
-          }
-        : {}),
-    },
-    body: JSON.stringify(req.body),
-    signal: AbortSignal.any([input.signal, AbortSignal.timeout(300000)]),
-    redirect: 'error',
-  });
-  if (!response.ok)
-    throw new Error(
-      redact(`模型服务返回 ${response.status}: ${(await response.text()).slice(0, 1600)}`, [
-        secret,
-      ]),
-    );
-  if (!response.body || !response.headers.get('content-type')?.includes('text/event-stream'))
-    throw new Error('服务未返回 SSE 流，请检查协议与服务地址。');
-  const result: Completion = { text: '', toolCalls: [], inputTokens: 0, outputTokens: 0 };
-  const calls = new Map<string, ToolCall>();
-  const outputLimitError = () =>
-    new Error(
-      `模型服务报告单次输出达到上限。本次请求上限：${input.provider.maxOutputTokens.toLocaleString('en-US')} Tokens（${input.provider.name} / ${input.model}）。` +
-        (calls.size
-          ? '本次工具调用未执行，参数可能不完整；此前已完成的操作保留。'
-          : '已收到的正文已保留。') +
-        '可在“连接中心 → 编辑该连接 → 单次最大输出 Tokens”调整后继续；服务或网关也可能另设上限。',
-    );
-  const anthropicBlocks = new Map<string, Record<string, any>>();
-  let finished = false;
-  let finishReason = '';
-  const delta = (text: string) => {
-    if (text) {
-      result.text += text;
-      input.onDelta(text);
-    }
-  };
-  for await (const event of sse(response.body)) {
-    if (event.data === '[DONE]') {
-      finished = true;
-      continue;
-    }
-    let d: any;
-    try {
-      d = JSON.parse(event.data);
-    } catch {
-      throw new Error('模型返回了无效的流式 JSON');
-    }
-    if (d.error || d.type === 'error' || d.type === 'response.failed')
+  const idleAbort = new AbortController();
+  const idle = new IdleTimeout(300000, () =>
+    idleAbort.abort(new Error('模型连接连续 5 分钟没有响应；已收到内容保留，可检查后继续。')),
+  );
+  try {
+    const response = await fetch(req.url, {
+      method: 'POST',
+      headers: {
+        ...headers(input.provider, secret),
+        ...(go
+          ? {
+              'User-Agent': 'Tongzhou/0.5',
+              'x-opencode-session': input.messages.at(-1)?.sessionId ?? 'connection-test',
+            }
+          : {}),
+      },
+      body: JSON.stringify(req.body),
+      signal: AbortSignal.any([input.signal, idleAbort.signal]),
+      redirect: 'error',
+    });
+    if (!response.ok)
       throw new Error(
-        redact(d.error?.message ?? d.response?.error?.message ?? '模型响应失败', [secret]),
+        redact(`模型服务返回 ${response.status}: ${(await response.text()).slice(0, 1600)}`, [
+          secret,
+        ]),
       );
-    switch (input.provider.protocol) {
-      case 'openai-chat': {
-        const choice = d.choices?.[0];
-        if (choice?.delta?.reasoning_content) input.onReasoning?.(choice.delta.reasoning_content);
-        delta(choice?.delta?.content ?? '');
-        for (const t of choice?.delta?.tool_calls ?? []) {
-          const key = String(t.index);
-          const c = calls.get(key) ?? { id: '', name: '', arguments: '' };
-          c.id += t.id ?? '';
-          c.name += t.function?.name ?? '';
-          c.arguments += t.function?.arguments ?? '';
-          calls.set(key, c);
-        }
-        if (choice?.finish_reason) {
-          finished = true;
-          finishReason = choice.finish_reason;
-        }
-        if (d.usage) {
-          result.usageReported = true;
-          result.inputTokens = d.usage.prompt_tokens ?? 0;
-          result.outputTokens = d.usage.completion_tokens ?? 0;
-        }
-        break;
+    if (!response.body || !response.headers.get('content-type')?.includes('text/event-stream'))
+      throw new Error('服务未返回 SSE 流，请检查协议与服务地址。');
+    const result: Completion = { text: '', toolCalls: [], inputTokens: 0, outputTokens: 0 };
+    const calls = new Map<string, ToolCall>();
+    const outputLimitError = () =>
+      new Error(
+        `模型服务报告单次输出达到上限。本次请求上限：${input.provider.maxOutputTokens.toLocaleString('en-US')} Tokens（${input.provider.name} / ${input.model}）。` +
+          (calls.size
+            ? '本次工具调用未执行，参数可能不完整；此前已完成的操作保留。'
+            : '已收到的正文已保留。') +
+          '可在“模型与订阅 → 编辑该连接 → 单次最大输出 Tokens”调整后继续；服务或网关也可能另设上限。',
+      );
+    const anthropicBlocks = new Map<string, Record<string, any>>();
+    let finished = false;
+    let finishReason = '';
+    const delta = (text: string) => {
+      if (text) {
+        result.text += text;
+        input.onDelta(text);
       }
-      case 'openai-responses': {
-        if (d.type === 'response.reasoning_summary_text.delta') input.onReasoning?.(d.delta);
-        if (d.type === 'response.output_text.delta') delta(d.delta);
-        if (d.type === 'response.output_item.added' && d.item?.type === 'function_call')
-          calls.set(d.item.id, {
-            id: d.item.call_id,
-            name: d.item.name,
-            arguments: d.item.arguments ?? '',
-          });
-        if (d.type === 'response.function_call_arguments.delta') {
-          const c = calls.get(d.item_id);
-          if (c) c.arguments += d.delta;
-        }
-        if (d.type === 'response.output_item.done' && d.item?.type === 'function_call')
-          calls.set(d.item.id, {
-            id: d.item.call_id,
-            name: d.item.name,
-            arguments: d.item.arguments,
-          });
-        if (d.type === 'response.completed') {
-          result.usageReported = Boolean(d.response?.usage);
-          finished = true;
-          result.inputTokens = d.response?.usage?.input_tokens ?? 0;
-          result.outputTokens = d.response?.usage?.output_tokens ?? 0;
-        }
-        if (d.type === 'response.incomplete') {
-          const reason = d.response?.incomplete_details?.reason;
-          if (reason === 'max_output_tokens') throw outputLimitError();
-          throw new Error('模型服务未完成此次请求：' + (reason ?? '未提供原因'));
-        }
-        break;
+    };
+    for await (const event of sse(response.body, () => idle.touch())) {
+      if (event.data === '[DONE]') {
+        finished = true;
+        continue;
       }
-      case 'anthropic': {
-        const key = String(d.index);
-        if (d.type === 'content_block_start' && d.content_block)
-          anthropicBlocks.set(key, { ...d.content_block });
-        if (d.type === 'message_start') {
-          result.inputTokens = d.message?.usage?.input_tokens ?? 0;
-          result.usageReported = Boolean(d.message?.usage);
-        }
-        if (d.type === 'content_block_start' && d.content_block?.type === 'tool_use')
-          calls.set(key, { id: d.content_block.id, name: d.content_block.name, arguments: '' });
-        if (d.type === 'content_block_delta') {
-          const block = anthropicBlocks.get(key);
-          if (block) {
-            if (d.delta?.type === 'text_delta') block.text = (block.text ?? '') + d.delta.text;
-            if (d.delta?.type === 'thinking_delta')
-              block.thinking = (block.thinking ?? '') + d.delta.thinking;
-            if (d.delta?.type === 'signature_delta')
-              block.signature = (block.signature ?? '') + d.delta.signature;
+      let d: any;
+      try {
+        d = JSON.parse(event.data);
+      } catch {
+        throw new Error('模型返回了无效的流式 JSON');
+      }
+      if (d.error || d.type === 'error' || d.type === 'response.failed')
+        throw new Error(
+          redact(d.error?.message ?? d.response?.error?.message ?? '模型响应失败', [secret]),
+        );
+      switch (input.provider.protocol) {
+        case 'openai-chat': {
+          const choice = d.choices?.[0];
+          if (choice?.delta?.reasoning_content) input.onReasoning?.(choice.delta.reasoning_content);
+          delta(choice?.delta?.content ?? '');
+          for (const t of choice?.delta?.tool_calls ?? []) {
+            const key = String(t.index);
+            const c = calls.get(key) ?? { id: '', name: '', arguments: '' };
+            c.id += t.id ?? '';
+            c.name += t.function?.name ?? '';
+            c.arguments += t.function?.arguments ?? '';
+            calls.set(key, c);
           }
-          if (d.delta?.type === 'text_delta') delta(d.delta.text);
-          if (d.delta?.type === 'thinking_delta') input.onReasoning?.(d.delta.thinking);
-          if (d.delta?.type === 'input_json_delta') {
-            const c = calls.get(key);
-            if (c) c.arguments += d.delta.partial_json;
+          if (choice?.finish_reason) {
+            finished = true;
+            finishReason = choice.finish_reason;
           }
+          if (d.usage) {
+            result.usageReported = true;
+            result.inputTokens = d.usage.prompt_tokens ?? 0;
+            result.outputTokens = d.usage.completion_tokens ?? 0;
+          }
+          break;
         }
-        if (d.type === 'message_delta') {
-          result.outputTokens = d.usage?.output_tokens ?? result.outputTokens;
-          finishReason = d.delta?.stop_reason ?? '';
-        }
-        if (d.type === 'message_stop') finished = true;
-        break;
-      }
-      case 'gemini': {
-        const candidate = d.candidates?.[0];
-        for (const part of candidate?.content?.parts ?? []) {
-          if (part.text && part.thought) input.onReasoning?.(part.text);
-          if (part.text && !part.thought) delta(part.text);
-          if (part.functionCall) {
-            const id = randomUUID();
-            calls.set(id, {
-              id,
-              name: part.functionCall.name,
-              arguments: JSON.stringify(part.functionCall.args ?? {}),
-              ...(part.thoughtSignature
-                ? { signature: part.thoughtSignature, signatureModel: input.model }
-                : {}),
+        case 'openai-responses': {
+          if (d.type === 'response.reasoning_summary_text.delta') input.onReasoning?.(d.delta);
+          if (d.type === 'response.output_text.delta') delta(d.delta);
+          if (d.type === 'response.output_item.added' && d.item?.type === 'function_call')
+            calls.set(d.item.id, {
+              id: d.item.call_id,
+              name: d.item.name,
+              arguments: d.item.arguments ?? '',
             });
+          if (d.type === 'response.function_call_arguments.delta') {
+            const c = calls.get(d.item_id);
+            if (c) c.arguments += d.delta;
           }
+          if (d.type === 'response.output_item.done' && d.item?.type === 'function_call')
+            calls.set(d.item.id, {
+              id: d.item.call_id,
+              name: d.item.name,
+              arguments: d.item.arguments,
+            });
+          if (d.type === 'response.completed') {
+            result.usageReported = Boolean(d.response?.usage);
+            finished = true;
+            result.inputTokens = d.response?.usage?.input_tokens ?? 0;
+            result.outputTokens = d.response?.usage?.output_tokens ?? 0;
+          }
+          if (d.type === 'response.incomplete') {
+            const reason = d.response?.incomplete_details?.reason;
+            if (reason === 'max_output_tokens') throw outputLimitError();
+            throw new Error('模型服务未完成此次请求：' + (reason ?? '未提供原因'));
+          }
+          break;
         }
-        if (candidate?.finishReason) {
-          finished = true;
-          finishReason = candidate.finishReason;
+        case 'anthropic': {
+          const key = String(d.index);
+          if (d.type === 'content_block_start' && d.content_block)
+            anthropicBlocks.set(key, { ...d.content_block });
+          if (d.type === 'message_start') {
+            result.inputTokens = d.message?.usage?.input_tokens ?? 0;
+            result.usageReported = Boolean(d.message?.usage);
+          }
+          if (d.type === 'content_block_start' && d.content_block?.type === 'tool_use')
+            calls.set(key, { id: d.content_block.id, name: d.content_block.name, arguments: '' });
+          if (d.type === 'content_block_delta') {
+            const block = anthropicBlocks.get(key);
+            if (block) {
+              if (d.delta?.type === 'text_delta') block.text = (block.text ?? '') + d.delta.text;
+              if (d.delta?.type === 'thinking_delta')
+                block.thinking = (block.thinking ?? '') + d.delta.thinking;
+              if (d.delta?.type === 'signature_delta')
+                block.signature = (block.signature ?? '') + d.delta.signature;
+            }
+            if (d.delta?.type === 'text_delta') delta(d.delta.text);
+            if (d.delta?.type === 'thinking_delta') input.onReasoning?.(d.delta.thinking);
+            if (d.delta?.type === 'input_json_delta') {
+              const c = calls.get(key);
+              if (c) c.arguments += d.delta.partial_json;
+            }
+          }
+          if (d.type === 'message_delta') {
+            result.outputTokens = d.usage?.output_tokens ?? result.outputTokens;
+            finishReason = d.delta?.stop_reason ?? '';
+          }
+          if (d.type === 'message_stop') finished = true;
+          break;
         }
-        if (d.usageMetadata) {
-          result.usageReported = true;
-          result.inputTokens = d.usageMetadata.promptTokenCount ?? 0;
-          result.outputTokens = d.usageMetadata.candidatesTokenCount ?? 0;
+        case 'gemini': {
+          const candidate = d.candidates?.[0];
+          for (const part of candidate?.content?.parts ?? []) {
+            if (part.text && part.thought) input.onReasoning?.(part.text);
+            if (part.text && !part.thought) delta(part.text);
+            if (part.functionCall) {
+              const id = randomUUID();
+              calls.set(id, {
+                id,
+                name: part.functionCall.name,
+                arguments: JSON.stringify(part.functionCall.args ?? {}),
+                ...(part.thoughtSignature
+                  ? { signature: part.thoughtSignature, signatureModel: input.model }
+                  : {}),
+              });
+            }
+          }
+          if (candidate?.finishReason) {
+            finished = true;
+            finishReason = candidate.finishReason;
+          }
+          if (d.usageMetadata) {
+            result.usageReported = true;
+            result.inputTokens = d.usageMetadata.promptTokenCount ?? 0;
+            result.outputTokens = d.usageMetadata.candidatesTokenCount ?? 0;
+          }
+          break;
         }
-        break;
       }
     }
-  }
-  if (!finished) throw new Error('连接在完成标记前中断；未自动重试，避免重复执行操作。');
-  if (['length', 'max_tokens', 'MAX_TOKENS'].includes(finishReason)) throw outputLimitError();
-  if (['content_filter', 'SAFETY', 'RECITATION'].includes(finishReason))
-    throw new Error('模型服务未完成此次请求：' + finishReason);
-  result.toolCalls = [...calls.values()].map((c) => ({
-    ...c,
-    id: c.id || randomUUID(),
-    arguments: c.arguments || '{}',
-  }));
-  for (const call of result.toolCalls) {
-    try {
-      JSON.parse(call.arguments);
-    } catch {
-      throw new Error(`工具 ${call.name} 参数不完整，未执行。`);
+    if (!finished) throw new Error('连接在完成标记前中断；未自动重试，避免重复执行操作。');
+    if (['length', 'max_tokens', 'MAX_TOKENS'].includes(finishReason)) throw outputLimitError();
+    if (['content_filter', 'SAFETY', 'RECITATION'].includes(finishReason))
+      throw new Error('模型服务未完成此次请求：' + finishReason);
+    result.toolCalls = [...calls.values()].map((c) => ({
+      ...c,
+      id: c.id || randomUUID(),
+      arguments: c.arguments || '{}',
+    }));
+    for (const call of result.toolCalls) {
+      try {
+        JSON.parse(call.arguments);
+      } catch {
+        throw new Error(`工具 ${call.name} 参数不完整，未执行。`);
+      }
     }
+    if (input.provider.protocol === 'anthropic') {
+      for (const [key, block] of anthropicBlocks)
+        if (block.type === 'tool_use') block.input = JSON.parse(calls.get(key)?.arguments || '{}');
+      result.anthropicContent = [...anthropicBlocks.values()];
+    }
+    return result;
+  } finally {
+    idle.dispose();
   }
-  if (input.provider.protocol === 'anthropic') {
-    for (const [key, block] of anthropicBlocks)
-      if (block.type === 'tool_use') block.input = JSON.parse(calls.get(key)?.arguments || '{}');
-    result.anthropicContent = [...anthropicBlocks.values()];
-  }
-  return result;
 }
 export async function listModels(provider: Provider, secret: string): Promise<string[]> {
   const response = await fetch(`${provider.baseUrl.replace(/\/$/, '')}/models`, {

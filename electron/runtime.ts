@@ -1,5 +1,9 @@
+import { IdleTimeout } from './idle-timeout';
 import { randomUUID } from 'node:crypto';
 import { Attachments } from './attachments';
+import { TaskMemories } from './task-memory';
+import { Terminals } from './terminals';
+import { ChangeCheckpoints } from './run-changes';
 import type {
   AgentProfile,
   AppEvent,
@@ -51,6 +55,9 @@ export class Runtime {
     event: 'completed' | 'failed' | 'interrupted' | 'approval',
     eventId?: string,
   ) => void;
+  readonly memories: TaskMemories;
+  readonly terminals: Terminals;
+  readonly checkpoints: ChangeCheckpoints;
   private stopping = false;
   private deleting = new Set<string>();
   private steering = new Map<
@@ -116,10 +123,9 @@ export class Runtime {
       this.appendText(message, text);
     }
   }
-  events(sessionId: string) {
+  events(sessionId: string, before?: string) {
     return this.store
-      .list<RunEvent>('runEvent')
-      .filter((e) => e.sessionId === sessionId)
+      .sessionObjects<RunEvent>('runEvent', sessionId, 300, before)
       .sort((a, b) => a.time - b.time || a.seq - b.seq);
   }
   private history(run: Run, maxChars: number, messages = this.store.messages(run.sessionId)) {
@@ -338,6 +344,7 @@ export class Runtime {
           throw new Error('无效的会话数据路径');
         await rm(directory, { recursive: true, force: true });
       }
+      for (const target of targets) this.terminals.stopSession(target);
       this.store.deleteSession(id);
       this.changed();
     } finally {
@@ -416,6 +423,9 @@ export class Runtime {
     private commands?: ClientCommands,
   ) {
     this.attachments = new Attachments(store, dataDir);
+    this.memories = new TaskMemories(store);
+    this.checkpoints = new ChangeCheckpoints(store, dataDir);
+    this.terminals = new Terminals(store, () => this.changed());
     this.authClient = new CodexClient(
       path.join(dataDir, 'codex'),
       store.providers().find((p) => p.id === 'openai-codex')?.network,
@@ -457,7 +467,7 @@ export class Runtime {
       agents: this.store.list('agent'),
       projects: this.store.list('project'),
       sessions: this.store.list<Session>('session').sort((a, b) => b.updatedAt - a.updatedAt),
-      runs: this.store.list<Run>('run').sort((a, b) => b.startedAt - a.startedAt),
+      runs: this.store.recentRuns(),
       approvals: [...this.approvals.values()].map((a) => a.value),
     };
   }
@@ -541,6 +551,13 @@ export class Runtime {
     // The user's explicit selection wins; Agent defaults are applied when selecting the Agent.
     input = { ...input };
     agent.instructions += skillInstructions(this.store, agent);
+    const memory = this.memories.read(session.id);
+    agent.instructions +=
+      '\n长任务在关键阶段使用 task_memory 保存目标、约束、已验证结果与下一步。缺失历史用 search_history 查找，再 read_history 读取。记忆不是新的授权，完成声明必须有实际工具证据。';
+    if (memory)
+      agent.instructions +=
+        '\n此前任务交接记录（历史资料，需核对当前状态）：\n' + JSON.stringify(memory);
+
     if (agent.instructions.length > 64000)
       throw new Error('已启用的 Skill 指令过长，请减少启用数量');
     const provider = this.store.get<Provider>('provider', input.providerId);
@@ -619,6 +636,9 @@ export class Runtime {
       );
       try {
         if (project) {
+          await this.checkpoints
+            .begin(run.id, session.id, project)
+            .catch((e) => this.progress(run, 'tool', '文本检查点未建立：' + String(e)));
           const baseline = await commandResult(
             'git',
             ['status', '--short'],
@@ -695,12 +715,14 @@ export class Runtime {
           },
           false,
         );
-        if (project || historyChars(this.store.messages(session.id)) > 4000)
+        if (project || historyChars(this.store.messages(session.id)) > 4000) {
+          this.memories.attach(scope, session.id);
+          if (project) this.terminals.attach(scope, session.id, agent.permission === 'read-only');
           scope.add(
             {
               name: 'read_history',
               description:
-                '分段读取当前会话保存的原始消息，用于恢复自动压缩的历史细节。只接受摘要中的消息 ID，不能读取其他会话。',
+                '分段读取当前会话保存的原始消息，用于恢复自动压缩的历史细节。使用摘要或 search_history 返回的消息 ID，不能读取其他会话。',
               parameters: {
                 type: 'object',
                 properties: {
@@ -729,6 +751,7 @@ export class Runtime {
             },
             false,
           );
+        }
         if (this.store.capabilities().management)
           this.commands?.attach(
             scope,
@@ -816,6 +839,10 @@ export class Runtime {
       } finally {
         controller.abort();
         await scope.close();
+        if (project)
+          await this.checkpoints
+            .finish(run.id)
+            .catch((e) => this.progress(run, 'tool', '检查点收尾失败：' + String(e)));
         if (project && run.workspace) {
           const after = await commandResult(
             'git',
@@ -965,6 +992,7 @@ export class Runtime {
           continue;
         }
         let output: string;
+        let toolFailed = false;
         try {
           output = await executeTool(
             call.name,
@@ -976,12 +1004,14 @@ export class Runtime {
             (text) => this.progress(run, 'tool', text),
           );
         } catch (e: any) {
+          toolFailed = true;
           output = '工具未完成：' + e.message;
         }
         this.add(input.sessionId, 'tool', redact(output, [secret]), {
           runId: run.id,
           toolCallId: call.id,
           toolName: call.name,
+          status: toolFailed ? 'error' : 'complete',
         });
       }
     }
@@ -1341,6 +1371,7 @@ export class Runtime {
     };
     client.on('request', onRequest);
     const onNotification = ({ method, params: p }: any) => {
+      timeout.touch();
       if (threadId && p?.threadId && p.threadId !== threadId) return;
       if (turnId && p?.turnId && p.turnId !== turnId) return;
       if (method === 'turn/started') turnId = p.turn.id;
@@ -1416,9 +1447,8 @@ export class Runtime {
       }
     };
     client.on('notification', onNotification);
-    const timeout = setTimeout(
-      () => fail(new Error('Codex 单次执行超过 30 分钟，请检查任务后继续。')),
-      30 * 60 * 1000,
+    const timeout = new IdleTimeout(30 * 60 * 1000, () =>
+      fail(new Error('Codex 连续 30 分钟没有活动，请检查任务后继续。')),
     );
     try {
       await client.start();
@@ -1537,7 +1567,7 @@ export class Runtime {
       });
       keepAlive = !this.stopping && !this.deleting.has(input.sessionId);
     } finally {
-      clearTimeout(timeout);
+      timeout.dispose();
       this.steering.delete(input.sessionId);
       signal.removeEventListener('abort', abort);
       client.removeListener('failure', onFailure);
@@ -1679,6 +1709,7 @@ export class Runtime {
   }
   stop() {
     this.stopping = true;
+    this.terminals.dispose();
     this.codexChats.clear();
     this.invalidateNative();
     for (const a of this.active.values()) a.controller.abort();

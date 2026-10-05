@@ -22,3 +22,5 @@ git push -u origin main
 4. 标签工作流构建两端安装包并创建草稿 Release。检查构建日志、校验值及平台测试后，再公开草稿。
 
 公开分发前应为 Windows 配置代码签名，为 macOS 配置 Developer ID 签名、公证。私钥、证书和令牌仅保存在受限的 GitHub Actions Secrets 中，不写入仓库。默认工作流不提供自动更新渠道。
+
+发布工作流可从 `WIN_CSC_LINK` / `WIN_CSC_KEY_PASSWORD` 和 `MAC_CSC_LINK` / `MAC_CSC_KEY_PASSWORD` Secrets 读取签名配置。没有证书时不代表产物已签名；macOS 公证仍需维护者配置和验收。每次发布生成平台独立 `SHA256SUMS-*`，避免多平台上传相互覆盖。设置中的版本检查只查询最新发布并提供发布页入口，不会自动下载安装。

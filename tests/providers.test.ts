@@ -472,7 +472,7 @@ describe('streaming protocol adapters', () => {
       async (base) => {
         const error = await complete(input('openai-chat', base)).catch((e) => e);
         expect(error.message).toContain('1,024 Tokens');
-        expect(error.message).toContain('连接中心 → 编辑该连接');
+        expect(error.message).toContain('模型与订阅 → 编辑该连接');
         expect(error.message).toContain('已收到的正文已保留');
         expect(error.message).not.toContain('工具调用未执行');
       },

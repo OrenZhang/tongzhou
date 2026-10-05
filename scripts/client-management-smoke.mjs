@@ -107,7 +107,11 @@ try {
   assert.equal(await page.locator('.sidebar-bottom .active').innerText(), '设置与优化');
   await page.getByRole('button', { name: '返回设置与优化', exact: true }).click();
   const catalog = await page.evaluate(() => window.tongzhou.clientMethods());
-  const source = await readFile('electron/main.ts', 'utf8');
+  const source = (
+    await Promise.all(
+      ['electron/main.ts', 'electron/task-services.ts'].map((file) => readFile(file, 'utf8')),
+    )
+  ).join('\n');
   const names = [...source.matchAll(/^\s*register\(\s*'([^']+)'/gm)].map((m) => m[1]);
   assert.deepEqual(
     catalog.methods.map((m) => m.name).sort(),

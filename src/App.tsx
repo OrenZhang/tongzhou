@@ -1,3 +1,6 @@
+import { ConnectionDiagnostics } from './ConnectionDiagnostics';
+import { TaskPanel, HistorySearch } from './TaskPanel';
+import { DataMaintenance } from './DataMaintenance';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
@@ -187,6 +190,8 @@ type View =
   | 'connections'
   | 'extensions';
 export default function App() {
+  const [taskOpen, setTaskOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [accountStates, setAccountStates] = useState<
     Record<string, { connected: boolean; pending: boolean; error: boolean }>
   >({});
@@ -1069,6 +1074,17 @@ export default function App() {
                     )}
                   </div>
                   <div className="row">
+                    <button className="secondary" onClick={() => setTaskOpen(true)}>
+                      任务与交付
+                    </button>
+                    <button
+                      className="icon-button"
+                      aria-label="搜索消息内容"
+                      title="搜索消息内容"
+                      onClick={() => setHistoryOpen(true)}
+                    >
+                      <Search size={16} />
+                    </button>
                     <button
                       className="icon-button"
                       aria-label="重命名会话"
@@ -1266,7 +1282,16 @@ export default function App() {
                     <ArrowDownToLine size={14} /> 回到最新
                   </button>
                 )}
-                {activity.error && <p role="alert">思考摘要加载失败：{activity.error}</p>}
+                {activity.error && <p role="alert">处理记录加载失败：{activity.error}</p>}
+                {activity.hasEarlier && (
+                  <button
+                    className="text-button"
+                    disabled={activity.loadingEarlier}
+                    onClick={() => void activity.loadEarlier()}
+                  >
+                    加载更早处理记录
+                  </button>
+                )}
                 <PendingInputs key={sessionId} api={api} sessionId={sessionId} data={data} />
                 {selectedAgent && (
                   <div className="selected-agent-note">
@@ -1928,6 +1953,7 @@ export default function App() {
               <p>同舟 0.5.7 · 开源多模型桌面工作台</p>
             </div>
             <Appearance value={appearance} onChange={setAppearance} />
+            <DataMaintenance api={api} />
             <section className="settings-card">
               <div className="settings-card-title">
                 <ShieldCheck size={23} />
@@ -1992,6 +2018,34 @@ export default function App() {
           </main>
         )}
       </div>
+      {taskOpen && sessionId && (
+        <TaskPanel
+          key={sessionId}
+          api={api}
+          sessionId={sessionId}
+          projectId={project?.id}
+          onClose={() => setTaskOpen(false)}
+          onSelectSession={(id) => {
+            const target = data.sessions.find((s) => s.id === id);
+            if (target) activateSession(target);
+            setTaskOpen(false);
+          }}
+        />
+      )}
+      {historyOpen && (
+        <Modal title="搜索消息内容" wide onClose={() => setHistoryOpen(false)}>
+          <div className="task-panel">
+            <HistorySearch
+              api={api}
+              onSelectSession={(id) => {
+                const target = data.sessions.find((s) => s.id === id);
+                if (target) activateSession(target);
+                setHistoryOpen(false);
+              }}
+            />
+          </div>
+        </Modal>
+      )}
       {paletteOpen && (
         <CommandPalette
           onClose={() => setPaletteOpen(false)}
@@ -2265,6 +2319,10 @@ export default function App() {
                 }}
               />
             )}
+            <ConnectionDiagnostics
+              api={api}
+              onSave={() => api.saveProvider(normalizedProvider())}
+            />
             <button className="secondary" disabled={busy} onClick={fetchModels}>
               {busy ? <Spinner /> : <RefreshCw size={14} />}
               保存连接并获取模型
@@ -2362,7 +2420,10 @@ export default function App() {
               disabled={busy || !providerEdit.models.filter(Boolean).length}
               onClick={() => saveProvider(true)}
             >
-              保存并测试调用
+              {providerEdit.protocol === 'codex' ||
+              ['kimi', 'minimax'].includes(providerEdit.protocol)
+                ? '保存并检查账号'
+                : '保存并测试调用'}
             </button>
             <button className="primary" disabled={busy} onClick={() => saveProvider()}>
               {busy ? <Spinner /> : <Check size={15} />}保存连接

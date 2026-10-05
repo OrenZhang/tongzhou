@@ -33,6 +33,7 @@ jobs:
       - run: npm run test:session-entry
       - run: npm run test:workbench
       - run: npm run test:capabilities
+      - run: npm run test:task-workbench
       - run: npm run test:management
       - run: npm run test:markdown
       - run: npm run test:appearance
@@ -43,6 +44,9 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - run: npm run test:package
+        env:
+          TONGZHOU_PACKAGE_AUTO: '1'
+      - run: npm run test:task-workbench
         env:
           TONGZHOU_PACKAGE_AUTO: '1'
       - uses: actions/upload-artifact@v4

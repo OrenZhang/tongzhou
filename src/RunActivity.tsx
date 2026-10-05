@@ -5,10 +5,13 @@ import { formatDuration } from './shared/turns';
 import { Spinner } from './components';
 
 export function useRunEvents(api: TongzhouAPI, sessionId: string) {
+  const [hasEarlier, setHasEarlier] = useState(false);
+  const [loadingEarlier, setLoadingEarlier] = useState(false);
   const [state, setState] = useState({ sessionId: '', events: [] as RunEvent[], error: '' });
   useEffect(() => {
     let alive = true;
     setState({ sessionId, events: [], error: '' });
+    setHasEarlier(false);
     if (!api || !sessionId) return;
     // Subscribe before loading history so streaming updates cannot fall into a gap.
     const off = api.onEvent((e) => {
@@ -16,13 +19,16 @@ export function useRunEvents(api: TongzhouAPI, sessionId: string) {
         setState((old) => ({
           sessionId,
           error: '',
-          events: [...old.events.filter((v) => v.id !== e.event.id), e.event],
+          events: old.events.some((v) => v.id === e.event.id)
+            ? old.events.map((v) => (v.id === e.event.id ? e.event : v))
+            : [...old.events, e.event],
         }));
     });
     void api
       .runEvents(sessionId)
       .then((events) => {
         if (!alive) return;
+        setHasEarlier(events.length === 300);
         setState((old) => {
           const merged = new Map(events.map((event) => [event.id, event]));
           for (const event of old.events) merged.set(event.id, event);
@@ -35,7 +41,32 @@ export function useRunEvents(api: TongzhouAPI, sessionId: string) {
       off();
     };
   }, [api, sessionId]);
-  return state.sessionId === sessionId ? state : { sessionId, events: [], error: '' };
+  const loadEarlier = async () => {
+    if (loadingEarlier || !state.events.length) return;
+    setLoadingEarlier(true);
+    try {
+      const events = await api.runEvents(sessionId, state.events[0].id);
+      setHasEarlier(events.length === 300);
+      setState((old) =>
+        old.sessionId !== sessionId
+          ? old
+          : {
+              ...old,
+              events: [...events, ...old.events.filter((e) => !events.some((x) => x.id === e.id))],
+            },
+      );
+    } catch (e) {
+      setState((old) => ({ ...old, error: String(e) }));
+    } finally {
+      setLoadingEarlier(false);
+    }
+  };
+  return {
+    ...(state.sessionId === sessionId ? state : { sessionId, events: [], error: '' }),
+    hasEarlier,
+    loadingEarlier,
+    loadEarlier,
+  };
 }
 
 export function TurnProcess({

@@ -32,6 +32,27 @@ export class Store {
       CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, value TEXT NOT NULL, seq INTEGER NOT NULL);
       CREATE INDEX IF NOT EXISTS messages_session ON messages(session_id, seq);
       INSERT OR IGNORE INTO metadata VALUES ('schema_version','1');`);
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS messages_sequence ON messages(seq);
+      CREATE INDEX IF NOT EXISTS objects_session ON objects(kind, json_extract(value,'$.sessionId'));
+      CREATE INDEX IF NOT EXISTS objects_started ON objects(kind, json_extract(value,'$.startedAt') DESC);
+      CREATE VIRTUAL TABLE IF NOT EXISTS message_search USING fts5(content, tokenize='trigram');
+      CREATE TRIGGER IF NOT EXISTS message_search_insert AFTER INSERT ON messages BEGIN
+        INSERT INTO message_search(rowid,content) VALUES(new.rowid,json_extract(new.value,'$.content'));
+      END;
+      CREATE TRIGGER IF NOT EXISTS message_search_update AFTER UPDATE ON messages BEGIN
+        DELETE FROM message_search WHERE rowid=old.rowid;
+        INSERT INTO message_search(rowid,content) VALUES(new.rowid,json_extract(new.value,'$.content'));
+      END;
+      CREATE TRIGGER IF NOT EXISTS message_search_delete AFTER DELETE ON messages BEGIN
+        DELETE FROM message_search WHERE rowid=old.rowid;
+      END;
+    `);
+    if (!this.db.prepare("SELECT 1 FROM metadata WHERE key='message_search_v1'").get()) {
+      this.db.exec(`BEGIN; DELETE FROM message_search;
+        INSERT INTO message_search(rowid,content) SELECT rowid,json_extract(value,'$.content') FROM messages;
+        INSERT INTO metadata VALUES('message_search_v1','1'); COMMIT;`);
+    }
     const version = this.db
       .prepare('SELECT value FROM metadata WHERE key=?')
       .get('schema_version') as { value: string };
@@ -249,6 +270,74 @@ export class Store {
       .reverse()
       .map((r) => JSON.parse(r.value));
   }
+  searchMessages(query: string, sessionId?: string, role?: string, before?: number, limit = 30) {
+    if (sessionId) this.get('session', sessionId);
+    const rows = this.db
+      .prepare(
+        `SELECT m.seq,m.value FROM messages m
+      JOIN message_search f ON f.rowid=m.rowid
+      WHERE f.content LIKE ? AND instr(lower(f.content),lower(?))>0 AND (? IS NULL OR m.session_id=?)
+      AND (? IS NULL OR json_extract(m.value,'$.role')=?) AND m.seq<?
+      ORDER BY m.seq DESC LIMIT ?`,
+      )
+      .all(
+        '%' + (query.split(/[%_]/).sort((a, b) => b.length - a.length)[0] || '') + '%',
+        query,
+        sessionId ?? null,
+        sessionId ?? null,
+        role ?? null,
+        role ?? null,
+        before ?? Number.MAX_SAFE_INTEGER,
+        Math.min(50, Math.max(1, limit)),
+      ) as { seq: number; value: string }[];
+    return rows.map(({ seq, value }) => {
+      const m: Message = JSON.parse(value);
+      const at = Math.max(0, m.content.toLowerCase().indexOf(query.toLowerCase()) - 80);
+      return {
+        id: m.id,
+        sessionId: m.sessionId,
+        role: m.role,
+        createdAt: m.createdAt,
+        seq,
+        excerpt: m.content.slice(at, at + 600),
+        totalChars: m.content.length,
+      };
+    });
+  }
+  sessionObjects<T>(kind: string, sessionId: string, limit = 200, before?: string): T[] {
+    const cursor = before
+      ? (
+          this.db
+            .prepare(
+              "SELECT rowid FROM objects WHERE kind=? AND id=? AND json_extract(value,'$.sessionId')=?",
+            )
+            .get(kind, before, sessionId) as { rowid: number } | undefined
+        )?.rowid
+      : Number.MAX_SAFE_INTEGER;
+    if (cursor === undefined) throw new Error('分页位置不存在');
+    return (
+      this.db
+        .prepare(
+          "SELECT value FROM objects WHERE kind=? AND json_extract(value,'$.sessionId')=? AND rowid<? ORDER BY rowid DESC LIMIT ?",
+        )
+        .all(kind, sessionId, cursor, Math.min(1000, Math.max(1, limit))) as { value: string }[]
+    )
+      .reverse()
+      .map((r) => JSON.parse(r.value));
+  }
+  recentRuns(): Run[] {
+    return (
+      this.db
+        .prepare(
+          `SELECT value FROM objects WHERE kind='run' AND (rowid IN
+      (SELECT MAX(rowid) FROM objects WHERE kind='run' GROUP BY json_extract(value,'$.sessionId'))
+      OR json_extract(value,'$.status')='running' OR rowid IN
+      (SELECT rowid FROM objects WHERE kind='run' ORDER BY rowid DESC LIMIT 200))
+      ORDER BY json_extract(value,'$.startedAt') DESC`,
+        )
+        .all() as { value: string }[]
+    ).map((r) => JSON.parse(r.value));
+  }
   readMessage(sessionId: string, messageId: string, offset = 0, limit = 2000) {
     this.get<Session>('session', sessionId);
     const row = this.db
@@ -341,6 +430,9 @@ export class Store {
           'delivery',
           'channelInbox',
           'contextCheckpoint',
+          'taskMemory',
+          'runChanges',
+          'terminal',
         ])
           for (const obj of this.list<any>(kind))
             if (obj.sessionId === target) this.remove(kind, obj.id);

@@ -301,6 +301,56 @@ export interface ImportPreview {
   warnings: string[];
 }
 export interface TongzhouAPI {
+  diagnoseProvider(
+    id: string,
+    model: string,
+    inference: boolean,
+  ): Promise<import('../ConnectionDiagnostics').ConnectionCheck[]>;
+  browserDownloads(id: string): Promise<any[]>;
+  browserSnapshot(id: string): Promise<any>;
+  browserAction(
+    id: string,
+    input: {
+      frame: string;
+      ref: number;
+      action: 'click' | 'fill' | 'select' | 'focus';
+      text?: string;
+    },
+  ): Promise<any>;
+  browserNavigate(id: string, url: string): Promise<any>;
+  browserPress(id: string, key: string): Promise<any>;
+  taskState(id: string): Promise<import('./task').TaskState>;
+  searchMessages(
+    query: string,
+    sessionId?: string,
+    before?: number,
+  ): Promise<import('./task').HistoryMatch[]>;
+  historyMessage(
+    sessionId: string,
+    messageId: string,
+    offset?: number,
+  ): Promise<{ content: string; nextOffset: number | null; totalChars: number }>;
+  resumeTask(id: string): Promise<string>;
+  startTerminal(id: string): Promise<import('./task').TerminalRecord>;
+  readTerminal(
+    id: string,
+    terminal: string,
+    offset?: number,
+  ): Promise<import('./task').TerminalRecord & { nextOffset: number }>;
+  writeTerminal(id: string, terminal: string, data: string): Promise<void>;
+  resizeTerminal(id: string, terminal: string, cols: number, rows: number): Promise<void>;
+  stopTerminal(id: string, terminal: string): Promise<void>;
+  runPatch(id: string, file: string): Promise<string>;
+  restoreRunFile(id: string, file: string): Promise<string>;
+  stageRunFile(id: string, file: string): Promise<string>;
+  reviewStaged(id: string): Promise<{ patch: string; hash: string }>;
+  commitStaged(id: string, message: string, expected: string): Promise<string>;
+  backupWorkspace(password: string): Promise<string | null>;
+  restoreWorkspace(password: string): Promise<string | null>;
+  exportDiagnostics(): Promise<string | null>;
+  cleanUnusedData(): Promise<{ files: number; bytes: number }>;
+  checkRelease(): Promise<{ current: string; latest: string | null; url: string }>;
+
   uploadAttachment(value: AttachmentUpload): Promise<Attachment>;
   attachmentContent(id: string): Promise<string>;
   clientMethods(): Promise<import('./client-catalog').ClientCatalog>;
@@ -358,7 +408,7 @@ export interface TongzhouAPI {
   initializeAgent(projectId: string): Promise<{ path: string; created: boolean }>;
   branchSession(sessionId: string, messageId: string): Promise<Session>;
   setCapability(name: 'computer' | 'management', enabled: boolean): Promise<void>;
-  runEvents(sessionId: string): Promise<RunEvent[]>;
+  runEvents(sessionId: string, before?: string): Promise<RunEvent[]>;
   enqueue(input: RunInput, mode: PendingInput['mode']): Promise<void>;
   cancelInput(id: string): Promise<void>;
   resumeInput(id: string): Promise<void>;

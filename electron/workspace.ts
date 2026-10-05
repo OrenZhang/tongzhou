@@ -20,7 +20,7 @@ import type { FileEntry } from '../src/shared/types';
 import type { ToolSpec } from './providers';
 
 const writeLocks = new Map<string, Promise<void>>();
-async function withFileLock<T>(file: string, action: () => Promise<T>) {
+export async function withFileLock<T>(file: string, action: () => Promise<T>) {
   const key = process.platform === 'win32' ? file.toLowerCase() : file;
   const previous = writeLocks.get(key) ?? Promise.resolve();
   let release!: () => void;
@@ -113,7 +113,7 @@ export const projectShell =
     ? 'Windows PowerShell 5.1（不支持 &&；工作目录已设置为项目目录；调用带引号的可执行路径用 &）'
     : '/bin/sh（工作目录已设置为项目目录）';
 
-function projectCommandEnv() {
+export function projectCommandEnv() {
   const env = minimalEnv();
   const require = createRequire(path.join(process.cwd(), 'package.json'));
   const nodeRoot = path
