@@ -1,7 +1,6 @@
 import { MultiValueInput } from './MultiValueInput';
 import { useEffect, useRef, useState } from 'react';
 import {
-  Archive,
   ArrowLeft,
   BookOpen,
   Check,
@@ -45,7 +44,7 @@ export function KnowledgeCenter({
   const [state, setState] = useState<KnowledgeState>();
   const [query, setQuery] = useState('');
   const [project, setProject] = useState('*');
-  const [kind, setKind] = useState<KnowledgeKind | 'all' | 'issues' | 'archived'>('all');
+  const [kind, setKind] = useState<KnowledgeKind | 'all' | 'issues'>('all');
   const [selected, setSelected] = useState<KnowledgeRead>();
   const [edit, setEdit] = useState<KnowledgeInput>();
   const [deleting, setDeleting] = useState<KnowledgeDocument>();
@@ -120,15 +119,12 @@ export function KnowledgeCenter({
           },
     );
   };
-  const visible =
-    kind === 'archived'
-      ? (state?.archived ?? [])
-      : (state?.documents ?? []).filter(
-          (d) =>
-            kind === 'all' ||
-            (kind === 'issues' && state?.issues.some((i) => i.id === d.id)) ||
-            d.kind === kind,
-        );
+  const visible = (state?.documents ?? []).filter(
+    (d) =>
+      kind === 'all' ||
+      (kind === 'issues' && state?.issues.some((i) => i.id === d.id)) ||
+      d.kind === kind,
+  );
   const doc = selected?.document;
   const scopeOptions = [
     { value: '*', label: '全部空间' },
@@ -316,7 +312,6 @@ export function KnowledgeCenter({
                 ['wiki', 'Wiki'],
                 ['memory', '每日记忆'],
                 ['issues', '待整理'],
-                ['archived', '归档'],
               ] as const
             ).map(([value, label]) => (
               <button key={value} aria-pressed={kind === value} onClick={() => setKind(value)}>
@@ -436,28 +431,13 @@ export function KnowledgeCenter({
                   </button>
                 )}
                 <button
-                  className="text-button"
+                  className="text-button danger"
                   disabled={busy}
-                  onClick={() =>
-                    void action(async () => {
-                      await api.knowledgeArchive(doc.id, doc.status !== 'archived');
-                      setSelected(await api.knowledgeRead(doc.id));
-                    })
-                  }
+                  onClick={() => setDeleting(doc)}
                 >
-                  <Archive size={14} />
-                  {doc.status === 'archived' ? '恢复资料' : '归档'}
+                  <Trash2 size={14} />
+                  永久删除
                 </button>
-                {doc.status === 'archived' && (
-                  <button
-                    className="text-button danger"
-                    disabled={busy}
-                    onClick={() => setDeleting(doc)}
-                  >
-                    <Trash2 size={14} />
-                    永久删除
-                  </button>
-                )}
               </div>
               {!!state?.issues.some((i) => i.id === doc.id) && (
                 <div className="knowledge-review-note">
@@ -649,10 +629,14 @@ export function KnowledgeCenter({
               确认永久删除“<strong>{deleting.title}</strong>”？
             </p>
             <p className="muted">
-              这份资料的正文、知识库中的上传原件和全部修订历史将被删除，无法通过恢复资料撤销。原始上传位置的文件不受影响。
+              这份资料的正文、知识库中的上传原件和全部修订历史将被删除，删除后无法撤销。原始上传位置的文件不受影响。
             </p>
             <p className="muted">会话引用将被取消；引用它的其他知识页仍保留，并标记来源已删除。</p>
-            {deleting.runId && <p className="muted">这条会话记忆不会再次自动收集。</p>}
+            {deleting.memoryDate ? (
+              <p className="muted">删除后，后台不会重新生成这一天的记忆。</p>
+            ) : deleting.runId ? (
+              <p className="muted">这条会话记忆不会再次自动收集。</p>
+            ) : null}
             {error && (
               <p className="error" role="alert">
                 {error}

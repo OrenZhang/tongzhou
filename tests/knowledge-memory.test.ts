@@ -140,8 +140,7 @@ describe('daily memory consolidation', () => {
         .sort(),
     ).toEqual(['2026-10-04', '2026-10-05']);
     const old = k.all()[0];
-    const archived = k.archive(old.id, true);
-    k.delete(old.id, archived.version);
+    k.delete(old.id, old.version);
     enqueue('late', '昨日补充资料仍有价值', undefined, day);
     expect(k.memory.claim(true)).toBeUndefined();
     expect(k.all()).toHaveLength(1);

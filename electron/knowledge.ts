@@ -27,7 +27,7 @@ export const knowledgeInput = z.object({
   kind: z.enum(['source', 'wiki', 'memory']),
   projectId: z.string().min(1).optional(),
   tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
-  status: z.enum(['ready', 'draft', 'archived']).optional(),
+  status: z.enum(['ready', 'draft']).optional(),
   sourceIds: z.array(id).max(30).default([]),
 });
 const hash = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
@@ -42,6 +42,12 @@ const summary = ({
 });
 const folder = (kind: KnowledgeDocument['kind']) =>
   ({ source: 'sources', wiki: 'wiki', memory: 'memories' })[kind];
+// Legacy archives return to their previous review state, including restored revisions.
+const activeStatus = (doc: KnowledgeDocument) =>
+  doc.status === 'archived'
+    ? (doc.archivedStatus ??
+      (doc.origin === 'agent' || doc.origin === 'automatic' ? 'draft' : 'ready'))
+    : doc.status;
 const terms = (query: string) =>
   [
     ...new Set(
@@ -72,6 +78,18 @@ export class Knowledge {
     );
     if (!store.db.prepare("SELECT 1 FROM metadata WHERE key='knowledge_index_v1'").get())
       this.reindex();
+    for (const doc of this.all().filter((item) => item.status === 'archived')) {
+      this.persist(
+        {
+          ...doc,
+          status: activeStatus(doc),
+          archivedStatus: undefined,
+          version: doc.version + 1,
+          updatedAt: Date.now(),
+        },
+        doc,
+      );
+    }
     this.memory = new KnowledgeMemory(store, this);
     this.memory.migrate();
   }
@@ -164,7 +182,7 @@ export class Knowledge {
   ) {
     const p = knowledgeInput.parse(raw);
     const old = p.id ? this.get(p.id) : undefined;
-    if (old?.memoryDate) throw new Error('每日记忆由后台 Agent 按条目整理，请通过核对或归档管理');
+    if (old?.memoryDate) throw new Error('每日记忆由后台 Agent 按条目整理，可核对收录或直接删除');
     if (old && p.version !== old.version)
       throw new Error('资料已被更新，请重新打开后再保存，避免覆盖新内容');
     if (old?.origin === 'import' && old.content !== p.content)
@@ -267,6 +285,8 @@ export class Knowledge {
       {
         ...revision,
         id: docId,
+        status: activeStatus(revision),
+        archivedStatus: undefined,
         kind: current.kind,
         memoryDate: current.memoryDate,
         version: current.version + 1,
@@ -275,29 +295,8 @@ export class Knowledge {
       current,
     );
   }
-  archive(docId: string, archived: boolean) {
-    const old = this.get(docId);
-    return this.persist(
-      {
-        ...old,
-        status: archived
-          ? 'archived'
-          : (old.archivedStatus ??
-            (old.origin === 'agent' || old.origin === 'automatic' ? 'draft' : 'ready')),
-        archivedStatus: archived
-          ? old.status === 'archived'
-            ? old.archivedStatus
-            : old.status
-          : undefined,
-        version: old.version + 1,
-        updatedAt: Date.now(),
-      },
-      old,
-    );
-  }
   delete(docId: string, currentVersion: number) {
     const doc = this.get(docId);
-    if (doc.status !== 'archived') throw new Error('请先归档资料，再永久删除');
     if (doc.version !== z.number().int().positive().parse(currentVersion))
       throw new Error('资料已更新，请重新打开后删除');
     const revisions = this.store.list<KnowledgeDocument & { documentId: string }>(
@@ -554,14 +553,6 @@ export class Knowledge {
       root: this.root,
       settings: this.settings(),
       documents: this.search(query, undefined, projectId),
-      archived: docs
-        .filter(
-          (d) =>
-            d.status === 'archived' &&
-            (!query || d.title.includes(query)) &&
-            (projectId === undefined || (d.projectId ?? '') === projectId),
-        )
-        .map(summary),
       total: docs.filter((d) => d.status !== 'archived').length,
       issues,
       pinned: sessionId ? this.pins(sessionId) : [],

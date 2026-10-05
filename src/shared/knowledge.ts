@@ -1,4 +1,5 @@
 export type KnowledgeKind = 'source' | 'wiki' | 'memory';
+// archived is retained only for reading legacy data and revisions.
 export type KnowledgeStatus = 'ready' | 'draft' | 'archived';
 export type MemoryCategory = 'preference' | 'fact' | 'decision' | 'lesson' | 'todo' | 'conflict';
 export const memoryCategories: Record<MemoryCategory, string> = {
@@ -85,7 +86,6 @@ export interface KnowledgeState {
   root: string;
   settings: KnowledgeSettings;
   documents: KnowledgeSummary[];
-  archived: KnowledgeSummary[];
   total: number;
   issues: { id: string; title: string; reason: string }[];
   pinned: string[];

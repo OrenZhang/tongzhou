@@ -332,7 +332,6 @@ export interface TongzhouAPI {
   knowledgeState(query?: string, projectId?: string, sessionId?: string): Promise<KnowledgeState>;
   knowledgeRead(id: string): Promise<KnowledgeRead>;
   knowledgeSave(input: KnowledgeInput): Promise<KnowledgeDocument>;
-  knowledgeArchive(id: string, archived: boolean): Promise<void>;
   knowledgeDelete(id: string, currentVersion: number): Promise<void>;
   knowledgeRestore(id: string, version: number, currentVersion: number): Promise<KnowledgeDocument>;
   knowledgeBind(sessionId: string, documentIds: string[]): Promise<void>;

@@ -154,19 +154,11 @@ export function registerKnowledgeServices(
     },
   );
   register(
-    'knowledgeArchive',
-    operation('知识库', 'change', '归档或恢复资料；归档后不会再注入会话上下文', [id, z.boolean()]),
-    (doc, archived) => {
-      k.archive(doc, archived);
-      runtime.changed();
-    },
-  );
-  register(
     'knowledgeDelete',
     operation(
       '知识库',
       'change',
-      '永久删除已归档资料及原件、修订历史；不可恢复，必须提供当前 version',
+      '直接永久删除知识资料及原件、修订历史和会话引用；不可恢复，必须提供当前 version',
       [id, z.number().int().positive()],
     ),
     (doc, version) => {

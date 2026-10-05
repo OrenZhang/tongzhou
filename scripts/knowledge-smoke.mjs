@@ -227,6 +227,7 @@ try {
   assert.equal(state.documents.filter((d) => d.kind === 'memory').length, 1);
   const catalog = await page.evaluate(() => window.tongzhou.clientMethods());
   assert.ok(catalog.methods.some((m) => m.name === 'knowledgeRead'));
+  assert.ok(!catalog.methods.some((m) => m.name === 'knowledgeArchive'));
   assert.equal(catalog.methods.find((m) => m.name === 'knowledgeReview').access, 'manual');
   assert.ok(!(await page.locator('[data-session-id]').filter({ hasText: '后台记忆整理' }).count()));
   assert.ok((await readFile(path.join(state.root, 'index.md'), 'utf8')).includes('库存处理 Wiki'));
@@ -236,23 +237,28 @@ try {
     .getByRole('button', { name: '全部', exact: true })
     .click();
   await page.locator('.knowledge-item').filter({ hasText: '库存参考.md' }).click();
-  assert.equal(await page.getByRole('button', { name: '永久删除', exact: true }).count(), 0);
-  await page
-    .locator('.knowledge-document-actions')
-    .getByRole('button', { name: '归档', exact: true })
-    .click();
-  await page
-    .locator('.knowledge-filters')
-    .getByRole('button', { name: '归档', exact: true })
-    .click();
-  await page.locator('.knowledge-item').filter({ hasText: '库存参考.md' }).click();
+  assert.equal(
+    await page
+      .locator('.knowledge-page')
+      .getByRole('button', { name: '归档', exact: true })
+      .count(),
+    0,
+  );
   await page.getByRole('button', { name: '永久删除', exact: true }).click();
   await page.getByRole('button', { name: '取消', exact: true }).click();
-  assert.equal((await page.evaluate(() => window.tongzhou.knowledgeState())).archived.length, 1);
+  assert.ok(
+    (await page.evaluate(() => window.tongzhou.knowledgeState())).documents.some(
+      (d) => d.id === sourceId,
+    ),
+  );
   await page.getByRole('button', { name: '永久删除', exact: true }).click();
   await page.getByRole('button', { name: '确认永久删除', exact: true }).click();
   await page.getByText('资料已永久删除', { exact: true }).waitFor();
-  assert.equal((await page.evaluate(() => window.tongzhou.knowledgeState())).archived.length, 0);
+  assert.ok(
+    !(await page.evaluate(() => window.tongzhou.knowledgeState())).documents.some(
+      (d) => d.id === sourceId,
+    ),
+  );
   assert.ok((await readFile(importedFile, 'utf8')).includes('订单确认后扣减库存'));
   await page
     .locator('.knowledge-filters')
@@ -265,10 +271,14 @@ try {
     true,
   );
   await page.reload();
-  assert.equal((await page.evaluate(() => window.tongzhou.knowledgeState())).archived.length, 0);
+  assert.ok(
+    !(await page.evaluate(() => window.tongzhou.knowledgeState())).documents.some(
+      (d) => d.id === sourceId,
+    ),
+  );
   assert.deepEqual(errors, []);
   console.log(
-    'Knowledge desktop passed: import, notes, revisions, model tool synthesis, source links, scoped context, auto capture, reload, client catalog, light/dark, archive deletion with confirmation and missing source indicators.',
+    'Knowledge desktop passed: import, notes, revisions, model tool synthesis, source links, scoped context, auto capture, reload, client catalog, light/dark, direct deletion with confirmation and missing source indicators.',
   );
 } finally {
   await app.close();

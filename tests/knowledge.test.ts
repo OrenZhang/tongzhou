@@ -58,7 +58,7 @@ describe('local knowledge lifecycle', () => {
     ).rejects.toThrow('不可通过');
     expect(k.get(saved.id).status).toBe('draft');
   });
-  it('permanently deletes only archived versions, removes files and pins, and preserves dependent Wiki evidence', () => {
+  it('directly deletes current versions, removes files and pins, and preserves dependent Wiki evidence', () => {
     const { k, root, store } = fixture();
     const session = store.createSession();
     const source = k.importFile('原文.txt', Buffer.from('source evidence'));
@@ -69,8 +69,7 @@ describe('local knowledge lifecycle', () => {
       sourceIds: [source.id],
     });
     k.bind(session.id, [source.id, wiki.id]);
-    expect(() => k.delete(source.id, source.version)).toThrow('先归档');
-    const archived = k.archive(source.id, true);
+    const changed = k.save({ ...source, title: '更新原文标题' });
     expect(() => k.delete(source.id, source.version)).toThrow('资料已更新');
     const files = [
       path.join(k.root, 'sources', `${source.id}.md`),
@@ -78,7 +77,7 @@ describe('local knowledge lifecycle', () => {
       path.join(k.root, 'revisions', `${source.id}-1.json`),
     ];
     expect(files.every(existsSync)).toBe(true);
-    k.delete(source.id, archived.version);
+    k.delete(source.id, changed.version);
     expect(() => k.get(source.id)).toThrow('已删除');
     expect(files.some(existsSync)).toBe(false);
     expect(store.list('knowledgeRevision')).toHaveLength(0);
@@ -102,16 +101,16 @@ describe('local knowledge lifecycle', () => {
   it('refuses a replaced vault folder before deleting any files', () => {
     const { k, root } = fixture();
     const source = k.importFile('原文.txt', Buffer.from('evidence'));
-    const archived = k.archive(source.id, true);
+    const changed = k.save({ ...source, title: '更新标题' });
     const outside = path.join(root, 'outside');
     mkdirSync(outside);
     const revisions = path.join(k.root, 'revisions');
     rmSync(revisions, { recursive: true });
     symlinkSync(outside, revisions, 'junction');
-    expect(() => k.delete(source.id, archived.version)).toThrow('符号链接');
+    expect(() => k.delete(source.id, changed.version)).toThrow('符号链接');
     expect(existsSync(path.join(k.root, 'sources', `${source.id}.md`))).toBe(true);
     expect(existsSync(path.join(k.root, 'files', source.blob!))).toBe(true);
-    expect(k.get(source.id).status).toBe('archived');
+    expect(k.get(source.id).status).toBe('ready');
   });
   it('imports immutable originals, deduplicates by hash and indexes Chinese and English', () => {
     const { k, root } = fixture();
@@ -144,13 +143,36 @@ describe('local knowledge lifecycle', () => {
     expect(k.read(source.id).backlinks[0].id).toBe(wiki.id);
     expect(k.restore(source.id, 1, changed.version).content).toBe('v1');
     expect(k.read(source.id).revisions.map((r) => r.version)).toEqual([2, 1]);
-    k.archive(source.id, true);
-    expect(k.search('接口')).toHaveLength(0);
-    expect(k.state().archived[0].id).toBe(source.id);
-    k.archive(source.id, false);
     expect(k.search('接口')[0].id).toBe(source.id);
   });
-  it('isolates projects and ordinary-session memories, and honors explicit references and archive', () => {
+  it('recovers legacy archives once and cannot restore an archived revision into a hidden state', () => {
+    const { k, store, root } = fixture();
+    const source = k.importFile('历史原文.txt', Buffer.from('历史原文'));
+    const draft = k.save(
+      { title: '历史草稿', content: '待核对', kind: 'wiki', status: 'draft' },
+      'agent',
+    );
+    k.persist({ ...source, status: 'archived', archivedStatus: 'ready', version: 2 }, source);
+    k.persist({ ...draft, status: 'archived', version: 2 }, draft);
+    const migrated = new Knowledge(store, root);
+    expect(migrated.get(source.id)).toMatchObject({
+      status: 'ready',
+      version: 3,
+      blob: source.blob,
+    });
+    expect(migrated.get(draft.id)).toMatchObject({ status: 'draft', version: 3 });
+    expect(migrated.state().documents.map((d) => d.id)).toEqual(
+      expect.arrayContaining([source.id, draft.id]),
+    );
+    expect(migrated.search('历史原文')[0].id).toBe(source.id);
+    expect(new Knowledge(store, root).get(source.id).version).toBe(3);
+    expect(migrated.restore(source.id, 2, 3).status).toBe('ready');
+    expect(migrated.restore(draft.id, 2, 3).status).toBe('draft');
+    expect(() => migrated.save({ ...source, status: 'archived' })).toThrow();
+    migrated.delete(draft.id, migrated.get(draft.id).version);
+    expect(() => migrated.get(draft.id)).toThrow('已删除');
+  });
+  it('isolates projects and ordinary-session memories, and honors explicit references and deletion', () => {
     const { k, store } = fixture();
     store.put('project', { id: 'a', name: 'A', path: '/a' });
     store.put('project', { id: 'b', name: 'B', path: '/b' });
@@ -179,7 +201,7 @@ describe('local knowledge lifecycle', () => {
     expect(k.context(b.id, 'Hello')).toContain('秘密实现');
     k.configure({ autoCollect: false, autoContext: false });
     expect(k.context(b.id, '共享')).not.toContain(global.id);
-    k.archive(local.id, true);
+    k.delete(local.id, local.version);
     expect(k.context(b.id, 'Hello')).toBe('');
   });
   it('captures completed turns once, preserves sources and redacts obvious credential assignments', () => {
@@ -228,8 +250,7 @@ describe('local knowledge lifecycle', () => {
     expect(memory.content).not.toContain('abcd1234');
     expect(memory.content).toContain('尚未验证');
     expect(k.context(session.id, '库存')).toBe('');
-    const archived = k.archive(memory.id, true);
-    k.delete(memory.id, archived.version);
+    k.delete(memory.id, memory.version);
     k.capture(run);
     expect(k.all()).toHaveLength(0);
     k.configure({ autoCollect: false, autoContext: true });
