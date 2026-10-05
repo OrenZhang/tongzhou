@@ -1,6 +1,6 @@
 import { seedAgents } from './fixtures';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { NativeAccount, NativeClient, loginDetails, modelCatalog } from '../electron/native-engine';
@@ -18,6 +18,15 @@ const fake = vi.hoisted(() => ({
   updates: [] as any[],
   images: false,
 }));
+vi.mock('node:fs', async () => {
+  const actual = await vi.importActual<typeof import('node:fs')>('node:fs');
+  return {
+    ...actual,
+    // This suite mocks process launch; the real bootstrap is exercised by engine smoke tests.
+    existsSync: (file: Parameters<typeof actual.existsSync>[0]) =>
+      String(file).endsWith('node-request-identity.cjs') || actual.existsSync(file),
+  };
+});
 vi.mock('node:child_process', async () => {
   const actual = await vi.importActual<typeof import('node:child_process')>('node:child_process');
   const { EventEmitter } = await import('node:events');
@@ -212,22 +221,30 @@ describe('official native engine account integration', () => {
       modelCatalog({ models: { availableModels: [{ modelId: 'k', name: 'Kimi' }] } }).models,
     ).toEqual(['k']);
   });
-  it('starts in an isolated home with the bundled Node runtime and no inherited API secrets', async () => {
-    process.env.OPENAI_API_KEY = 'must-not-leak';
-    try {
-      const client = new NativeClient('kimi', root);
-      cleanups.push(() => client.stop());
-      await client.start();
-      const child = fake.children[0];
-      expect(child.executable).toMatch(/node[/\\]bin[/\\]node/);
-      expect(child.options.env.KIMI_CODE_HOME).toBe(root);
-      expect(child.options.env.OPENAI_API_KEY).toBeUndefined();
-      expect(child.options.shell).toBe(false);
-      await expect(client.authenticate()).rejects.toMatchObject({ code: -32000 });
-    } finally {
-      delete process.env.OPENAI_API_KEY;
-    }
-  });
+  it.each(['kimi', 'minimax'] as const)(
+    'starts %s with the shared network bootstrap and no inherited API secrets',
+    async (kind) => {
+      process.env.OPENAI_API_KEY = 'must-not-leak';
+      try {
+        if (kind === 'minimax')
+          writeFileSync(path.join(root, 'config.yaml'), 'defaultModel: fixture\n');
+        const client = new NativeClient(kind, root);
+        cleanups.push(() => client.stop());
+        await client.start();
+        const child = fake.children[0];
+        expect(child.executable).toMatch(/node[/\\]bin[/\\]node/);
+        expect(child.args[0]).toBe('--require');
+        expect(child.args[1]).toMatch(/node-request-identity\.cjs$/);
+        expect(child.options.env.NODE_OPTIONS).toBeUndefined();
+        expect(child.options.env.KIMI_CODE_HOME).toBe(root);
+        expect(child.options.env.OPENAI_API_KEY).toBeUndefined();
+        expect(child.options.shell).toBe(false);
+        await expect(client.authenticate()).rejects.toMatchObject({ code: -32000 });
+      } finally {
+        delete process.env.OPENAI_API_KEY;
+      }
+    },
+  );
   it('requires verified auth and model discovery before reporting login success', async () => {
     const { auth, synced } = account();
     auth.start('cn');

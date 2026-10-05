@@ -33,7 +33,11 @@ export function launchEngine(kind: NativeEngine, home: string, args: string[]) {
     .replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep);
   const executable = path.join(nodeRoot, 'bin', process.platform === 'win32' ? 'node.exe' : 'node');
   if (!existsSync(executable)) throw new Error('内置 Node 运行时缺失，请重新安装同舟');
-  return spawn(executable, [entry, ...args], {
+  const networkBootstrap = path
+    .join(__dirname, 'node-request-identity.cjs')
+    .replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep);
+  if (!existsSync(networkBootstrap)) throw new Error('内置请求标识模块缺失，请重新构建或安装同舟');
+  return spawn(executable, ['--require', networkBootstrap, entry, ...args], {
     cwd: home,
     windowsHide: true,
     shell: false,

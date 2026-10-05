@@ -116,6 +116,7 @@
       "node_modules/**/*",
       "build/computer/**/*",
       "dist-electron/tool-proxy.cjs",
+      "dist-electron/node-request-identity.cjs",
       "dist-electron/network-core-host.cjs",
       "dist-electron/builtin-mcp.cjs",
       "dist-electron/terminal-host.cjs"

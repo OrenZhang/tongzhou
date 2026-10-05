@@ -1,4 +1,5 @@
-import { userAgent } from './request-identity';
+import './node-request-identity';
+import { browserUserAgent, userAgent } from './request-identity';
 import { registerKnowledgeServices } from './knowledge-services';
 import { builtinAgent } from '../src/shared/builtin-agents';
 import { saveAgentProfile } from './agents';
@@ -81,6 +82,7 @@ import type {
 
 if (process.env.TONGZHOU_USER_DATA) app.setPath('userData', process.env.TONGZHOU_USER_DATA);
 app.setName('Tongzhou');
+app.on('session-created', (s) => s.setUserAgent(browserUserAgent(s.getUserAgent())));
 let window: BrowserWindow | undefined;
 let store: Store;
 let runtime: Runtime;

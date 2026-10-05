@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { EventEmitter } from 'node:events';
 import { CodexSessions } from '../electron/codex-sessions';
 import { codexTransportArgs } from '../electron/codex-transport';
+import { userAgent } from '../electron/request-identity';
 import { networkKey } from '../src/shared/provider-network';
 const client = () => Object.assign(new EventEmitter(), { stop: vi.fn(), reject: vi.fn() }) as any;
 afterEach(() => vi.useRealTimers());
@@ -46,6 +47,10 @@ describe('idle Codex connections', () => {
     expect(codexTransportArgs().join(' ')).toContain('websocket_connect_timeout_ms=4000');
     expect(codexTransportArgs().join(' ')).toContain('stream_max_retries=1');
     expect(codexTransportArgs('http').join(' ')).toContain('supports_websockets=false');
+    for (const mode of ['http', 'auto'] as const)
+      expect(codexTransportArgs(mode).join(' ')).toContain(
+        `http_headers={"User-Agent"="${userAgent}"}`,
+      );
     expect(networkKey()).toBe(networkKey({ mode: 'inherit', transport: 'auto' }));
     expect(networkKey()).not.toBe(networkKey({ mode: 'inherit', transport: 'http' }));
   });

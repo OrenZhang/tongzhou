@@ -2,7 +2,12 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { version } from '../package.json';
-import { appFetch, userAgent, withRequestIdentity } from '../electron/request-identity';
+import {
+  appFetch,
+  userAgent,
+  withRequestIdentity,
+  browserUserAgent,
+} from '../electron/request-identity';
 import { serviceFetch, setServiceTransport } from '../electron/service-network';
 import { listModels } from '../electron/providers';
 import type { Provider } from '../src/shared/types';
@@ -10,6 +15,13 @@ import type { Provider } from '../src/shared/types';
 afterEach(() => {
   setServiceTransport();
   vi.restoreAllMocks();
+});
+
+it('keeps browser compatibility and replaces old app versions without duplicate tokens', () => {
+  const original = 'Mozilla/5.0 Chrome/140.0 Safari/537.36 Tongzhou/0.1';
+  const branded = browserUserAgent(original);
+  expect(branded).toBe(`Mozilla/5.0 Chrome/140.0 Safari/537.36 ${userAgent}`);
+  expect(browserUserAgent(branded)).toBe(branded);
 });
 
 it.each([

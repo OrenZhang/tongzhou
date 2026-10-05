@@ -1,3 +1,5 @@
+import { userAgent } from './request-identity';
+
 /** Explicit provider settings keep WS first while bounding failed handshakes. */
 export function codexTransportArgs(transport: 'http' | 'auto' = 'auto') {
   const provider = `tongzhou_chatgpt_${transport}`;
@@ -6,6 +8,7 @@ export function codexTransportArgs(transport: 'http' | 'auto' = 'auto') {
     `model_providers.${provider}.name="OpenAI"`,
     `model_providers.${provider}.base_url="https://chatgpt.com/backend-api/codex"`,
     `model_providers.${provider}.wire_api="responses"`,
+    `model_providers.${provider}.http_headers={"User-Agent"=${JSON.stringify(userAgent)}}`,
     `model_providers.${provider}.requires_openai_auth=true`,
     `model_providers.${provider}.supports_websockets=${transport === 'auto'}`,
     `model_providers.${provider}.supports_standalone_web_search=true`,
