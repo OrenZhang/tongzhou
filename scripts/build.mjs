@@ -22,7 +22,7 @@ await build({
   platform: 'node',
   format: 'cjs',
   target: 'node22',
-  external: ['electron', '@openai/codex', 'node:sqlite'],
+  external: ['electron', 'electron-updater', '@openai/codex', 'node:sqlite'],
   sourcemap: true,
 });
 await build({

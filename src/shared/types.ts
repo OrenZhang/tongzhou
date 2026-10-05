@@ -264,6 +264,7 @@ export interface CodexAuthState {
   };
 }
 export type AppEvent =
+  | { type: 'update'; state: import('./updates').UpdateState }
   | { type: 'appearance'; value: Partial<import('./appearance').AppearancePreferences> }
   | {
       type: 'navigate';
@@ -319,6 +320,10 @@ export interface ImportPreview {
   warnings: string[];
 }
 export interface TongzhouAPI {
+  updateStatus(): Promise<import('./updates').UpdateState>;
+  checkUpdates(): Promise<import('./updates').UpdateState>;
+  installUpdate(): Promise<void | import('./updates').UpdateState>;
+  projectDeletionPreview(id: string): Promise<string[]>;
   knowledgeReview(id: string, version: number): Promise<KnowledgeDocument>;
   knowledgeAudit(sessionId: string): Promise<string>;
   knowledgeMemoryProcess(retry?: boolean): Promise<{ started: boolean }>;
@@ -500,7 +505,7 @@ export interface TongzhouAPI {
   saveAgent(agent: AgentProfile): Promise<AgentProfile>;
   deleteAgent(id: string): Promise<void>;
   addProject(): Promise<Project | null>;
-  deleteProject(id: string): Promise<string[]>;
+  deleteProject(id: string, expectedSessionIds?: string[]): Promise<string[]>;
   createSession(projectId?: string | null): Promise<Session>;
   updateSession(
     id: string,

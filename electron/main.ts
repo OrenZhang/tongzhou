@@ -1,4 +1,6 @@
 import './node-request-identity';
+import { autoUpdater } from 'electron-updater';
+import { Updates } from './updates';
 import { browserUserAgent, userAgent } from './request-identity';
 import { registerKnowledgeServices } from './knowledge-services';
 import { builtinAgent } from '../src/shared/builtin-agents';
@@ -86,6 +88,7 @@ app.on('session-created', (s) => s.setUserAgent(browserUserAgent(s.getUserAgent(
 let window: BrowserWindow | undefined;
 let store: Store;
 let runtime: Runtime;
+let updates: Updates;
 let accounts: Accounts;
 let accountBrowser: AccountBrowser;
 let networks: NetworkProfiles;
@@ -161,6 +164,40 @@ function setup() {
       .replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep),
   );
   runtime = new Runtime(store, dataDir, emit, computer, clientCommands);
+  updates = new Updates(
+    autoUpdater,
+    app.getVersion(),
+    app.isPackaged && ['win32', 'darwin'].includes(process.platform),
+    process.platform === 'win32' ||
+      require(path.join(app.getAppPath(), 'package.json')).tongzhouMacAutoUpdate === true,
+    () =>
+      runtime.snapshot().runs.some((r) => r.status === 'running') ||
+      store.list<any>('terminal').some((t) => t.status === 'running') ||
+      store.list<any>('pendingInput').some((p) => ['queued', 'dispatching'].includes(p.status)),
+    (state) => emit({ type: 'update', state }),
+  );
+  register('updateStatus', operation('客户端更新', 'query', '读取当前版本与更新状态'), () =>
+    updates.snapshot(),
+  );
+  register(
+    'checkUpdates',
+    manual('客户端更新', '检查正式版本更新', 'settings', '由用户检查更新'),
+    () => updates.check(),
+  );
+  register(
+    'installUpdate',
+    manual('客户端更新', '下载更新并重启客户端', 'settings', '由用户点击安装更新'),
+    () => {
+      if (updates.snapshot().version && !updates.snapshot().automaticInstall)
+        return shell.openExternal('https://github.com/OrenZhang/tongzhou/releases/latest');
+      return updates.install();
+    },
+  );
+  register(
+    'projectDeletionPreview',
+    operation('项目与 Git', 'query', '核对项目内全部会话（包含归档与子会话）', [idSchema]),
+    (id) => runtime.projectDeletionPreview(idSchema.parse(id)),
+  );
   registerTaskServices(register, store, runtime, dataDir);
   registerKnowledgeServices(register, store, runtime);
   networks = new NetworkProfiles(
@@ -1698,11 +1735,14 @@ function setup() {
       '删除项目及关联会话，保留磁盘文件',
       'workspace',
       '需要在项目删除对话框中确认范围',
-      [idSchema.describe('projectId')],
+      [idSchema.describe('projectId'), z.array(idSchema).optional()],
     ),
-    (id) => {
+    (id, expectedSessionIds) => {
       if (worktreeOperations) throw new Error('正在处理工作树，请完成后再删除项目。');
-      const deleted = runtime.deleteProject(idSchema.parse(id));
+      const deleted = runtime.deleteProject(
+        idSchema.parse(id),
+        z.array(idSchema).optional().parse(expectedSessionIds),
+      );
       for (const sessionId of deleted) channels.abort(sessionId);
       feishu.sync();
       return deleted;
@@ -2079,6 +2119,7 @@ else {
     .then(async () => {
       setup();
       await createWindow();
+      if (!process.env.TONGZHOU_DISABLE_UPDATES) updates.start();
       computer.emergencyShortcut = globalShortcut.register('CommandOrControl+Alt+Escape', () => {
         runtime.terminals.stopAll();
         for (const r of runtime.snapshot().runs)
@@ -2099,6 +2140,7 @@ else {
     if (quitting || !runtime) return;
     event.preventDefault();
     quitting = true;
+    updates.dispose();
     globalShortcut.unregisterAll();
     accounts.dispose();
     accountBrowser.dispose();

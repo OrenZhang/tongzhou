@@ -59,5 +59,7 @@ node_modules/
 *.swo
 *~
 .DS_Store
+/artifacts/
+/release-assets/
 Thumbs.db
 Desktop.ini

@@ -40,17 +40,34 @@ try {
   await page.waitForSelector('.app-shell');
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
+  await page.getByRole('button', { name: '设置与优化', exact: true }).hover();
+  assert.equal(
+    await page
+      .getByRole('button', { name: '删除项目 空项目', exact: true })
+      .evaluate((el) => getComputedStyle(el).opacity),
+    '0',
+  );
+  await page.getByRole('button', { name: '项目 空项目', exact: true }).hover();
+  assert.equal(
+    await page
+      .getByRole('button', { name: '删除项目 空项目', exact: true })
+      .evaluate((el) => getComputedStyle(el).opacity),
+    '1',
+  );
   await page.getByRole('button', { name: '删除项目 空项目', exact: true }).click();
   await page.getByRole('heading', { name: '删除项目', exact: true }).waitFor();
   assert.match(await page.locator('.modal').innerText(), /磁盘上的项目文件/);
   await page.getByRole('button', { name: '取消', exact: true }).click();
   assert.equal(await page.getByRole('button', { name: '项目 空项目', exact: true }).count(), 1);
+  await page.getByRole('button', { name: '项目 空项目', exact: true }).hover();
   await page.getByRole('button', { name: '删除项目 空项目', exact: true }).click();
   await page.getByRole('button', { name: '确认删除项目' }).click();
   await page.waitForFunction(() => !document.querySelector('[aria-label="项目 空项目"]'));
   await page.locator(`[data-session-id="${session.id}"]`).click();
   const terminal = await page.evaluate((id) => window.tongzhou.startTerminal(id), session.id);
+  await page.getByRole('button', { name: '项目 待删除项目', exact: true }).hover();
   await page.getByRole('button', { name: '删除项目 待删除项目', exact: true }).click();
+  await page.getByLabel('我确认删除这些会话及记录').check();
   await page.getByRole('button', { name: '确认删除项目' }).click();
   await page.getByRole('alert').filter({ hasText: '运行中的终端' }).waitFor();
   assert.ok(!(await page.getByRole('alert').innerText()).includes('invoking remote method'));

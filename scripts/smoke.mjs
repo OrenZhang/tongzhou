@@ -79,6 +79,8 @@ try {
   app = await electron.launch(launchOptions);
   const page = await app.firstWindow();
   await page.waitForSelector('.app-shell');
+  // Reproduce the constrained hosted-runner viewport where the side panel hid Send.
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1100, 800));
   await app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows().forEach((w) => w.setIgnoreMouseEvents(true)),
   );

@@ -1,26 +1,24 @@
-# GitHub 维护与发布
+# 版本发布与更新
 
-仓库包含主分支/PR 检查和标签草稿发布流程。源码使用 Apache-2.0；模型账号、个人数据库、安装包和依赖目录不进入 Git 历史。
+源码在 `main` 开发；`release` 是稳定版发布分支。安装包上传到 GitHub Releases，不提交进 Git。现阶段无需额外后台服务：Actions 构建，Releases 分发，GitHub Issues 记录问题。
 
-## 仓库与本地推送
+## 发布
 
-仓库地址为 `https://github.com/OrenZhang/tongzhou`，默认分支为 `main`。已有工作目录应先检查 `git remote -v`，新环境可直接 clone。Codex 的 GitHub 连接不等于电脑上的 Git 命令已登录；使用命令行推送时，需要维护者自行完成 GitHub CLI 或 Git Credential Manager 登录。
+1. 更新 `package.json`、锁文件和 `docs/RELEASE_NOTES.md`。稳定版使用新的三段版本号。
+2. 验证后将指定提交快进到 `release`，或在该分支手动运行 Publish release。
+3. Windows x64、macOS Intel、macOS Apple Silicon 分别在原生机器运行测试、打包和安装包启动验证。
+4. 全部成功后，流程核对版本与 SHA-512，合并双架构 macOS 更新清单，创建 `v版本号` 标签及正式 Release。已发布版本禁止覆盖，修复需升版。
 
-```bash
-gh auth login
-gh auth setup-git
-git push -u origin main
-```
+发布内容包括 EXE、DMG、ZIP、blockmap、latest.yml、latest-mac.yml、SHA256SUMS。源码开发预览不执行自动更新；正式包启动后及每六小时检查一次，发现版本才显示侧栏更新图标。下载由用户点击发起，校验后安装并重启。存在运行会话、终端或排队任务时拒绝安装；下载期间新任务启动时保留已下载包，等待用户再次点击。
 
-首次通过 GitHub 连接器导入时，提交说明保留来源本地提交 ID；GitHub 会为导入记录生成新的提交 ID。后续从远端历史继续维护。不要覆盖已有仓库历史或强制推送。
+## 签名
 
-## 后续版本
+Windows 可配置 `WIN_CSC_LINK`、`WIN_CSC_KEY_PASSWORD`。macOS 配置 `MAC_CSC_LINK`、`MAC_CSC_KEY_PASSWORD` 及公证用的 `APPLE_ID`、`APPLE_APP_SPECIFIC_PASSWORD`、`APPLE_TEAM_ID`。
 
-1. 修改版本与发行说明，运行 `npm test`、`npm run build` 和 `npm run test:desktop`。
-2. 在 Windows 和 macOS 检查安装、启动、真实账号登录、工具执行、退出恢复。
-3. 提交代码并创建对应 `v*` 标签，推送到 GitHub。
-4. 标签工作流构建两端安装包并创建草稿 Release。检查构建日志、校验值及平台测试后，再公开草稿。
+证书和凭据仅放在 GitHub Actions Secrets。未配置时可以生成未签名安装包，但 macOS 不启用自动安装，仅提供正式发布页下载；签名与公证齐备后才在包中启用自动更新。不能用关闭系统安全检查来代替签名。
 
-公开分发前应为 Windows 配置代码签名，为 macOS 配置 Developer ID 签名、公证。私钥、证书和令牌仅保存在受限的 GitHub Actions Secrets 中，不写入仓库。默认工作流不提供自动更新渠道。
+## 运维
 
-发布工作流可从 `WIN_CSC_LINK` / `WIN_CSC_KEY_PASSWORD` 和 `MAC_CSC_LINK` / `MAC_CSC_KEY_PASSWORD` Secrets 读取签名配置。没有证书时不代表产物已签名；macOS 公证仍需维护者配置和验收。每次发布生成平台独立 `SHA256SUMS-*`，避免多平台上传相互覆盖。设置中的版本检查只查询最新发布并提供发布页入口，不会自动下载安装。
+构建失败在 Actions 中查对应平台日志。测试与打包失败均阻止 Release 公开，诊断产物保存七天。更新源固定为 `OrenZhang/tongzhou` 的正式 Releases，排除预发布与降级，不向客户端分发 GitHub 凭据。
+
+GitHub Projects 是问题看板，不是安装包托管服务；将待办 Issues 加入 TongZhou 看板跟踪即可。首次正式发布前的旧预览需手动安装一次，后续使用内置更新。

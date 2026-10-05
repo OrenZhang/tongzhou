@@ -427,7 +427,12 @@ svg {
 .live-dot.gray {
   background: #aab3b6;
 }
-.sidebar-bottom > button {
+.sidebar-settings-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.sidebar-settings-row > button {
   width: 100%;
   padding: 8px;
   justify-content: flex-start;
@@ -435,11 +440,7 @@ svg {
   font-size: 12px;
   height: 34px;
 }
-.sidebar-bottom > button svg:last-child {
-  margin-left: auto;
-  color: var(--muted);
-}
-.sidebar-bottom > button.active {
+.sidebar-settings-row > button.active {
   color: var(--accent);
   background: var(--accent-soft);
   border-radius: 6px;
@@ -608,6 +609,43 @@ svg {
 .project-group-heading .project-delete:focus-visible {
   color: var(--danger, #bc3434);
   background: #bc343415;
+}
+.project-group-heading .project-delete {
+  opacity: 0;
+  pointer-events: none;
+}
+.project-group-heading:hover .project-delete,
+.project-group-heading:focus-within .project-delete {
+  opacity: 1;
+  pointer-events: auto;
+}
+@media (hover: none) {
+  .project-group-heading .project-delete {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+.sidebar-update {
+  position: relative;
+}
+.sidebar-update > button {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.update-error {
+  position: absolute;
+  bottom: 38px;
+  left: 0;
+  width: 260px;
+  padding: 12px;
+  background: var(--surface);
+  color: var(--danger);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  z-index: 30;
+}
+.update-settings > p {
+  margin: 10px 0;
 }
 .project-delete-path {
   overflow-wrap: anywhere;

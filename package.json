@@ -1,6 +1,6 @@
 {
   "name": "tongzhou",
-  "version": "0.5.7",
+  "version": "0.5.8",
   "description": "同舟 — 多模型协作，一个工作台。An open-source, local-first agent workspace.",
   "private": true,
   "type": "module",
@@ -61,6 +61,7 @@
     "diff": "9.0.0",
     "dingtalk-stream": "2.1.6-beta.1",
     "dompurify": "3.4.16",
+    "electron-updater": "6.8.9",
     "fflate": "0.8.3",
     "katex": "0.19.0",
     "lowlight": "3.3.0",
@@ -96,6 +97,15 @@
     "vitest": "^4.1.11"
   },
   "build": {
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "OrenZhang",
+        "repo": "tongzhou",
+        "releaseType": "release"
+      }
+    ],
     "appId": "org.tongzhou.desktop",
     "productName": "Tongzhou",
     "directories": {

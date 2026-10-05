@@ -384,15 +384,12 @@
 }
 @media (max-width: 1200px) {
   .context-panel.project-context {
-    position: absolute;
-    right: 0;
-    top: 0;
-    bottom: 0;
-    z-index: 8;
-    width: min(420px, 78vw);
+    position: relative;
+    flex-shrink: 0;
+    width: min(320px, 40%);
     box-shadow: -8px 0 24px #0000000b;
   }
   .context-panel.project-context.wide {
-    width: min(680px, 85vw);
+    width: min(420px, 45%);
   }
 }

@@ -24,6 +24,15 @@ async function fixture() {
   return { root, store, runtime, session };
 }
 describe('project deletion', () => {
+  it('requires the confirmed complete session set and rejects a stale confirmation', async () => {
+    const { store, runtime } = await fixture();
+    expect(() => runtime.deleteProject('p')).toThrow('重新打开');
+    const confirmed = runtime.projectDeletionPreview('p');
+    const archived = store.createSession('p');
+    store.put('session', { ...archived, archived: true });
+    expect(() => runtime.deleteProject('p', confirmed)).toThrow('2 个会话');
+    expect(runtime.projectDeletionPreview('p')).toHaveLength(2);
+  });
   it('deletes the complete project family and records while preserving files and unrelated sessions', async () => {
     const { root, store, runtime, session } = await fixture();
     const file = path.join(root, 'keep.txt');
@@ -54,7 +63,9 @@ describe('project deletion', () => {
       store.put('taskMemory', { id, sessionId: id });
     }
     store.put('channel', { id: 'channel', sessionId: session.id, inbound: true });
-    expect(runtime.deleteProject('p').sort()).toEqual([session.id, branch.id, child.id].sort());
+    expect(runtime.deleteProject('p', runtime.projectDeletionPreview('p')).sort()).toEqual(
+      [session.id, branch.id, child.id].sort(),
+    );
     expect(store.list('project')).toEqual([]);
     expect(store.list('worktree')).toEqual([]);
     expect(store.list('session').map((s) => s.id)).toEqual([other.id]);
@@ -92,7 +103,9 @@ describe('project deletion', () => {
     store.db.exec(
       "CREATE TRIGGER fail_project BEFORE DELETE ON objects WHEN OLD.kind='project' BEGIN SELECT RAISE(ABORT, 'fixture failure'); END",
     );
-    expect(() => runtime.deleteProject('p')).toThrow('fixture failure');
+    expect(() => runtime.deleteProject('p', runtime.projectDeletionPreview('p'))).toThrow(
+      'fixture failure',
+    );
     expect(store.get('session', session.id)).toBeTruthy();
     expect(store.get('project', 'p')).toBeTruthy();
     expect(store.list('deletedSession')).toEqual([]);

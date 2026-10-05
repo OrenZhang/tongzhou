@@ -3,7 +3,11 @@ import type { TongzhouAPI } from '../src/shared/types';
 const call = (method: string, ...args: unknown[]) =>
   ipcRenderer.invoke('tongzhou:' + method, ...args);
 const api: TongzhouAPI = {
-  deleteProject: (id) => call('deleteProject', id),
+  updateStatus: () => call('updateStatus'),
+  checkUpdates: () => call('checkUpdates'),
+  installUpdate: () => call('installUpdate'),
+  projectDeletionPreview: (id) => call('projectDeletionPreview', id),
+  deleteProject: (...args) => call('deleteProject', ...args),
   knowledgeReview: (...args) => call('knowledgeReview', ...args),
   knowledgeAudit: (...args) => call('knowledgeAudit', ...args),
   knowledgeMemoryProcess: (...args) => call('knowledgeMemoryProcess', ...args),

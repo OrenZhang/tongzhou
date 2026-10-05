@@ -1,4 +1,5 @@
 import { KnowledgeCenter } from './KnowledgeCenter';
+import { UpdateControl } from './UpdateControl';
 import { errorMessage } from './feedback';
 import { ChoicePicker } from './ChoicePicker';
 import { ConnectionDiagnostics } from './ConnectionDiagnostics';
@@ -17,7 +18,6 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
-  CircleHelp,
   Code2,
   Folder,
   FolderOpen,
@@ -264,6 +264,8 @@ export default function App() {
   const [deleteId, setDeleteId] = useState('');
   const [deleteProjectId, setDeleteProjectId] = useState('');
   const [deleteProjectError, setDeleteProjectError] = useState('');
+  const [deleteProjectSessions, setDeleteProjectSessions] = useState<string[]>();
+  const [deleteProjectAcknowledged, setDeleteProjectAcknowledged] = useState(false);
   const { draft, setDraft, clearDraft } = useDraft(sessionId);
   const attachments = useAttachmentDraft(sessionId, (error) => report(error));
   const attachmentPicker = useRef<HTMLInputElement>(null);
@@ -1005,6 +1007,12 @@ export default function App() {
             setNotice('');
             setDeleteProjectId(target.id);
             setDeleteProjectError('');
+            setDeleteProjectSessions(undefined);
+            setDeleteProjectAcknowledged(false);
+            void api
+              .projectDeletionPreview(target.id)
+              .then(setDeleteProjectSessions)
+              .catch((e) => setDeleteProjectError(errorMessage(e)));
           }}
         />
         <div className="sidebar-bottom">
@@ -1012,14 +1020,16 @@ export default function App() {
             <span className="live-dot" />
             本地优先<span>你的数据，你掌控</span>
           </div>
-          <button
-            onClick={() => setView('settings')}
-            className={view === 'settings' || view === 'connections' ? 'active' : ''}
-          >
-            <Settings2 size={17} />
-            设置与优化
-            <CircleHelp size={15} />
-          </button>
+          <div className="sidebar-settings-row">
+            <button
+              onClick={() => setView('settings')}
+              className={view === 'settings' || view === 'connections' ? 'active' : ''}
+            >
+              <Settings2 size={17} />
+              设置与优化
+            </button>
+            <UpdateControl api={api} />
+          </div>
         </div>
       </aside>
       <div className="main-shell">
@@ -2134,9 +2144,10 @@ export default function App() {
           <main className="page settings-page">
             <div className="page-heading">
               <h1>设置与优化</h1>
-              <p>同舟 0.5.7 · 开源多模型桌面工作台</p>
+              <p>同舟 · 开源多模型桌面工作台</p>
             </div>
             <Appearance value={appearance} onChange={setAppearance} />
+            <UpdateControl api={api} settings />
             <DataMaintenance api={api} />
             <section className="settings-card">
               <div className="settings-card-title">
@@ -2798,6 +2809,21 @@ export default function App() {
               项目内全部会话（含归档和内部子会话）、消息、运行记录和终端日志将一并删除，无法撤销。
             </p>
             <p>
+              {deleteProjectSessions
+                ? `已核对：共 ${deleteProjectSessions.length} 个关联会话（含归档和子会话）。`
+                : '正在核对项目会话…'}
+            </p>
+            {!!deleteProjectSessions?.length && (
+              <label className="check-row">
+                <input
+                  type="checkbox"
+                  checked={deleteProjectAcknowledged}
+                  onChange={(e) => setDeleteProjectAcknowledged(e.target.checked)}
+                />
+                我确认删除这些会话及记录
+              </label>
+            )}
+            <p>
               <strong>磁盘上的项目文件与 Git 工作树目录会保留。</strong>
               关联的隔离工作目录仅从同舟移除登记。
             </p>
@@ -2813,12 +2839,16 @@ export default function App() {
             </button>
             <button
               className="destructive-button"
-              disabled={busy}
+              disabled={
+                busy ||
+                !deleteProjectSessions ||
+                (!!deleteProjectSessions.length && !deleteProjectAcknowledged)
+              }
               onClick={() =>
                 void perform(async () => {
                   setDeleteProjectError('');
                   try {
-                    const deleted = await api.deleteProject(deleteProjectId);
+                    const deleted = await api.deleteProject(deleteProjectId, deleteProjectSessions);
                     for (const id of deleted) clearDraft(id);
                     if (deleted.includes(sessionId)) {
                       setSessionId('');

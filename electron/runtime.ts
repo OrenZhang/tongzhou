@@ -327,7 +327,17 @@ export class Runtime {
     if (consumed) this.changed();
     return consumed;
   }
-  deleteProject(id: string) {
+  projectDeletionPreview(id: string) {
+    this.store.get<Project>('project', id);
+    return [
+      ...projectDeletionTargets(
+        this.store.list<Project>('project'),
+        this.store.list<Session>('session'),
+        id,
+      ).sessionIds,
+    ].sort();
+  }
+  deleteProject(id: string, expectedSessionIds?: string[]) {
     this.store.get<Project>('project', id);
     const { projectIds, sessionIds } = projectDeletionTargets(
       this.store.list<Project>('project'),
@@ -354,6 +364,13 @@ export class Runtime {
     )
       throw new Error('项目仍有排队中的任务，请先取消排队再删除。');
     // Synchronous transaction: no new task or terminal can start between checks and deletion.
+    if (
+      JSON.stringify([...sessionIds].sort()) !==
+      JSON.stringify([...(expectedSessionIds ?? [])].sort())
+    )
+      throw new Error(
+        `项目包含 ${sessionIds.size} 个会话，或会话已发生变化，请重新打开删除确认框核对。`,
+      );
     // Remove registrations only; never remove project or Git worktree directories from disk.
     this.store.deleteProject(projectIds, sessionIds);
     for (const s of sessionIds) this.codexChats.remove(s);
