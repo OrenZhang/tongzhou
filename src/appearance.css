@@ -227,6 +227,12 @@ code,
   font-weight: 500;
   box-shadow: 0 2px 4px #00000012;
 }
+.welcome-actions .open-project {
+  min-height: 40px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 14px;
+}
 .secondary {
   border-color: var(--control-border);
   color: var(--ink);

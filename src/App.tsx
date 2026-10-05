@@ -1157,8 +1157,8 @@ export default function App() {
                     </p>
                     <div className="welcome-actions">
                       {!project && (
-                        <button className="secondary" onClick={openProject}>
-                          <FolderOpen size={16} />
+                        <button className="primary open-project" onClick={openProject}>
+                          <FolderOpen size={18} />
                           打开项目
                           <ArrowRight size={15} />
                         </button>
