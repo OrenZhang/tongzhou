@@ -1,3 +1,4 @@
+import { KnowledgeCenter, KnowledgeReferences } from './KnowledgeCenter';
 import { ChoicePicker } from './ChoicePicker';
 import { ConnectionDiagnostics } from './ConnectionDiagnostics';
 import { TaskPanel, HistorySearch } from './TaskPanel';
@@ -5,6 +6,7 @@ import { DataMaintenance } from './DataMaintenance';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
+  BookOpen,
   ArrowDownToLine,
   ArrowRight,
   ArrowUp,
@@ -189,7 +191,8 @@ type View =
   | 'activity'
   | 'settings'
   | 'connections'
-  | 'extensions';
+  | 'extensions'
+  | 'knowledge';
 export default function App() {
   const [taskOpen, setTaskOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -601,6 +604,7 @@ export default function App() {
     { id: 'providers', label: '模型与订阅', icon: Network },
     { id: 'agents', label: 'Agent 团队', icon: Users },
     { id: 'extensions', label: '插件', icon: Terminal },
+    { id: 'knowledge', label: '知识中心', icon: BookOpen },
     { id: 'activity', label: '运行记录', icon: Activity },
   ] as const;
   const selectModel = (connection: string, selectedModel: string) => {
@@ -1028,6 +1032,7 @@ export default function App() {
                     activity: '运行记录',
                     settings: '设置与优化',
                     extensions: '插件',
+                    knowledge: '知识中心',
                   }[view]}
             </strong>
           </div>
@@ -1402,6 +1407,13 @@ export default function App() {
                       />
                     </div>
                     <div className="row composer-actions">
+                      {sessionId && (
+                        <KnowledgeReferences
+                          api={api}
+                          sessionId={sessionId}
+                          onOpen={() => setView('knowledge')}
+                        />
+                      )}
                       <button
                         className="icon-button"
                         aria-label="添加图片或文件"
@@ -1712,6 +1724,14 @@ export default function App() {
         )}
         {view === 'extensions' && (
           <Extensions api={api} data={data} refresh={refresh} report={report} />
+        )}
+        {view === 'knowledge' && (
+          <KnowledgeCenter
+            api={api}
+            data={data}
+            sessionId={sessionId}
+            onSession={activateSession}
+          />
         )}
         {view === 'agents' && (
           <main className="page">

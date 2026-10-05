@@ -1,3 +1,4 @@
+import { registerKnowledgeServices } from './knowledge-services';
 import { registerTaskServices } from './task-services';
 import { applyPendingRestore } from './data-maintenance';
 import {
@@ -156,6 +157,7 @@ function setup() {
   );
   runtime = new Runtime(store, dataDir, emit, computer, clientCommands);
   registerTaskServices(register, store, runtime, dataDir);
+  registerKnowledgeServices(register, store, runtime);
   networks = new NetworkProfiles(
     store,
     dataDir,
@@ -1290,6 +1292,7 @@ function setup() {
         'settings',
         'connections',
         'extensions',
+        'knowledge',
         'projects',
       ]),
     ]),
@@ -1305,6 +1308,7 @@ function setup() {
             'settings',
             'connections',
             'extensions',
+            'knowledge',
             'projects',
           ])
           .transform((value) => (value === 'projects' ? ('workspace' as const) : value))

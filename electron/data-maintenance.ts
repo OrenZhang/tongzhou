@@ -18,7 +18,10 @@ const signature = Buffer.from('TONGZHOU-BACKUP-1\n');
 const allowed = (name: string) =>
   name === 'tongzhou.db' ||
   /^attachments\/[a-f0-9-]{36}$/.test(name) ||
-  /^checkpoints\/[a-f0-9]{64}$/.test(name);
+  /^checkpoints\/[a-f0-9]{64}$/.test(name) ||
+  /^knowledge\/(?:index\.md|(?:sources|wiki|memories)\/[a-f0-9-]{36}\.md|revisions\/[a-f0-9-]{36}-[0-9]+\.json|files\/[a-f0-9-]{36}\.[a-z0-9]{1,8})$/.test(
+    name,
+  );
 const maxBytes = 256 * 1024 * 1024;
 export function encryptBackup(data: Uint8Array, password: string) {
   if (password.length < 12 || password.length > 256) throw new Error('备份密码需 12–256 个字符');
@@ -88,14 +91,19 @@ export class DataMaintenance {
       const entries: Record<string, Uint8Array> = { 'tongzhou.db': readFileSync(temp) };
       let size = entries['tongzhou.db'].length;
       if (size > maxBytes) throw new Error('数据库超过 256 MB');
-      for (const folder of ['attachments', 'checkpoints']) {
+      for (const folder of ['attachments', 'checkpoints', 'knowledge']) {
         const root = path.join(this.dataDir, folder);
         if (!existsSync(root)) continue;
-        for (const name of readdirSync(root)) {
-          const key = folder + '/' + name;
+        for (const name of readdirSync(root, { recursive: folder === 'knowledge' }) as string[]) {
+          const key = folder + '/' + name.replaceAll(path.sep, '/');
           if (!allowed(key)) continue;
           const file = path.join(root, name);
-          if (lstatSync(file).isSymbolicLink()) continue;
+          if (
+            lstatSync(file).isSymbolicLink() ||
+            !lstatSync(file).isFile() ||
+            (path.dirname(file) !== root && lstatSync(path.dirname(file)).isSymbolicLink())
+          )
+            continue;
           size += lstatSync(file).size;
           if (size > maxBytes) throw new Error('工作数据超过 256 MB，请先清理未使用附件');
           entries[key] = readFileSync(file);
@@ -230,6 +238,7 @@ export function applyPendingRestore(dataDir: string) {
     'tongzhou.db-shm',
     'attachments',
     'checkpoints',
+    'knowledge',
   ]) {
     if (state.done.includes(name)) continue;
     const target = path.join(dataDir, name),

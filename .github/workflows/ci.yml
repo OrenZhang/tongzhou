@@ -34,6 +34,7 @@ jobs:
       - run: npm run test:workbench
       - run: npm run test:capabilities
       - run: npm run test:task-workbench
+      - run: npm run test:knowledge
       - run: npm run test:management
       - run: npm run test:markdown
       - run: npm run test:appearance

@@ -434,6 +434,7 @@ export class Store {
           'channelInbox',
           'contextCheckpoint',
           'taskMemory',
+          'knowledgeBinding',
           'runChanges',
           'terminal',
         ])

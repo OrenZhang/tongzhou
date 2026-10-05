@@ -576,7 +576,7 @@ describe('agent execution lifecycle', () => {
       f.store.list<Run>('run').every((r) => r.sessionId === session.id && r.status === 'completed'),
     ).toBe(true);
   });
-  it('chats and hands history to another model without any project or tools', async () => {
+  it('chats and hands history to another model with only attachment and knowledge tools', async () => {
     const f = await fixture(() => [text('Chat answer')]);
     f.store.remove('project', 'project');
     const session = f.store.createSession();
@@ -587,7 +587,13 @@ describe('agent execution lifecycle', () => {
     f.runtime.start({ ...input, prompt: 'Continue', model: 'second' });
     await f.runtime.waitForIdle();
     expect(
-      f.requests.every((r) => r.tools.every((t: any) => t.function.name === 'read_attachment')),
+      f.requests.every((r) =>
+        r.tools.every((t: any) =>
+          ['read_attachment', 'knowledge_search', 'knowledge_read', 'knowledge_write'].includes(
+            t.function.name,
+          ),
+        ),
+      ),
     ).toBe(true);
     expect(f.requests[1].messages.some((m: any) => m.content === input.prompt)).toBe(true);
     expect(f.store.list<Run>('run').every((r) => r.status === 'completed')).toBe(true);
@@ -622,6 +628,21 @@ describe('agent execution lifecycle', () => {
     expect(f.runtime.snapshot().approvals).toHaveLength(0);
     await expect(readFile(path.join(f.root, 'unexpected.txt'))).rejects.toThrow();
   });
+  it('restricts a project-linked knowledge job to knowledge tools and does not collect itself', async () => {
+    const f = await fixture(() => [text('Knowledge summary')]);
+    f.store.put('session', {
+      ...f.store.get<any>('session', f.input.sessionId),
+      knowledgeJob: true,
+    });
+    f.runtime.start(f.input);
+    await f.runtime.waitForIdle();
+    const tools = f.requests[0].tools.map((t: any) => t.function.name);
+    expect(tools).toContain('knowledge_write');
+    expect(tools).not.toContain('write_file');
+    expect(tools).not.toContain('run_command');
+    expect(f.store.list('knowledge')).toHaveLength(0);
+    expect(f.store.list<Run>('run')[0].status).toBe('completed');
+  });
   it('runs a projectless team without assigning project tools to children', async () => {
     const f = await fixture(() => [text('Discussion finding')]);
     const session = f.store.createSession();
@@ -629,7 +650,11 @@ describe('agent execution lifecycle', () => {
     await f.runtime.waitForIdle();
     expect(f.store.list<Run>('run').every((r) => r.status === 'completed')).toBe(true);
     expect(
-      f.requests.every((r) => r.tools.every((t: any) => t.function.name === 'read_attachment')),
+      f.requests.every((r) =>
+        r.tools.every((t: any) =>
+          ['read_attachment', 'knowledge_search', 'knowledge_read'].includes(t.function.name),
+        ),
+      ),
     ).toBe(true);
     expect(f.store.messages(session.id).at(-1)?.content).toContain('Discussion finding');
   });
@@ -748,6 +773,8 @@ describe('agent execution lifecycle', () => {
             'task_memory',
             'terminal_read',
             'read_attachment',
+            'knowledge_search',
+            'knowledge_read',
           ].includes(t.function.name),
         ),
       ),

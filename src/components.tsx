@@ -108,9 +108,11 @@ export function Modal({
         }
         if (e.key !== 'Tab') return;
         // Include the model picker portal while it belongs to this dialog.
-        const containers = [modal.current, document.querySelector('.model-picker-panel')].filter(
-          Boolean,
-        );
+        const containers = [
+          modal.current,
+          document.querySelector('.model-picker-panel'),
+          document.querySelector('.choice-panel'),
+        ].filter(Boolean);
         const controls = containers
           .flatMap((container) => [
             ...container!.querySelectorAll<HTMLElement>(

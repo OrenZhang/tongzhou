@@ -3,6 +3,20 @@ import type { TongzhouAPI } from '../src/shared/types';
 const call = (method: string, ...args: unknown[]) =>
   ipcRenderer.invoke('tongzhou:' + method, ...args);
 const api: TongzhouAPI = {
+  knowledgeReferences: (...args) => call('knowledgeReferences', ...args),
+  knowledgeCollect: (...args) => call('knowledgeCollect', ...args),
+  knowledgeState: (...args) => call('knowledgeState', ...args),
+  knowledgeRead: (...args) => call('knowledgeRead', ...args),
+  knowledgeSave: (...args) => call('knowledgeSave', ...args),
+  knowledgeArchive: (...args) => call('knowledgeArchive', ...args),
+  knowledgeRestore: (...args) => call('knowledgeRestore', ...args),
+  knowledgeBind: (...args) => call('knowledgeBind', ...args),
+  knowledgeSettings: (...args) => call('knowledgeSettings', ...args),
+  knowledgeReindex: (...args) => call('knowledgeReindex', ...args),
+  knowledgeImport: (...args) => call('knowledgeImport', ...args),
+  knowledgeOpenFolder: (...args) => call('knowledgeOpenFolder', ...args),
+  knowledgeOrganize: (...args) => call('knowledgeOrganize', ...args),
+
   diagnoseProvider: (...args) => call('diagnoseProvider', ...args),
   browserDownloads: (...args) => call('browserDownloads', ...args),
   browserSnapshot: (...args) => call('browserSnapshot', ...args),

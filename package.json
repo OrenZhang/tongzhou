@@ -44,7 +44,8 @@
     "test:live": "node scripts/live-coding-smoke.mjs",
     "test:package": "node scripts/package-smoke.mjs",
     "test:latency": "node scripts/chat-latency-smoke.mjs",
-    "test:task-workbench": "node scripts/task-workbench-smoke.mjs"
+    "test:task-workbench": "node scripts/task-workbench-smoke.mjs",
+    "test:knowledge": "node scripts/knowledge-smoke.mjs"
   },
   "dependencies": {
     "@iarna/toml": "^2.2.5",

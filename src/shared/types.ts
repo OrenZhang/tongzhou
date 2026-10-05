@@ -1,3 +1,10 @@
+import type {
+  KnowledgeState,
+  KnowledgeRead,
+  KnowledgeDocument,
+  KnowledgeInput,
+  KnowledgeSettings,
+} from './knowledge';
 export type NativeEngine = 'kimi' | 'minimax';
 export interface NativeAuthState {
   providerId?: string;
@@ -174,6 +181,7 @@ export interface Message {
   visibleTool?: boolean;
 }
 export interface Session {
+  knowledgeJob?: boolean;
   permission?: PermissionMode;
   id: string;
   projectId: string | null;
@@ -261,7 +269,8 @@ export type AppEvent =
         | 'activity'
         | 'settings'
         | 'connections'
-        | 'extensions';
+        | 'extensions'
+        | 'knowledge';
     }
   | { type: 'run-event'; event: RunEvent }
   | { type: 'native-auth'; state: NativeAuthState }
@@ -305,6 +314,20 @@ export interface ImportPreview {
   warnings: string[];
 }
 export interface TongzhouAPI {
+  knowledgeReferences(sessionId: string): Promise<string[]>;
+  knowledgeCollect(sessionId: string): Promise<{ collected: number }>;
+  knowledgeState(query?: string, projectId?: string, sessionId?: string): Promise<KnowledgeState>;
+  knowledgeRead(id: string): Promise<KnowledgeRead>;
+  knowledgeSave(input: KnowledgeInput): Promise<KnowledgeDocument>;
+  knowledgeArchive(id: string, archived: boolean): Promise<void>;
+  knowledgeRestore(id: string, version: number, currentVersion: number): Promise<KnowledgeDocument>;
+  knowledgeBind(sessionId: string, documentIds: string[]): Promise<void>;
+  knowledgeSettings(value: KnowledgeSettings): Promise<void>;
+  knowledgeReindex(): Promise<{ indexed: number }>;
+  knowledgeImport(projectId?: string): Promise<{ imported: KnowledgeDocument[]; errors: string[] }>;
+  knowledgeOpenFolder(): Promise<void>;
+  knowledgeOrganize(sessionId: string, documentIds: string[]): Promise<string>;
+
   diagnoseProvider(
     id: string,
     model: string,

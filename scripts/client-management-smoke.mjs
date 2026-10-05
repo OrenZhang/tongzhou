@@ -1,6 +1,6 @@
 import { _electron as electron } from 'playwright';
 import { createServer } from 'node:http';
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 
@@ -109,7 +109,12 @@ try {
   const catalog = await page.evaluate(() => window.tongzhou.clientMethods());
   const source = (
     await Promise.all(
-      ['electron/main.ts', 'electron/task-services.ts'].map((file) => readFile(file, 'utf8')),
+      [
+        'electron/main.ts',
+        ...(await readdir('electron'))
+          .filter((file) => file.endsWith('-services.ts'))
+          .map((file) => 'electron/' + file),
+      ].map((file) => readFile(file, 'utf8')),
     )
   ).join('\n');
   const names = [...source.matchAll(/^\s*register\(\s*'([^']+)'/gm)].map((m) => m[1]);
