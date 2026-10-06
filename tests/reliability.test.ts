@@ -166,8 +166,9 @@ describe('long conversations and concurrent changes', () => {
     const root = await directory();
     await writeFile(path.join(root, 'source.txt'), 'before');
     const hash = fileHash('before');
+    const contents = ['one', 'two'];
     const results = await Promise.allSettled(
-      ['one', 'two'].map((content) =>
+      contents.map((content) =>
         executeTool(
           'write_file',
           JSON.stringify({ path: 'source.txt', content, expectedHash: hash }),
@@ -180,7 +181,14 @@ describe('long conversations and concurrent changes', () => {
     );
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
     expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1);
-    expect(await readFile(path.join(root, 'source.txt'), 'utf8')).toBe('one');
+    // Either concurrent call may acquire the file lock first. The saved file must
+    // belong to the successful writer, and the stale writer must be rejected.
+    expect(await readFile(path.join(root, 'source.txt'), 'utf8')).toBe(
+      contents[results.findIndex((r) => r.status === 'fulfilled')],
+    );
+    expect(
+      String((results.find((r) => r.status === 'rejected') as PromiseRejectedResult).reason),
+    ).toContain('文件已');
   });
   it('removes internal child data and disables inbound bindings while preserving project files', async () => {
     const s = store(),
