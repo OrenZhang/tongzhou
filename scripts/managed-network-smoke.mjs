@@ -184,6 +184,15 @@ try {
   await page.getByRole('button', { name: /^模型与订阅/ }).click();
   await page.getByRole('button', { name: '编辑 OpenAI · ChatGPT', exact: true }).click();
   assert.equal(await page.getByLabel('ChatGPT 网络方式', { exact: true }).inputValue(), 'managed');
+  // Profile options arrive through IPC after the editor opens. Wait for that list
+  // before reading the select value, especially on a cold macOS CI runner.
+  await page.waitForFunction(
+    (id) =>
+      document
+        .querySelector('[aria-label="ChatGPT 内置网络配置"]')
+        ?.querySelector(`option[value="${id}"]`),
+    id,
+  );
   assert.equal(await page.getByLabel('ChatGPT 内置网络配置').inputValue(), id);
   checks.push(
     'selected profile persists in account editor, stopping permits automatic restart, bound deletion rejected',

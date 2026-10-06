@@ -200,6 +200,8 @@ try {
   await page
     .getByRole('button', { name: 'live-created.txt', exact: true })
     .waitFor({ timeout: 8000 });
+  // On smaller displays the workspace is a drawer over the conversation.
+  await page.getByRole('button', { name: '关闭工作区', exact: true }).click();
   release();
   await turn
     .locator('.turn-final')
