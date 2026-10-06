@@ -470,31 +470,6 @@ export function WorkPlugins({
                   >
                     {installed ? '管理连接' : '配置插件'}
                   </button>
-                  {installed && (
-                    <>
-                      <button
-                        disabled={busy}
-                        onClick={() =>
-                          void act(() =>
-                            api.savePlugin({ ...installed, enabled: !installed.enabled }),
-                          )
-                        }
-                      >
-                        {installed.enabled ? '停用' : '启用'}
-                      </button>
-                      <button
-                        disabled={busy}
-                        onClick={() =>
-                          void act(async () => {
-                            const tools = await api.testPlugin(installed.id);
-                            return `✓ ${p.name} 连接成功，共 ${tools.length} 个工具`;
-                          }, '连接检查已完成')
-                        }
-                      >
-                        检查工具
-                      </button>
-                    </>
-                  )}
                 </div>
                 {installed?.catalog && <PluginToolList plugin={installed} />}
               </article>
