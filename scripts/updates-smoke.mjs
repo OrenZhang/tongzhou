@@ -22,12 +22,12 @@ try {
           state,
         });
       },
-      { phase, currentVersion: '0.5.8', automaticInstall: true, ...extra },
+      { phase, currentVersion: '0.1.0', automaticInstall: true, ...extra },
     );
-  await emit('available', { version: '0.6.0' });
+  await emit('available', { version: '0.2.0' });
   await page.locator('.sidebar-update button').waitFor();
-  assert.match(await page.locator('.sidebar-update button').getAttribute('aria-label'), /0.6.0/);
-  await emit('downloading', { version: '0.6.0', progress: 42 });
+  assert.match(await page.locator('.sidebar-update button').getAttribute('aria-label'), /0.2.0/);
+  await emit('downloading', { version: '0.2.0', progress: 42 });
   await page.getByRole('button', { name: '正在下载 42%', exact: true }).first().waitFor();
   assert.equal(await page.locator('.sidebar-update button').isDisabled(), true);
   await emit('current');

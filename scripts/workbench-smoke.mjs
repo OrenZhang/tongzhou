@@ -271,7 +271,7 @@ try {
   await nav('插件');
   await page.getByRole('button', { name: /^内置插件/ }).click();
   assert.equal(await page.getByRole('button', { name: /^工作插件|^内置与自定义/ }).count(), 0);
-  assert.equal(await page.locator('.plugin-library .provider-card').count(), 7);
+  assert.equal(await page.locator('.plugin-library .provider-card').count(), 8);
   await capture('builtin-plugin-library-all');
   assert.equal(await page.getByRole('button', { name: '添加插件', exact: true }).count(), 0);
   await page.getByLabel('类型', { exact: true }).selectOption('mcp');
@@ -280,7 +280,8 @@ try {
   assert.equal(await page.locator('.plugin-library .provider-card').count(), 1);
   await page.getByLabel('搜索插件', { exact: true }).fill('');
   await page.getByLabel('类型', { exact: true }).selectOption('skill');
-  await page.getByRole('heading', { name: '暂无此类型的插件', exact: true }).waitFor();
+  await page.getByRole('heading', { name: '技能创建', exact: true }).waitFor();
+  assert.equal(await page.getByRole('button', { name: '移除', exact: true }).count(), 0);
   await page.getByLabel('类型', { exact: true }).selectOption('app');
   assert.equal(await page.locator('.plugin-library .provider-card').count(), 5);
   await capture('builtin-plugin-library');

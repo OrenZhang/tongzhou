@@ -12,6 +12,7 @@ import {
 import { errorMessage } from './feedback';
 import { CoreCapabilities } from './CoreCapabilities';
 import { builtinPlugins } from './shared/builtin-plugins';
+import { builtinSkills, isBuiltinSkill } from './shared/builtin-skills';
 import type { PluginInput, Snapshot, TongzhouAPI } from './shared/types';
 
 export function Extensions({
@@ -47,8 +48,14 @@ export function Extensions({
       matchesQuery(p.name + (builtinPlugins.find((b) => b.id === p.id)?.description ?? p.url)),
   );
   const visibleSkills =
-    tab === 'personal' && (kind === 'all' || kind === 'skill')
-      ? (data.skills ?? []).filter((s) => matchesQuery(s.name + s.description))
+    kind === 'all' || kind === 'skill'
+      ? (data.skills ?? []).filter(
+          (s) =>
+            (tab === 'builtin' ? isBuiltinSkill(s.id) : !isBuiltinSkill(s.id)) &&
+            matchesQuery(
+              s.name + s.description + (builtinSkills.find((b) => b.id === s.id)?.title ?? ''),
+            ),
+        )
       : [];
   const showApps = tab === 'builtin' && (kind === 'all' || kind === 'app');
   const matchingApps = showApps
@@ -100,9 +107,10 @@ export function Extensions({
                 ? 3
                 : value === 'builtin'
                   ? workPluginCatalog.length +
-                    otherPlugins.filter((p) => builtinIds.has(p.id)).length
+                    otherPlugins.filter((p) => builtinIds.has(p.id)).length +
+                    (data.skills ?? []).filter((s) => isBuiltinSkill(s.id)).length
                   : otherPlugins.filter((p) => !builtinIds.has(p.id)).length +
-                    (data.skills ?? []).length}
+                    (data.skills ?? []).filter((s) => !isBuiltinSkill(s.id)).length}
             </span>
           </button>
         ))}
@@ -120,7 +128,7 @@ export function Extensions({
               <h2>{tab === 'builtin' ? '内置插件' : '个人插件'}</h2>
               <p className="muted">
                 {tab === 'builtin'
-                  ? '同舟预设的应用与工具，配置后即可使用。'
+                  ? '同舟预设的应用、MCP 与技能，按需使用。'
                   : '你接入的 MCP 服务和导入的技能，集中在这里管理。'}
               </p>
             </div>
@@ -244,8 +252,11 @@ export function Extensions({
                     <span aria-hidden="true" />
                   </label>
                 </div>
-                <h3>{s.name}</h3>
+                <h3>{builtinSkills.find((b) => b.id === s.id)?.title ?? s.name}</h3>
                 <p>{s.description}</p>
+                {isBuiltinSkill(s.id) && (
+                  <p className="muted">在会话中说“帮我创建一个技能并保存到个人插件”。</p>
+                )}
                 <p className="muted">
                   {s.enabled ? '已启用' : '已停用'} · {Object.keys(s.files).length} 个附属文本文件
                 </p>
@@ -253,16 +264,18 @@ export function Extensions({
                   <summary>查看指令</summary>
                   <pre className="skill-preview">{s.instructions}</pre>
                 </details>
-                <div className="row wrap">
-                  <button
-                    className="text-button danger"
-                    disabled={busy}
-                    onClick={() => perform(() => api.deleteSkill(s.id))}
-                  >
-                    <Trash2 size={14} />
-                    移除
-                  </button>
-                </div>
+                {!isBuiltinSkill(s.id) && (
+                  <div className="row wrap">
+                    <button
+                      className="text-button danger"
+                      disabled={busy}
+                      onClick={() => perform(() => api.deleteSkill(s.id))}
+                    >
+                      <Trash2 size={14} />
+                      移除
+                    </button>
+                  </div>
+                )}
               </article>
             ))}
           </div>

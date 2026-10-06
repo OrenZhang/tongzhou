@@ -14,7 +14,7 @@ it('allows only release commits, tags in release ancestry, and manual release di
   git('init', '-b', 'main');
   git('config', 'user.name', 'Release test');
   git('config', 'user.email', 'release@example.invalid');
-  writeFileSync(path.join(root, 'package.json'), JSON.stringify({ version: '0.5.8' }));
+  writeFileSync(path.join(root, 'package.json'), JSON.stringify({ version: '0.1.0' }));
   git('add', 'package.json');
   git('-c', 'commit.gpgsign=false', 'commit', '-m', 'Release base');
   const base = git('rev-parse', 'HEAD');
@@ -27,17 +27,17 @@ it('allows only release commits, tags in release ancestry, and manual release di
     });
   expect(() => run('push', 'refs/heads/release')).not.toThrow();
   expect(() => run('workflow_dispatch', 'refs/heads/release')).not.toThrow();
-  expect(() => run('push', 'refs/tags/v0.5.8')).not.toThrow();
+  expect(() => run('push', 'refs/tags/v0.1.0')).not.toThrow();
   expect(() => run('workflow_dispatch', 'refs/heads/main')).toThrow();
-  expect(() => run('workflow_dispatch', 'refs/tags/v0.5.8')).toThrow();
+  expect(() => run('workflow_dispatch', 'refs/tags/v0.1.0')).toThrow();
   expect(() => run('push', 'refs/tags/v0.5.9')).toThrow();
   git('-c', 'commit.gpgsign=false', 'commit', '--allow-empty', '-m', 'Unreleased work');
-  expect(() => run('push', 'refs/tags/v0.5.8')).toThrow();
+  expect(() => run('push', 'refs/tags/v0.1.0')).toThrow();
   const candidate = git('rev-parse', 'HEAD');
   git('update-ref', 'refs/remotes/origin/release', candidate);
-  expect(() => run('push', 'refs/tags/v0.5.8')).not.toThrow();
+  expect(() => run('push', 'refs/tags/v0.1.0')).not.toThrow();
   git('checkout', '--detach', base);
-  expect(() => run('push', 'refs/tags/v0.5.8')).not.toThrow();
+  expect(() => run('push', 'refs/tags/v0.1.0')).not.toThrow();
 });
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
@@ -45,18 +45,18 @@ afterEach(() => {
 it('merges architecture-specific update manifests only after checking complete packages and hashes', () => {
   const root = mkdtempSync(path.join(tmpdir(), 'tongzhou-release-'));
   roots.push(root);
-  writeFileSync(path.join(root, 'package.json'), JSON.stringify({ version: '0.5.8' }));
+  writeFileSync(path.join(root, 'package.json'), JSON.stringify({ version: '0.1.0' }));
   for (const target of ['win-x64', 'mac-x64', 'mac-arm64']) {
     const directory = path.join(root, 'artifacts', target);
     mkdirSync(directory, { recursive: true });
     const files = (target.startsWith('win') ? ['exe'] : ['zip', 'dmg']).map((ext) => {
-      const url = `Tongzhou-0.5.8-${target}.${ext}`;
+      const url = `Tongzhou-0.1.0-${target}.${ext}`;
       writeFileSync(path.join(directory, url), url);
       return { url, sha512: createHash('sha512').update(url).digest('base64') };
     });
     writeFileSync(
       path.join(directory, target.startsWith('win') ? 'latest.yml' : 'latest-mac.yml'),
-      YAML.stringify({ version: '0.5.8', files }),
+      YAML.stringify({ version: '0.1.0', files }),
     );
   }
   const script = path.resolve('scripts/merge-release-artifacts.mjs');
@@ -66,6 +66,6 @@ it('merges architecture-specific update manifests only after checking complete p
   );
   expect(manifest.files).toHaveLength(4);
   expect(manifest.files.some((f: any) => f.url.endsWith('mac-arm64.zip'))).toBe(true);
-  writeFileSync(path.join(root, 'artifacts/win-x64/Tongzhou-0.5.8-win-x64.exe'), 'corrupt');
+  writeFileSync(path.join(root, 'artifacts/win-x64/Tongzhou-0.1.0-win-x64.exe'), 'corrupt');
   expect(() => execFileSync(process.execPath, [script], { cwd: root, stdio: 'pipe' })).toThrow();
 });

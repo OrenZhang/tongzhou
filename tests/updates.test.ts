@@ -9,7 +9,7 @@ function fixture() {
     allowPrerelease: true,
     allowDowngrade: true,
     checkForUpdates: vi.fn(async () => {
-      driver.emit('update-available', { version: '0.6.0' });
+      driver.emit('update-available', { version: '0.2.0' });
     }),
     downloadUpdate: vi.fn(async () => {
       driver.emit('download-progress', { percent: 50 });
@@ -18,13 +18,13 @@ function fixture() {
     quitAndInstall: vi.fn(),
   });
   const busy = vi.fn(() => false);
-  return { driver, busy, updates: new Updates(driver, '0.5.8', true, true, busy, () => {}) };
+  return { driver, busy, updates: new Updates(driver, '0.1.0', true, true, busy, () => {}) };
 }
 describe('application updates', () => {
   it('checks without downloading, installs only after a completed download and restarts', async () => {
     const { driver, updates } = fixture();
     await updates.check();
-    expect(updates.snapshot()).toMatchObject({ phase: 'available', version: '0.6.0' });
+    expect(updates.snapshot()).toMatchObject({ phase: 'available', version: '0.2.0' });
     expect(driver.autoDownload).toBe(false);
     expect(driver.autoInstallOnAppQuit).toBe(false);
     expect(driver.downloadUpdate).not.toHaveBeenCalled();
@@ -63,7 +63,7 @@ describe('application updates', () => {
     expect(updates.snapshot().version).toBeUndefined();
     const dev = new Updates(
       driver,
-      '0.5.8',
+      '0.1.0',
       false,
       true,
       () => false,
@@ -71,7 +71,7 @@ describe('application updates', () => {
     );
     const mac = new Updates(
       driver,
-      '0.5.8',
+      '0.1.0',
       true,
       false,
       () => false,

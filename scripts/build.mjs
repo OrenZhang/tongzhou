@@ -1,5 +1,8 @@
 import { build } from 'esbuild';
+import { cp, mkdir } from 'node:fs/promises';
 import './prepare-pty.mjs';
+await mkdir('dist-electron/skills', { recursive: true });
+await cp('skills/skill-creator', 'dist-electron/skills/skill-creator', { recursive: true });
 await build({
   entryPoints: ['electron/node-request-identity.ts'],
   outfile: 'dist-electron/node-request-identity.cjs',

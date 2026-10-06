@@ -485,6 +485,10 @@ export interface TongzhouAPI {
   deletePlugin(id: string): Promise<void>;
   testPlugin(id: string): Promise<{ name: string; description: string }[]>;
   importSkill(): Promise<SkillRecord | null>;
+  createSkill(input: {
+    instructions: string;
+    files?: Record<string, string>;
+  }): Promise<SkillRecord>;
   saveSkill(skill: SkillRecord): Promise<void>;
   deleteSkill(id: string): Promise<void>;
   computerStatus(): Promise<ComputerStatus>;

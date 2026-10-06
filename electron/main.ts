@@ -52,6 +52,14 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { Store } from './store';
 import { ensureBuiltinPlugins } from './builtin-plugins';
+import {
+  ensureBuiltinSkills,
+  createPersonalSkill,
+  createSkillSchema,
+  saveExistingSkill,
+  saveSkillSchema,
+} from './skills';
+import { isBuiltinSkill } from '../src/shared/builtin-skills';
 import { builtinPlugins } from '../src/shared/builtin-plugins';
 import { Runtime } from './runtime';
 import { Attachments, attachmentUploadSchema } from './attachments';
@@ -165,6 +173,7 @@ function setup() {
       .join(__dirname, 'builtin-mcp.cjs')
       .replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep),
   );
+  ensureBuiltinSkills(store, path.join(__dirname, 'skills'));
   runtime = new Runtime(store, dataDir, emit, computer, clientCommands);
   updates = new Updates(
     autoUpdater,
@@ -1186,29 +1195,31 @@ function setup() {
     },
   );
   register(
+    'createSkill',
+    operation(
+      'Skills',
+      'change',
+      '创建个人技能：传入完整 SKILL.md 和可选附属文本文件，保存后显示在个人插件，默认启用',
+      [createSkillSchema],
+    ),
+    (raw) => {
+      const skill = createPersonalSkill(store, raw);
+      runtime.invalidateNative();
+      runtime.changed();
+      return skill;
+    },
+  );
+  register(
     'saveSkill',
-    operation('Skills', 'change', '修改或启停已导入的技能', [
-      z.object({
-        id: idSchema,
-        name: z.string().min(1).max(100),
-        description: z.string().max(500),
-        instructions: z.string().max(32000),
-        enabled: z.boolean(),
-      }),
-    ]),
+    operation(
+      'Skills',
+      'change',
+      '修改或启停已有技能；内置技能只允许启停，个人技能可更新内容和附属文件',
+      [saveSkillSchema],
+    ),
     (raw) => {
       requireIdle();
-      const p = z
-        .object({
-          id: idSchema,
-          name: z.string().min(1).max(100),
-          description: z.string().max(500),
-          instructions: z.string().max(32000),
-          enabled: z.boolean(),
-        })
-        .parse(raw);
-      const old = store.get<SkillRecord>('skill', p.id);
-      store.put('skill', { ...old, ...p });
+      saveExistingSkill(store, raw);
       runtime.invalidateNative();
       runtime.changed();
     },
@@ -1219,6 +1230,7 @@ function setup() {
     (raw) => {
       requireIdle();
       const id = idSchema.parse(raw);
+      if (isBuiltinSkill(id)) throw new Error('内置技能不可删除，可以停用');
       store.remove('skill', id);
       for (const a of store.list<AgentProfile>('agent'))
         store.put('agent', { ...a, skillIds: a.skillIds?.filter((s) => s !== id) });

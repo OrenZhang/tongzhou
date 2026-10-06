@@ -1,4 +1,4 @@
-import { appFetch } from './request-identity';
+import { appFetch, clientIdentity } from './request-identity';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
@@ -8,7 +8,7 @@ import os from 'node:os';
 const mode = process.argv[2] ?? '--web';
 if (!['--web', '--system'].includes(mode)) throw new Error('Unknown built-in plugin mode');
 const server = new Server(
-  { name: mode === '--web' ? 'tongzhou-web' : 'tongzhou-system', version: '0.5.7' },
+  { name: mode === '--web' ? 'tongzhou-web' : 'tongzhou-system', version: clientIdentity.version },
   { capabilities: { tools: {} } },
 );
 server.setRequestHandler(ListToolsRequestSchema, async () => ({

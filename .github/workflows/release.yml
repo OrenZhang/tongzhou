@@ -109,3 +109,7 @@ jobs:
           fi
           gh release create "v$VERSION" release-assets/* --target "$GITHUB_SHA" --title "同舟 v$VERSION" --notes-file docs/RELEASE_NOTES.md --draft
           gh release edit "v$VERSION" --draft=false --latest
+      - name: Retire the development preview after the first stable release is verified
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/reset-initial-release.mjs

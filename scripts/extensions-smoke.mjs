@@ -187,9 +187,15 @@ try {
   await page.getByLabel('类型', { exact: true }).selectOption('skill');
   assert.equal(await page.locator('.provider-grid .provider-card:visible').count(), 1);
   await skillCard.getByRole('checkbox').uncheck();
-  await page.waitForFunction(async () => !(await window.tongzhou.snapshot()).skills[0].enabled);
+  await page.waitForFunction(
+    async () =>
+      !(await window.tongzhou.snapshot()).skills.find((s) => s.name === 'sample-skill').enabled,
+  );
   await skillCard.getByRole('checkbox').check();
-  await page.waitForFunction(async () => (await window.tongzhou.snapshot()).skills[0].enabled);
+  await page.waitForFunction(
+    async () =>
+      (await window.tongzhou.snapshot()).skills.find((s) => s.name === 'sample-skill').enabled,
+  );
   await skillCard.getByText('查看指令', { exact: true }).click();
   await skillCard.locator('pre').waitFor();
   assert.ok((await skillCard.locator('pre').innerText()).includes('Use concise answers.'));
@@ -254,11 +260,13 @@ try {
   const persisted = await page.evaluate(() => window.tongzhou.snapshot());
   assert.equal(persisted.sessions[0].model, 'model-b');
   assert.equal(persisted.plugins.length, 3);
-  assert.equal(persisted.skills.length, 1);
+  assert.equal(persisted.skills.length, 2);
   await page.getByRole('button', { name: '插件', exact: true }).click();
   await page.getByRole('button', { name: /^个人插件/ }).click();
   await skillCard.getByRole('button', { name: '移除', exact: true }).click();
-  await page.waitForFunction(async () => (await window.tongzhou.snapshot()).skills.length === 0);
+  await page.waitForFunction(
+    async () => !(await window.tongzhou.snapshot()).skills.some((s) => s.name === 'sample-skill'),
+  );
   await page.getByLabel('类型', { exact: true }).selectOption('skill');
   await page.getByRole('heading', { name: '暂无此类型的插件', exact: true }).waitFor();
   console.log(

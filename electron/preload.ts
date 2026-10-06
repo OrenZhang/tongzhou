@@ -112,6 +112,7 @@ const api: TongzhouAPI = {
   deletePlugin: (id) => call('deletePlugin', id),
   testPlugin: (id) => call('testPlugin', id),
   importSkill: () => call('importSkill'),
+  createSkill: (s) => call('createSkill', s),
   saveSkill: (s) => call('saveSkill', s),
   deleteSkill: (id) => call('deleteSkill', id),
   computerStatus: () => call('computerStatus'),

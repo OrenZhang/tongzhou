@@ -57,6 +57,7 @@ import type {
   Snapshot,
 } from './shared/types';
 import { Extensions } from './Extensions';
+import { version } from '../package.json';
 import { CommandPalette } from './CommandPalette';
 import { PendingInputs, useRunEvents } from './RunActivity';
 import { ConversationTurn } from './ConversationTurn';
@@ -966,7 +967,7 @@ export default function App() {
             <strong>同舟</strong>
             <span>TONGZHOU</span>
           </div>
-          <span className="version">0.5</span>
+          <span className="version">{version}</span>
         </button>
         <button className="new-chat" onClick={() => newSession()}>
           <Plus size={17} />

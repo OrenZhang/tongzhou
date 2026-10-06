@@ -1,10 +1,10 @@
-import { appFetch } from './request-identity';
+import { appFetch, clientIdentity } from './request-identity';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { randomUUID } from 'node:crypto';
 const server = new Server(
-  { name: 'tongzhou-tools', version: '0.5.7' },
+  { name: 'tongzhou-tools', version: clientIdentity.version },
   { capabilities: { tools: {} } },
 );
 async function request(body: unknown, signal?: AbortSignal) {

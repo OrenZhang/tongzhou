@@ -8,6 +8,9 @@ await mkdir('test-results', { recursive: true });
 const root = await mkdtemp(path.resolve('test-results/client-management-'));
 let step = 0;
 let createdId;
+let createdSkillId;
+const skillSource =
+  '---\nname: release-notes\ndescription: Draft release notes from changes.\n---\nRead references/format.md and prepare the requested notes.';
 const failures = [],
   errors = [];
 const server = createServer(async (req, res) => {
@@ -16,7 +19,12 @@ const server = createServer(async (req, res) => {
     for await (const b of req) raw += b;
     const body = JSON.parse(raw);
     const previous = body.messages.filter((m) => m.role === 'tool').at(-1);
-    const value = previous ? JSON.parse(previous.content) : undefined;
+    let value = previous?.content;
+    try {
+      value = JSON.parse(value);
+    } catch {
+      /* Skill files are plain text. */
+    }
     const tools = body.tools.map((t) => t.function.name);
     assert.ok(tools.includes('client_catalog'));
     const calls = [
@@ -47,6 +55,40 @@ const server = createServer(async (req, res) => {
         assert.equal(value.success, true);
         return ['client_query', { method: 'snapshot', args: [] }];
       },
+      () => {
+        assert.ok(value.sessions.some((s) => s.id === createdId));
+        assert.ok(value.skills.some((s) => s.id === 'tongzhou-skill-creator' && s.enabled));
+        return ['read_skill_file', { skillId: 'tongzhou-skill-creator', path: 'SKILL.md' }];
+      },
+      () => {
+        assert.ok(value.includes('createSkill'));
+        return ['client_catalog', { method: 'createSkill' }];
+      },
+      () => {
+        assert.equal(value.methods[0].access, 'change');
+        assert.equal(
+          value.methods[0].arguments.prefixItems[0].properties.instructions.type,
+          'string',
+        );
+        return [
+          'client_change',
+          {
+            method: 'createSkill',
+            args: [
+              {
+                instructions: skillSource,
+                files: { 'references/format.md': '# Changes\nGroup by user-visible behavior.' },
+              },
+            ],
+          },
+        ];
+      },
+      () => {
+        assert.equal(value.name, 'release-notes');
+        assert.equal(value.enabled, true);
+        createdSkillId = value.id;
+        return ['client_query', { method: 'snapshot', args: [] }];
+      },
     ];
     let delta, finish_reason;
     if (step < calls.length) {
@@ -64,6 +106,14 @@ const server = createServer(async (req, res) => {
       finish_reason = 'tool_calls';
     } else {
       assert.ok(value.sessions.some((s) => s.id === createdId && s.title === '会话工具创建的任务'));
+      assert.ok(
+        value.skills.some(
+          (s) =>
+            s.id === createdSkillId &&
+            s.instructions === skillSource &&
+            s.files['references/format.md'],
+        ),
+      );
       delta = { content: '已通过会话工具切换外观并创建会话。' };
       finish_reason = 'stop';
     }
@@ -132,6 +182,7 @@ try {
     'setAppearance',
     'savePlugin',
     'saveSkill',
+    'createSkill',
     'syncRepository',
   ])
     assert.ok(catalog.change.includes(name));
@@ -174,18 +225,19 @@ try {
         providerId: 'fixture',
         model: 'mock',
         agentId: '',
-        prompt: '切换深色雾蓝外观并创建一个会话，最后查询确认。',
+        prompt:
+          '切换深色雾蓝外观，创建一个会话，再使用内置技能创建技能并保存到个人插件，最后查询确认。',
       });
     },
     'http://127.0.0.1:' + server.address().port + '/v1',
   );
   const deadline = Date.now() + 30000;
-  while (step < 6 && !failures.length && Date.now() < deadline)
+  while (step < 10 && !failures.length && Date.now() < deadline)
     await new Promise((resolve) => setTimeout(resolve, 100));
   const finished = await page.evaluate(() => window.tongzhou.snapshot());
   assert.ok(finished.runs.some((run) => run.status === 'completed'));
   assert.deepEqual(failures, []);
-  assert.equal(step, 6);
+  assert.equal(step, 10);
   await page.waitForFunction(
     () =>
       document.documentElement.dataset.theme === 'dark' &&
@@ -209,6 +261,18 @@ try {
     BrowserWindow.getAllWindows()[0].setContentSize(1000, 700),
   );
   await page.screenshot({ path: 'test-results/client-catalog-narrow.png', animations: 'disabled' });
+  await page.getByRole('button', { name: /^内置插件/ }).click();
+  await page.getByLabel('类型', { exact: true }).selectOption('skill');
+  await page.getByRole('heading', { name: '技能创建', exact: true }).waitFor();
+  assert.equal(await page.getByRole('heading', { name: 'release-notes', exact: true }).count(), 0);
+  await page.screenshot({ path: 'test-results/builtin-skill-creator.png' });
+  await page.getByRole('button', { name: /^个人插件/ }).click();
+  await page.getByLabel('类型', { exact: true }).selectOption('skill');
+  await page.getByRole('heading', { name: 'release-notes', exact: true }).waitFor();
+  assert.equal(await page.getByRole('heading', { name: '技能创建', exact: true }).count(), 0);
+  const savedSkills = await page.evaluate(() => window.tongzhou.snapshot());
+  assert.equal(savedSkills.skills.find((s) => s.id === createdSkillId).instructions, skillSource);
+  await page.screenshot({ path: 'test-results/created-personal-skill.png' });
   assert.deepEqual(errors, []);
   await writeFile(
     'test-results/client-management-report.json',
