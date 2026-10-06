@@ -1,3 +1,4 @@
+import { openModelMenu } from './choice-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -59,6 +60,7 @@ try {
   await page.waitForFunction(
     () => document.querySelector('[aria-label="当前连接"]').value === 'ready',
   );
+  await openModelMenu(page);
   await page.getByLabel('当前连接', { exact: true }).click();
   const options = await page
     .locator('.choice-panel [role="menuitemradio"]')
@@ -177,6 +179,7 @@ try {
   await page.getByRole('button', { name: /^普通会话/ }).click();
   for (const theme of ['light', 'dark']) {
     await page.evaluate((theme) => (document.documentElement.dataset.theme = theme), theme);
+    await openModelMenu(page);
     await page.getByRole('button', { name: '当前连接', exact: true }).click();
     await page.getByLabel('搜索当前连接', { exact: true }).fill('可用');
     assert.equal(await page.locator('.choice-panel [role="menuitemradio"]').count(), 1);

@@ -194,8 +194,8 @@ try {
     return el.scrollHeight - el.scrollTop - el.clientHeight < 50;
   });
   // Files created while the same run is still active should appear without manual refresh.
-  if (await page.getByRole('button', { name: '展开项目面板', exact: true }).count())
-    await page.getByRole('button', { name: '展开项目面板', exact: true }).click();
+  if (await page.getByRole('button', { name: '展开工作区', exact: true }).count())
+    await page.getByRole('button', { name: '展开工作区', exact: true }).click();
   await writeFile(path.join(project, 'live-created.txt'), 'Created while a run is active.');
   await page
     .getByRole('button', { name: 'live-created.txt', exact: true })

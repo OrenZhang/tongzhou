@@ -75,6 +75,7 @@ export function SessionNavigator({
   };
   const row = (s: Session) => {
     const running = data.runs.some((r) => r.sessionId === s.id && r.status === 'running');
+    const waiting = data.approvals.some((a) => a.sessionId === s.id);
     const isolated = data.projects.find((p) => p.id === s.projectId)?.sourceProjectId;
     return (
       <div
@@ -99,10 +100,15 @@ export function SessionNavigator({
             ) : (
               <Folder size={12} aria-label="项目会话" />
             ))}
-          <span>
+          <span className="session-title-text">
             {s.parentId ? '↳ ' : ''}
             {s.title}
           </span>
+          {(waiting || running) && (
+            <small className={`session-state ${waiting ? 'waiting' : ''}`}>
+              {waiting ? '待处理' : '运行中'}
+            </small>
+          )}
         </button>
         <div className="session-actions">
           <button

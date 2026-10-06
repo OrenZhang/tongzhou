@@ -39,6 +39,7 @@ jobs:
       - run: npm run test:ui
       - run: npm run test:session-entry
       - run: npm run test:workbench
+      - run: npm run test:workspace-layout
       - run: npm run test:capabilities
       - run: npm run test:task-workbench
       - run: npm run test:knowledge

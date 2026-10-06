@@ -5,6 +5,7 @@ import './styles.css';
 import './appearance.css';
 import './controls.css';
 import './markdown.css';
+import './workspace.css';
 import { applyAppearance, savedAppearance } from './Appearance';
 applyAppearance(savedAppearance());
 ReactDOM.createRoot(document.getElementById('root')!).render(

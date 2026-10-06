@@ -1,4 +1,4 @@
-import { chooseOption } from './choice-helper.mjs';
+import { chooseOption, openModelMenu } from './choice-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { createServer } from 'node:http';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
@@ -156,6 +156,7 @@ try {
   });
   await page.getByRole('button', { name: '返回会话', exact: true }).click();
   await chooseOption(page, '当前连接', provider.id);
+  await openModelMenu(page);
   await page.getByRole('button', { name: '当前模型', exact: true }).click();
   await page.getByRole('button', { name: 'fixture-model', exact: true }).click();
   await page.getByLabel('消息', { exact: true }).fill('你好，不打开项目聊天');
@@ -223,6 +224,7 @@ try {
   assert.equal(ordinary.projects.length, 0);
   assert.equal(ordinary.sessions[0].projectId, null);
   assert.equal(ordinary.runs[0].status, 'completed');
+  await openModelMenu(page);
   await page.getByRole('button', { name: '当前模型', exact: true }).click();
   await page.getByRole('button', { name: 'fixture-reviewer', exact: true }).click();
   await page.getByLabel('消息', { exact: true }).fill('换一个模型继续');
@@ -280,7 +282,10 @@ try {
     await page.locator(`.ordinary-sessions [data-session-id="${projectSessionId}"]`).count(),
     0,
   );
-  assert.ok((await page.locator('.project-binding').innerText()).includes('项目'));
+  assert.equal(
+    await page.getByLabel('执行上下文').locator('.context-chip').first().getAttribute('title'),
+    project,
+  );
   const sessionCount = state.sessions.length;
   const projectToggle = group.getByRole('button', { name: /^项目 / });
   await projectToggle.click();
@@ -337,11 +342,11 @@ try {
   );
   await page.screenshot({ path: 'test-results/permissions-settings.png' });
   await page.getByRole('button', { name: '返回会话', exact: true }).click();
-  await page.getByText('当前：完全开放', { exact: true }).waitFor();
+  await page.getByLabel('会话权限', { exact: true }).filter({ hasText: '完全开放' }).waitFor();
   await chooseOption(page, '会话权限', 'read-only');
-  await page.getByText('当前：只读', { exact: true }).waitFor();
+  await page.getByLabel('会话权限', { exact: true }).filter({ hasText: '只读' }).waitFor();
   await chooseOption(page, '会话权限', 'inherit');
-  await page.getByText('当前：完全开放', { exact: true }).waitFor();
+  await page.getByLabel('会话权限', { exact: true }).filter({ hasText: '完全开放' }).waitFor();
   await page.screenshot({ path: 'test-results/project-sessions-permissions.png' });
   await page.getByRole('button', { name: '运行记录', exact: true }).click();
   await page.locator('.table-row').first().waitFor();

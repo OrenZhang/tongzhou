@@ -473,7 +473,12 @@ try {
     1,
     'execution worktrees must not create separate project groups',
   );
-  await page.locator('.project-binding').filter({ hasText: 'feature/ui-test' }).waitFor();
+  await page
+    .getByLabel('执行上下文')
+    .locator('.context-chip')
+    .first()
+    .filter({ hasText: 'feature/ui-test' })
+    .waitFor();
   assert.equal(
     (await page.evaluate(() => window.tongzhou.snapshot())).sessions.find(
       (s) => s.id === isolated.id,

@@ -59,8 +59,8 @@ try {
   );
   await page.waitForSelector('.app-shell');
   await page.locator(`[data-session-id="${session.id}"]`).click();
-  if (await page.getByLabel('展开项目面板', { exact: true }).count())
-    await page.getByLabel('展开项目面板', { exact: true }).click();
+  if (await page.getByLabel('展开工作区', { exact: true }).count())
+    await page.getByLabel('展开工作区', { exact: true }).click();
   const panel = page.getByLabel('项目上下文', { exact: true });
   await panel.getByRole('button', { name: 'src', exact: true }).click();
   await panel.getByRole('button', { name: 'hello.ts', exact: true }).click();
@@ -84,7 +84,8 @@ try {
   await panel.locator('.search-result').filter({ hasText: 'hello.ts:2' }).click();
   await panel.locator('.source-line.selected').waitFor();
   checks.push('path/content search and result line navigation');
-  await panel.getByRole('tab', { name: '变更', exact: true }).click();
+  await page.getByRole('tab', { name: '审阅', exact: true }).click();
+  await page.getByRole('button', { name: '工作目录全部改动', exact: true }).click();
   await panel
     .locator('.project-change-list')
     .getByRole('button', { name: /新文件/ })
@@ -109,6 +110,10 @@ try {
   assert.match(await page.getByLabel('消息', { exact: true }).inputValue(), /已暂存.*Git 变更/);
   checks.push('new files, staged/unstaged diffs, old/new line references, review prompt');
   await page.screenshot({ path: 'test-results/project-context-changes.png' });
+  await page
+    .getByRole('tablist', { name: '工作区工具' })
+    .getByRole('tab', { name: '文件', exact: true })
+    .click();
   await panel.getByRole('tab', { name: '说明', exact: true }).click();
   await panel.getByRole('button', { name: '生成基础说明', exact: true }).click();
   await panel.locator('.project-preview-bar').filter({ hasText: 'agent.md' }).waitFor();
@@ -122,7 +127,7 @@ try {
   await panel.getByLabel('搜索项目文件', { exact: true }).fill('');
   await panel.getByRole('button', { name: 'hello.ts', exact: true }).click();
   await panel.locator('.hljs-keyword').first().waitFor();
-  await panel.getByLabel('加宽项目面板', { exact: true }).click();
+  await page.getByLabel('放大工作区', { exact: true }).click();
   await page.screenshot({ path: 'test-results/project-context-files.png' });
   await page.evaluate(() =>
     window.tongzhou.setAppearance({
@@ -143,7 +148,7 @@ try {
     ),
     true,
   );
-  await panel.getByLabel('关闭项目面板', { exact: true }).click();
+  await page.getByLabel('关闭工作区', { exact: true }).click();
   assert.equal(await page.getByLabel('项目上下文', { exact: true }).count(), 0);
   checks.push('wide panel, dark mode, narrow window layout, close');
   assert.deepEqual(errors, []);

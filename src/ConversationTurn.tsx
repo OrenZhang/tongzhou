@@ -10,6 +10,7 @@ import {
 import { ChatMessage, Markdown } from './components';
 import { TurnProcess } from './RunActivity';
 import { AttachmentCards } from './Attachments';
+import type { ReactNode } from 'react';
 
 interface Actions {
   onCopy: (message: Message) => void;
@@ -56,7 +57,11 @@ function MessageActions({
   );
 }
 
-export function ConversationTurn({ turn, ...actions }: Actions & { turn: Turn }) {
+export function ConversationTurn({
+  turn,
+  delivery,
+  ...actions
+}: Actions & { turn: Turn; delivery?: ReactNode }) {
   const first = turn.messages[0];
   const prompt = first?.role === 'user' ? first : undefined;
   const response = prompt ? turn.messages.slice(1) : turn.messages;
@@ -189,6 +194,7 @@ export function ConversationTurn({ turn, ...actions }: Actions & { turn: Turn })
               )}
             </TurnProcess>
             {final && <div className="turn-final">{renderEntry(final)}</div>}
+            {!active && delivery}
             {response
               .filter((m) => m.role === 'system')
               .map((m) => (

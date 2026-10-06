@@ -187,6 +187,9 @@ export function ProjectContext({
   onClose,
   onReference,
   onNotice,
+  embedded = false,
+  activeTab,
+  fileRequest,
 }: {
   project: Project;
   sessionId: string;
@@ -195,23 +198,63 @@ export function ProjectContext({
   onClose: () => void;
   onReference: (text: string) => void;
   onNotice: (text: string) => void;
+  embedded?: boolean;
+  activeTab?: 'files' | 'changes';
+  fileRequest?: { path: string; line: number; key: number };
 }) {
-  const [tab, setTab] = useState<'files' | 'changes' | 'instructions'>('files');
+  const storageKey = `tongzhou-project-panel-${sessionId}-${project.id}-${activeTab ?? 'files'}`;
+  const [saved] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(storageKey) ?? '{}') ?? {};
+    } catch {
+      return {};
+    }
+  });
+  const textValue = (name: string) => (typeof saved[name] === 'string' ? saved[name] : '');
+  const [tab, setTab] = useState<'files' | 'changes' | 'instructions'>(
+    activeTab ?? (saved.tab === 'instructions' ? 'instructions' : 'files'),
+  );
   const [expanded, setExpanded] = useState(
     () => localStorage.getItem('tongzhou-context-wide') === 'true',
   );
   const [revision, setRevision] = useState(0);
-  const [directory, setDirectory] = useState('');
-  const [query, setQuery] = useState('');
+  const [directory, setDirectory] = useState(textValue('directory'));
+  const [query, setQuery] = useState(textValue('query'));
   const [search, setSearch] = useState('');
-  const [mode, setMode] = useState<'path' | 'content'>('path');
-  const [selected, setSelected] = useState('');
-  const [line, setLine] = useState(0);
-  const [scope, setScope] = useState<ChangeScope>('unstaged');
-  const [changedFile, setChangedFile] = useState('');
+  const [mode, setMode] = useState<'path' | 'content'>(
+    saved.mode === 'content' ? 'content' : 'path',
+  );
+  const [selected, setSelected] = useState(textValue('selected'));
+  const [line, setLine] = useState(Number.isFinite(saved.line) ? saved.line : 0);
+  const [scope, setScope] = useState<ChangeScope>(saved.scope === 'staged' ? 'staged' : 'unstaged');
+  const [changedFile, setChangedFile] = useState(textValue('changedFile'));
   const [diffLine, setDiffLine] = useState<{ line: number; side: '旧' | '新' }>();
   const [generating, setGenerating] = useState(false);
   const [wrap, setWrap] = useState(false);
+  const [handledRequest, setHandledRequest] = useState(saved.handledRequest ?? 0);
+  useEffect(() => {
+    if (!fileRequest || fileRequest.key === handledRequest) return;
+    setTab('files');
+    setSelected(fileRequest.path);
+    setLine(fileRequest.line);
+    setHandledRequest(fileRequest.key);
+  }, [fileRequest, handledRequest]);
+  useEffect(() => {
+    localStorage.setItem(
+      storageKey,
+      JSON.stringify({
+        tab,
+        directory,
+        query,
+        mode,
+        selected,
+        line,
+        scope,
+        changedFile,
+        handledRequest,
+      }),
+    );
+  }, [storageKey, tab, directory, query, mode, selected, line, scope, changedFile, handledRequest]);
   const refresh = () => setRevision((n) => n + 1);
   useEffect(() => {
     const timer = setTimeout(() => setSearch(query.trim()), 250);
@@ -281,29 +324,31 @@ export function ProjectContext({
     instructions.loading;
   return (
     <aside
-      className={`context-panel project-context ${expanded ? 'wide' : ''} ${wrap ? 'wrap-code' : ''}`}
+      className={`context-panel project-context ${embedded ? 'embedded' : ''} ${expanded ? 'wide' : ''} ${wrap ? 'wrap-code' : ''}`}
       aria-label="项目上下文"
     >
-      <header className="project-panel-heading">
-        <div>
-          <strong>{project.name}</strong>
-          <span title={project.path}>{project.path}</span>
-        </div>
-        <button
-          className="icon-button"
-          aria-label={expanded ? '缩小项目面板' : '加宽项目面板'}
-          title={expanded ? '缩小' : '加宽'}
-          onClick={() => {
-            setExpanded(!expanded);
-            localStorage.setItem('tongzhou-context-wide', String(!expanded));
-          }}
-        >
-          {expanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-        </button>
-        <button className="icon-button" aria-label="关闭项目面板" onClick={onClose}>
-          <X size={15} />
-        </button>
-      </header>
+      {!embedded && (
+        <header className="project-panel-heading">
+          <div>
+            <strong>{project.name}</strong>
+            <span title={project.path}>{project.path}</span>
+          </div>
+          <button
+            className="icon-button"
+            aria-label={expanded ? '缩小项目面板' : '加宽项目面板'}
+            title={expanded ? '缩小' : '加宽'}
+            onClick={() => {
+              setExpanded(!expanded);
+              localStorage.setItem('tongzhou-context-wide', String(!expanded));
+            }}
+          >
+            {expanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+          </button>
+          <button className="icon-button" aria-label="关闭项目面板" onClick={onClose}>
+            <X size={15} />
+          </button>
+        </header>
+      )}
       <div className="project-tabs" role="tablist" aria-label="项目功能">
         {(
           [
@@ -311,12 +356,16 @@ export function ProjectContext({
             ['changes', '变更', GitBranch],
             ['instructions', '说明', FileText],
           ] as const
-        ).map(([id, label, Icon]) => (
-          <button role="tab" aria-selected={tab === id} key={id} onClick={() => changeTab(id)}>
-            <Icon size={13} />
-            {label}
-          </button>
-        ))}
+        )
+          .filter(
+            ([id]) => !embedded || (activeTab === 'changes' ? id === 'changes' : id !== 'changes'),
+          )
+          .map(([id, label, Icon]) => (
+            <button role="tab" aria-selected={tab === id} key={id} onClick={() => changeTab(id)}>
+              <Icon size={13} />
+              {label}
+            </button>
+          ))}
         <button
           className="icon-button"
           aria-label="刷新项目上下文"

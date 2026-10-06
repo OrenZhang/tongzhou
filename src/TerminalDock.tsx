@@ -12,15 +12,21 @@ export function TerminalDock({
   initialId,
   disabled,
   onClose,
+  fill = false,
+  onDockRight,
 }: {
   api: TongzhouAPI;
   sessionId: string;
   initialId: string;
   disabled: boolean;
   onClose: () => void;
+  fill?: boolean;
+  onDockRight?: () => void;
 }) {
   const [state, setState] = useState<TaskState>();
-  const [selected, setSelected] = useState(initialId);
+  const [selected, setSelected] = useState(
+    () => localStorage.getItem(`tongzhou-terminal-${sessionId}`) || initialId,
+  );
   const [collapsed, setCollapsed] = useState(false);
   const [height, setHeight] = useState(
     () => Number(localStorage.getItem('tongzhou-terminal-height')) || 240,
@@ -84,11 +90,11 @@ export function TerminalDock({
   return (
     <section
       ref={host}
-      className={`terminal-dock ${collapsed ? 'collapsed' : ''}`}
+      className={`terminal-dock ${fill ? 'fill' : ''} ${collapsed ? 'collapsed' : ''}`}
       aria-label="会话终端面板"
-      style={{ height: collapsed ? 42 : Math.min(height, limit) }}
+      style={fill ? undefined : { height: collapsed ? 42 : Math.min(height, limit) }}
     >
-      {!collapsed && (
+      {!collapsed && !fill && (
         <div
           className="terminal-resizer"
           role="separator"
@@ -167,6 +173,16 @@ export function TerminalDock({
           <Plus size={16} />
         </button>
         <div className="terminal-dock-actions">
+          {onDockRight && (
+            <button
+              className="icon-button"
+              aria-label="停靠右侧"
+              title="将终端移到右侧工作区"
+              onClick={onDockRight}
+            >
+              <Terminal size={14} />
+            </button>
+          )}
           <button
             className="icon-button"
             aria-label="停止终端"
@@ -180,15 +196,17 @@ export function TerminalDock({
           >
             <Square size={13} />
           </button>
-          <button
-            className="icon-button"
-            aria-label={collapsed ? '展开终端' : '折叠终端'}
-            title={collapsed ? '展开终端' : '折叠终端'}
-            aria-expanded={!collapsed}
-            onClick={() => setCollapsed(!collapsed)}
-          >
-            {collapsed ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-          </button>
+          {!fill && (
+            <button
+              className="icon-button"
+              aria-label={collapsed ? '展开终端' : '折叠终端'}
+              title={collapsed ? '展开终端' : '折叠终端'}
+              aria-expanded={!collapsed}
+              onClick={() => setCollapsed(!collapsed)}
+            >
+              {collapsed ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
+          )}
           <button
             className="icon-button"
             aria-label="关闭终端面板"

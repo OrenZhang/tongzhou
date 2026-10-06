@@ -5,6 +5,10 @@ import { ChoicePicker } from './ChoicePicker';
 import { ConnectionDiagnostics } from './ConnectionDiagnostics';
 import { TaskPanel, HistorySearch } from './TaskPanel';
 import { TerminalDock } from './TerminalDock';
+import { WorkspacePanel } from './WorkspacePanel';
+import { WorkspaceFileContext } from './WorkspaceFileContext';
+import { SessionTitle } from './SessionTitle';
+import { useTaskContext, useWorkspaceLayout } from './workspace-state';
 import { DataMaintenance } from './DataMaintenance';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -26,7 +30,6 @@ import {
   Layers3,
   LayoutPanelLeft,
   MessageSquare,
-  MoreHorizontal,
   Network,
   Plus,
   Paperclip,
@@ -70,7 +73,6 @@ import { effectivePermission } from './shared/permissions';
 import { ConnectionsPanel } from './ConnectionsPanel';
 import { Appearance, useAppearance } from './Appearance';
 import { useDraft } from './useDraft';
-import { ProjectContext } from './ProjectContext';
 import { ProviderNetworkFields } from './ProviderNetworkFields';
 import { AttachmentCards, useAttachmentDraft } from './Attachments';
 import { longPaste } from './shared/attachments';
@@ -197,13 +199,16 @@ type View =
   | 'extensions'
   | 'knowledge';
 export default function App() {
-  const [terminalPanel, setTerminalPanel] = useState<{ sessionId: string; id: string } | null>(
-    null,
-  );
   const [activityTab, setActivityTab] = useState<'runs' | 'review'>('runs');
   const [reviewSession, setReviewSession] = useState('');
   const [reviewRun, setReviewRun] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [fileRequest, setFileRequest] = useState<{
+    sessionId: string;
+    path: string;
+    line: number;
+    key: number;
+  }>();
   const [accountStates, setAccountStates] = useState<
     Record<string, { connected: boolean; pending: boolean; error: boolean }>
   >({});
@@ -218,9 +223,6 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(
     () => localStorage.getItem('tongzhou-sidebar') !== 'closed',
   );
-  const [contextOpen, setContextOpen] = useState(
-    () => localStorage.getItem('tongzhou-context') !== 'closed',
-  );
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [providerQuery, setProviderQuery] = useState('');
   const [runQuery, setRunQuery] = useState('');
@@ -228,9 +230,6 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('tongzhou-sidebar', sidebarOpen ? 'open' : 'closed');
   }, [sidebarOpen]);
-  useEffect(() => {
-    localStorage.setItem('tongzhou-context', contextOpen ? 'open' : 'closed');
-  }, [contextOpen]);
   useEffect(() => {
     const shortcuts = (e: KeyboardEvent) => {
       if (e.isComposing || !(e.ctrlKey || e.metaKey)) return;
@@ -280,7 +279,6 @@ export default function App() {
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [teamOpen, setTeamOpen] = useState(false);
   const [teamIds, setTeamIds] = useState<string[]>([]);
-  const [rename, setRename] = useState<string | null>(null);
   const [archived, setArchived] = useState(false);
   const [nativeAccounts, setNativeAccounts] = useState<
     Partial<Record<NativeEngine, NativeAuthState>>
@@ -295,6 +293,23 @@ export default function App() {
     perform(async () => setCodex(await api.codexLogin(method, authProviderId)));
   const feed = useRef<HTMLDivElement>(null);
   const composerInput = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const outside = (event: Event) => {
+      if (
+        event.target instanceof Element &&
+        !event.target.closest('.composer-model-menu,.choice-panel,.model-picker-panel')
+      ) {
+        const menu = document.querySelector<HTMLDetailsElement>('.composer-model-menu');
+        if (menu) menu.open = false;
+      }
+    };
+    document.addEventListener('pointerdown', outside);
+    document.addEventListener('focusin', outside);
+    return () => {
+      document.removeEventListener('pointerdown', outside);
+      document.removeEventListener('focusin', outside);
+    };
+  }, []);
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     const input = composerInput.current;
@@ -315,6 +330,40 @@ export default function App() {
   const selectedAgent = data.agents.find((a) => a.id === agentId);
   const sessionPermission = effectivePermission(session, data.defaultPermission, selectedAgent);
   const running = data.runs.find((r) => r.sessionId === sessionId && r.status === 'running');
+  const [workspace, updateWorkspace] = useWorkspaceLayout(sessionId);
+  const taskContext = useTaskContext(
+    api,
+    sessionId,
+    project?.id,
+    data.runs
+      .filter((r) => r.sessionId === sessionId)
+      .map((r) => `${r.id}:${r.status}`)
+      .join(','),
+    view === 'workspace',
+  );
+  const openReview = (
+    runId = taskContext.task?.runs[0]?.id ?? '',
+    reviewTab: 'changes' | 'evidence' = 'changes',
+  ) => updateWorkspace({ open: true, tab: 'review', scope: 'task', runId, reviewTab });
+  const openTerminal = () => {
+    if (!session || session.knowledgeJob) return;
+    const target = session;
+    void perform(async () => {
+      const task = await api.taskState(target.id);
+      const saved = localStorage.getItem(`tongzhou-terminal-${target.id}`);
+      const terminal =
+        task.terminals.find((t) => t.id === saved) ??
+        task.terminals.find((t) => t.status === 'running') ??
+        task.terminals.at(-1) ??
+        (target.archived ? undefined : await api.startTerminal(target.id));
+      updateWorkspace({
+        open: workspace.dock === 'right' || workspace.open,
+        tab: 'terminal',
+        terminalOpen: true,
+        terminalId: terminal?.id ?? '',
+      });
+    });
+  };
   const activity = useRunEvents(api, sessionId);
   const turns = useMemo(
     () => conversationTurns(sessionId, messages, data.runs, activity.events),
@@ -973,20 +1022,21 @@ export default function App() {
           <Plus size={17} />
           开启新会话<span>↗</span>
         </button>
-        <nav>
-          {nav.map((n) => (
-            <button
-              key={n.id}
-              aria-label={n.label}
-              aria-current={view === n.id ? 'page' : undefined}
-              className={view === n.id ? 'active' : ''}
-              onClick={() => setView(n.id)}
-            >
-              <n.icon size={17} />
-              {n.label}
-              {n.id === 'providers' && <span className="nav-count">{data.providers.length}</span>}
-            </button>
-          ))}
+        <nav className="workspace-navigation" aria-label="工作入口">
+          {nav
+            .filter((n) => n.id === 'agents' || n.id === 'knowledge')
+            .map((n) => (
+              <button
+                key={n.id}
+                aria-label={n.label}
+                aria-current={view === n.id ? 'page' : undefined}
+                className={view === n.id ? 'active' : ''}
+                onClick={() => setView(n.id)}
+              >
+                <n.icon size={17} />
+                {n.label}
+              </button>
+            ))}
         </nav>
         <div className="sidebar-divider" />
         <SessionNavigator
@@ -1017,6 +1067,25 @@ export default function App() {
           }}
         />
         <div className="sidebar-bottom">
+          <nav aria-label="管理与工具">
+            {nav
+              .filter((n) => n.id !== 'agents' && n.id !== 'knowledge')
+              .map((n) => (
+                <button
+                  key={n.id}
+                  aria-label={n.label}
+                  aria-current={view === n.id ? 'page' : undefined}
+                  className={view === n.id ? 'active' : ''}
+                  onClick={() => setView(n.id)}
+                >
+                  <n.icon size={17} />
+                  {n.label}
+                  {n.id === 'providers' && (
+                    <span className="nav-count">{data.providers.length}</span>
+                  )}
+                </button>
+              ))}
+          </nav>
           <div className="local-status">
             <span className="live-dot" />
             本地优先<span>你的数据，你掌控</span>
@@ -1071,15 +1140,15 @@ export default function App() {
               <span>搜索与快捷操作</span>
               <kbd>{navigator.platform.includes('Mac') ? '⌘ K' : 'Ctrl K'}</kbd>
             </button>
-            {view === 'workspace' && project && (
+            {view === 'workspace' && session && (
               <button
-                className={'icon-button ' + (contextOpen ? 'active' : '')}
-                aria-label={contextOpen ? '收起项目面板' : '展开项目面板'}
-                aria-expanded={contextOpen}
-                title="项目文件与变更"
-                onClick={() => setContextOpen(!contextOpen)}
+                className={'workspace-entry secondary ' + (workspace.open ? 'active' : '')}
+                aria-label={workspace.open ? '收起工作区' : '展开工作区'}
+                aria-expanded={workspace.open}
+                title="文件、审阅与终端"
+                onClick={() => updateWorkspace({ open: !workspace.open })}
               >
-                <FolderOpen size={17} />
+                <LayoutPanelLeft size={16} /> 工作区
               </button>
             )}
             <span className="local-badge">
@@ -1089,48 +1158,40 @@ export default function App() {
           </div>
         </header>
         {view === 'workspace' && (
-          <div className={`workspace-layout ${project && contextOpen ? 'has-context' : ''}`}>
+          <div className={`workspace-layout ${workspace.open && session ? 'has-context' : ''}`}>
             <main className="conversation">
               {session && (
                 <div className="conversation-header">
                   <div>
-                    <h2>{session.title}</h2>
-                    {project ? (
-                      <span className="project-binding" title={project.path}>
-                        <Folder size={12} />
-                        项目 · {project.name}
-                      </span>
-                    ) : (
-                      <span>普通聊天 · 未关联项目</span>
-                    )}
+                    <SessionTitle
+                      key={session.id}
+                      title={session.title}
+                      onSave={async (title) => {
+                        await api.updateSession(session.id, { title });
+                        await refresh();
+                      }}
+                    />
                   </div>
                   <div className="row">
                     <button
                       className="terminal-entry"
-                      aria-expanded={terminalPanel?.sessionId === session.id}
-                      disabled={busy || !!session.knowledgeJob}
-                      title={
-                        project ? `打开项目终端：${project.path}` : '打开本会话独立工作目录的终端'
-                      }
-                      onClick={() => {
-                        if (terminalPanel?.sessionId === session.id) {
-                          setTerminalPanel(null);
-                          return;
-                        }
-                        void perform(async () => {
-                          const task = await api.taskState(session.id);
-                          const saved = localStorage.getItem(`tongzhou-terminal-${session.id}`);
-                          const terminal =
-                            task.terminals.find((t) => t.id === saved) ??
-                            task.terminals.find((t) => t.status === 'running') ??
-                            task.terminals.at(-1) ??
-                            (session.archived ? undefined : await api.startTerminal(session.id));
-                          setTerminalPanel({ sessionId: session.id, id: terminal?.id ?? '' });
-                        });
-                      }}
+                      onClick={() => openReview()}
+                      title="在当前会话中审阅改动"
                     >
-                      <Terminal size={16} />
-                      终端
+                      <GitBranch size={16} /> 审阅
+                    </button>
+                    <button
+                      className="terminal-entry"
+                      aria-expanded={
+                        workspace.terminalOpen &&
+                        (workspace.dock === 'bottom' ||
+                          (workspace.open && workspace.tab === 'terminal'))
+                      }
+                      disabled={busy || !!session.knowledgeJob}
+                      title="打开本会话终端"
+                      onClick={openTerminal}
+                    >
+                      <Terminal size={16} /> 终端
                     </button>
                     <button
                       className="icon-button"
@@ -1139,14 +1200,6 @@ export default function App() {
                       onClick={() => setHistoryOpen(true)}
                     >
                       <Search size={16} />
-                    </button>
-                    <button
-                      className="icon-button"
-                      aria-label="重命名会话"
-                      title="重命名"
-                      onClick={() => setRename(session.title)}
-                    >
-                      <MoreHorizontal size={18} />
                     </button>
                     {!session.archived && (
                       <SessionNotification
@@ -1298,33 +1351,73 @@ export default function App() {
                     </div>
                   </div>
                 ) : (
-                  turns.map((turn) => (
-                    <ConversationTurn
-                      key={turn.key}
-                      turn={turn}
-                      branchDisabled={!!running}
-                      onCopy={(message) =>
-                        void perform(async () => {
-                          await api.copyText(message.content);
-                          setNotice('已复制');
-                        })
-                      }
-                      onQuote={(message) => {
-                        setDraft(
-                          (text) =>
-                            `${text}${text ? '\n\n' : ''}针对历史消息（${message.id}）补充：\n> ${message.content.slice(0, 1500).replace(/\n/g, '\n> ')}\n\n`,
-                        );
-                        composerInput.current?.focus();
-                      }}
-                      onBranch={(message) =>
-                        void perform(async () => {
-                          const branch = await api.branchSession(sessionId, message.id);
-                          await refresh();
-                          activateSession(branch);
-                        })
-                      }
-                    />
-                  ))
+                  <WorkspaceFileContext.Provider
+                    value={
+                      project
+                        ? {
+                            root: project.path,
+                            open: (path, line) => {
+                              setFileRequest({ sessionId, path, line, key: Date.now() });
+                              updateWorkspace({ open: true, tab: 'files' });
+                            },
+                          }
+                        : null
+                    }
+                  >
+                    {turns.map((turn) => (
+                      <ConversationTurn
+                        key={turn.key}
+                        turn={turn}
+                        branchDisabled={!!running}
+                        delivery={
+                          turn.run && turn.run.status !== 'running' ? (
+                            <div className="turn-delivery" aria-label="任务交付">
+                              <strong>
+                                {turn.run.status === 'completed'
+                                  ? '执行已结束'
+                                  : turn.run.status === 'failed'
+                                    ? '执行失败'
+                                    : '执行已中断'}
+                              </strong>
+                              {taskContext.task?.changes.find((c) => c.id === turn.runId) && (
+                                <span>
+                                  {
+                                    taskContext.task.changes.find((c) => c.id === turn.runId)!.files
+                                      .length
+                                  }{' '}
+                                  个文件发生变化
+                                </span>
+                              )}
+                              <button onClick={() => openReview(turn.runId)}>查看改动</button>
+                              <button onClick={() => openReview(turn.runId, 'evidence')}>
+                                验证记录
+                              </button>
+                            </div>
+                          ) : undefined
+                        }
+                        onCopy={(message) =>
+                          void perform(async () => {
+                            await api.copyText(message.content);
+                            setNotice('已复制');
+                          })
+                        }
+                        onQuote={(message) => {
+                          setDraft(
+                            (text) =>
+                              `${text}${text ? '\n\n' : ''}针对历史消息（${message.id}）补充：\n> ${message.content.slice(0, 1500).replace(/\n/g, '\n> ')}\n\n`,
+                          );
+                          composerInput.current?.focus();
+                        }}
+                        onBranch={(message) =>
+                          void perform(async () => {
+                            const branch = await api.branchSession(sessionId, message.id);
+                            await refresh();
+                            activateSession(branch);
+                          })
+                        }
+                      />
+                    ))}
+                  </WorkspaceFileContext.Provider>
                 )}
               </div>
               <div className="composer-wrap">
@@ -1348,6 +1441,48 @@ export default function App() {
                   </button>
                 )}
                 <PendingInputs key={sessionId} api={api} sessionId={sessionId} data={data} />
+                {session && (
+                  <div className="composer-context" aria-label="执行上下文">
+                    <button
+                      className="context-chip"
+                      title={project?.path ?? taskContext.task?.cwd ?? '正在读取执行目录'}
+                      onClick={() => updateWorkspace({ open: true, tab: 'files' })}
+                    >
+                      <Folder size={13} />
+                      <span>{project?.name ?? '会话工作目录'}</span>
+                    </button>
+                    <span
+                      className="context-chip"
+                      title={taskContext.task?.cwd ?? taskContext.error ?? '正在读取执行目录'}
+                    >
+                      <Terminal size={13} />
+                      <span>{taskContext.error ?? (taskContext.task ? '本地' : '读取中…')}</span>
+                    </span>
+                    {project && (
+                      <button
+                        className="context-chip"
+                        title="查看工作目录全部改动"
+                        onClick={() =>
+                          updateWorkspace({ open: true, tab: 'review', scope: 'directory' })
+                        }
+                      >
+                        <GitBranch size={13} />
+                        <span>{taskContext.branch ?? '读取分支…'}</span>
+                      </button>
+                    )}
+                    {session && (
+                      <SessionPermission
+                        session={session}
+                        defaultPermission={data.defaultPermission ?? 'ask'}
+                        effective={sessionPermission}
+                        running={running}
+                        api={api}
+                        onError={report}
+                      />
+                    )}
+                  </div>
+                )}
+
                 {selectedAgent && (
                   <div className="selected-agent-note">
                     <Bot size={16} />
@@ -1411,7 +1546,9 @@ export default function App() {
                         e.preventDefault();
                         void attachments
                           .addFiles([
-                            new File([text], `粘贴文本-${Date.now()}.txt`, { type: 'text/plain' }),
+                            new File([text], `粘贴文本-${Date.now()}.txt`, {
+                              type: 'text/plain',
+                            }),
                           ])
                           .then((added) => {
                             if (added) setNotice('长文本已转为附件，点击卡片可查看全文');
@@ -1426,35 +1563,62 @@ export default function App() {
                     }}
                   />
                   <div className="composer-toolbar">
-                    <div className="composer-controls">
-                      <ChoicePicker
-                        label="当前连接"
-                        compact
-                        searchable
-                        value={providerReady ? providerId : ''}
-                        options={availableProviders.map((p) => ({
-                          value: p.id,
-                          label: p.name,
-                          detail: `${p.models.length} 个模型`,
-                        }))}
-                        placeholder={availableProviders.length ? '选择连接' : '暂无可用连接'}
-                        onChange={(id) =>
-                          selectModel(id, data.providers.find((p) => p.id === id)?.models[0] ?? '')
+                    <details
+                      className="composer-model-menu"
+                      onKeyDown={(event) => {
+                        if (event.key === 'Escape' && !event.defaultPrevented) {
+                          event.currentTarget.open = false;
+                          event.currentTarget.querySelector('summary')?.focus();
                         }
-                        disabled={!!running}
-                      />
-                      <ModelPicker
-                        key={providerId}
-                        label="当前模型"
-                        compact
-                        value={providerReady ? model : ''}
-                        models={providerReady ? (provider?.models ?? []) : []}
-                        modelLabels={provider?.modelLabels}
-                        load={providerReady && provider ? () => api.models(provider.id) : undefined}
-                        onChange={(m) => selectModel(providerId, m)}
-                        disabled={!!running || !providerReady}
-                      />
-                    </div>
+                      }}
+                    >
+                      <summary
+                        aria-label="选择模型与连接"
+                        title={`${provider?.name ?? '未连接'} · ${model || '选择模型'}`}
+                      >
+                        <span>
+                          {providerReady ? (provider?.modelLabels?.[model] ?? model) : '选择模型'}
+                        </span>
+                        <small>{provider?.name ?? '未连接'}</small>
+                        <ChevronDown size={13} />
+                      </summary>
+                      <div className="composer-model-options">
+                        <div className="composer-controls">
+                          <ChoicePicker
+                            label="当前连接"
+                            compact
+                            searchable
+                            value={providerReady ? providerId : ''}
+                            options={availableProviders.map((p) => ({
+                              value: p.id,
+                              label: p.name,
+                              detail: `${p.models.length} 个模型`,
+                            }))}
+                            placeholder={availableProviders.length ? '选择连接' : '暂无可用连接'}
+                            onChange={(id) =>
+                              selectModel(
+                                id,
+                                data.providers.find((p) => p.id === id)?.models[0] ?? '',
+                              )
+                            }
+                            disabled={!!running}
+                          />
+                          <ModelPicker
+                            key={providerId}
+                            label="当前模型"
+                            compact
+                            value={providerReady ? model : ''}
+                            models={providerReady ? (provider?.models ?? []) : []}
+                            modelLabels={provider?.modelLabels}
+                            load={
+                              providerReady && provider ? () => api.models(provider.id) : undefined
+                            }
+                            onChange={(m) => selectModel(providerId, m)}
+                            disabled={!!running || !providerReady}
+                          />
+                        </div>
+                      </div>
+                    </details>
                     <div className="row composer-actions">
                       <button
                         className="icon-button"
@@ -1550,7 +1714,9 @@ export default function App() {
                     {running ? (
                       <>
                         <span className="live-dot" />
-                        {running.agentName} 正在工作
+                        {data.approvals.some((approval) => approval.sessionId === sessionId)
+                          ? '等待你处理审批'
+                          : `${running.agentName} · ${running.phase || '正在工作'}`}
                       </>
                     ) : (
                       <>
@@ -1561,36 +1727,32 @@ export default function App() {
                   </span>
                   <span>Enter 发送 · Shift + Enter 换行</span>
                 </div>
-                {session && (
-                  <SessionPermission
-                    session={session}
-                    defaultPermission={data.defaultPermission ?? 'ask'}
-                    effective={sessionPermission}
-                    running={running}
-                    api={api}
-                    onError={report}
-                  />
-                )}
               </div>
-              {session && terminalPanel?.sessionId === session.id && (
+              {session && workspace.terminalOpen && workspace.dock === 'bottom' && (
                 <TerminalDock
                   key={session.id}
                   api={api}
                   sessionId={session.id}
-                  initialId={terminalPanel.id}
+                  initialId={workspace.terminalId}
                   disabled={!!session.archived || !!session.knowledgeJob}
-                  onClose={() => setTerminalPanel(null)}
+                  onClose={() => updateWorkspace({ terminalOpen: false })}
+                  onDockRight={() =>
+                    updateWorkspace({ dock: 'right', open: true, tab: 'terminal' })
+                  }
                 />
               )}
             </main>
-            {project && contextOpen && (
-              <ProjectContext
-                key={project.id + ':' + sessionId}
-                project={project}
-                sessionId={sessionId}
-                running={!!running}
+            {session && workspace.open && (
+              <WorkspacePanel
+                key={session.id}
+                fileRequest={fileRequest?.sessionId === session.id ? fileRequest : undefined}
                 api={api}
-                onClose={() => setContextOpen(false)}
+                session={session}
+                project={project}
+                running={!!running}
+                layout={workspace}
+                update={updateWorkspace}
+                onTerminal={openTerminal}
                 onNotice={setNotice}
                 onReference={(text) => {
                   setDraft((old) => (old ? old + '\n\n' + text : text));
@@ -2858,8 +3020,7 @@ export default function App() {
                       setHasEarlier(false);
                       localStorage.removeItem('tongzhou-last-session');
                     }
-                    if (terminalPanel && deleted.includes(terminalPanel.sessionId))
-                      setTerminalPanel(null);
+                    for (const id of deleted) localStorage.removeItem(`tongzhou-workspace-${id}`);
                     if (deleted.includes(reviewSession)) {
                       setReviewSession('');
                       setReviewRun('');
@@ -3012,29 +3173,6 @@ export default function App() {
             >
               导入 {preview.providers.length} 个连接
               <ArrowRight size={15} />
-            </button>
-          </div>
-        </Modal>
-      )}
-      {rename !== null && (
-        <Modal title="重命名会话" onClose={() => setRename(null)}>
-          <div className="modal-content">
-            <Field label="会话名称">
-              <input autoFocus value={rename} onChange={(e) => setRename(e.target.value)} />
-            </Field>
-          </div>
-          <div className="modal-footer">
-            <button
-              className="primary"
-              onClick={() =>
-                perform(async () => {
-                  await api.updateSession(sessionId, { title: rename });
-                  setRename(null);
-                  await refresh();
-                })
-              }
-            >
-              保存
             </button>
           </div>
         </Modal>

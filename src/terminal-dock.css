@@ -138,8 +138,15 @@
 .terminal-dock .task-terminal {
   height: 100%;
   border-radius: 0;
-  padding: 5px 12px;
+  padding: 0;
   background: #17191e;
+}
+.terminal-dock .task-terminal .xterm {
+  /* FitAddon subtracts padding on .xterm when calculating visible rows. */
+  padding: 5px 12px;
+}
+.terminal-dock:not(.fill) .task-terminal .xterm {
+  padding: 6px 12px 8px;
 }
 .terminal-dock .task-error {
   padding: 4px 12px;

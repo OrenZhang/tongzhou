@@ -369,11 +369,11 @@ svg {
   color: var(--muted);
 }
 .session-actions button:hover {
-  background: var(--surface);
+  background: transparent;
   color: var(--ink);
 }
 .session-actions .session-delete:hover {
-  background: var(--danger-soft);
+  background: transparent;
   color: var(--danger);
 }
 @media (hover: none) {

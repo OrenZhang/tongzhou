@@ -41,6 +41,7 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npm run test:desktop
+      - run: npm run test:workspace-layout
       - run: npm run test:knowledge
       - run: node scripts/project-deletion-smoke.mjs
       - run: node scripts/updates-smoke.mjs
@@ -98,11 +99,15 @@ jobs:
           path: artifacts
           pattern: binaries-*
       - run: node scripts/merge-release-artifacts.mjs
-      - name: Publish immutable version with verified artifacts
+      - name: Publish verified artifacts
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION=$(node -p "require('./package.json').version")
+          if [ "$VERSION" = "0.1.0" ]; then
+            node scripts/replace-initial-release.mjs
+            exit 0
+          fi
           if gh release view "v$VERSION" >/dev/null 2>&1; then
             echo "Version already published. Bump package.json; releases are immutable."
             exit 1

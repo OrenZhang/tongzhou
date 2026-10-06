@@ -38,7 +38,7 @@ try {
   await page.waitForSelector('.app-shell');
   const open = async (sessionId) => {
     await page.locator(`[data-session-id="${sessionId}"]`).click();
-    const contextToggle = page.getByRole('button', { name: '收起项目面板', exact: true });
+    const contextToggle = page.getByRole('button', { name: '关闭工作区', exact: true });
     if (await contextToggle.count()) await contextToggle.click();
     assert.equal(
       await page
@@ -52,6 +52,9 @@ try {
       .getByRole('button', { name: '终端', exact: true })
       .click();
     await page.getByRole('region', { name: '会话终端面板' }).waitFor();
+    const bottom = page.getByRole('button', { name: '停靠底部', exact: true });
+    if (await bottom.count()) await bottom.click();
+    await page.locator('.conversation > .terminal-dock .xterm').waitFor();
     assert.equal(await page.locator('.modal').count(), 0);
     assert.equal(await page.locator('.conversation-header').getByText('任务与交付').count(), 0);
     await page.locator('.xterm').waitFor();
@@ -120,7 +123,10 @@ try {
     composer: document.querySelector('.composer-wrap').getBoundingClientRect().bottom,
     dock: document.querySelector('.terminal-dock').getBoundingClientRect().top,
   }));
-  assert.ok(geometry.dock >= geometry.composer - 1, 'terminal must be below composer');
+  assert.ok(
+    geometry.dock >= geometry.composer - 1,
+    `terminal must be below composer: ${JSON.stringify(geometry)}`,
+  );
   const resizer = page.getByRole('separator', { name: '调整终端高度' });
   const before = Number(await resizer.getAttribute('aria-valuenow'));
   await resizer.focus();

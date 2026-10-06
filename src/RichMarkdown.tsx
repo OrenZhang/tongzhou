@@ -1,6 +1,17 @@
-import { Children, isValidElement, memo, useEffect, useId, useState, type ReactNode } from 'react';
+import {
+  Children,
+  isValidElement,
+  memo,
+  useContext,
+  useEffect,
+  useId,
+  useState,
+  type ReactNode,
+} from 'react';
+import { WorkspaceFileContext } from './WorkspaceFileContext';
+import { projectFileReference } from './shared/file-reference';
 import { Check, Code2, Copy, Maximize2, ZoomIn, ZoomOut } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
@@ -220,6 +231,18 @@ export function MarkdownLink({
   children: ReactNode;
 }) {
   const [error, setError] = useState('');
+  const files = useContext(WorkspaceFileContext);
+  const reference = files && href ? projectFileReference(href, files.root) : undefined;
+  if (reference)
+    return (
+      <button
+        className="markdown-file-link"
+        title={`查看 ${reference.path}`}
+        onClick={() => files!.open(reference.path, reference.line)}
+      >
+        {children}
+      </button>
+    );
   if (!href || !/^(https?:\/\/|#)/i.test(href)) return <span>{children}</span>;
   return (
     <>
@@ -250,10 +273,14 @@ export const Markdown = memo(function Markdown({
   onKnowledgeLink?: (target: string) => void;
 }) {
   const id = useId().replace(/[^a-z0-9]/gi, '');
+  const files = useContext(WorkspaceFileContext);
   return (
     <div className="markdown">
       <ReactMarkdown
         skipHtml
+        urlTransform={(url) =>
+          files && projectFileReference(url, files.root) ? url : defaultUrlTransform(url)
+        }
         remarkPlugins={
           onKnowledgeLink ? [remarkGfm, remarkMath, remarkKnowledgeLinks] : [remarkGfm, remarkMath]
         }

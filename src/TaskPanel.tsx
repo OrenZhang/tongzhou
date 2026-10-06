@@ -8,15 +8,17 @@ export function TaskPanel({
   sessionId,
   projectId,
   initialRunId = '',
+  initialTab = 'task',
   onSelectSession,
 }: {
   api: TongzhouAPI;
   sessionId: string;
   projectId?: string;
   initialRunId?: string;
+  initialTab?: 'task' | 'changes' | 'evidence';
   onSelectSession: (id: string) => void;
 }) {
-  const [tab, setTab] = useState('task'),
+  const [tab, setTab] = useState<string>(initialTab),
     [state, setState] = useState<TaskState>(),
     [error, setError] = useState(''),
     [notice, setNotice] = useState(''),

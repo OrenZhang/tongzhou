@@ -18,6 +18,7 @@ export function ChoicePicker({
   compact = false,
   searchable = false,
   placeholder = '请选择',
+  displayLabel,
 }: {
   id?: string;
   label: string;
@@ -28,6 +29,7 @@ export function ChoicePicker({
   compact?: boolean;
   searchable?: boolean;
   placeholder?: string;
+  displayLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -111,7 +113,7 @@ export function ChoicePicker({
           }
         }}
       >
-        <span>{options.find((o) => o.value === value)?.label ?? placeholder}</span>
+        <span>{displayLabel ?? options.find((o) => o.value === value)?.label ?? placeholder}</span>
         <ChevronDown size={14} />
       </button>
       {open &&

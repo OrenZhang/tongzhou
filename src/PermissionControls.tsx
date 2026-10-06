@@ -33,6 +33,7 @@ export function SessionPermission({
     <div className={'session-permission ' + actual}>
       <ChoicePicker
         label="会话权限"
+        displayLabel={permissionLabels[actual]}
         compact
         value={session.permission ?? 'inherit'}
         options={[
@@ -52,11 +53,7 @@ export function SessionPermission({
             .catch(onError)
         }
       />
-      <span>
-        {running
-          ? `本轮：${permissionLabels[actual]} · 修改下轮生效`
-          : `当前：${permissionLabels[actual]}`}
-      </span>
+      {running && <span>修改下轮生效</span>}
     </div>
   );
 }

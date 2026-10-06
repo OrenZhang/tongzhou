@@ -30,6 +30,7 @@
     "test:ui": "node scripts/ui-smoke.mjs",
     "test:session-entry": "node scripts/session-entry-smoke.mjs",
     "test:workbench": "node scripts/workbench-smoke.mjs",
+    "test:workspace-layout": "node scripts/workspace-layout-smoke.mjs",
     "test:markdown": "node scripts/markdown-smoke.mjs",
     "test:appearance": "node scripts/appearance-smoke.mjs",
     "test:attachments": "node scripts/attachments-smoke.mjs",

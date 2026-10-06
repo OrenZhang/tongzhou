@@ -257,7 +257,8 @@ try {
   await page.getByRole('button', { name: '返回会话', exact: true }).click();
   assert.equal(await page.locator('.context-panel').count(), 0);
   await page.locator(`[data-session-id="${sessions[1].id}"]`).click();
-  await page.getByRole('button', { name: '关闭项目面板', exact: true }).click();
+  await page.getByRole('button', { name: '展开工作区', exact: true }).click();
+  await page.getByRole('button', { name: '关闭工作区', exact: true }).click();
   assert.equal(await page.locator('.context-panel').count(), 0);
   await page.getByRole('button', { name: '收起导航', exact: true }).click();
   assert.equal(await page.locator('.sidebar').getAttribute('inert'), '');
@@ -267,7 +268,7 @@ try {
   await page.getByRole('button', { name: '展开导航', exact: true }).click();
   await page.locator(`[data-session-id="${sessions[1].id}"]`).click();
   assert.equal(await page.locator('.context-panel').count(), 0);
-  await page.getByRole('button', { name: '展开项目面板', exact: true }).click();
+  await page.getByRole('button', { name: '展开工作区', exact: true }).click();
   await page.locator('.context-panel').waitFor();
   checks.push('ordinary chat has no empty inspector; both panels toggle and persist');
   await nav('运行记录');
