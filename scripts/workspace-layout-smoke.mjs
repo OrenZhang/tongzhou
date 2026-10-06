@@ -139,6 +139,11 @@ try {
   await page.locator('.source-line.selected').filter({ hasText: '0.1.0' }).waitFor();
   await page.screenshot({ path: 'test-results/workspace-layout-files.png' });
   await page.getByLabel('调整工作区宽度').press('ArrowLeft');
+  await page.waitForFunction(
+    () =>
+      document.querySelector('[aria-label="调整工作区宽度"]')?.getAttribute('aria-valuenow') ===
+      '454',
+  );
   assert.equal(await page.getByLabel('调整工作区宽度').getAttribute('aria-valuenow'), '454');
   await page.getByLabel('关闭工作区').click();
   await page.getByRole('button', { name: '验证记录', exact: true }).click();
