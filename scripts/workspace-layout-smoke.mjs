@@ -116,6 +116,10 @@ try {
     w.setContentSize(1440, 900);
     w.webContents.setBackgroundThrottling(false);
   });
+  // macOS may constrain native window bounds to the CI display. Use an explicit
+  // renderer viewport so every runner exercises the same desktop breakpoint.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  assert.equal(await page.evaluate(() => innerWidth), 1440);
   await page.locator(`[data-session-id="${session.id}"]`).click();
   await page.getByRole('button', { name: '优化客户端工作区', exact: true }).click();
   assert.equal(await page.getByRole('dialog').count(), 0);
@@ -228,6 +232,7 @@ try {
       ({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0].setContentSize(...size),
       [width, height],
     );
+    await page.setViewportSize({ width, height });
     await page.evaluate(
       (theme) =>
         window.tongzhou.setAppearance({ theme, style: 'graphite', font: 'system', textSize: 14 }),
