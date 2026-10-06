@@ -471,33 +471,6 @@ export function WorkPlugins({
                     {installed ? '管理连接' : '配置插件'}
                   </button>
                   {installed && (
-                    <button
-                      className="text-button"
-                      disabled={busy}
-                      onClick={() => {
-                        setEditingService(p.id);
-                        setNotice('');
-                        setLoginUrl('');
-                        setToken('');
-                        setGithubMode(githubAccounts.length ? 'saved' : 'token');
-                        setSource(p.id === 'github' ? (githubAccounts[0]?.id ?? '') : '');
-                        setEdit({
-                          id: crypto.randomUUID(),
-                          name: p.name,
-                          transport: 'http',
-                          url: p.url,
-                          command: '',
-                          args: [],
-                          enabled: false,
-                          readOnlyTools: [],
-                          authMode: p.authMode,
-                        });
-                      }}
-                    >
-                      添加连接
-                    </button>
-                  )}
-                  {installed && (
                     <>
                       <button
                         disabled={busy}
@@ -840,6 +813,38 @@ export function WorkPlugins({
                 </button>
               )}
             </div>
+            {current && (
+              <details>
+                <summary>其他账号与站点</summary>
+                <button
+                  type="button"
+                  className="text-button"
+                  disabled={busy}
+                  onClick={() => {
+                    const p = workPluginCatalog.find((p) => p.id === editingService);
+                    if (!p) return;
+                    setNotice('');
+                    setLoginUrl('');
+                    setToken('');
+                    setGithubMode(githubAccounts.length ? 'saved' : 'token');
+                    setSource(p.id === 'github' ? (githubAccounts[0]?.id ?? '') : '');
+                    setEdit({
+                      id: crypto.randomUUID(),
+                      name: p.name,
+                      transport: 'http',
+                      url: p.url,
+                      command: '',
+                      args: [],
+                      enabled: false,
+                      readOnlyTools: [],
+                      authMode: p.authMode,
+                    });
+                  }}
+                >
+                  添加其他账号或站点
+                </button>
+              </details>
+            )}
           </form>
         </Modal>
       )}

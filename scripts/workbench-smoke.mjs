@@ -401,10 +401,19 @@ try {
   assert.equal(gitlabPlugin.url, 'https://gitlab.fixture.example/api/v4/mcp');
   assert.equal(gitlabPlugin.authMode, 'oauth');
   assert.equal(gitlabPlugin.enabled, false);
+  assert.equal(
+    await page
+      .locator('.work-plugins .service-card-actions')
+      .getByRole('button', { name: '添加连接', exact: true })
+      .count(),
+    0,
+  );
   await page
     .locator('.work-plugins')
-    .getByRole('button', { name: '添加连接', exact: true })
+    .getByRole('button', { name: '管理连接', exact: true })
     .click();
+  await dialog.getByText('其他账号与站点', { exact: true }).click();
+  await dialog.getByRole('button', { name: '添加其他账号或站点', exact: true }).click();
   assert.equal(
     await dialog.getByLabel('GitLab 实例地址', { exact: true }).inputValue(),
     'https://gitlab.com',

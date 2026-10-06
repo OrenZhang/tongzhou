@@ -3535,6 +3535,11 @@ kbd {
 }
 .work-plugins .provider-card > .service-card-actions {
   margin-top: auto;
+  flex-wrap: wrap;
+}
+.work-plugins .service-card-actions > button {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 .work-plugins .provider-card > .row:has(> .muted) {
   margin-bottom: 12px;
