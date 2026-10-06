@@ -83,7 +83,8 @@ try {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [skill] });
   }, skill);
   await page.getByRole('button', { name: '插件', exact: true }).click();
-  await page.getByRole('button', { name: /^内置与自定义/ }).click();
+  await page.getByRole('button', { name: /^内置插件/ }).click();
+  await page.getByLabel('类型', { exact: true }).selectOption('mcp');
   const builtins = (await page.evaluate(() => window.tongzhou.snapshot())).plugins;
   assert.deepEqual(builtins.map((p) => p.id).sort(), ['tongzhou-system', 'tongzhou-web']);
   assert.ok(builtins.every((p) => !p.enabled));
@@ -99,16 +100,12 @@ try {
       (await window.tongzhou.snapshot()).plugins.find((p) => p.id === 'tongzhou-system').enabled,
   );
   assert.equal(await webCard.getByRole('checkbox').isChecked(), false);
-  await systemCard.getByRole('button', { name: '连接检查' }).click();
-  await page
-    .getByRole('status')
-    .getByText('系统环境 · 内置：连接成功，发现 2 个工具', { exact: true })
-    .waitFor();
-  await webCard.getByRole('button', { name: '连接检查' }).click();
-  await page
-    .getByRole('status')
-    .getByText('网页读取 · 内置：连接成功，发现 1 个工具', { exact: true })
-    .waitFor();
+  assert.equal(await page.getByRole('button', { name: '连接检查', exact: true }).count(), 0);
+  assert.equal(
+    (await page.evaluate(() => window.tongzhou.testPlugin('tongzhou-system'))).length,
+    2,
+  );
+  assert.equal((await page.evaluate(() => window.tongzhou.testPlugin('tongzhou-web'))).length, 1);
   assert.equal(await webCard.getByRole('checkbox').isChecked(), false);
   assert.ok(!(await webCard.innerText()).includes('builtin-mcp.cjs'));
   await page.screenshot({ path: 'test-results/builtin-plugins.png' });
@@ -162,6 +159,7 @@ try {
       !(await window.tongzhou.snapshot()).plugins.find((p) => p.id === 'tongzhou-system').enabled,
   );
   assert.equal(await page.getByRole('button', { name: /^Skills/ }).count(), 0);
+  await page.getByRole('button', { name: /^个人插件/ }).click();
   await page.getByRole('button', { name: '添加插件', exact: true }).click();
   await page.getByRole('button', { name: '连接 MCP 服务', exact: true }).click();
   await page.getByLabel('插件名称', { exact: true }).fill('测试笔记插件');
@@ -178,7 +176,14 @@ try {
   const skillCard = page
     .locator('.provider-card')
     .filter({ has: page.getByRole('heading', { name: 'sample-skill', exact: true }) });
-  await skillCard.getByText('Skill 技能', { exact: true }).waitFor();
+  await skillCard.getByText('技能', { exact: true }).waitFor();
+  assert.equal(await page.locator('.plugin-library .provider-card').count(), 2);
+  await page.getByLabel('类型', { exact: true }).selectOption('mcp');
+  assert.equal(await page.locator('.plugin-library .provider-card').count(), 1);
+  await page.getByRole('heading', { name: '测试笔记插件', exact: true }).waitFor();
+  await page.getByLabel('搜索插件', { exact: true }).fill('不存在的插件');
+  await page.getByRole('heading', { name: '没有匹配的插件', exact: true }).waitFor();
+  await page.getByLabel('搜索插件', { exact: true }).fill('');
   await page.getByLabel('类型', { exact: true }).selectOption('skill');
   assert.equal(await page.locator('.provider-grid .provider-card:visible').count(), 1);
   await skillCard.getByRole('checkbox').uncheck();
@@ -251,7 +256,7 @@ try {
   assert.equal(persisted.plugins.length, 3);
   assert.equal(persisted.skills.length, 1);
   await page.getByRole('button', { name: '插件', exact: true }).click();
-  await page.getByRole('button', { name: /^内置与自定义/ }).click();
+  await page.getByRole('button', { name: /^个人插件/ }).click();
   await skillCard.getByRole('button', { name: '移除', exact: true }).click();
   await page.waitForFunction(async () => (await window.tongzhou.snapshot()).skills.length === 0);
   await page.getByLabel('类型', { exact: true }).selectOption('skill');

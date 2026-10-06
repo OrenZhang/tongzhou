@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, Plug, Plus, ExternalLink } from 'lucide-react';
+import { Plug, ExternalLink } from 'lucide-react';
 import { Modal } from './components';
 import { MarkdownLink } from './RichMarkdown';
 import { errorMessage } from './feedback';
@@ -251,18 +251,17 @@ export function WorkPlugins({
   data,
   api,
   refresh,
-  onCustom,
+  query,
   onManage,
 }: {
   data: Snapshot;
   api: TongzhouAPI;
   refresh: () => Promise<void>;
-  onCustom: () => void;
+  query: string;
   onManage: (plugin: PluginConfig) => void;
 }) {
   const [selectedConnections, setSelectedConnections] = useState<Record<string, string>>({});
-  const [query, setQuery] = useState(''),
-    [edit, setEdit] = useState<PluginInput | null>(null),
+  const [edit, setEdit] = useState<PluginInput | null>(null),
     [token, setToken] = useState(''),
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState('');
@@ -326,24 +325,6 @@ export function WorkPlugins({
   };
   return (
     <section className="work-plugins">
-      <div className="collection-toolbar">
-        <div>
-          <h2>工作插件</h2>
-          <p>
-            连接后，各个 Agent
-            引擎共享工具目录，按需搜索和调用。账号授权与会话权限共同决定可执行的操作。
-          </p>
-        </div>
-        <div className="search-box">
-          <Search size={14} />
-          <input
-            aria-label="搜索工作插件"
-            placeholder="搜索服务或用途"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
-      </div>
       {notice && !edit && (
         <p role="status" className="info-strip">
           {notice}
@@ -476,10 +457,6 @@ export function WorkPlugins({
             );
           })}
       </div>
-      <button className="text-button" onClick={onCustom}>
-        <Plus size={14} />
-        前往内置与自定义
-      </button>
       {edit && (
         <Modal title={`连接 ${edit.name}`} onClose={() => setEdit(null)}>
           <form

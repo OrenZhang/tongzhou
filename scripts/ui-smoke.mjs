@@ -369,7 +369,7 @@ try {
     await capture(`${width}-agents`);
     await nav('插件');
     await capture(`${width}-core`);
-    await page.getByRole('button', { name: /^内置与自定义/ }).click();
+    await page.getByRole('button', { name: /^个人插件/ }).click();
     await capture(`${width}-mcp`);
     await page.getByLabel('类型', { exact: true }).selectOption('skill');
     await capture(`${width}-skills`);
@@ -384,7 +384,7 @@ try {
     await page.keyboard.press('Escape');
   }
   await nav('插件');
-  await page.getByRole('button', { name: /^内置与自定义/ }).click();
+  await page.getByRole('button', { name: /^个人插件/ }).click();
   await page.getByRole('checkbox', { name: '启用 文档检索', exact: true }).click();
   await page.waitForFunction(
     async () =>

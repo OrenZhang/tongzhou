@@ -269,8 +269,22 @@ try {
   assert.ok(!JSON.stringify(connector).includes('fixture-github-token'));
   assert.equal(await page.locator('.work-plugins').count(), 0);
   await nav('插件');
-  await page.getByRole('button', { name: /^工作插件/ }).click();
-  await page.getByLabel('搜索工作插件', { exact: true }).fill('Figma');
+  await page.getByRole('button', { name: /^内置插件/ }).click();
+  assert.equal(await page.getByRole('button', { name: /^工作插件|^内置与自定义/ }).count(), 0);
+  assert.equal(await page.locator('.plugin-library .provider-card').count(), 7);
+  await capture('builtin-plugin-library-all');
+  assert.equal(await page.getByRole('button', { name: '添加插件', exact: true }).count(), 0);
+  await page.getByLabel('类型', { exact: true }).selectOption('mcp');
+  assert.equal(await page.locator('.plugin-library .provider-card').count(), 2);
+  await page.getByLabel('搜索插件', { exact: true }).fill('系统环境');
+  assert.equal(await page.locator('.plugin-library .provider-card').count(), 1);
+  await page.getByLabel('搜索插件', { exact: true }).fill('');
+  await page.getByLabel('类型', { exact: true }).selectOption('skill');
+  await page.getByRole('heading', { name: '暂无此类型的插件', exact: true }).waitFor();
+  await page.getByLabel('类型', { exact: true }).selectOption('app');
+  assert.equal(await page.locator('.plugin-library .provider-card').count(), 5);
+  await capture('builtin-plugin-library');
+  await page.getByLabel('搜索插件', { exact: true }).fill('Figma');
   assert.equal(await page.locator('.work-plugins .provider-card').count(), 1);
   await page
     .locator('.work-plugins')
@@ -285,11 +299,20 @@ try {
   );
   assert.equal(plugin.url, 'https://mcp.figma.com/mcp');
   assert.equal(plugin.enabled, false);
-  await page.getByRole('button', { name: /^内置与自定义/ }).click();
+  await page.getByRole('button', { name: /^个人插件/ }).click();
   assert.equal(await page.getByRole('heading', { name: 'Figma', exact: true }).count(), 0);
-  await page.getByRole('heading', { name: '系统环境 · 内置', exact: true }).waitFor();
-  await page.getByRole('button', { name: /^工作插件/ }).click();
-  await page.getByLabel('搜索工作插件', { exact: true }).fill('Figma');
+  assert.equal(
+    await page.getByRole('heading', { name: '系统环境 · 内置', exact: true }).count(),
+    0,
+  );
+  await page.getByRole('button', { name: '添加插件', exact: true }).waitFor();
+  await page.getByLabel('类型', { exact: true }).selectOption('app');
+  await page
+    .getByText('暂无个人应用插件，可在“内置插件”中配置现有应用。', { exact: true })
+    .waitFor();
+  await capture('personal-plugin-library-empty');
+  await page.getByRole('button', { name: /^内置插件/ }).click();
+  await page.getByLabel('搜索插件', { exact: true }).fill('Figma');
   await page
     .locator('.work-plugins')
     .getByRole('button', { name: '管理连接', exact: true })
@@ -314,6 +337,7 @@ try {
   await page.evaluate(() => window.tongzhou.deletePlugin('figma-extra'));
   await page.getByLabel('Figma 连接', { exact: true }).waitFor({ state: 'detached' });
   await capture('plugin-single-entry');
+  assert.equal(await page.locator('.work-plugins .service-card-actions button').count(), 1);
   await page
     .locator('.work-plugins')
     .getByRole('button', { name: '管理连接', exact: true })
@@ -327,7 +351,7 @@ try {
     .getByLabel('Figma 连接方式', { exact: true })
     .selectOption('https://mcp.figma.com/mcp');
   await dialog.getByRole('button', { name: '关闭', exact: true }).click();
-  await page.getByLabel('搜索工作插件', { exact: true }).fill('GitHub');
+  await page.getByLabel('搜索插件', { exact: true }).fill('GitHub');
   await page
     .locator('.work-plugins')
     .getByRole('button', { name: '配置插件', exact: true })
@@ -378,7 +402,7 @@ try {
   assert.ok(!(await dialog.innerText()).includes('Error invoking remote method'));
   await capture('github-oauth-requirements');
   await dialog.getByRole('button', { name: '关闭', exact: true }).click();
-  await page.getByLabel('搜索工作插件', { exact: true }).fill('GitLab');
+  await page.getByLabel('搜索插件', { exact: true }).fill('GitLab');
   await page
     .locator('.work-plugins')
     .getByRole('button', { name: '配置插件', exact: true })
@@ -430,9 +454,10 @@ try {
     'https://gitlab.fixture.example',
   );
   await dialog.getByRole('button', { name: '关闭', exact: true }).click();
-  await page.getByLabel('搜索工作插件', { exact: true }).fill('');
+  await page.getByLabel('搜索插件', { exact: true }).fill('');
   checks.push(
-    'work plugin catalog is under Plugins; Figma desktop alternative and inline GitHub registration requirements without external login',
+    'plugin library separates built-in and personal sources, filters applications/MCP/skills, searches built-ins, and preserves app connections without duplicates',
+    'Figma desktop alternative and inline GitHub registration requirements without external login',
   );
   assert.equal(await page.getByRole('button', { name: '项目与工作树', exact: true }).count(), 0);
   await page.evaluate((id) => window.tongzhou.bindGitAccount('project', id), connector.id);

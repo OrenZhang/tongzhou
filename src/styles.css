@@ -2343,6 +2343,22 @@ input[type='checkbox'] {
   margin: 0 0 16px;
   color: var(--muted);
   font-size: 12px;
+  flex-wrap: wrap;
+}
+.plugin-list-filter .search-box {
+  margin-left: auto;
+  max-width: 320px;
+  flex: 1 1 180px;
+}
+.plugin-library .section-heading > div {
+  flex: 1;
+}
+.plugin-library-grid > .work-plugins,
+.plugin-library-grid > .work-plugins > .provider-grid {
+  display: contents;
+}
+.plugin-library-grid > .work-plugins > .info-strip {
+  grid-column: 1 / -1;
 }
 .plugin-list-filter select {
   width: auto;

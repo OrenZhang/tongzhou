@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Plug, RefreshCw, Trash2, BookOpen } from 'lucide-react';
+import { Plus, Plug, Search, Trash2, BookOpen } from 'lucide-react';
 import { Field, Modal, Spinner } from './components';
 import { MultiValueInput } from './MultiValueInput';
 import {
@@ -12,7 +12,7 @@ import {
 import { errorMessage } from './feedback';
 import { CoreCapabilities } from './CoreCapabilities';
 import { builtinPlugins } from './shared/builtin-plugins';
-import type { AgentProfile, PluginInput, Snapshot, TongzhouAPI } from './shared/types';
+import type { PluginInput, Snapshot, TongzhouAPI } from './shared/types';
 
 export function Extensions({
   api,
@@ -25,9 +25,10 @@ export function Extensions({
   refresh: () => Promise<void>;
   report: (e: unknown) => void;
 }) {
-  const [tab, setTab] = useState<'core' | 'catalog' | 'mcp'>('core');
+  const [tab, setTab] = useState<'core' | 'builtin' | 'personal'>('core');
   const [adding, setAdding] = useState(false);
   const [kind, setKind] = useState('all');
+  const [query, setQuery] = useState('');
   const [loginUrl, setLoginUrl] = useState('');
   const [edit, setEdit] = useState<PluginInput | null>(null);
   const [busy, setBusy] = useState(false);
@@ -37,11 +38,22 @@ export function Extensions({
   );
   const [notice, setNotice] = useState('');
   const otherPlugins = (data.plugins ?? []).filter((p) => !workPluginDefinition(p));
+  const builtinIds = new Set<string>(builtinPlugins.map((p) => p.id));
+  const matchesQuery = (text: string) => text.toLowerCase().includes(query.trim().toLowerCase());
   const visiblePlugins = otherPlugins.filter(
     (p) =>
-      kind === 'all' || kind === (builtinPlugins.some((b) => b.id === p.id) ? 'builtin' : 'mcp'),
+      (tab === 'builtin' ? builtinIds.has(p.id) : !builtinIds.has(p.id)) &&
+      (kind === 'all' || kind === 'mcp') &&
+      matchesQuery(p.name + (builtinPlugins.find((b) => b.id === p.id)?.description ?? p.url)),
   );
-  const visibleSkills = kind === 'all' || kind === 'skill' ? (data.skills ?? []) : [];
+  const visibleSkills =
+    tab === 'personal' && (kind === 'all' || kind === 'skill')
+      ? (data.skills ?? []).filter((s) => matchesQuery(s.name + s.description))
+      : [];
+  const showApps = tab === 'builtin' && (kind === 'all' || kind === 'app');
+  const matchingApps = showApps
+    ? workPluginCatalog.filter((p) => matchesQuery(p.name + p.category + p.description))
+    : [];
   const perform = async (fn: () => Promise<unknown>) => {
     setBusy(true);
     setNotice('');
@@ -67,198 +79,215 @@ export function Extensions({
     <main className="page extensions-page">
       <div className="page-heading">
         <h1>插件</h1>
-        <p>管理公共工具，统一启停能力，所有会话和 Agent 自动继承。切换模型不会切换你的会话记录。</p>
+        <p>管理同舟的核心能力、内置插件和个人插件，供所有会话与 Agent 按需使用。</p>
       </div>
-      <nav className="section-tabs" aria-label="工具分类">
-        {(['core', 'catalog', 'mcp'] as const).map((value, i) => (
+      <nav className="section-tabs" aria-label="插件来源">
+        {(['core', 'builtin', 'personal'] as const).map((value, i) => (
           <button
             key={value}
             aria-pressed={tab === value}
             className={tab === value ? 'active' : ''}
-            onClick={() => setTab(value)}
+            onClick={() => {
+              setTab(value);
+              setKind('all');
+              setQuery('');
+              setNotice('');
+            }}
           >
-            {['核心能力', '工作插件', '内置与自定义'][i]}
+            {['核心能力', '内置插件', '个人插件'][i]}
             <span className="tab-count">
               {value === 'core'
                 ? 3
-                : value === 'catalog'
-                  ? workPluginCatalog.length
-                  : otherPlugins.length + (data.skills ?? []).length}
+                : value === 'builtin'
+                  ? workPluginCatalog.length +
+                    otherPlugins.filter((p) => builtinIds.has(p.id)).length
+                  : otherPlugins.filter((p) => !builtinIds.has(p.id)).length +
+                    (data.skills ?? []).length}
             </span>
           </button>
         ))}
       </nav>
-      {notice && !edit && tab !== 'mcp' && (
+      {notice && !edit && tab === 'core' && (
         <p role="status" className="info-strip">
           {notice}
         </p>
       )}
-      {tab === 'catalog' && (
-        <WorkPlugins
-          api={api}
-          data={data}
-          refresh={refresh}
-          onCustom={() => setTab('mcp')}
-          onManage={(plugin) => {
-            setNotice('');
-            setLoginUrl('');
-            setEdit({ ...plugin, secret: '' });
-          }}
-        />
-      )}
       {tab === 'core' && <CoreCapabilities api={api} data={data} refresh={refresh} />}
-      <div hidden={tab !== 'mcp'}>
-        <div className="section-heading">
-          <div>
-            <h2>内置与自定义</h2>
-            <p className="muted">统一管理内置工具、MCP 服务和 Skill 技能，按类型区分。</p>
-          </div>
-          <button
-            className="primary"
-            disabled={busy}
-            onClick={() => {
-              setNotice('');
-              setAdding(true);
-            }}
-          >
-            <Plus size={16} />
-            添加插件
-          </button>
-        </div>
-        <div className="plugin-list-filter">
-          <label htmlFor="plugin-kind">类型</label>
-          <select id="plugin-kind" value={kind} onChange={(e) => setKind(e.target.value)}>
-            <option value="all">全部类型</option>
-            <option value="builtin">内置工具</option>
-            <option value="mcp">MCP 服务</option>
-            <option value="skill">Skill 技能</option>
-          </select>
-        </div>
-        <div className="provider-grid">
-          {visiblePlugins.map((p) => (
-            <article className="provider-card" key={p.id}>
-              <div className="card-top">
-                <Plug />
-                <span className="tag">
-                  {builtinPlugins.some((b) => b.id === p.id) ? '内置工具' : 'MCP 服务'}
-                </span>
-                <label className="switch-control">
-                  <input
-                    type="checkbox"
-                    aria-label={`启用 ${p.name}`}
-                    checked={pendingToggle?.id === p.id ? pendingToggle.enabled : p.enabled}
-                    disabled={busy}
-                    onChange={(e) => {
-                      const enabled = e.target.checked;
-                      setPendingToggle({ id: p.id, enabled });
-                      void perform(() => api.savePlugin({ ...p, enabled })).finally(() =>
-                        setPendingToggle(null),
-                      );
-                    }}
-                  />
-                  <span aria-hidden="true" />
-                </label>
-              </div>
-              <h3>{p.name}</h3>
-              <p>
-                {builtinPlugins.find((item) => item.id === p.id)?.description ??
-                  (p.transport === 'http' ? p.url : [p.command, ...p.args].join(' '))}
-              </p>
+      {tab !== 'core' && (
+        <div className="plugin-library">
+          <div className="section-heading">
+            <div>
+              <h2>{tab === 'builtin' ? '内置插件' : '个人插件'}</h2>
               <p className="muted">
-                {p.enabled ? '已启用' : '已停用'} ·{' '}
-                {(catalogs[p.id] ?? p.catalog)
-                  ? `已发现 ${(catalogs[p.id] ?? p.catalog)!.length} 个工具`
-                  : '点击连接检查工具目录'}
+                {tab === 'builtin'
+                  ? '同舟预设的应用与工具，配置后即可使用。'
+                  : '你接入的 MCP 服务和导入的技能，集中在这里管理。'}
               </p>
-              <div className="row wrap">
-                <button
-                  className="secondary"
-                  disabled={busy}
-                  onClick={() =>
-                    perform(async () => {
-                      const tools = await api.testPlugin(p.id);
-                      setCatalogs((c) => ({ ...c, [p.id]: tools }));
-                      setNotice(`${p.name}：连接成功，发现 ${tools.length} 个工具`);
-                    })
-                  }
-                >
-                  <RefreshCw size={14} />
-                  连接检查
-                </button>
-                {!builtinPlugins.some((item) => item.id === p.id) && (
+            </div>
+            {tab === 'personal' && (
+              <button
+                className="primary"
+                disabled={busy}
+                onClick={() => {
+                  setNotice('');
+                  setQuery('');
+                  setAdding(true);
+                }}
+              >
+                <Plus size={16} />
+                添加插件
+              </button>
+            )}
+          </div>
+          <div className="plugin-list-filter">
+            <label htmlFor="plugin-kind">类型</label>
+            <select id="plugin-kind" value={kind} onChange={(e) => setKind(e.target.value)}>
+              <option value="all">全部类型</option>
+              <option value="app">应用</option>
+              <option value="mcp">MCP</option>
+              <option value="skill">技能</option>
+            </select>
+            <div className="search-box">
+              <Search size={14} />
+              <input
+                aria-label="搜索插件"
+                placeholder="搜索名称或用途"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="provider-grid plugin-library-grid">
+            {showApps && (
+              <WorkPlugins
+                api={api}
+                data={data}
+                refresh={refresh}
+                query={query.trim()}
+                onManage={(plugin) => {
+                  setNotice('');
+                  setLoginUrl('');
+                  setEdit({ ...plugin, secret: '' });
+                }}
+              />
+            )}
+            {visiblePlugins.map((p) => (
+              <article className="provider-card" key={p.id}>
+                <div className="card-top">
+                  <Plug />
+                  <span className="tag">MCP</span>
+                  <label className="switch-control">
+                    <input
+                      type="checkbox"
+                      aria-label={`启用 ${p.name}`}
+                      checked={pendingToggle?.id === p.id ? pendingToggle.enabled : p.enabled}
+                      disabled={busy}
+                      onChange={(e) => {
+                        const enabled = e.target.checked;
+                        setPendingToggle({ id: p.id, enabled });
+                        void perform(() => api.savePlugin({ ...p, enabled })).finally(() =>
+                          setPendingToggle(null),
+                        );
+                      }}
+                    />
+                    <span aria-hidden="true" />
+                  </label>
+                </div>
+                <h3>{p.name}</h3>
+                <p>
+                  {builtinPlugins.find((item) => item.id === p.id)?.description ??
+                    (p.transport === 'http' ? p.url : [p.command, ...p.args].join(' '))}
+                </p>
+                <p className="muted">
+                  {p.enabled ? '已启用' : '已停用'} ·{' '}
+                  {(catalogs[p.id] ?? p.catalog)
+                    ? `已发现 ${(catalogs[p.id] ?? p.catalog)!.length} 个工具`
+                    : '会话按需连接'}
+                </p>
+                <div className="row wrap">
+                  {!builtinPlugins.some((item) => item.id === p.id) && (
+                    <button
+                      className="text-button"
+                      onClick={() => {
+                        setNotice('');
+                        setLoginUrl('');
+                        setEdit({ ...p, secret: '' });
+                      }}
+                    >
+                      管理插件
+                    </button>
+                  )}
+                </div>
+              </article>
+            ))}
+            {visibleSkills.map((s) => (
+              <article className="provider-card" key={'skill:' + s.id}>
+                <div className="card-top">
+                  <BookOpen />
+                  <span className="tag">技能</span>
+                  <label className="switch-control">
+                    <input
+                      type="checkbox"
+                      aria-label={`启用技能 ${s.name}`}
+                      checked={
+                        pendingToggle?.id === 'skill:' + s.id ? pendingToggle.enabled : s.enabled
+                      }
+                      disabled={busy}
+                      onChange={(e) => {
+                        const enabled = e.target.checked;
+                        setPendingToggle({ id: 'skill:' + s.id, enabled });
+                        void perform(() => api.saveSkill({ ...s, enabled })).finally(() =>
+                          setPendingToggle(null),
+                        );
+                      }}
+                    />
+                    <span aria-hidden="true" />
+                  </label>
+                </div>
+                <h3>{s.name}</h3>
+                <p>{s.description}</p>
+                <p className="muted">
+                  {s.enabled ? '已启用' : '已停用'} · {Object.keys(s.files).length} 个附属文本文件
+                </p>
+                <details>
+                  <summary>查看指令</summary>
+                  <pre className="skill-preview">{s.instructions}</pre>
+                </details>
+                <div className="row wrap">
                   <button
-                    className="text-button"
-                    onClick={() => {
-                      setNotice('');
-                      setLoginUrl('');
-                      setEdit({ ...p, secret: '' });
-                    }}
-                  >
-                    管理插件
-                  </button>
-                )}
-              </div>
-            </article>
-          ))}
-          {visibleSkills.map((s) => (
-            <article className="provider-card" key={'skill:' + s.id}>
-              <div className="card-top">
-                <BookOpen />
-                <span className="tag">Skill 技能</span>
-                <label className="switch-control">
-                  <input
-                    type="checkbox"
-                    aria-label={`启用技能 ${s.name}`}
-                    checked={
-                      pendingToggle?.id === 'skill:' + s.id ? pendingToggle.enabled : s.enabled
-                    }
+                    className="text-button danger"
                     disabled={busy}
-                    onChange={(e) => {
-                      const enabled = e.target.checked;
-                      setPendingToggle({ id: 'skill:' + s.id, enabled });
-                      void perform(() => api.saveSkill({ ...s, enabled })).finally(() =>
-                        setPendingToggle(null),
-                      );
-                    }}
-                  />
-                  <span aria-hidden="true" />
-                </label>
-              </div>
-              <h3>{s.name}</h3>
-              <p>{s.description}</p>
-              <p className="muted">
-                {s.enabled ? '已启用' : '已停用'} · {Object.keys(s.files).length} 个附属文本文件
-              </p>
-              <details>
-                <summary>查看指令</summary>
-                <pre className="skill-preview">{s.instructions}</pre>
-              </details>
-              <div className="row wrap">
-                <button
-                  className="text-button danger"
-                  disabled={busy}
-                  onClick={() => perform(() => api.deleteSkill(s.id))}
-                >
-                  <Trash2 size={14} />
-                  移除
-                </button>
-              </div>
-            </article>
-          ))}
-        </div>
-        {!visiblePlugins.length && !visibleSkills.length && (
-          <div className="empty-state compact">
-            <Plug size={26} />
-            <h3>暂无此类型的插件</h3>
-            <p>点击“添加插件”，选择连接 MCP 服务或导入 Skill 技能。</p>
+                    onClick={() => perform(() => api.deleteSkill(s.id))}
+                  >
+                    <Trash2 size={14} />
+                    移除
+                  </button>
+                </div>
+              </article>
+            ))}
           </div>
-        )}
-        {notice && (
-          <p role="status" className="extension-notice">
-            {notice}
-          </p>
-        )}
-      </div>
+          {!visiblePlugins.length && !visibleSkills.length && !matchingApps.length && (
+            <div className="empty-state compact">
+              <Plug size={26} />
+              <h3>{query.trim() ? '没有匹配的插件' : '暂无此类型的插件'}</h3>
+              <p>
+                {query.trim()
+                  ? '试试其他关键词，或切换类型。'
+                  : tab === 'builtin'
+                    ? '可以切换类型查看其他内置插件。'
+                    : kind === 'app'
+                      ? '暂无个人应用插件，可在“内置插件”中配置现有应用。'
+                      : '点击“添加插件”，连接 MCP 服务或导入技能。'}
+              </p>
+            </div>
+          )}
+          {notice && (
+            <p role="status" className="extension-notice">
+              {notice}
+            </p>
+          )}
+        </div>
+      )}
       {adding && (
         <Modal title="添加插件" subtitle="选择要添加的类型" onClose={() => setAdding(false)}>
           <div className="modal-content plugin-kind-options">
