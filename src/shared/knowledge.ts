@@ -1,11 +1,15 @@
 export type KnowledgeKind = 'source' | 'wiki' | 'memory';
 export interface KnowledgeFolder {
+  /** Legacy storage field, ignored. Directory use no longer requires a switch. */
+  usageEnabled?: boolean;
+  libraryId?: string;
   id: string;
   name: string;
   parentId?: string;
   version: number;
 }
 export interface KnowledgeFolderInput {
+  libraryId?: string;
   id?: string;
   name: string;
   parentId?: string | null;
@@ -76,6 +80,19 @@ export interface KnowledgeSource {
   messageId?: string;
 }
 export interface KnowledgeDocument {
+  derivationKey?: string;
+  derivation?: {
+    batchId: string;
+    index: number;
+    createdAt: number;
+    sourceId: string;
+    sourceVersion: number;
+    mode: 'split' | 'transform';
+    start?: number;
+    end?: number;
+  };
+  libraryId?: string;
+  contentType?: string;
   id: string;
   title: string;
   kind: KnowledgeKind;
@@ -109,6 +126,8 @@ export type KnowledgeSummary = Omit<
   'content' | 'memoryEntries' | 'memoryCandidateIds' | 'assertions' | 'forgottenMemoryKeys'
 > & { excerpt: string };
 export interface KnowledgeInput {
+  libraryId?: string;
+  contentType?: string;
   id?: string;
   version?: number;
   title: string;
@@ -144,7 +163,14 @@ export interface KnowledgeRead {
   document: KnowledgeDocument;
   links: { target: string; id?: string; ambiguous: boolean }[];
   missingSourceIds: string[];
+  changedSourceIds?: string[];
   revisions: { id: string; version: number; updatedAt: number }[];
   backlinks: KnowledgeSummary[];
   outline: { title: string; line: number; level: number }[];
+}
+
+/** Omit obsolete permission flags from tool results, including legacy stored directories. */
+export function knowledgeFolderForTool(folder: KnowledgeFolder, folders: KnowledgeFolder[]) {
+  const { usageEnabled: _legacyFlag, ...value } = folder;
+  return { ...value, path: knowledgeFolderPath(folders, folder.id) };
 }

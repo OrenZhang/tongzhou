@@ -1,0 +1,85 @@
+.approval-queue {
+  --approval-ink: #b4232c;
+  --approval-fill: #fff3f3;
+  --approval-border: #edbfc2;
+  flex-shrink: 0;
+  max-height: min(340px, 38vh);
+  overflow-y: auto;
+  margin-bottom: 10px;
+  display: grid;
+  gap: 8px;
+}
+:root[data-theme='dark'] .approval-queue {
+  --approval-ink: #ffadb3;
+  --approval-fill: #342326;
+  --approval-border: #704149;
+}
+.approval-count {
+  color: var(--approval-ink);
+  font-size: 12px;
+}
+.approval-card {
+  background: var(--approval-fill);
+  border: 1px solid var(--approval-border);
+  border-radius: 9px;
+  padding: 12px 14px;
+  min-width: 0;
+}
+.approval-card header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--approval-ink);
+  font-size: 13px;
+}
+.approval-card header strong {
+  overflow-wrap: anywhere;
+}
+.approval-card header span {
+  margin-left: auto;
+  white-space: nowrap;
+  font-size: 11px;
+}
+.approval-card pre {
+  margin: 10px 0;
+  max-height: 120px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font: 12px/1.6 var(--font-code);
+}
+.approval-card footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.approval-card footer small {
+  margin-right: auto;
+  color: var(--approval-ink);
+  font-size: 11px;
+}
+.approval-card .approval-confirm {
+  background: #b4232c;
+  color: #fff;
+  border: 1px solid #b4232c;
+  padding: 7px 12px;
+  border-radius: 8px;
+}
+.approval-card .approval-confirm:hover:not(:disabled) {
+  background: #941d25;
+}
+.approval-card [role='alert'] {
+  color: var(--approval-ink);
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+.topbar .approval-notice {
+  color: #b4232c;
+  font-size: 12px;
+  white-space: nowrap;
+}
+:root[data-theme='dark'] .topbar .approval-notice {
+  color: #ffadb3;
+}

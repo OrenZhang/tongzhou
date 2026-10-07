@@ -1,0 +1,133 @@
+.automation-center {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.automation-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+}
+.automation-tabs button.selected,
+.automation-job-list button.selected {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.automation-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.automation-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+.automation-cards article,
+.automation-empty,
+.automation-form,
+.automation-result {
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  min-width: 0;
+}
+.automation-cards article {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.automation-cards .row {
+  margin-top: auto;
+  flex-wrap: wrap;
+}
+.automation-excerpt {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-wrap;
+}
+.automation-form {
+  max-width: 960px;
+  width: 100%;
+}
+.automation-form fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.automation-form input:not([type='checkbox']),
+.automation-form textarea,
+.automation-form select {
+  width: 100%;
+}
+.automation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 16px;
+}
+.automation-schedule {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--bg);
+  padding: 16px;
+  border-radius: 10px;
+}
+.automation-jobs {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+.automation-job-list {
+  max-height: 700px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.automation-job-list button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+.automation-result {
+  min-height: 300px;
+  overflow-wrap: anywhere;
+}
+.automation-result .row {
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+.automation-result pre {
+  white-space: pre-wrap;
+}
+@media (max-width: 800px) {
+  .automation-jobs {
+    grid-template-columns: 1fr;
+  }
+  .automation-job-list {
+    max-height: 260px;
+  }
+  .automation-form {
+    padding: 14px;
+  }
+}

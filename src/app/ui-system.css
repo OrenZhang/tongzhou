@@ -1,0 +1,425 @@
+/* Shared visual language. Feature styles own layout; these tokens own rhythm and surfaces. */
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --control-height: 34px;
+  --control-radius: 8px;
+  --page-gutter: clamp(20px, 2.6vw, 40px);
+  --hairline: color-mix(in srgb, var(--ink) 12%, transparent);
+  --hover-surface: color-mix(in srgb, var(--ink) 5%, var(--surface));
+  --focus-ring: color-mix(in srgb, var(--accent) 16%, transparent);
+  --panel-shadow: 0 12px 40px #00000016, 0 2px 8px #00000008;
+}
+:root[data-style='graphite'] {
+  --canvas: #fafafa;
+  --sidebar: #f2f3f4;
+  --surface-muted: #f4f5f6;
+  --border: #e5e6e8;
+  --control-border: #d8dade;
+  --accent-soft: #e9ebef;
+}
+:root[data-style='graphite'][data-theme='dark'] {
+  --canvas: #191a1c;
+  --sidebar: #202124;
+  --surface: #242528;
+  --surface-muted: #2b2d31;
+  --border: #36383d;
+  --control-border: #484b52;
+  --accent-soft: #35383f;
+  --panel-shadow: 0 16px 48px #00000050, 0 2px 8px #00000028;
+}
+
+/* Controls keep the same baseline regardless of their priority. */
+.primary,
+.secondary,
+.choice-trigger,
+.model-picker-trigger {
+  min-height: var(--control-height);
+  border-radius: var(--control-radius);
+  padding: 7px 12px;
+  line-height: 18px;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: none;
+}
+.secondary,
+.choice-trigger,
+.model-picker-trigger {
+  border-color: var(--border);
+}
+.secondary:hover:not(:disabled) {
+  border-color: var(--control-border);
+  background: var(--hover-surface);
+}
+.primary:disabled,
+.secondary:disabled {
+  box-shadow: none;
+}
+input:not([type='checkbox']):not([type='radio']):not([type='range']),
+select,
+textarea {
+  border-radius: var(--control-radius);
+  border-color: var(--border);
+}
+input:focus,
+select:focus,
+textarea:focus {
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+.text-button {
+  font-size: 12px;
+  border-radius: 6px;
+}
+.icon-button {
+  border-radius: var(--control-radius);
+}
+.icon-button[aria-pressed='true'] {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* Quiet page framing and consistent toolbar placement. */
+.page {
+  padding: var(--space-6) var(--page-gutter);
+  scrollbar-gutter: stable;
+}
+.page-heading {
+  margin-bottom: var(--space-5);
+  gap: var(--space-4);
+  align-items: center;
+}
+.page-heading h1 {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.6px;
+  line-height: 1.35;
+}
+.page-heading p {
+  margin-top: var(--space-2);
+  color: var(--muted);
+  font-size: 13px;
+}
+.knowledge-page {
+  gap: var(--space-4);
+}
+.knowledge-page > .page-heading {
+  margin-bottom: var(--space-2);
+}
+.workspace-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-5);
+  flex-wrap: wrap;
+  min-height: var(--control-height);
+}
+.workspace-toolbar-context,
+.workspace-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.workspace-toolbar-actions {
+  margin-left: auto;
+}
+.workspace-toolbar .icon-button,
+.workspace-toolbar .text-button,
+.workspace-toolbar select {
+  height: var(--control-height);
+  min-height: var(--control-height);
+}
+.workspace-toolbar .icon-button {
+  width: var(--control-height);
+}
+.workspace-toolbar .primary,
+.workspace-toolbar .secondary {
+  white-space: nowrap;
+}
+.workspace-toolbar svg {
+  width: 15px;
+  height: 15px;
+}
+.knowledge-navigation {
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  padding: 0 0 var(--space-3);
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+}
+.knowledge-navigation > button {
+  padding: 10px 14px;
+  gap: 10px;
+  min-height: 54px;
+}
+.knowledge-navigation > button[aria-selected='true'] {
+  background: var(--accent-soft);
+  color: var(--ink);
+  box-shadow: none;
+  outline: none;
+}
+.knowledge-navigation small {
+  margin-top: 3px;
+  line-height: 1.5;
+}
+.knowledge-maintenance {
+  padding: 4px 0;
+}
+
+/* Lists use spacing and selection, instead of a separate card for every row. */
+.sidebar {
+  padding: 18px 12px 12px;
+  border-right-color: var(--hairline);
+}
+.sidebar nav > button {
+  min-height: 36px;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.session-row {
+  border-radius: 8px;
+  margin-bottom: 3px;
+}
+.session-row.selected {
+  box-shadow: none;
+  background: var(--accent-soft);
+}
+.session-title {
+  line-height: 1.6;
+}
+.section-label {
+  padding-top: 8px;
+  padding-bottom: 6px;
+}
+.content-workspace {
+  gap: var(--space-4);
+}
+.content-tree {
+  padding: var(--space-4) var(--space-3);
+}
+.content-document-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: var(--space-3);
+}
+.content-document-list button {
+  padding: 12px 10px;
+  border-radius: 8px;
+  line-height: 1.5;
+  gap: 10px;
+}
+.content-document-list small {
+  font-size: 11px;
+  margin-top: 5px;
+}
+.content-document-list button:hover:not(.selected) {
+  background: var(--hover-surface);
+}
+.wiki-folder-row {
+  min-height: 34px;
+}
+.wiki-folder-row[data-selected='true'] {
+  box-shadow: none;
+}
+.knowledge-item {
+  border-radius: 8px;
+}
+.automation-job-list button {
+  padding: 14px 12px;
+  border-radius: 8px;
+}
+
+/* The document and AI surfaces share the same calm, compact framing. */
+.content-layout {
+  border-color: var(--hairline);
+  border-radius: 12px;
+}
+.content-editor {
+  padding: var(--space-5);
+  gap: var(--space-4);
+}
+.content-title {
+  padding: 4px 0;
+  font-size: 22px;
+  font-weight: 600;
+}
+.content-editor-actions {
+  gap: 6px;
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+.content-body {
+  line-height: 1.85;
+  padding: 16px;
+}
+.content-chat {
+  background: var(--surface);
+}
+.content-chat header {
+  padding: 18px 16px;
+}
+.content-chat-settings {
+  padding: 12px 16px;
+  gap: 8px;
+}
+.content-chat-messages {
+  padding: 16px;
+}
+.content-chat-message {
+  padding: 16px 0;
+  border-bottom-color: var(--hairline);
+}
+.content-chat-message > small {
+  font-size: 11px;
+}
+.content-chat-compose {
+  padding: 16px;
+  background: var(--surface-muted);
+  border-top-color: var(--hairline);
+}
+.content-chat-compose textarea {
+  background: var(--surface);
+  padding: 12px;
+  line-height: 1.7;
+}
+.composer {
+  border-color: var(--control-border);
+  border-radius: 14px;
+  box-shadow: 0 2px 10px #00000006;
+}
+.composer:focus-within {
+  border-color: var(--control-border);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+.composer textarea {
+  padding: 16px 18px 10px;
+}
+.composer-toolbar {
+  padding: 8px 12px 12px;
+}
+.composer-context {
+  gap: 8px;
+}
+
+/* Settings, plugins and auxiliary panels retain one surface treatment. */
+.provider-card,
+.agent-card,
+.settings-card,
+.extension-card,
+.automation-cards article {
+  border-color: var(--hairline);
+  border-radius: 12px;
+  box-shadow: none;
+}
+.provider-card,
+.agent-card {
+  padding: 20px;
+}
+.settings-card {
+  padding: 24px;
+}
+.card-footer {
+  padding-top: 16px;
+  gap: 8px;
+}
+.modal {
+  border: 1px solid var(--hairline);
+  border-radius: 16px;
+  box-shadow: var(--panel-shadow);
+}
+.modal-header,
+.modal-content,
+.modal-footer {
+  padding: 20px 24px;
+}
+.modal-footer {
+  gap: 8px;
+  background: var(--surface);
+}
+.choice-panel,
+.model-picker-panel {
+  border-color: var(--hairline);
+  box-shadow: var(--panel-shadow);
+}
+.command-palette {
+  border-radius: 14px;
+}
+.command-search {
+  padding: 18px 20px;
+}
+.command-results {
+  padding: 8px;
+}
+.command-results button {
+  border-radius: 8px;
+  min-height: 44px;
+  padding: 10px 12px;
+}
+.command-footer {
+  border-top-color: var(--hairline);
+  padding: 10px 16px;
+  color: var(--muted);
+}
+
+@media (max-width: 1150px) {
+  .page {
+    padding: 24px;
+  }
+  .knowledge-navigation > button {
+    padding: 9px 10px;
+  }
+  .knowledge-navigation small {
+    display: none;
+  }
+  .knowledge-navigation > button {
+    min-height: 38px;
+  }
+  .content-editor {
+    padding: 20px;
+  }
+}
+@media (max-width: 700px) {
+  .page {
+    padding: 18px 14px;
+  }
+  .workspace-toolbar-context {
+    flex: 1 1 100%;
+  }
+  .workspace-toolbar-actions {
+    justify-content: flex-end;
+    width: 100%;
+  }
+  .knowledge-navigation {
+    gap: 2px;
+  }
+  .knowledge-navigation > button {
+    padding: 8px;
+    font-size: 12px;
+  }
+  .knowledge-navigation > button > svg {
+    width: 15px;
+    height: 15px;
+  }
+  .modal-header,
+  .modal-content,
+  .modal-footer {
+    padding: 16px;
+  }
+}
+
+.knowledge-item.selected {
+  background: var(--accent-soft);
+  border-color: transparent;
+  box-shadow: none;
+}
+.knowledge-item:hover:not(.selected) {
+  background: var(--hover-surface);
+}

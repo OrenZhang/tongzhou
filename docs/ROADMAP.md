@@ -61,9 +61,9 @@
 
 ### 已确认原因与待核验项
 
-- `electron/runtime.ts` 的 `nativeRun` 当前在只读 Agent，或无项目且未启用公共工具时，主动选择 `plan` 并发送 `session/set_mode`。这把工具权限限制与引擎规划模式耦合，影响 Kimi / MiniMax 的回复行为。
+- `electron/core/runtime/runtime.ts` 的 `nativeRun` 当前在只读 Agent，或无项目且未启用公共工具时，主动选择 `plan` 并发送 `session/set_mode`。这把工具权限限制与引擎规划模式耦合，影响 Kimi / MiniMax 的回复行为。
 - 同一流程又在普通聊天提示词中要求「不启动规划或澄清工作流」，与实际设置的引擎模式冲突。仅补提示词或隐藏工具条没有移除底层触发点。
-- `tests/native-engine.test.ts` 目前还断言普通聊天使用 `plan`，修复时需要同步调整这一旧预期。
+- `tests/services/accounts/native-engine.test.ts` 目前还断言普通聊天使用 `plan`，修复时需要同步调整这一旧预期。
 - 截图中额外结束语的具体来源尚未确认；需结合原生事件、被拒绝的澄清工具调用及历史注入复现，不能仅凭截图断定为某个工具导致。
 
 ### 修复方向
@@ -117,7 +117,7 @@
 
 ### 当前发现
 
-- `src/components.tsx` 只有在流式助手消息已存在且正文为空时显示「正在思考…」。Kimi / MiniMax 的 `nativeRun` 与 Codex 适配器均在收到第一段正文时才创建助手消息，初始化和首字等待阶段缺少对应占位与阶段反馈。
+- `src/components/components.tsx` 只有在流式助手消息已存在且正文为空时显示「正在思考…」。Kimi / MiniMax 的 `nativeRun` 与 Codex 适配器均在收到第一段正文时才创建助手消息，初始化和首字等待阶段缺少对应占位与阶段反馈。
 - `AppEvent` 没有统一运行进度或思考事件。ACP 当前仅处理正文和部分工具更新；Responses 仅输出正文增量；Anthropic thinking 内容虽为协议续接保存，但没有流式展示；Gemini thought 内容未接入展示。是否存在具体可公开事件，需按固定引擎 / 接口版本核验。
 - `scope.prepare` 在推理前连接已启用 MCP 并获取目录；原生新会话还涉及启动、认证、模型目录与模式设置。普通原生聊天已有有限复用，但启用公共工具后不复用，Codex 每轮建立新分段，可能增加等待。
 - 当前 Run 主要记录开始 / 结束时间，缺少分阶段耗时。以上是可确认的代码路径与候选开销，不能据此认定实际慢在网络、模型思考或某个插件。
@@ -345,7 +345,7 @@ Agent 页面不自动生成「协作助手」「代码审查」「架构规划�
 
 ### 当前缺口
 
-`src/App.tsx` 在运行中阻止发送，`electron/runtime.ts` 的 `start()` 也拒绝同会话并发运行。应增加专门的补充消息处理，而非只放开按钮后启动第二个竞争执行的任务。
+`src/app/App.tsx` 在运行中阻止发送，`electron/core/runtime/runtime.ts` 的 `start()` 也拒绝同会话并发运行。应增加专门的补充消息处理，而非只放开按钮后启动第二个竞争执行的任务。
 
 ### 补充方式
 

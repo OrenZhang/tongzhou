@@ -1,96 +1,85 @@
-import './node-request-identity';
-import { autoUpdater } from 'electron-updater';
-import { Updates } from './updates';
-import { browserUserAgent, userAgent } from './request-identity';
-import { registerKnowledgeServices } from './knowledge-services';
-import { builtinAgent } from '../src/shared/builtin-agents';
-import { saveAgentProfile } from './agents';
-import { registerTaskServices } from './task-services';
-import { applyPendingRestore } from './data-maintenance';
 import {
   app,
   BrowserWindow,
-  dialog,
-  ipcMain,
-  safeStorage,
-  shell,
   clipboard,
+  dialog,
   globalShortcut,
+  ipcMain,
   Menu,
   nativeTheme,
+  safeStorage,
   session,
+  shell,
 } from 'electron';
-import { NativeAccount, nativeEngine } from './native-engine';
-import { Accounts } from './accounts';
-import { AccountBrowser } from './account-browser';
-import { NetworkProfiles } from './network-profiles';
-import { networkProfileSchema } from './network-config';
-import { accountProxyConfig } from './provider-network';
-import { networkKey } from '../src/shared/provider-network';
-import { Connectors, connectorSchema } from './connectors';
-import { BrowserProfiles } from './browser-profiles';
-import { Channels, channelSchema, notificationRuleSchema } from './channels';
-import { Feishu } from './feishu';
-import { Bots, botSchema } from './bots';
-import { Worktrees } from './worktrees';
-import { GitRepositories } from './git-repositories';
-import { McpAuth, pluginOAuth, pluginAuthIdentity } from './mcp-auth';
-import { setServiceTransport } from './service-network';
-import { initializeAgent } from './project-init';
-import {
-  projectChanges,
-  projectPatch,
-  projectSearch,
-  projectInstructionsView,
-} from './project-context';
-import { writeClipboardText } from './clipboard';
-import path from 'node:path';
-import { createRequire } from 'node:module';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { realpath, stat, writeFile } from 'node:fs/promises';
+import { autoUpdater } from 'electron-updater';
 import { randomUUID } from 'node:crypto';
+import { realpath, stat, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { z } from 'zod';
-import { Store } from './store';
-import { ensureBuiltinPlugins } from './builtin-plugins';
-import {
-  ensureBuiltinSkills,
-  createPersonalSkill,
-  createSkillSchema,
-  saveExistingSkill,
-  saveSkillSchema,
-} from './skills';
-import { isBuiltinSkill } from '../src/shared/builtin-skills';
-import { builtinPlugins } from '../src/shared/builtin-plugins';
-import { Runtime } from './runtime';
-import { Attachments, attachmentUploadSchema } from './attachments';
-import { ClientCommands, operation, manual, type ClientOperation } from './client-commands';
-import { DesktopComputer } from './computer';
-import { computerDiagnostic } from './computer-diagnostic';
-import { PluginConnection, importSkillDirectory, pluginTool } from './extensions';
-import { pluginSecret, pluginCredentialVersion } from './code-hosting';
-import { codeHost } from '../src/shared/code-hosting';
-import {
-  agentSchema,
-  idSchema,
-  providerSchema,
-  redact,
-  runSchema,
-  pluginSchema,
-} from './validation';
-import { complete, listModels } from './providers';
-import { command, files, read } from './workspace';
-import { importCCSwitch } from './cc-switch';
 import { normalizeAppearance } from '../src/shared/appearance';
+import { builtinPlugins } from '../src/shared/builtin-plugins';
 import type {
-  AgentProfile,
   AppEvent,
+  PluginConfig,
   Project,
   Provider,
   ProviderInput,
-  PluginConfig,
-  SkillRecord,
   Session,
 } from '../src/shared/types';
+import { Runtime } from './core/runtime/runtime';
+import {
+  ClientCommands,
+  manual,
+  operation,
+  workspaceOperation,
+  type ClientOperation,
+} from './core/tools/client-commands';
+import { command, files, read } from './core/tools/workspace';
+import { registerAgentServices } from './modules/agents/agent-services';
+import { registerArtifactServices } from './modules/artifacts/artifact-services';
+import { Attachments, attachmentUploadSchema } from './modules/artifacts/attachments';
+import { registerAutomationServices } from './modules/automation/automation-services';
+import { registerContentServices } from './modules/content/content-services';
+import { registerKnowledgeServices } from './modules/knowledge/knowledge-services';
+import { ensureBuiltinPlugins } from './modules/plugins/builtin-plugins';
+import { McpAuth } from './modules/plugins/mcp-auth';
+import { registerPluginServices } from './modules/plugins/plugin-services';
+import { ensureBuiltinSkills } from './modules/plugins/skills';
+import { GitRepositories } from './modules/projects/git-repositories';
+import {
+  projectChanges,
+  projectInstructionsView,
+  projectPatch,
+  projectSearch,
+} from './modules/projects/project-context';
+import { initializeAgent } from './modules/projects/project-init';
+import { Worktrees } from './modules/projects/worktrees';
+import { registerTaskServices } from './modules/sessions/task-services';
+import { AccountBrowser } from './services/accounts/account-browser';
+import { Accounts } from './services/accounts/accounts';
+import { importCCSwitch } from './services/accounts/cc-switch';
+import { Connectors, connectorSchema } from './services/accounts/connectors';
+import { registerProviderServices } from './services/accounts/provider-services';
+import { BrowserProfiles } from './services/browser/browser-profiles';
+import { Bots, botSchema } from './services/channels/bots';
+import { Channels, channelSchema, notificationRuleSchema } from './services/channels/channels';
+import { Feishu } from './services/channels/feishu';
+import { writeClipboardText } from './services/desktop/clipboard';
+import { DesktopComputer } from './services/desktop/computer';
+import { computerDiagnostic } from './services/desktop/computer-diagnostic';
+import { Updates } from './services/desktop/updates';
+import { networkProfileSchema } from './services/network/network-config';
+import { NetworkProfiles } from './services/network/network-profiles';
+import './services/network/node-request-identity';
+import { accountProxyConfig } from './services/network/provider-network';
+import { browserUserAgent, userAgent } from './services/network/request-identity';
+import { setServiceTransport } from './services/network/service-network';
+import { applyPendingRestore } from './services/storage/data-maintenance';
+import { absolutePathSchema } from './services/storage/file-transfer';
+import { Store } from './services/storage/store';
+import { idSchema, redact, runSchema } from './services/storage/validation';
 
 if (process.env.TONGZHOU_USER_DATA) app.setPath('userData', process.env.TONGZHOU_USER_DATA);
 app.setName('Tongzhou');
@@ -192,7 +181,7 @@ function setup() {
   );
   register(
     'checkUpdates',
-    manual('客户端更新', '检查正式版本更新', 'settings', '由用户检查更新'),
+    workspaceOperation(store, '客户端更新', 'change', '检查正式版本更新'),
     () => updates.check(),
   );
   register(
@@ -211,6 +200,9 @@ function setup() {
   );
   registerTaskServices(register, store, runtime, dataDir);
   registerKnowledgeServices(register, store, runtime);
+  registerContentServices(register, store, runtime);
+  registerAutomationServices(register, runtime);
+  registerArtifactServices(register, runtime);
   networks = new NetworkProfiles(
     store,
     dataDir,
@@ -246,6 +238,29 @@ function setup() {
     },
   );
   runtime.resolveNetwork = (network, runId) => networks.resolve(network, runId);
+  const modelTransports = new Map<string, Promise<typeof fetch>>();
+  runtime.modelTransport = (network) => {
+    const key = JSON.stringify(network ?? { mode: 'inherit' });
+    let pending = modelTransports.get(key);
+    if (!pending) {
+      pending = (async () => {
+        const isolated = session.fromPartition(
+          'tongzhou-model-' + Buffer.from(key).toString('hex'),
+        );
+        await isolated.setProxy(accountProxyConfig(network));
+        return ((input, init) =>
+          isolated.fetch(input as string, {
+            ...init,
+            headers: { ...Object.fromEntries(new Headers(init?.headers)), 'User-Agent': userAgent },
+            credentials: 'omit',
+          })) as typeof fetch;
+      })();
+      modelTransports.set(key, pending);
+      void pending.catch(() => modelTransports.delete(key));
+    }
+    return pending;
+  };
+
   register(
     'checkNetworkNodes',
     operation(
@@ -291,9 +306,7 @@ function setup() {
   );
   register(
     'installNetworkCore',
-    manual('网络配置', '安装官方网络内核', 'connections', '由用户安装校验过的内核压缩包', [
-      z.boolean(),
-    ]),
+    workspaceOperation(store, '网络配置', 'change', '安装官方网络内核', [z.boolean()]),
     async (offline) => {
       if (z.boolean().parse(offline)) {
         const chosen = await dialog.showOpenDialog({
@@ -310,7 +323,9 @@ function setup() {
   );
   register(
     'deleteNetworkProfile',
-    operation('网络配置', 'change', '删除未绑定账号的网络配置', [idSchema.describe('profileId')]),
+    operation('网络配置', 'change', '删除未绑定账号的网络配置', [idSchema.describe('profileId')], {
+      confirmation: 'always',
+    }),
     (id) => networks.remove(idSchema.parse(id)),
   );
   register(
@@ -411,9 +426,13 @@ function setup() {
   );
   register(
     'removeWorktree',
-    operation('项目与 Git', 'change', '移除同舟创建且无未保存或未推送更改的工作树', [
-      idSchema.describe('worktreeProjectId'),
-    ]),
+    operation(
+      '项目与 Git',
+      'change',
+      '移除同舟创建且无未保存或未推送更改的工作树',
+      [idSchema.describe('worktreeProjectId')],
+      { confirmation: 'always' },
+    ),
     async (id) => {
       worktreeOperations++;
       try {
@@ -541,7 +560,9 @@ function setup() {
   );
   register(
     'deleteBot',
-    operation('会话机器人', 'change', '删除机器人连接', [idSchema.describe('botId')]),
+    operation('会话机器人', 'change', '删除机器人连接', [idSchema.describe('botId')], {
+      confirmation: 'always',
+    }),
     (raw) => {
       const id = idSchema.parse(raw);
       feishu.cancel(id);
@@ -609,9 +630,13 @@ function setup() {
   );
   register(
     'deleteConnector',
-    operation('服务与浏览器', 'change', '删除服务连接及其浏览器登录态', [
-      idSchema.describe('connectorId'),
-    ]),
+    operation(
+      '服务与浏览器',
+      'change',
+      '删除服务连接及其浏览器登录态',
+      [idSchema.describe('connectorId')],
+      { confirmation: 'always' },
+    ),
     async (raw) => {
       const id = idSchema.parse(raw);
       await browserProfiles.clear(id);
@@ -627,13 +652,9 @@ function setup() {
   );
   register(
     'loginConnector',
-    manual(
-      '服务与浏览器',
-      '浏览器登录代码托管服务',
-      'connections',
-      '授权须由用户在浏览器完成，认证信息不进入对话',
-      [idSchema.describe('connectorId')],
-    ),
+    workspaceOperation(store, '服务与浏览器', 'change', '浏览器登录代码托管服务', [
+      idSchema.describe('connectorId'),
+    ]),
     async (id) => {
       const result = await connectors.login(idSchema.parse(id));
       await shell.openExternal(result.url);
@@ -741,7 +762,9 @@ function setup() {
   );
   register(
     'deleteChannel',
-    operation('渠道通知', 'change', '删除通知渠道及关联规则', [idSchema.describe('channelId')]),
+    operation('渠道通知', 'change', '删除通知渠道及关联规则', [idSchema.describe('channelId')], {
+      confirmation: 'always',
+    }),
     (id) => {
       idSchema.parse(id);
       feishu.cancel(id);
@@ -771,7 +794,9 @@ function setup() {
   );
   register(
     'deleteNotificationRule',
-    operation('渠道通知', 'change', '删除通知规则', [idSchema.describe('ruleId')]),
+    operation('渠道通知', 'change', '删除通知规则', [idSchema.describe('ruleId')], {
+      confirmation: 'always',
+    }),
     (id) => {
       store.remove('notificationRule', idSchema.parse(id));
       runtime.changed();
@@ -865,13 +890,11 @@ function setup() {
   );
   register(
     'nativeLogin',
-    manual(
-      '模型连接与认证',
-      '启动 Kimi 或 MiniMax 账号登录',
-      'providers',
-      '需要用户在官方页面完成账号授权',
-      [z.enum(['kimi', 'minimax']), z.enum(['cn', 'global']), idSchema.optional()],
-    ),
+    workspaceOperation(store, '模型连接与认证', 'change', '启动 Kimi 或 MiniMax 账号登录', [
+      z.enum(['kimi', 'minimax']),
+      z.enum(['cn', 'global']),
+      idSchema.optional(),
+    ]),
     (raw, region, id) => {
       accounts.idle(idSchema.parse(id ?? raw + '-account'));
       return accountFor(raw, id).start(z.enum(['cn', 'global']).parse(region));
@@ -887,7 +910,7 @@ function setup() {
   );
   register(
     'nativeOpen',
-    manual('模型连接与认证', '打开正在等待的官方授权页面', 'providers', '需要用户本人完成授权', [
+    workspaceOperation(store, '模型连接与认证', 'change', '打开正在等待的官方授权页面', [
       z.enum(['kimi', 'minimax']),
       idSchema.optional(),
     ]),
@@ -924,9 +947,6 @@ function setup() {
       runtime.changed();
     },
   );
-  const requireIdle = () => {
-    // Per-run scope remains frozen; dispatch rechecks global revocation.
-  };
   register(
     'setCapability',
     operation('核心能力', 'change', '启用或停用内置能力，工具可用性从下一轮生效', [
@@ -1011,6 +1031,7 @@ function setup() {
       '删除会话及消息记录，不能删除当前执行会话',
       [idSchema.describe('sessionId')],
       {
+        confirmation: 'always',
         guard: (args, current) => {
           if (args[0] === current) throw new Error('请使用当前会话的输入框或菜单操作当前任务');
         },
@@ -1023,221 +1044,7 @@ function setup() {
       feishu.sync();
     },
   );
-  register(
-    'savePlugin',
-    operation('插件', 'change', '保存或启停 MCP 插件配置，凭据在界面输入', [pluginSchema]),
-    (raw) => {
-      requireIdle();
-      const { secret, clearSecret, oauthClientSecret, clearOAuthClientSecret, ...config } =
-        pluginSchema.parse(raw);
-      if (secret || clearSecret || config.authMode === 'oauth') config.connectorId = undefined;
-      if (config.connectorId) pluginSecret(store, config);
-      const previous = store.list<PluginConfig>('plugin').find((p) => p.id === config.id);
-      const identityChanged =
-        !!previous &&
-        (pluginAuthIdentity(previous) !== pluginAuthIdentity(config) ||
-          previous.command !== config.command ||
-          previous.connectorId !== config.connectorId ||
-          JSON.stringify(previous.args) !== JSON.stringify(config.args));
-      const clientSecretChanged = !!oauthClientSecret || !!clearOAuthClientSecret;
-      if (identityChanged || clearSecret || clientSecretChanged) mcpAuth.logout(config.id);
-      store.saveSecret(
-        'plugin_oauth_client_' + config.id,
-        config.authMode === 'oauth' ? oauthClientSecret : undefined,
-        identityChanged || clearOAuthClientSecret || config.authMode !== 'oauth',
-      );
-      const same =
-        previous &&
-        !identityChanged &&
-        !secret &&
-        !clearSecret &&
-        !clientSecretChanged &&
-        previous.transport === config.transport &&
-        previous.command === config.command &&
-        previous.url === config.url &&
-        JSON.stringify(previous.args) === JSON.stringify(config.args);
-      if (identityChanged) store.saveSecret('plugin_' + config.id, undefined, true);
-      store.saveSecret(
-        'plugin_' + config.id,
-        secret,
-        clearSecret || config.authMode === 'oauth' || !!config.connectorId,
-      );
-      store.put('plugin', {
-        ...config,
-        oauthStatus:
-          config.authMode === 'oauth' && !identityChanged && !clearSecret && !clientSecretChanged
-            ? previous?.oauthStatus
-            : undefined,
-        oauthError:
-          !identityChanged && !clearSecret && !clientSecretChanged
-            ? previous?.oauthError
-            : undefined,
-        ...(same ? { catalog: previous.catalog, checkedAt: previous.checkedAt } : {}),
-      });
-      runtime.invalidateNative();
-      runtime.changed();
-    },
-  );
-  register(
-    'deletePlugin',
-    operation('插件', 'change', '删除 MCP 插件', [idSchema.describe('pluginId')]),
-    (raw) => {
-      requireIdle();
-      const id = idSchema.parse(raw);
-      mcpAuth.logout(id);
-      store.remove('plugin', id);
-      store.saveSecret('plugin_' + id, undefined, true);
-      store.saveSecret('plugin_oauth_client_' + id, undefined, true);
-      for (const a of store.list<AgentProfile>('agent'))
-        store.put('agent', { ...a, pluginIds: a.pluginIds?.filter((p) => p !== id) });
-      runtime.invalidateNative();
-      runtime.changed();
-    },
-  );
-  register(
-    'testPlugin',
-    operation('插件', 'change', '连接插件并发现其工具', [idSchema.describe('pluginId')]),
-    async (raw) => {
-      requireIdle();
-      const p = store.get<PluginConfig>('plugin', idSchema.parse(raw));
-      const credentials = pluginCredentialVersion(store, p);
-      const c = new PluginConnection(p, pluginSecret(store, p), pluginOAuth(store, p));
-      try {
-        const signal = AbortSignal.timeout(30000);
-        await c.connect(signal);
-        const catalog = (await c.tools(signal)).map(pluginTool);
-        const current = store.get<PluginConfig>('plugin', p.id);
-        if (
-          JSON.stringify(current) !== JSON.stringify(p) ||
-          pluginCredentialVersion(store, p) !== credentials
-        )
-          throw new Error('插件配置已变更，请重新检查');
-        store.put('plugin', { ...p, catalog, checkedAt: Date.now() });
-        runtime.changed();
-        return catalog;
-      } finally {
-        await c.close();
-      }
-    },
-  );
-  register(
-    'loginPlugin',
-    manual('插件', '开始插件 OAuth 浏览器认证', 'extensions', '需要用户本人完成浏览器授权', [
-      idSchema.describe('pluginId'),
-    ]),
-    (raw) => {
-      requireIdle();
-      return mcpAuth.login(idSchema.parse(raw));
-    },
-  );
-  register(
-    'cancelPluginLogin',
-    operation('插件', 'change', '取消插件待完成的授权', [idSchema.describe('pluginId')]),
-    (raw) => mcpAuth.cancel(idSchema.parse(raw)),
-  );
-  register(
-    'logoutPlugin',
-    operation('插件', 'change', '退出插件账号授权', [idSchema.describe('pluginId')]),
-    (raw) => {
-      requireIdle();
-      mcpAuth.logout(idSchema.parse(raw));
-      runtime.invalidateNative();
-    },
-  );
-  register(
-    'useGithubConnector',
-    operation('插件', 'change', '将已有 GitHub 账号用于官方 GitHub MCP', [
-      idSchema.describe('pluginId'),
-      idSchema.describe('connectorId'),
-    ]),
-    (rawPlugin, rawConnector) => {
-      requireIdle();
-      const p = store.get<PluginConfig>('plugin', idSchema.parse(rawPlugin));
-      const c = connectors.list().find((c) => c.id === idSchema.parse(rawConnector));
-      if (
-        codeHost(p) !== 'github' ||
-        p.transport !== 'http' ||
-        p.authMode === 'oauth' ||
-        c?.kind !== 'github' ||
-        new URL(c.baseUrl).origin !== 'https://github.com' ||
-        !c.enabled
-      )
-        throw new Error('仅可将启用的 GitHub 官方站点账号连接到官方 GitHub MCP');
-      const token = store.secret('connector_' + c.id);
-      if (!token) throw new Error('此 GitHub 账号尚未保存访问令牌');
-      // Resolve the current account token at execution time, including future refreshes/logout.
-      store.saveSecret('plugin_' + p.id, undefined, true);
-      store.put('plugin', { ...p, connectorId: c.id, catalog: undefined, checkedAt: undefined });
-      runtime.invalidateNative();
-      runtime.changed();
-    },
-  );
-  register(
-    'importSkill',
-    manual(
-      'Skills',
-      '从目录导入 SKILL.md 技能',
-      'extensions',
-      '需要用户在文件夹选择器中选择技能目录',
-      [],
-    ),
-    async () => {
-      requireIdle();
-      const chosen = await dialog.showOpenDialog(window!, {
-        title: '选择包含 SKILL.md 的目录',
-        properties: ['openDirectory'],
-      });
-      if (chosen.canceled) return null;
-      const skill = await importSkillDirectory(chosen.filePaths[0]);
-      store.put('skill', skill);
-      runtime.changed();
-      return skill;
-    },
-  );
-  register(
-    'createSkill',
-    operation(
-      'Skills',
-      'change',
-      '创建个人技能：传入完整 SKILL.md 和可选附属文本文件，保存后显示在个人插件，默认启用',
-      [createSkillSchema],
-    ),
-    (raw) => {
-      const skill = createPersonalSkill(store, raw);
-      runtime.invalidateNative();
-      runtime.changed();
-      return skill;
-    },
-  );
-  register(
-    'saveSkill',
-    operation(
-      'Skills',
-      'change',
-      '修改或启停已有技能；内置技能只允许启停，个人技能可更新内容和附属文件',
-      [saveSkillSchema],
-    ),
-    (raw) => {
-      requireIdle();
-      saveExistingSkill(store, raw);
-      runtime.invalidateNative();
-      runtime.changed();
-    },
-  );
-  register(
-    'deleteSkill',
-    operation('Skills', 'change', '删除已导入技能', [idSchema.describe('skillId')]),
-    (raw) => {
-      requireIdle();
-      const id = idSchema.parse(raw);
-      if (isBuiltinSkill(id)) throw new Error('内置技能不可删除，可以停用');
-      store.remove('skill', id);
-      for (const a of store.list<AgentProfile>('agent'))
-        store.put('agent', { ...a, skillIds: a.skillIds?.filter((s) => s !== id) });
-      runtime.invalidateNative();
-      runtime.changed();
-    },
-  );
+  registerPluginServices(register, store, runtime, mcpAuth, connectors, () => window);
   const computerStatus = () => ({
     ...computer.status(),
     diagnostic: store.list<any>('computerDiagnostic')[0],
@@ -1249,7 +1056,7 @@ function setup() {
   );
   register(
     'computerPermission',
-    manual('电脑控制', '检查或申请系统权限', 'extensions', '系统授权需要用户确认', []),
+    workspaceOperation(store, '电脑控制', 'change', '检查或申请系统权限', []),
     () => {
       computer.requestPermission();
       return computerStatus();
@@ -1337,13 +1144,9 @@ function setup() {
   );
   register(
     'copyText',
-    manual(
-      '客户端',
-      '复制内容到系统剪贴板',
-      'workspace',
-      '请使用消息复制按钮，避免覆盖用户剪贴板',
-      [z.string().max(2000000)],
-    ),
+    workspaceOperation(store, '客户端', 'change', '复制内容到系统剪贴板', [
+      z.string().max(2000000),
+    ]),
     (text) => writeClipboardText(clipboard, z.string().max(2000000).parse(text)),
   );
   register(
@@ -1437,304 +1240,32 @@ function setup() {
       );
     },
   );
-  register(
-    'saveProvider',
-    operation('模型连接与认证', 'change', '保存模型连接配置，使用完整对象，密钥在界面保存', [
-      providerSchema,
-    ]),
-    (raw) => {
-      const input = providerSchema.parse(raw);
-      if (input.network?.mode === 'managed') networks.exists(input.network.profileId!);
-      const before = store.providers().find((p) => p.id === input.id);
-      if (
-        input.enabled === false &&
-        runtime.snapshot().runs.some((r) => r.providerId === input.id && r.status === 'running')
-      )
-        throw new Error('此连接正在执行任务，请结束或停止任务后再停用。');
-      const networkChanged = networkKey(before?.network) !== networkKey(input.network);
-      if (
-        networkChanged &&
-        runtime.snapshot().runs.some((r) => r.providerId === input.id && r.status === 'running')
-      )
-        throw new Error('此 ChatGPT 连接正在执行任务，请结束或停止任务后再修改代理。');
-      const pending = pendingImports.get(input.id);
-      const result = store.saveProvider({ ...input, secret: input.secret || pending?.secret });
-      if (networkChanged) {
-        accountBrowser.close(input.id);
-        accounts.resetCodex(input.id);
-      }
-      pendingImports.delete(input.id);
-      runtime.changed();
-      return result;
-    },
+  registerProviderServices(
+    register,
+    store,
+    runtime,
+    accounts,
+    accountBrowser,
+    networks,
+    pendingImports,
   );
-  register(
-    'deleteProvider',
-    operation('模型连接与认证', 'change', '删除模型连接及认证', [idSchema.describe('providerId')]),
-    (raw) => {
-      const id = idSchema.parse(raw);
-      if (runtime.snapshot().runs.some((r) => r.providerId === id && r.status === 'running'))
-        throw new Error('此连接正在执行任务');
-      store.deleteProvider(id);
-      accounts.forget(id);
-      accountBrowser.close(id);
-      runtime.changed();
-    },
-  );
-  register(
-    'testProvider',
-    operation('模型连接与认证', 'change', '测试连接和指定模型，API 连接会发起一次实际请求', [
-      idSchema.describe('providerId'),
-      z.string().min(1).max(200).describe('model'),
-    ]),
-    async (raw, model) => {
-      const p = store.get<Provider>('provider', idSchema.parse(raw));
-      const selected = z.string().min(1).max(200).parse(model);
-      if (nativeEngine(p.protocol)) {
-        const catalog = await accounts.native(p.protocol, p.id).catalog();
-        store.put('provider', { ...p, models: catalog.models, modelLabels: catalog.modelLabels });
-        runtime.changed();
-        return '账号已通过官方引擎验证，模型列表已同步；实际调用权限以账号套餐为准。';
-      }
-      if (p.protocol === 'codex') {
-        await runtime.authClientFor(p.id).start();
-        const a = await runtime.authClientFor(p.id).request('account/read', {});
-        if (!a.account) throw new Error('尚未登录 ChatGPT');
-        return 'Codex 已连接，账号已登录。模型访问权限以实际执行为准。';
-      }
-      const result = await complete({
-        provider: { ...p, maxOutputTokens: 256 },
-        secret: store.secret(p.id),
-        model: selected,
-        instructions: 'Reply briefly.',
-        messages: [
-          {
-            id: 'test',
-            sessionId: 'test',
-            role: 'user',
-            content: 'Reply with OK.',
-            createdAt: Date.now(),
-          },
-        ],
-        tools: [],
-        signal: AbortSignal.timeout(30000),
-        onDelta: () => {},
-      });
-      return `连接成功：${result.text.slice(0, 120)}`;
-    },
-  );
-  register(
-    'diagnoseProvider',
-    operation(
-      '模型连接与认证',
-      'change',
-      '分项检测连接、账号和模型；includeInference 为 true 时直接 API 发起一次真实推理和无副作用工具测试，可能计费',
-      [idSchema, z.string().max(200), z.boolean()],
-    ),
-    async (raw, rawModel, rawInference) => {
-      const p = store.get<Provider>('provider', idSchema.parse(raw));
-      const model = z.string().max(200).parse(rawModel),
-        inference = z.boolean().parse(rawInference);
-      const checks: import('../src/ConnectionDiagnostics').ConnectionCheck[] = [];
-      const check = async (name: string, fn: () => Promise<string>) => {
-        const start = Date.now();
-        try {
-          checks.push({ name, status: 'passed', detail: await fn(), ms: Date.now() - start });
-          return true;
-        } catch (e: any) {
-          checks.push({
-            name,
-            status: 'failed',
-            detail: redact(String(e.message), [store.secret(p.id)]),
-            ms: Date.now() - start,
-          });
-          return false;
-        }
-      };
-      checks.push({
-        name: '会话入口',
-        status: p.enabled === false ? 'unknown' : 'passed',
-        detail: p.enabled === false ? '连接已停用，可检测但不会出现在模型选择中' : '已启用',
-        ms: 0,
-      });
-      if (p.protocol === 'codex') {
-        await check('账号网络', () => accountBrowser.test(p.id));
-        await check('账号认证', async () => {
-          const c = runtime.authClientFor(p.id);
-          await c.start();
-          const r = await c.request('account/read', { refreshToken: false });
-          if (!r.account) throw new Error('尚未授权');
-          return '官方引擎确认已登录';
-        });
-        await check('模型目录', async () => {
-          const c = runtime.authClientFor(p.id);
-          await c.start();
-          const r = await c.request('model/list', { includeHidden: false });
-          if (model && !r.data.some((m: any) => (m.model ?? m.id) === model))
-            throw new Error('所选模型不在当前目录');
-          return `${r.data.length} 个模型`;
-        });
-      } else if (nativeEngine(p.protocol)) {
-        await check('账号与模型目录', async () => {
-          const c = await accounts.native(p.protocol as 'kimi' | 'minimax', p.id).catalog();
-          if (model && !c.models.includes(model)) throw new Error('所选模型不在当前目录');
-          return `官方引擎返回 ${c.models.length} 个模型`;
-        });
-      } else {
-        await check('配置', async () => {
-          if (!p.baseUrl) throw new Error('缺少服务地址');
-          if (p.auth !== 'none' && !store.hasSecret(p.id)) throw new Error('缺少密钥');
-          return '地址与认证配置已保存，实际权限需请求验证';
-        });
-        await check('模型目录接口', async () => {
-          const models = await listModels(p, store.secret(p.id));
-          return `${models.length} 个模型；不支持目录接口的服务可手动配置模型后测试推理`;
-        });
-        if (inference && model) {
-          const stamp = randomUUID();
-          let first: number | undefined;
-          const start = Date.now();
-          await check('推理与工具协议', async () => {
-            const r = await complete({
-              provider: { ...p, maxOutputTokens: 512 },
-              secret: store.secret(p.id),
-              model,
-              instructions:
-                'Connection diagnostic. Call diagnostic_echo exactly once using the provided value. No other task.',
-              messages: [
-                {
-                  id: stamp,
-                  sessionId: stamp,
-                  role: 'user',
-                  content: 'Call diagnostic_echo with value ' + stamp,
-                  createdAt: Date.now(),
-                },
-              ],
-              tools: [
-                {
-                  name: 'diagnostic_echo',
-                  description:
-                    'Harmless local diagnostic; echoes a supplied string without external actions.',
-                  parameters: {
-                    type: 'object',
-                    properties: { value: { type: 'string' } },
-                    required: ['value'],
-                    additionalProperties: false,
-                  },
-                },
-              ],
-              signal: AbortSignal.timeout(90000),
-              onDelta: () => {
-                first ??= Date.now() - start;
-              },
-              onReasoning: () => {
-                first ??= Date.now() - start;
-              },
-            });
-            const call = r.toolCalls.find((c) => c.name === 'diagnostic_echo');
-            if (!call || JSON.parse(call.arguments).value !== stamp)
-              throw new Error('模型有响应，但未通过工具调用协议测试');
-            return `模型响应与工具参数通过；${first === undefined ? '工具响应已返回' : '首条内容 ' + first + ' ms'}`;
-          });
-        }
-      }
-      if (p.protocol === 'codex' || nativeEngine(p.protocol) || !inference || !model)
-        checks.push({
-          name: '真实推理与工具执行',
-          status: 'unknown',
-          detail:
-            p.protocol === 'codex' || nativeEngine(p.protocol)
-              ? '订阅账号请在会话中完成真实任务验收；此处只验证认证和目录'
-              : '勾选真实推理并选择模型后检测',
-          ms: 0,
-        });
-      store.put('providerDiagnostic', { id: p.id, checkedAt: Date.now(), checks });
-      return checks;
-    },
-  );
-  register(
-    'testProviderNetwork',
-    operation(
-      '模型连接与认证',
-      'query',
-      '检查 ChatGPT 账号独立网络是否可达授权服务，不执行登录或模型推理',
-      [idSchema.describe('providerId')],
-    ),
-    (id) => accountBrowser.test(idSchema.parse(id)),
-  );
-  register(
-    'models',
-    operation('模型连接与认证', 'change', '获取并更新连接的模型列表', [
-      idSchema.describe('providerId'),
-    ]),
-    async (raw) => {
-      const p = store.get<Provider>('provider', idSchema.parse(raw));
-      let models: string[];
-      if (nativeEngine(p.protocol)) {
-        const catalog = await accounts.native(p.protocol, p.id).catalog();
-        store.put('provider', { ...p, models: catalog.models, modelLabels: catalog.modelLabels });
-        runtime.changed();
-        return catalog.models;
-      }
-      if (p.protocol === 'codex') {
-        await runtime.authClientFor(p.id).start();
-        const result = await runtime
-          .authClientFor(p.id)
-          .request('model/list', { includeHidden: false });
-        models = result.data.map((m: any) => m.model ?? m.id);
-      } else {
-        models = await listModels(p, store.secret(p.id));
-      }
-      const current = store.get<Provider>('provider', p.id);
-      if (current.baseUrl !== p.baseUrl || current.protocol !== p.protocol)
-        throw new Error('连接已变更，请重新获取模型');
-      models = [...new Set(models.filter((m) => typeof m === 'string' && m.trim()))];
-      store.put('provider', { ...current, models: [...new Set([...current.models, ...models])] });
-      runtime.changed();
-      return models;
-    },
-  );
-  register(
-    'saveAgent',
-    operation('Agent', 'change', '新增或修改 Agent 角色配置', [agentSchema]),
-    (raw) => {
-      const a = saveAgentProfile(store, raw);
-      runtime.changed();
-      return a;
-    },
-  );
-  register(
-    'deleteAgent',
-    operation('Agent', 'change', '删除自定义 Agent；内置 Agent 恢复默认配置', [
-      idSchema.describe('agentId'),
-    ]),
-    (raw) => {
-      const id = idSchema.parse(raw);
-      if (builtinAgent(id)) {
-        store.remove('agentOverride', id);
-        runtime.changed();
-        return;
-      }
-      store.remove('agent', id);
-      for (const s of store.list<Session>('session'))
-        if (s.agentId === id) store.put('session', { ...s, agentId: '' });
-      runtime.changed();
-    },
-  );
+  registerAgentServices(register, store, runtime);
   register(
     'addProject',
-    manual(
+    workspaceOperation(
+      store,
       '项目与 Git',
-      '选择已有项目目录',
-      'workspace',
-      '需要用户在文件夹选择器中选择本地目录',
-      [],
+      'change',
+      '打开已有项目；指定绝对目录直接添加，省略则选择目录',
+      [absolutePathSchema.optional()],
     ),
-    async () => {
-      const result = await dialog.showOpenDialog(window!, {
-        title: '选择项目目录',
-        properties: ['openDirectory'],
-      });
+    async (directory) => {
+      const result = directory
+        ? { canceled: false, filePaths: [absolutePathSchema.parse(directory)] }
+        : await dialog.showOpenDialog(window!, {
+            title: '选择项目目录',
+            properties: ['openDirectory'],
+          });
       if (result.canceled) return null;
       const selected = await realpath(result.filePaths[0]);
       if (!(await stat(selected)).isDirectory()) throw new Error('请选择目录');
@@ -1752,12 +1283,19 @@ function setup() {
   );
   register(
     'deleteProject',
-    manual(
+    workspaceOperation(
+      store,
       '项目与 Git',
+      'change',
       '删除项目及关联会话，保留磁盘文件',
-      'workspace',
-      '需要在项目删除对话框中确认范围',
       [idSchema.describe('projectId'), z.array(idSchema).optional()],
+      {
+        confirmation: 'always',
+        guard: ([id], current) => {
+          if (store.get<Session>('session', current).projectId === id)
+            throw new Error('不能从项目自身的运行会话删除该项目，请在普通会话操作');
+        },
+      },
     ),
     (id, expectedSessionIds) => {
       if (worktreeOperations) throw new Error('正在处理工作树，请完成后再删除项目。');
@@ -1979,7 +1517,7 @@ function setup() {
   );
   register(
     'exportSession',
-    manual('会话', '导出会话为 Markdown', 'workspace', '需要用户在保存对话框中选择文件位置', [
+    workspaceOperation(store, '会话', 'change', '导出会话为 Markdown', [
       idSchema.describe('sessionId'),
     ]),
     async (raw) => {
@@ -2012,13 +1550,10 @@ function setup() {
   );
   register(
     'codexLogin',
-    manual(
-      '模型连接与认证',
-      '启动 ChatGPT 浏览器或设备登录',
-      'providers',
-      '需要用户本人在官方页面完成授权',
-      [z.enum(['browser', 'device']).optional(), idSchema.optional()],
-    ),
+    workspaceOperation(store, '模型连接与认证', 'change', '启动 ChatGPT 浏览器或设备登录', [
+      z.enum(['browser', 'device']).optional(),
+      idSchema.optional(),
+    ]),
     (method, id) => {
       accounts.idle(idSchema.parse(id ?? 'openai-codex'));
       return codexFor(id).start(z.enum(['browser', 'device']).parse(method ?? 'browser'));
@@ -2026,7 +1561,7 @@ function setup() {
   );
   register(
     'codexLoginRetry',
-    manual('模型连接与认证', '重试 ChatGPT 登录', 'providers', '需要用户本人完成授权', [
+    workspaceOperation(store, '模型连接与认证', 'change', '重试 ChatGPT 登录', [
       z.enum(['browser', 'device']),
       idSchema.optional(),
     ]),
@@ -2045,7 +1580,7 @@ function setup() {
   );
   register(
     'codexLoginOpen',
-    manual('模型连接与认证', '打开 ChatGPT 授权页面', 'providers', '需要用户本人完成授权', [
+    workspaceOperation(store, '模型连接与认证', 'change', '打开 ChatGPT 授权页面', [
       idSchema.optional(),
     ]),
     (id) => codexFor(id).openPage(),

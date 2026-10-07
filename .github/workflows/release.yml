@@ -43,8 +43,8 @@ jobs:
       - run: npm run test:desktop
       - run: npm run test:workspace-layout
       - run: npm run test:knowledge
-      - run: node scripts/project-deletion-smoke.mjs
-      - run: node scripts/updates-smoke.mjs
+      - run: node scripts/testing/project-deletion-smoke.mjs
+      - run: node scripts/testing/updates-smoke.mjs
       - name: Package and optionally sign
         run: node scripts/package-release.mjs
         env:

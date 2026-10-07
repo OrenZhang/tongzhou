@@ -4,7 +4,7 @@ import './prepare-pty.mjs';
 await mkdir('dist-electron/skills', { recursive: true });
 await cp('skills/skill-creator', 'dist-electron/skills/skill-creator', { recursive: true });
 await build({
-  entryPoints: ['electron/node-request-identity.ts'],
+  entryPoints: ['electron/services/network/node-request-identity.ts'],
   outfile: 'dist-electron/node-request-identity.cjs',
   bundle: true,
   platform: 'node',
@@ -12,7 +12,7 @@ await build({
   target: 'node22',
 });
 await build({
-  entryPoints: ['electron/network-core-host.ts'],
+  entryPoints: ['electron/services/network/network-core-host.ts'],
   outfile: 'dist-electron/network-core-host.cjs',
   bundle: true,
   platform: 'node',
@@ -40,7 +40,7 @@ await build({
 });
 
 await build({
-  entryPoints: ['electron/tool-proxy.ts'],
+  entryPoints: ['electron/core/tools/tool-proxy.ts'],
   outfile: 'dist-electron/tool-proxy.cjs',
   bundle: true,
   platform: 'node',
@@ -48,7 +48,7 @@ await build({
   target: 'node22',
 });
 await build({
-  entryPoints: ['electron/builtin-mcp.ts'],
+  entryPoints: ['electron/modules/plugins/builtin-mcp.ts'],
   outfile: 'dist-electron/builtin-mcp.cjs',
   bundle: true,
   platform: 'node',
@@ -57,7 +57,7 @@ await build({
 });
 
 await build({
-  entryPoints: ['electron/terminal-host.ts'],
+  entryPoints: ['electron/services/desktop/terminal-host.ts'],
   outfile: 'dist-electron/terminal-host.cjs',
   bundle: true,
   platform: 'node',

@@ -28,9 +28,9 @@ jobs:
       - run: npm run build
       - run: npm run test:workspace-layout
       - run: npm run test:desktop
-      - run: node scripts/project-deletion-smoke.mjs
-      - run: node scripts/updates-smoke.mjs
-      - run: node scripts/account-ui-smoke.mjs
+      - run: node scripts/testing/project-deletion-smoke.mjs
+      - run: node scripts/testing/updates-smoke.mjs
+      - run: node scripts/testing/account-ui-smoke.mjs
       - run: npm run test:account-proxy
       - run: npm run test:managed-network
       - run: npm run test:extensions
@@ -43,12 +43,17 @@ jobs:
       - run: npm run test:capabilities
       - run: npm run test:task-workbench
       - run: npm run test:knowledge
+      - run: npm run test:content
+      - run: npm run test:personalization
+      - run: npm run test:automations
+      - run: node scripts/testing/artifacts-smoke.mjs
+      - run: node scripts/testing/inline-approval-smoke.mjs
       - run: npm run test:management
       - run: npm run test:markdown
       - run: npm run test:appearance
       - run: npm run test:attachments
       - run: npm run test:project-context
-      - run: node scripts/native-smoke.mjs
+      - run: node scripts/testing/native-smoke.mjs
       - run: npm run dist
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'

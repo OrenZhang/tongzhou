@@ -1,0 +1,204 @@
+.personalization-panel {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 4px 0 16px;
+  overflow: visible;
+  gap: 18px;
+}
+.preference-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.preference-heading h2 {
+  font-size: 18px;
+  margin: 0 0 6px;
+  font-weight: 600;
+}
+.preference-heading p {
+  margin: 0;
+}
+.preference-state {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.preference-enable {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.preference-enable input,
+.personalization-candidates input[type='checkbox'] {
+  width: auto;
+}
+.preference-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 250px;
+  gap: 28px;
+  align-items: start;
+}
+.preference-editor {
+  min-width: 0;
+}
+.preference-section {
+  padding: 0 0 24px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+}
+.preference-section h3,
+.preference-preview h3 {
+  font-size: 14px;
+  margin: 0 0 12px;
+  font-weight: 600;
+}
+.preference-presets {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+  font-size: 12px;
+}
+.preference-presets > span {
+  color: var(--muted);
+}
+.preference-presets > button {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+.preference-presets > button.text-button {
+  border-color: transparent;
+}
+.preference-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+  margin-bottom: 16px;
+}
+.preference-fields input,
+.preference-fields select {
+  width: 100%;
+  min-width: 0;
+}
+.preference-advanced,
+.preference-suggestions {
+  margin-top: 16px;
+}
+.preference-advanced > summary,
+.preference-suggestions > summary,
+.preference-preview summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 4px 0;
+}
+.preference-advanced > .field {
+  margin-top: 12px;
+}
+.preference-preview {
+  position: sticky;
+  top: 0;
+  padding: 18px;
+  background: var(--surface-muted);
+  border-radius: 10px;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.preference-preview ul {
+  padding-left: 18px;
+  line-height: 1.8;
+}
+.preference-preview small {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+.preference-preview details {
+  margin-top: 14px;
+}
+.preference-preview details p {
+  font-size: 12px;
+  color: var(--muted);
+}
+.preference-summary-text {
+  white-space: pre-wrap;
+  max-height: 180px;
+  overflow: auto;
+}
+.preference-savebar {
+  position: sticky;
+  bottom: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0;
+  z-index: 2;
+  flex-wrap: wrap;
+}
+.preference-savebar > span {
+  margin-right: auto;
+  font-size: 12px;
+  color: var(--muted);
+}
+.personalization-candidates .preference-state {
+  margin-left: auto;
+}
+.personalization-candidates p {
+  margin: 8px 0;
+  font-size: 13px;
+}
+@media (max-width: 1100px) {
+  .preference-layout {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .preference-preview {
+    position: static;
+    margin-bottom: 14px;
+  }
+  .preference-heading {
+    align-items: flex-start;
+  }
+}
+@media (max-width: 700px) {
+  .preference-fields {
+    grid-template-columns: 1fr;
+  }
+  .preference-savebar > span {
+    width: 100%;
+  }
+  .preference-heading {
+    flex-direction: column;
+    gap: 5px;
+  }
+}
+
+.personalization-panel p {
+  line-height: 1.7;
+}
+.personalization-panel textarea {
+  width: 100%;
+  resize: vertical;
+}
+.personalization-candidates {
+  max-height: 400px;
+  overflow-y: auto;
+}
+.personalization-candidates article {
+  border-bottom: 1px solid var(--border);
+  padding: 14px 0;
+  overflow-wrap: anywhere;
+}
+.personalization-candidates details {
+  margin-top: 8px;
+  font-size: 12px;
+}

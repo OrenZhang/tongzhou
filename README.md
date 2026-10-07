@@ -34,7 +34,7 @@ npm run dev
 
 ## 了解更多
 
-[贡献指南](CONTRIBUTING.md) · [架构设计](docs/ARCHITECTURE.md) · [发布流程](docs/RELEASING.md) · [实际开发示例](examples/miniapp-admin/README.md)
+[贡献指南](CONTRIBUTING.md) · [架构设计](docs/ARCHITECTURE.md) · [代码目录](docs/CODE_STRUCTURE.md) · [发布流程](docs/RELEASING.md) · [实际开发示例](examples/miniapp-admin/README.md)
 
 欢迎通过 [Issues](https://github.com/OrenZhang/tongzhou/issues) 提交问题和建议，也欢迎贡献代码。
 

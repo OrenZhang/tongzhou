@@ -1,6 +1,6 @@
 # 请求来源标识
 
-`electron/request-identity.ts` 是唯一的应用请求身份定义：客户端名称 `tongzhou`，显示名称“同舟 Tongzhou”，HTTP 标识 `Tongzhou/<应用版本>`。版本自动取自 `package.json`，各模块不再各自定义品牌或版本。
+`electron/services/network/request-identity.ts` 是唯一的应用请求身份定义：客户端名称 `tongzhou`，显示名称“同舟 Tongzhou”，HTTP 标识 `Tongzhou/<应用版本>`。版本自动取自 `package.json`，各模块不再各自定义品牌或版本。
 
 ## 接入位置
 

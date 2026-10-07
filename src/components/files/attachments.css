@@ -1,0 +1,47 @@
+.attachment-strip {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 8px 0 12px;
+}
+.composer .attachment-strip {
+  margin: 10px 12px 0;
+}
+.attachment-card {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  min-width: 0;
+}
+.attachment-remove {
+  flex-shrink: 0;
+  display: flex;
+  padding: 3px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+}
+.attachment-remove:hover {
+  color: var(--ink);
+  background: transparent;
+}
+.attachment-preview {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+}
+.attachment-preview img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: auto;
+}
+.attachment-preview pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.7;
+}

@@ -48,6 +48,7 @@ export interface ProviderInput extends Provider {
 }
 export type PermissionMode = 'read-only' | 'ask' | 'full-access';
 export interface AgentProfile {
+  soul?: string;
   id: string;
   builtin?: 'knowledge-organizer' | 'memory-organizer';
   customized?: boolean;
@@ -121,6 +122,8 @@ export interface AttachmentUpload {
 }
 export interface ToolOutput {
   text: string;
+  artifacts?: import('./artifacts').ArtifactOutput[];
+  artifactIds?: string[];
   images?: ToolImage[];
   isError?: boolean;
 }
@@ -167,6 +170,7 @@ export interface WorktreeInfo {
   unsharedCommits: boolean;
 }
 export interface Message {
+  artifactIds?: string[];
   attachments?: Attachment[];
   // Presentation order within a run; protocol content remains unchanged.
   sequence?: number;
@@ -191,6 +195,8 @@ export interface Message {
   visibleTool?: boolean;
 }
 export interface Session {
+  automationJob?: string;
+  contentContext?: { libraryId: string; documentId: string };
   memoryJob?: string;
   knowledgeScopeSession?: string;
   knowledgeJob?: boolean;
@@ -223,6 +229,7 @@ export interface Run {
   error?: string;
   phase?: string;
   config?: {
+    executionCore?: 'codex';
     protocol: Protocol;
     baseUrl: string;
     instructions: string;
@@ -328,6 +335,54 @@ export interface ImportPreview {
   warnings: string[];
 }
 export interface TongzhouAPI {
+  artifactList(
+    query?: import('./artifacts').ArtifactQuery,
+  ): Promise<import('./artifacts').ArtifactPage>;
+  artifactRead(id: string): Promise<import('./artifacts').Artifact>;
+  artifactPreview(id: string): Promise<import('./artifacts').ArtifactPreview>;
+  artifactOpen(id: string): Promise<void>;
+  artifactExport(id: string): Promise<boolean>;
+  artifactDelete(id: string): Promise<void>;
+  artifactToKnowledge(
+    id: string,
+    libraryId: string,
+    folderId?: string,
+    newFolderName?: string,
+  ): Promise<string>;
+  automationJobRead(id: string): Promise<import('./automation').AutomationJobView>;
+  automationState(): Promise<import('./automation').AutomationState>;
+  contentFlowSave(
+    input: import('./automation').ContentFlowInput,
+  ): Promise<import('./automation').ContentFlow>;
+  contentFlowDelete(id: string): Promise<void>;
+  automationSave(
+    input: import('./automation').AutomationInput,
+  ): Promise<import('./automation').AutomationRule>;
+  automationDelete(id: string): Promise<void>;
+  automationRun(id: string): Promise<{ queued: number; reason?: string }>;
+  automationCancel(id: string): Promise<void>;
+  automationRetry(id: string): Promise<void>;
+  automationReview(id: string): Promise<void>;
+  contentReady(id: string, version: number): Promise<void>;
+  contentState(libraryId: string, query?: string): Promise<import('./content').ContentState>;
+  contentLibrarySave(input: {
+    id?: string;
+    version?: number;
+    name: string;
+  }): Promise<import('./content').ContentLibrary>;
+  contentLibraryDelete(id: string, version: number): Promise<void>;
+  contentWrite(input: import('./content').ContentWrite): Promise<KnowledgeDocument>;
+  contentConversation(documentId: string): Promise<string | null>;
+  contentRun(input: import('./content').ContentRun): Promise<{ sessionId: string; runId: string }>;
+  contentImport(
+    libraryId: string,
+    folderId?: string,
+  ): Promise<{ imported: KnowledgeDocument[]; errors: string[] }>;
+  contentExport(documentId: string): Promise<string | null>;
+  personalizationState(): Promise<import('./personalization').PersonalizationState>;
+  savePersonalization(
+    value: import('./personalization').Personalization,
+  ): Promise<import('./personalization').Personalization>;
   updateStatus(): Promise<import('./updates').UpdateState>;
   checkUpdates(): Promise<import('./updates').UpdateState>;
   installUpdate(): Promise<void | import('./updates').UpdateState>;
@@ -372,7 +427,7 @@ export interface TongzhouAPI {
     id: string,
     model: string,
     inference: boolean,
-  ): Promise<import('../ConnectionDiagnostics').ConnectionCheck[]>;
+  ): Promise<import('./connection-diagnostics').ConnectionCheck[]>;
   browserDownloads(id: string): Promise<any[]>;
   browserSnapshot(id: string): Promise<any>;
   browserAction(

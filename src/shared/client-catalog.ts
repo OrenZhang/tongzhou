@@ -4,6 +4,7 @@ export interface ClientMethod {
   module: string;
   description: string;
   access: 'query' | 'change' | 'manual';
+  confirmation?: 'always' | 'none';
   arguments: Record<string, unknown>;
   reason?: string;
   view?: string;

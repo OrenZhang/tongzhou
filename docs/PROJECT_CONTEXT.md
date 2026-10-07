@@ -34,7 +34,7 @@
 
 ## 验证
 
-- `tests/project-context.test.ts`：真实临时 Git 仓库，验证新文件、索引与工作区分离、重命名/删除、子目录边界、忽略规则、二进制与行号解析。
+- `tests/modules/projects/project-context.test.ts`：真实临时 Git 仓库，验证新文件、索引与工作区分离、重命名/删除、子目录边界、忽略规则、二进制与行号解析。
 - `npm run test:project-context`：隔离 Electron 配置与示例项目，操作文件/搜索/差异/引用/说明初始化，覆盖深色与窄屏。不会使用真实用户项目或模型账号。
 
 设计参考：[Codex 官方本地变更审阅说明](https://learn.chatgpt.com/docs/code-review?surface=app)。同舟实现文件定位和会话反馈闭环，不声称覆盖该产品全部审阅功能。
