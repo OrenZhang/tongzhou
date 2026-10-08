@@ -31,6 +31,28 @@ async function fixture() {
   return { home, put };
 }
 describe('subscription inference adapter (official CLI retained only for auth)', () => {
+  it('uses the renewed Kimi token for inference and rejects an untrusted OAuth host', async () => {
+    const f = await fixture();
+    const config = (oauthHost: string) =>
+      `[providers."managed:kimi-code"]\ntype="kimi"\nbase_url="https://api.kimi.com/coding/v1"\n[providers."managed:kimi-code".oauth]\nstorage="file"\nkey="oauth/kimi-code"\noauthHost="${oauthHost}"\n[models.k3]\nprovider="managed:kimi-code"\nmodel="k3"\n`;
+    await f.put('config.toml', config('https://auth.kimi.com'));
+    await f.put('credentials/kimi-code.json', '{"access_token":"old-access","expires_at":1}');
+    const refresh = vi.fn(() =>
+      f.put(
+        'credentials/kimi-code.json',
+        JSON.stringify({ access_token: 'new-access', expires_at: Date.now() / 1000 + 3600 }),
+      ),
+    );
+    expect(await nativeModelConnection(provider('kimi'), 'k3', f.home, refresh)).toMatchObject({
+      secret: 'new-access',
+    });
+    expect(refresh).toHaveBeenCalledTimes(1);
+    await f.put('config.toml', config('https://evil.example'));
+    await expect(nativeModelConnection(provider('kimi'), 'k3', f.home, refresh)).rejects.toThrow(
+      '官方授权接口',
+    );
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
   it('resolves only the matching MiniMax account and refreshes expired tokens once', async () => {
     const f = await fixture();
     await f.put('preferences/mcode-region.json', JSON.stringify({ regions: { prod: 'cn' } }));

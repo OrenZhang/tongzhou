@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
@@ -9,6 +9,7 @@ import {
   modelCatalog,
 } from '../../../electron/services/accounts/native-engine';
 import { providerSchema } from '../../../electron/services/storage/validation';
+import { assertKimiRefreshRequest } from '../../../electron/services/accounts/kimi-refresh-policy';
 
 const fake = vi.hoisted(() => ({
   children: [] as any[],
@@ -175,7 +176,74 @@ function account(kind: 'kimi' | 'minimax' = 'kimi') {
   cleanups.push(() => auth.dispose());
   return { auth, synced, changed };
 }
+function kimiToken(auth: NativeAccount, expires: number, access = 'fixture-access') {
+  mkdirSync(path.join(auth.home, 'credentials'), { recursive: true });
+  writeFileSync(
+    path.join(auth.home, 'config.toml'),
+    '[providers."managed:kimi-code"]\ntype="kimi"\nbase_url="https://api.kimi.com/coding/v1"\n[providers."managed:kimi-code".oauth]\nstorage="file"\nkey="oauth/kimi-code"\n',
+  );
+  writeFileSync(
+    path.join(auth.home, 'credentials/kimi-code.json'),
+    JSON.stringify({ access_token: access, refresh_token: 'fixture-refresh', expires_at: expires }),
+  );
+}
 describe('official native engine account integration', () => {
+  it('renews an expired Kimi account through the official CLI before reporting authorized', async () => {
+    const { auth } = account();
+    kimiToken(auth, 1);
+    fake.authenticated = true;
+    const reading = auth.read();
+    await expect.poll(() => fake.children.length).toBe(1);
+    const child = fake.children[0];
+    expect(child.args.at(-1)).toBe('login');
+    expect(child.options.env.TONGZHOU_KIMI_REFRESH_ONLY).toBe('1');
+    expect(fake.calls).toHaveLength(0);
+    kimiToken(auth, Date.now() / 1000 + 3600, 'renewed-access');
+    child.exitCode = 0;
+    child.emit('close', 0);
+    expect((await reading).authenticated).toBe(true);
+    expect(fake.calls.some((c) => c.method === 'session/prompt')).toBe(false);
+  });
+  it.each([
+    ['fixture-access', '检查网络'],
+    ['', '重新登录'],
+  ])(
+    'does not report expired or revoked credentials as authorized (%s)',
+    async (access, reason) => {
+      const { auth } = account();
+      kimiToken(auth, 1);
+      fake.authenticated = true;
+      const reading = auth.read();
+      await expect.poll(() => fake.children.length).toBe(1);
+      kimiToken(auth, 1, access);
+      const child = fake.children[0];
+      child.stderr.write('private-fixture-token');
+      child.exitCode = 1;
+      child.emit('close', 1);
+      const state = await reading;
+      expect(state.authenticated).toBe(false);
+      expect(state.error).toContain(reason);
+      expect(state.error).not.toContain('private-fixture-token');
+      expect(fake.calls).toHaveLength(0);
+    },
+  );
+  it('coalesces concurrent Kimi refreshes and leaves normal login unrestricted', async () => {
+    const { auth } = account();
+    kimiToken(auth, 1);
+    const first = auth.refresh();
+    expect(auth.refresh()).toBe(first);
+    await expect.poll(() => fake.children.length).toBe(1);
+    kimiToken(auth, Date.now() / 1000 + 3600);
+    fake.children[0].exitCode = 0;
+    fake.children[0].emit('close', 0);
+    await first;
+    for (const host of ['auth.kimi.com', 'auth.kimi.ai']) {
+      const url = `https://${host}/api/oauth/device_authorization`;
+      expect(() => assertKimiRefreshRequest(new Request(url), true)).toThrow('重新登录');
+      expect(() => assertKimiRefreshRequest(url, false)).not.toThrow();
+      expect(() => assertKimiRefreshRequest(`https://${host}/api/oauth/token`, true)).not.toThrow();
+    }
+  });
   it('only exposes official HTTPS login links and a bounded device code', () => {
     expect(
       loginDetails(

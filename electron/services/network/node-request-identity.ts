@@ -2,6 +2,7 @@ import http from 'node:http';
 import https from 'node:https';
 import { syncBuiltinESMExports } from 'node:module';
 import { requestUserAgent, withRequestIdentity } from './request-identity';
+import { assertKimiRefreshRequest } from '../accounts/kimi-refresh-policy';
 
 // Loaded before SDKs in the app and its managed Node engines. Do not use
 // NODE_OPTIONS: project commands and external plugin processes must not inherit it.
@@ -14,7 +15,10 @@ const runtime = globalThis as typeof globalThis & { [installed]?: boolean };
 if (!runtime[installed]) {
   runtime[installed] = true;
   const originalFetch = globalThis.fetch.bind(globalThis);
-  globalThis.fetch = (input, init) => originalFetch(input, withRequestIdentity(input, init));
+  globalThis.fetch = (input, init) => {
+    assertKimiRefreshRequest(input, process.env.TONGZHOU_KIMI_REFRESH_ONLY === '1');
+    return originalFetch(input, withRequestIdentity(input, init));
+  };
   for (const transport of [http, https]) {
     const originalRequest = transport.request;
     transport.request = ((...args: Parameters<typeof http.request>) => {

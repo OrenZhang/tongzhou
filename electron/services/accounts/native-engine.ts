@@ -7,6 +7,7 @@ import path from 'node:path';
 import { minimalEnv } from '../../core/tools/workspace';
 import { configureNativeTools } from './native-policy';
 import type { NativeAuthState, NativeEngine } from '../../../src/shared/types';
+import { kimiCredentialStatus } from './kimi-credentials';
 
 const definitions = {
   kimi: { package: '@moonshot-ai/kimi-code', entry: 'dist/main.mjs', method: 'login' },
@@ -15,7 +16,12 @@ const definitions = {
 export const nativeEngine = (protocol: string): protocol is NativeEngine =>
   protocol === 'kimi' || protocol === 'minimax';
 
-export function launchEngine(kind: NativeEngine, home: string, args: string[]) {
+export function launchEngine(
+  kind: NativeEngine,
+  home: string,
+  args: string[],
+  refreshOnly = false,
+) {
   mkdirSync(home, { recursive: true, mode: 0o700 });
   if (args[0] === 'acp') configureNativeTools(kind, home);
   const require = createRequire(path.join(process.cwd(), 'package.json'));
@@ -50,6 +56,7 @@ export function launchEngine(kind: NativeEngine, home: string, args: string[]) {
       KIMI_CODE_HOME: home,
       MINIMAX_DATA_DIR: home,
       MAVIS_DATA_DIR: home,
+      ...(refreshOnly ? { TONGZHOU_KIMI_REFRESH_ONLY: '1' } : {}),
     },
   });
 }
@@ -285,6 +292,8 @@ export class NativeAccount {
   private disposed = false;
   private signingOut = false;
   private readers = new Set<NativeClient>();
+  private refreshChild?: ChildProcessWithoutNullStreams;
+  private refreshing?: Promise<void>;
   constructor(
     readonly kind: NativeEngine,
     readonly home: string,
@@ -299,6 +308,8 @@ export class NativeAccount {
     return this.state;
   }
   async catalog() {
+    if (this.kind === 'kimi' && (await kimiCredentialStatus(this.home)) === 'expired')
+      await this.refresh();
     const client = new NativeClient(this.kind, this.home);
     this.readers.add(client);
     client.on('request', (r) => client.reject(r.id));
@@ -322,15 +333,22 @@ export class NativeAccount {
     this.readers.add(client);
     client.on('request', (r) => client.reject(r.id));
     try {
+      if (this.kind === 'kimi' && (await kimiCredentialStatus(this.home)) === 'expired') {
+        if (epoch === this.epoch)
+          this.set({ phase: 'checking', authenticated: false, error: undefined });
+        await this.refresh();
+      }
       await client.start();
       await client.authenticate();
-      if (epoch === this.epoch) this.set({ authenticated: true, error: undefined });
+      if (epoch === this.epoch) this.set({ phase: 'idle', authenticated: true, error: undefined });
     } catch (e: any) {
       if (epoch === this.epoch)
         this.set({
+          phase: 'error',
           authenticated: false,
-          error:
-            e.code === -32000 || /auth|login|sign.in/i.test(e.message)
+          error: String(e.message).startsWith('Kimi ')
+            ? e.message
+            : e.code === -32000 || /auth|login|sign.in/i.test(e.message)
               ? undefined
               : '引擎暂不可用，请重试或重新安装同舟。',
         });
@@ -339,6 +357,51 @@ export class NativeAccount {
       this.readers.delete(client);
     }
     return this.state;
+  }
+  /** Official login's cached-account path rotates tokens; the bootstrap blocks new device login. */
+  refresh(): Promise<void> {
+    if (this.kind !== 'kimi') return this.catalog().then(() => {});
+    if (this.refreshing) return this.refreshing;
+    const epoch = this.epoch;
+    this.refreshing = (async () => {
+      const before = await kimiCredentialStatus(this.home);
+      if (this.disposed || this.signingOut || epoch !== this.epoch)
+        throw new Error('Kimi 授权检查已取消');
+      if (before === 'fresh') return;
+      if (before === 'missing') throw new Error('Kimi 授权已失效，请在模型中重新登录');
+      const child = (this.refreshChild = launchEngine('kimi', this.home, ['login'], true));
+      child.stdout.resume();
+      child.stderr.resume();
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(() => {
+            stopEngine(child);
+            reject(new Error('Kimi 令牌续期超时，请检查网络后重试'));
+          }, 60000);
+          child.once('error', () => {
+            clearTimeout(timer);
+            reject(new Error('Kimi 令牌续期进程启动失败，请重新安装同舟'));
+          });
+          child.once('close', () => {
+            clearTimeout(timer);
+            resolve();
+          });
+        });
+        const after = await kimiCredentialStatus(this.home);
+        if (after === 'fresh') return;
+        throw new Error(
+          after === 'missing'
+            ? 'Kimi 授权已失效，请在模型中重新登录'
+            : 'Kimi 令牌续期失败，请检查网络后重试',
+        );
+      } finally {
+        stopEngine(child);
+        this.refreshChild = undefined;
+      }
+    })().finally(() => {
+      this.refreshing = undefined;
+    });
+    return this.refreshing;
   }
   start(region: 'cn' | 'global') {
     if (this.signingOut) throw new Error('正在退出账号，请稍后重试');
@@ -407,6 +470,7 @@ export class NativeAccount {
     clearTimeout(this.timer);
     stopEngine(this.child);
     this.child = undefined;
+    stopEngine(this.refreshChild);
     for (const reader of this.readers) reader.stop();
     if (publish)
       this.set({ phase: 'cancelled', url: undefined, userCode: undefined, error: undefined });

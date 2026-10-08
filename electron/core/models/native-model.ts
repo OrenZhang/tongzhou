@@ -5,6 +5,7 @@ import TOML from '@iarna/toml';
 import YAML from 'yaml';
 import type { Provider } from '../../../src/shared/types';
 import { NativeAccount } from '../../services/accounts/native-engine';
+import { kimiOAuthKey, kimiSubscriptionEndpoint } from '../../services/accounts/kimi-credentials';
 import type { ModelConnection } from './model-gateway';
 
 const json = async (file: string) => JSON.parse(await readFile(file, 'utf8'));
@@ -20,7 +21,7 @@ async function refreshAccount(provider: Provider, home: string) {
       () => {},
       () => {},
     );
-    pending = account.catalog().finally(() => {
+    pending = account.refresh().finally(() => {
       account.dispose();
       refreshes.delete(home);
     });
@@ -79,21 +80,8 @@ export async function nativeModelConnection(
       const source = config.providers?.[alias?.provider];
       if (!alias || source?.type !== 'kimi' || source.oauth?.storage !== 'file')
         throw new Error('Kimi 模型或订阅未配置，请重新登录并刷新模型列表');
-      const endpoint = new URL(source.base_url ?? source.baseUrl);
-      if (
-        !['api.kimi.com', 'api.kimi.ai'].includes(endpoint.hostname) ||
-        endpoint.protocol !== 'https:' ||
-        endpoint.port ||
-        endpoint.username ||
-        endpoint.password ||
-        endpoint.pathname.replace(/\/$/, '') !== '/coding/v1' ||
-        endpoint.search ||
-        endpoint.hash
-      )
-        throw new Error('Kimi 订阅必须使用官方模型接口');
-      const key = String(source.oauth.key ?? '').replace(/^oauth\//, '');
-      if (!/^kimi-code(?:-env-[a-zA-Z0-9_-]+)?$/.test(key))
-        throw new Error('Kimi 登录凭据引用无效');
+      const endpoint = kimiSubscriptionEndpoint(source);
+      const key = kimiOAuthKey(source.oauth);
       const token = await json(path.join(home, 'credentials', key + '.json'));
       if (!token.access_token) throw new Error('Kimi 未登录');
       // Kimi Code 2.1.x omits protocol for its default OpenAI Chat wire format.
