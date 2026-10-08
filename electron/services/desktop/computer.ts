@@ -8,7 +8,6 @@ import { command } from '../../core/tools/workspace';
 import type { ComputerAdapter } from '../../core/tools/extensions';
 import type { ComputerStatus, ToolOutput } from '../../../src/shared/types';
 import type { ToolSpec } from '../../core/models/providers';
-import { ComputerPointer, POINTER_TITLE } from './computer-pointer';
 
 const schema = (properties: Record<string, unknown>, required: string[] = []) => ({
   type: 'object',
@@ -156,12 +155,9 @@ type Frame = {
 };
 export class DesktopComputer implements ComputerAdapter {
   private frames = new Map<string, Frame>();
-  constructor(
-    private lock = { busy: false },
-    private pointer = new ComputerPointer(),
-  ) {}
+  constructor(private lock = { busy: false }) {}
   fork() {
-    return new DesktopComputer(this.lock, this.pointer);
+    return new DesktopComputer(this.lock);
   }
   emergencyShortcut = false;
   status(): ComputerStatus {
@@ -234,22 +230,13 @@ export class DesktopComputer implements ComputerAdapter {
     if (!this.status().supported) throw new Error('电脑控制仅支持 Windows 和 macOS');
     if (this.lock.busy) throw new Error('另一项电脑操作正在执行，请稍后重试');
     this.lock.busy = true;
-    let succeeded = false;
     try {
-      signal.throwIfAborted();
-      await this.pointer
-        .show(name.replace('computer_', ''), signal)
-        .catch(() => this.pointer.hide(signal));
       signal.throwIfAborted();
       if (name === 'computer_windows') {
         const windows = await this.helper({ action: 'windows' }, signal);
-        succeeded = true;
-        return {
-          text: JSON.stringify(windows.filter((w: WindowInfo) => w.title !== POINTER_TITLE)),
-        };
+        return { text: JSON.stringify(windows) };
       }
       if (name === 'computer_screenshot') {
-        this.pointer.pause();
         const { windowId } = z.object({ windowId: z.string().max(80) }).parse(args);
         if (this.status().screen === 'denied')
           throw new Error('请在 macOS 系统设置授予同舟屏幕录制权限后重启');
@@ -316,7 +303,6 @@ export class DesktopComputer implements ComputerAdapter {
           bounds: captureBounds,
           expires: Date.now() + 120000,
         });
-        succeeded = true;
         return {
           text: JSON.stringify({
             frameId,
@@ -367,12 +353,8 @@ export class DesktopComputer implements ComputerAdapter {
       this.frames.delete(frameId);
       signal.throwIfAborted();
       await this.helper(payload, signal);
-      succeeded = true;
       return { text: '操作已发送。请重新截图确认实际结果；不能仅凭输入已发送判断任务成功。' };
     } finally {
-      if (succeeded && !signal.aborted)
-        await this.pointer.finish(signal).catch(() => this.pointer.hide(signal));
-      else this.pointer.hide(signal);
       if (signal.aborted && !['computer_windows', 'computer_screenshot'].includes(name))
         await this.helper({ action: 'release' }, AbortSignal.timeout(10000)).catch(() => {});
       this.lock.busy = false;

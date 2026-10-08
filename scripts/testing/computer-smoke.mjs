@@ -27,7 +27,7 @@ const server = createServer(async (req, res) => {
   for await (const b of req) raw += b;
   const body = JSON.parse(raw);
   if (stage > 0 && inspectPointer) {
-    // Simulate a model thinking pause longer than the old 700 ms expiry.
+    // Ensure no cursor overlay is created while waiting for the next action.
     await new Promise((resolve) => setTimeout(resolve, 1000));
     waitingPointers.push(await inspectPointer());
   }
@@ -123,20 +123,13 @@ try {
   await page.waitForSelector('.app-shell');
   inspectPointer = () =>
     app.evaluate(({ BrowserWindow }) => {
-      const pointer = BrowserWindow.getAllWindows().find((w) => w.getTitle() === '同舟操作指针');
-      return !!pointer && pointer.isVisible() && !pointer.isFocusable();
+      return BrowserWindow.getAllWindows().some((w) => w.getTitle() === '同舟操作指针');
     });
   await app.evaluate(({ app }) => {
     globalThis.pointerObservations = [];
     app.on('browser-window-created', (_event, window) => {
       if (window.getTitle() !== '同舟操作指针') return;
-      window.once('show', () =>
-        globalThis.pointerObservations.push({
-          focusable: window.isFocusable(),
-          onTop: window.isAlwaysOnTop(),
-          focused: window.isFocused(),
-        }),
-      );
+      globalThis.pointerObservations.push(window.getTitle());
     });
   });
   await app.evaluate(
@@ -200,17 +193,13 @@ try {
   );
   assert.ok(outcomes.filter((v) => v.includes('frameId')).length >= 3);
   const pointers = await app.evaluate(() => globalThis.pointerObservations);
-  assert.equal(pointers.length, 1, 'Reuse one pointer window throughout the run');
+  assert.equal(pointers.length, 0, 'Computer tools must not create a cursor overlay');
   assert.ok(
-    waitingPointers.length >= 12 && waitingPointers.every(Boolean),
-    'Pointer must remain visible during every model thinking gap',
+    waitingPointers.length >= 12 && waitingPointers.every((visible) => !visible),
+    'No cursor overlay should appear between actions',
   );
   await page.waitForFunction(() => !document.querySelector('[aria-label="停止生成"]'));
   assert.equal(await inspectPointer(), false, 'Pointer must be removed when the run ends');
-  assert.ok(
-    pointers.every((p) => !p.focusable && !p.focused && p.onTop),
-    'Pointer must be non-focusing and on top: ' + JSON.stringify(pointers),
-  );
   await page.screenshot({ path: 'test-results/14-computer.png' });
   await target.screenshot({ path: 'test-results/15-computer-fixture.png' });
   console.log(

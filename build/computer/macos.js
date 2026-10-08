@@ -4,7 +4,7 @@ function run(argv) {
   var p=JSON.parse(argv[0]);
   if(p.action==='release') { [54,55,56,58,59].forEach(function(k){var e=$.CGEventCreateKeyboardEvent(null,k,false);$.CGEventPost(0,e);});var position=$.CGEventGetLocation($.CGEventCreate(null));[2,4].forEach(function(t){$.CGEventPost(0,$.CGEventCreateMouseEvent(null,t,position,t===4?1:0));});return '{"ok":true}'; }
   if(p.action==='windows') {
-    var windows=ObjC.deepUnwrap($.CGWindowListCopyWindowInfo(1,0));
+    var windows=ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo(1,0)));
     return JSON.stringify(windows.filter(function(w){return w.kCGWindowLayer===0&&w.kCGWindowName&&w.kCGWindowBounds.Width>0;}).slice(0,200).map(function(w){return {id:String(w.kCGWindowNumber),pid:w.kCGWindowOwnerPID,title:w.kCGWindowName,bounds:{x:w.kCGWindowBounds.X,y:w.kCGWindowBounds.Y,width:w.kCGWindowBounds.Width,height:w.kCGWindowBounds.Height}};}));
   }
   var app=$.NSRunningApplication.runningApplicationWithProcessIdentifier(p.window.pid);
