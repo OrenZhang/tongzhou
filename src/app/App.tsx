@@ -1081,7 +1081,7 @@ export default function App() {
             onToggleArchive={(target) =>
               void perform(() => api.updateSession(target.id, { archived: !target.archived }))
             }
-            onDelete={(target) => setDeleteId(target.id)}
+            onDelete={(target) => target.archived && setDeleteId(target.id)}
             onDeleteProject={(target) => {
               setNotice('');
               setDeleteProjectId(target.id);
@@ -3268,7 +3268,7 @@ export default function App() {
                 消息、运行记录和内部团队子会话将一并删除。项目文件和共享配置会保留。
               </p>
               {data.runs.some((r) => r.sessionId === deleteId && r.status === 'running') && (
-                <p className="danger">此会话正在执行，删除会同时停止任务。</p>
+                <p className="danger">请先停止任务，再删除归档会话。</p>
               )}
             </div>
             <div className="modal-footer">
@@ -3277,6 +3277,10 @@ export default function App() {
               </button>
               <button
                 className="destructive-button"
+                disabled={
+                  !data.sessions.find((s) => s.id === deleteId)?.archived ||
+                  data.runs.some((r) => r.sessionId === deleteId && r.status === 'running')
+                }
                 onClick={() =>
                   perform(async () => {
                     await api.deleteSession(deleteId);

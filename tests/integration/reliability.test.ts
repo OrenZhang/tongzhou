@@ -205,6 +205,22 @@ describe('long conversations and concurrent changes', () => {
     }
     await writeFile(path.join(root, 'user-project.txt'), 'preserve');
     s.put('channel', { id: 'bound', sessionId: grandchild.id, inbound: true, enabled: true });
+    await expect(runtime.deleteSession(parent.id)).rejects.toThrow('请先归档');
+    expect(s.get<any>('channel', 'bound').inbound).toBe(true);
+    expect(await readFile(path.join(root, 'chat-workspaces', grandchild.id, 'temp'), 'utf8')).toBe(
+      'owned',
+    );
+    expect(s.list('session')).toHaveLength(4);
+    s.put('session', { ...parent, archived: true });
+    s.put('run', { id: 'running-child', sessionId: grandchild.id, status: 'running' });
+    await expect(runtime.deleteSession(parent.id)).rejects.toThrow('请先停止');
+    expect(s.get<any>('run', 'running-child').status).toBe('running');
+    expect(s.get<any>('channel', 'bound').inbound).toBe(true);
+    expect(await readFile(path.join(root, 'chat-workspaces', grandchild.id, 'temp'), 'utf8')).toBe(
+      'owned',
+    );
+    expect(s.list('session')).toHaveLength(4);
+    s.put('run', { id: 'running-child', sessionId: grandchild.id, status: 'completed' });
     await runtime.deleteSession(parent.id);
     expect(s.list<any>('session').map((v) => v.id)).toEqual([branch.id]);
     expect(s.get<any>('channel', 'bound').inbound).toBe(false);

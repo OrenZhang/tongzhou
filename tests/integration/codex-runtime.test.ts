@@ -552,6 +552,7 @@ describe('locked Codex resume and steer contracts', () => {
       'second',
     );
     const latest = fake.instances.at(-1);
+    f.store.put('session', { ...f.store.get<any>('session', f.input.sessionId), archived: true });
     await f.runtime.deleteSession(f.input.sessionId);
     expect(latest.stopped).toBe(true);
   });

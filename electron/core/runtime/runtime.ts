@@ -349,7 +349,7 @@ export class Runtime {
     return [...sessionIds];
   }
   async deleteSession(id: string) {
-    this.store.get<Session>('session', id);
+    if (!this.store.get<Session>('session', id).archived) throw new Error('请先归档会话，再删除');
     const targets = new Set([id]);
     for (let changed = true; changed; ) {
       changed = false;
@@ -359,10 +359,15 @@ export class Runtime {
           changed = true;
         }
     }
+    if ([...targets].some((target) => this.deleting.has(target)))
+      throw new Error('会话正在删除，请稍候');
+    if (
+      [...targets].some((target) => this.isActive(target)) ||
+      this.store.list<Run>('run').some((r) => targets.has(r.sessionId) && r.status === 'running')
+    )
+      throw new Error('请先停止会话及内部子会话的任务，再删除');
     for (const target of targets) this.deleting.add(target);
     try {
-      for (const target of targets) this.active.get(target)?.controller.abort();
-      await Promise.all([...targets].map((target) => this.active.get(target)?.promise));
       await Promise.all([...targets].map((target) => this.codexChats.remove(target)));
       const root = path.resolve(this.dataDir, 'chat-workspaces');
       for (const target of targets) {
@@ -609,6 +614,9 @@ export class Runtime {
   }
   isActive(id: string) {
     return this.active.has(id);
+  }
+  isDeleting(id: string) {
+    return this.deleting.has(id);
   }
   start(input: RunInput, resendMessageId?: string): string {
     let replaced: Message | undefined;

@@ -1051,7 +1051,7 @@ function setup() {
     operation(
       '会话',
       'change',
-      '删除会话及消息记录，不能删除当前执行会话',
+      '删除已归档的会话及消息记录；执行中的会话须先停止',
       [idSchema.describe('sessionId')],
       {
         confirmation: 'always',
@@ -1062,8 +1062,8 @@ function setup() {
     ),
     async (id) => {
       idSchema.parse(id);
-      channels.abort(id);
       await runtime.deleteSession(id);
+      channels.abort(id);
       feishu.sync();
     },
   );
@@ -1373,6 +1373,7 @@ function setup() {
     ]),
     (raw, patch) => {
       const id = idSchema.parse(raw);
+      if (runtime.isDeleting(id)) throw new Error('会话正在删除，请稍候');
       const update = z
         .object({
           title: z.string().trim().min(1).max(120).optional(),
@@ -1385,7 +1386,7 @@ function setup() {
         runtime.isActive(id) &&
         (update.archived || update.providerId !== undefined || update.model !== undefined)
       )
-        throw new Error('请先停止执行，再切换模型');
+        throw new Error(update.archived ? '请先停止执行，再归档会话' : '请先停止执行，再切换模型');
       if (update.providerId) store.get('provider', update.providerId);
       store.put('session', {
         ...store.get<Session>('session', id),

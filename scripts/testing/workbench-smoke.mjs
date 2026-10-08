@@ -48,15 +48,15 @@ try {
   page.on('pageerror', (e) => errors.push(e.message));
   page.setDefaultTimeout(12000);
   await page.waitForSelector('.app-shell');
-  await app.evaluate(({ BrowserWindow }) =>
-    BrowserWindow.getAllWindows()[0].setIgnoreMouseEvents(true),
-  );
+  await app.evaluate(({ BrowserWindow }) => {
+    const window = BrowserWindow.getAllWindows()[0];
+    window.setIgnoreMouseEvents(true);
+    window.setFocusable(false);
+    window.blur();
+  });
   const nav = async (label) => {
     if (label === '连接中心') {
-      await page
-        .locator('.sidebar')
-        .getByRole('button', { name: '设置', exact: true })
-        .click();
+      await page.locator('.sidebar').getByRole('button', { name: '设置', exact: true }).click();
       await page.getByRole('button', { name: '打开连接中心', exact: true }).click();
     } else await page.locator('.sidebar').getByRole('button', { name: label, exact: true }).click();
   };
@@ -92,6 +92,18 @@ try {
   const projectRow = page
     .locator('.session-row')
     .filter({ has: page.locator(`[data-session-id="${sessions[1].id}"]`) });
+  for (const row of [ordinaryRow, projectRow])
+    assert.equal(await row.getByRole('button', { name: '删除会话', exact: true }).count(), 0);
+  const rejectedDelete = await page.evaluate(async (id) => {
+    try {
+      await window.tongzhou.deleteSession(id);
+      return '';
+    } catch (error) {
+      return error.message;
+    }
+  }, sessions[0].id);
+  assert.ok(rejectedDelete.includes('请先归档'), rejectedDelete);
+  assert.equal(await ordinaryRow.count(), 1);
   await page.locator('.composer textarea').focus();
   await page.locator('.conversation-header').hover();
   assert.equal(
@@ -142,25 +154,56 @@ try {
   await ordinaryRow.waitFor({ state: 'detached' });
   await page.getByRole('button', { name: '切换归档会话', exact: true }).click();
   await ordinaryRow.hover();
+  assert.equal(await ordinaryRow.getByRole('button', { name: '删除会话', exact: true }).count(), 0);
+  await ordinaryRow.getByRole('button', { name: '归档会话', exact: true }).click();
+  await ordinaryRow.waitFor({ state: 'detached' });
+  await page.getByRole('button', { name: '切换归档会话', exact: true }).click();
+  await ordinaryRow.hover();
   await ordinaryRow.getByRole('button', { name: '删除会话', exact: true }).click();
   assert.ok((await page.getByRole('dialog').innerText()).includes('确认删除“普通会话”'));
   await capture('delete-confirmation');
   await page.getByRole('dialog').getByRole('button', { name: '取消', exact: true }).click();
   assert.equal(await ordinaryRow.count(), 1);
+  await ordinaryRow.getByRole('button', { name: '恢复会话', exact: true }).click();
+  await ordinaryRow.waitFor({ state: 'detached' });
+  await page.getByRole('button', { name: '切换归档会话', exact: true }).click();
   const disposable = await page.evaluate(() => window.tongzhou.createSession('project'));
   const disposableRow = page
     .locator('.session-row')
     .filter({ has: page.locator(`[data-session-id="${disposable.id}"]`) });
   await disposableRow.hover();
+  assert.equal(
+    await disposableRow.getByRole('button', { name: '删除会话', exact: true }).count(),
+    0,
+  );
+  await disposableRow.getByRole('button', { name: '归档会话', exact: true }).click();
+  await disposableRow.waitFor({ state: 'detached' });
+  await page.getByRole('button', { name: '切换归档会话', exact: true }).click();
+  await disposableRow.hover();
+  await disposableRow.getByRole('button', { name: '删除会话', exact: true }).click();
+  // A restored session must no longer be deletable even if its confirmation is open.
+  await page.evaluate(
+    (id) => window.tongzhou.updateSession(id, { archived: false }),
+    disposable.id,
+  );
+  await page.getByRole('dialog').getByRole('button', { name: '确认删除', exact: true }).waitFor();
+  await page.waitForFunction(
+    () => document.querySelector('.destructive-button')?.disabled === true,
+  );
+  await page.getByRole('dialog').getByRole('button', { name: '取消', exact: true }).click();
+  await page.evaluate((id) => window.tongzhou.updateSession(id, { archived: true }), disposable.id);
+  await disposableRow.hover();
   await disposableRow.getByRole('button', { name: '删除会话', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: '确认删除', exact: true }).click();
   await disposableRow.waitFor({ state: 'detached' });
+  await page.getByRole('button', { name: '切换归档会话', exact: true }).click();
   assert.equal(await page.locator('.conversation-header h2').innerText(), '项目任务');
   assert.equal(await page.locator('.composer textarea').inputValue(), '项目会话草稿');
   checks.push(
     'session actions reveal on hover or keyboard focus',
     'archive and restore from the sidebar preserve the current conversation',
-    'delete names the target and supports cancel and inactive project sessions',
+    'unarchived sessions have no delete entry and reject direct deletion',
+    'archived deletion names the target, supports cancellation and refuses restored sessions',
   );
   await nav('连接中心');
   await page.getByRole('button', { name: '渠道通知', exact: true }).click();

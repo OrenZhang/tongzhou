@@ -119,14 +119,17 @@ export function SessionNavigator({
           >
             {s.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
           </button>
-          <button
-            aria-label="删除会话"
-            title="删除会话"
-            className="session-delete"
-            onClick={() => onDelete(s)}
-          >
-            <Trash2 size={14} />
-          </button>
+          {s.archived && (
+            <button
+              aria-label="删除会话"
+              title={running ? '停止任务后可删除' : '删除会话'}
+              className="session-delete"
+              disabled={running}
+              onClick={() => onDelete(s)}
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
         </div>
       </div>
     );
