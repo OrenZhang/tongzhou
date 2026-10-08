@@ -1648,7 +1648,11 @@ function setup() {
   );
 }
 async function createWindow() {
-  if (process.platform === 'darwin') app.dock?.setIcon(path.join(__dirname, '../build/icon.png'));
+  const icon = path.join(
+    __dirname,
+    process.platform === 'darwin' ? '../build/icon-mac.png' : '../build/icon.png',
+  );
+  if (process.platform === 'darwin') app.dock?.setIcon(icon);
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
       ...(process.platform === 'darwin' ? [{ role: 'appMenu' as const }] : []),
@@ -1672,7 +1676,7 @@ async function createWindow() {
     minWidth: 1000,
     minHeight: 700,
     title: '同舟 Tongzhou',
-    icon: path.join(__dirname, '../build/icon.png'),
+    icon,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#17191e' : '#fafbfc',
     show: false,
     autoHideMenuBar: true,

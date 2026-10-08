@@ -126,6 +126,7 @@
       "dist/**/*",
       "dist-electron/**/*",
       "build/icon.png",
+      "build/icon-mac.png",
       "package.json",
       "LICENSE",
       "NOTICE",

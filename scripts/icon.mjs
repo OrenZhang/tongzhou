@@ -40,15 +40,16 @@ function inside(x, y, p) {
       yes = !yes;
   return yes;
 }
-function render(size) {
+function render(size, scale = 1) {
+  const inset = (256 * (1 - scale)) / 2;
   const raw = Buffer.alloc(size * (size * 4 + 1));
   for (let y = 0; y < size; y++)
     for (let x = 0; x < size; x++) {
       const out = [0, 0, 0, 0];
       for (let sy = 0; sy < samples; sy++)
         for (let sx = 0; sx < samples; sx++) {
-          const px = ((x + (sx + 0.5) / samples) * 256) / size,
-            py = ((y + (sy + 0.5) / samples) * 256) / size;
+          const px = (((x + (sx + 0.5) / samples) * 256) / size - inset) / scale,
+            py = (((y + (sy + 0.5) / samples) * 256) / size - inset) / scale;
           const cx = Math.max(58, Math.min(198, px)),
             cy = Math.max(58, Math.min(198, py));
           if (Math.hypot(px - cx, py - cy) > 58) continue;
@@ -101,6 +102,9 @@ ico.writeUInt32LE(png.length, 14);
 ico.writeUInt32LE(22, 18);
 await mkdir('build', { recursive: true });
 await writeFile('build/icon.png', render(512));
+// macOS reserves transparent margins around Dock icons. Match native app sizing.
+const macScale = 0.8;
+await writeFile('build/icon-mac.png', render(512, macScale));
 await writeFile('build/icon.ico', Buffer.concat([ico, png]));
 // PNG-backed ICNS entries are understood by modern macOS at every Dock scale.
 const iconEntries = [
@@ -112,7 +116,7 @@ const iconEntries = [
   ['ic09', 512],
   ['ic10', 1024],
 ].map(([type, size]) => {
-  const data = render(size);
+  const data = render(size, macScale);
   const header = Buffer.alloc(8);
   header.write(type, 0, 'ascii');
   header.writeUInt32BE(data.length + 8, 4);
