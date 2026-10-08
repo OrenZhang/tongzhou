@@ -96,14 +96,18 @@ export async function nativeModelConnection(
         throw new Error('Kimi 登录凭据引用无效');
       const token = await json(path.join(home, 'credentials', key + '.json'));
       if (!token.access_token) throw new Error('Kimi 未登录');
+      // Kimi Code 2.1.x omits protocol for its default OpenAI Chat wire format.
+      // Explicit model overrides still select Anthropic or Responses.
       const protocol =
-        alias.protocol === 'anthropic'
-          ? 'anthropic'
-          : alias.protocol === 'openai_responses'
-            ? 'openai-responses'
-            : undefined;
+        alias.protocol === undefined
+          ? 'openai-chat'
+          : alias.protocol === 'anthropic'
+            ? 'anthropic'
+            : alias.protocol === 'openai_responses'
+              ? 'openai-responses'
+              : undefined;
       if (!protocol || typeof alias.model !== 'string')
-        throw new Error('此 Kimi 模型协议尚未支持，请刷新模型列表');
+        throw new Error('此 Kimi 模型协议尚未被当前同舟版本支持，请更新同舟后刷新模型列表');
       return {
         provider: {
           ...provider,

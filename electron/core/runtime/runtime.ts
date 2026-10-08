@@ -13,6 +13,7 @@ import { personalizationInstructions } from '../../modules/agents/personalizatio
 import { projectDeletionTargets } from '../../../src/shared/projects';
 import { codexThinking, thinkingRequest } from './thinking';
 import { IdleTimeout } from './idle-timeout';
+import { modelErrorMessage } from './errors';
 import { randomUUID } from 'node:crypto';
 import { Attachments } from '../../modules/artifacts/attachments';
 import { Artifacts } from '../../modules/artifacts/artifacts';
@@ -941,7 +942,7 @@ export class Runtime {
         run.status = 'completed';
       } catch (e: any) {
         run.status = controller.signal.aborted ? 'interrupted' : 'failed';
-        run.error = redact(e.message ?? String(e), [secret]);
+        run.error = redact(modelErrorMessage(e), [secret]);
         for (const m of this.store.messages(session.id))
           if (m.runId === run.id && m.status === 'streaming')
             this.message({ ...m, status: run.status === 'interrupted' ? 'interrupted' : 'error' });
