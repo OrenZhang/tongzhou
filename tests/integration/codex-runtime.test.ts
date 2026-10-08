@@ -13,6 +13,7 @@ const fake = vi.hoisted(() => ({
   hold: false,
   loseSteer: false,
   next: 0,
+  replies: [] as any[],
 }));
 vi.mock('../../electron/core/codex/codex', async () => {
   const { EventEmitter } = await import('node:events');
@@ -33,7 +34,9 @@ vi.mock('../../electron/core/codex/codex', async () => {
         this.stopped = true;
         this.modelTransport?.close();
       }
-      reply() {}
+      reply(id: string, result: any) {
+        fake.replies.push({ id, result });
+      }
       reject() {}
       complete(threadId: string, turnId: string) {
         const turns = fake.calls.filter(
@@ -99,6 +102,7 @@ beforeEach(() => {
   fake.hold = false;
   fake.loseSteer = false;
   fake.next = 0;
+  fake.replies = [];
 });
 afterEach(async () => {
   for (const fn of cleanup.splice(0).reverse()) await fn();
@@ -259,6 +263,165 @@ describe('editing unanswered messages', () => {
     f.store.remove('runEvent', event.id);
     f.store.message({ ...prompt, id: 'later-user', runId: undefined, content: '后续请求' });
     expect(() => f.runtime.start({ ...f.input, prompt: '修改' }, prompt.id)).toThrow('最后一条');
+  });
+});
+describe('live execution permissions', () => {
+  const activeTurn = () => fake.calls.filter((c) => c.method === 'turn/start').at(-1);
+  const ready = async (count: number) =>
+    vi.waitFor(() =>
+      expect(fake.calls.filter((c) => c.method === 'turn/start')).toHaveLength(count),
+    );
+  const complete = () => {
+    const turn = activeTurn();
+    const turnId = 'turn-' + fake.next;
+    fake.instances.at(-1).complete(turn.params.threadId, turnId);
+  };
+  it('changes a waiting task to full access with a new sandbox and keeps its prompt, output and run ID', async () => {
+    const f = await fixture();
+    fake.hold = true;
+    const id = f.runtime.start(f.input);
+    await ready(1);
+    const previousClient = fake.instances.at(-1);
+    const turn = activeTurn();
+    previousClient.emit('notification', {
+      method: 'item/agentMessage/delta',
+      params: { threadId: turn.params.threadId, itemId: 'partial', delta: '已完成的分析' },
+    });
+    previousClient.emit('notification', {
+      method: 'thread/tokenUsage/updated',
+      params: {
+        threadId: turn.params.threadId,
+        tokenUsage: { total: { inputTokens: 50, outputTokens: 5 } },
+      },
+    });
+    previousClient.emit('request', {
+      id: 'waiting-command',
+      method: 'item/commandExecution/requestApproval',
+      params: { threadId: turn.params.threadId, turnId: 'turn-' + fake.next, command: 'fixture' },
+    });
+    await vi.waitFor(() => expect(f.runtime.snapshot().approvals).toHaveLength(1));
+    f.runtime.setSessionPermission(f.input.sessionId, 'full-access');
+    await ready(2);
+    expect(previousClient.stopped).toBe(true);
+    expect(f.runtime.snapshot().approvals).toHaveLength(0);
+    expect(fake.replies.find((r) => r.id === 'waiting-command').result.decision).toBe('decline');
+    expect(fake.calls.filter((c) => c.method === 'thread/start').at(-1).params).toMatchObject({
+      sandbox: 'danger-full-access',
+      approvalPolicy: 'never',
+    });
+    expect(activeTurn().params.input[0].text).toContain('已完成的分析');
+    expect(activeTurn().params.input[0].text).toContain('必须先读取现状再继续');
+    expect(f.store.get<Run>('run', id)).toMatchObject({
+      status: 'running',
+      config: { permission: 'full-access' },
+    });
+    expect(
+      await f.runtime.ask(f.input.sessionId, 'next tool', '{}', new AbortController().signal),
+    ).toBe(true);
+    complete();
+    await f.runtime.waitForIdle();
+    expect(f.store.list<Run>('run')).toHaveLength(1);
+    expect(f.store.messages(f.input.sessionId).filter((m) => m.role === 'user')).toHaveLength(1);
+    expect(
+      f.store.messages(f.input.sessionId).find((m) => m.content === '已完成的分析')?.status,
+    ).toBe('interrupted');
+    expect(f.store.get<Run>('run', id)).toMatchObject({
+      status: 'completed',
+      inputTokens: 150,
+      outputTokens: 15,
+    });
+  });
+  it('rebuilds tool capabilities on read-only changes and returns to approval mode in the same task', async () => {
+    const f = await fixture();
+    f.store.put('project', { id: 'project', name: 'fixture', path: f.root, createdAt: Date.now() });
+    f.store.put('session', {
+      ...f.store.get<any>('session', f.input.sessionId),
+      projectId: 'project',
+    });
+    f.runtime.setSessionPermission(f.input.sessionId, 'full-access');
+    fake.hold = true;
+    const id = f.runtime.start(f.input);
+    await ready(1);
+    f.runtime.setSessionPermission(f.input.sessionId, 'read-only');
+    await ready(2);
+    const readonly = fake.calls.filter((c) => c.method === 'thread/start').at(-1).params;
+    expect(readonly.sandbox).toBe('read-only');
+    expect(readonly.config['features.shell_tool']).toBe(false);
+    expect(readonly.dynamicTools.some((t: any) => t.name === 'write_file')).toBe(false);
+    f.runtime.setSessionPermission(f.input.sessionId, 'ask');
+    await ready(3);
+    const asking = fake.calls.filter((c) => c.method === 'thread/start').at(-1).params;
+    expect(asking).toMatchObject({ sandbox: 'workspace-write', approvalPolicy: 'untrusted' });
+    expect(asking.dynamicTools.some((t: any) => t.name === 'write_file')).toBe(true);
+    const decision = f.runtime.ask(
+      f.input.sessionId,
+      'requires approval',
+      '{}',
+      new AbortController().signal,
+    );
+    const approval = f.runtime.snapshot().approvals[0];
+    expect(approval).toBeDefined();
+    f.runtime.approve(approval.id, false);
+    expect(await decision).toBe(false);
+    complete();
+    await f.runtime.waitForIdle();
+    expect(f.store.get<Run>('run', id).status).toBe('completed');
+    expect(f.store.list<Run>('run')).toHaveLength(1);
+  });
+  it('uses the latest selection when changed before startup or repeatedly during reconnection', async () => {
+    const f = await fixture();
+    fake.hold = true;
+    f.runtime.start(f.input);
+    f.runtime.setSessionPermission(f.input.sessionId, 'full-access');
+    await ready(1);
+    expect(fake.calls.find((c) => c.method === 'thread/start').params.sandbox).toBe(
+      'danger-full-access',
+    );
+    f.runtime.setSessionPermission(f.input.sessionId, 'read-only');
+    f.runtime.setSessionPermission(f.input.sessionId, 'ask');
+    f.runtime.setSessionPermission(f.input.sessionId, 'full-access');
+    await ready(2);
+    expect(fake.calls.filter((c) => c.method === 'thread/start').at(-1).params.sandbox).toBe(
+      'danger-full-access',
+    );
+    await f.runtime.cancel(f.input.sessionId);
+    await f.runtime.waitForIdle();
+    expect(f.store.list<Run>('run')[0].status).toBe('interrupted');
+  });
+  it('updates inherited global permissions, preserves overrides and keeps read-only Agents locked', async () => {
+    const f = await fixture();
+    fake.hold = true;
+    f.runtime.start(f.input);
+    await ready(1);
+    f.runtime.setDefaultPermission('full-access');
+    await ready(2);
+    f.runtime.setSessionPermission(f.input.sessionId, 'ask');
+    await ready(3);
+    f.runtime.setDefaultPermission('read-only');
+    expect(fake.calls.filter((c) => c.method === 'turn/start')).toHaveLength(3);
+    f.runtime.setDefaultPermission('read-only', true);
+    await ready(4);
+    expect(f.store.get<Run>('run', f.store.list<Run>('run')[0].id).config?.permission).toBe(
+      'read-only',
+    );
+    complete();
+    await f.runtime.waitForIdle();
+    f.store.put('agent', {
+      id: 'readonly-agent',
+      name: '只读助手',
+      instructions: '',
+      permission: 'read-only',
+      providerId: '',
+      model: '',
+      maxSteps: 0,
+    });
+    f.runtime.start({ ...f.input, agentId: 'readonly-agent' });
+    await ready(5);
+    f.runtime.setSessionPermission(f.input.sessionId, 'full-access');
+    expect(fake.calls.filter((c) => c.method === 'turn/start')).toHaveLength(5);
+    expect(f.store.list<Run>('run').at(-1)?.config?.permission).toBe('read-only');
+    complete();
+    await f.runtime.waitForIdle();
   });
 });
 describe('locked Codex resume and steer contracts', () => {

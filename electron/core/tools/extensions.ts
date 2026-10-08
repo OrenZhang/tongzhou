@@ -268,7 +268,7 @@ export class PluginConnection {
   }
 }
 
-/** A frozen tool catalog and permission scope for one Run, independent of its model. */
+/** A frozen tool catalog and permission scope for one execution segment. */
 export class ToolScope {
   readonly specs: ToolSpec[] = [];
   private connections: PluginConnection[] = [];
@@ -578,6 +578,9 @@ export class ToolScope {
     }
     await this.record(name, args, result);
     return result;
+  }
+  async settle() {
+    await Promise.allSettled(this.seen.values());
   }
   private closing?: Promise<void>;
   close() {

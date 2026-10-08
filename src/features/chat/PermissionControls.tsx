@@ -28,12 +28,14 @@ export function SessionPermission({
   api: TongzhouAPI;
   onError(error: unknown): void;
 }) {
+  const selected = session.permission ?? defaultPermission;
   const actual = running?.config?.permission ?? effective;
+  const switching = running?.phase === '切换执行权限' || (running && actual !== effective);
   return (
-    <div className={'session-permission ' + actual}>
+    <div className={'session-permission ' + selected}>
       <ChoicePicker
         label="会话权限"
-        displayLabel={permissionLabels[actual]}
+        displayLabel={permissionLabels[selected]}
         compact
         value={session.permission ?? 'inherit'}
         options={[
@@ -53,7 +55,13 @@ export function SessionPermission({
             .catch(onError)
         }
       />
-      {running && <span>修改下轮生效</span>}
+      {effective !== selected ? (
+        <span>只读 Agent 限制</span>
+      ) : switching ? (
+        <span role="status">正在切换权限…</span>
+      ) : running ? (
+        <span>当前任务生效</span>
+      ) : null}
     </div>
   );
 }
@@ -93,7 +101,7 @@ export function GlobalPermission({
           应用到全部会话
         </button>
       </div>
-      <small>应用到全部会话会清除各会话的单独权限设置；运行中的任务从下一轮生效。</small>
+      <small>应用到全部会话会清除各会话的单独权限设置；运行中的任务会更新权限后继续执行。</small>
     </div>
   );
 }

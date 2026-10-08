@@ -1165,8 +1165,7 @@ function setup() {
       const applyToAll = z.boolean().parse(all ?? false);
       // The renderer snapshot can lag a just-saved selection. Applying the current
       // default must not restore the previous value while clearing overrides.
-      store.setDefaultPermission(applyToAll ? store.defaultPermission() : selected, applyToAll);
-      runtime.changed();
+      runtime.setDefaultPermission(applyToAll ? store.defaultPermission() : selected, applyToAll);
     },
   );
   register(
@@ -1179,8 +1178,7 @@ function setup() {
       [idSchema, z.enum(['read-only', 'ask', 'full-access']).nullable()],
     ),
     (id, mode) => {
-      store.setSessionPermission(idSchema.parse(id), permissionSchema.nullable().parse(mode));
-      runtime.changed();
+      runtime.setSessionPermission(idSchema.parse(id), permissionSchema.nullable().parse(mode));
     },
   );
   register(

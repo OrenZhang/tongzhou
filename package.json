@@ -28,6 +28,7 @@
     "test:workflows": "node scripts/testing/workflows-smoke.mjs",
     "test:turns": "node scripts/testing/turn-process-smoke.mjs",
     "test:message-resend": "node scripts/testing/message-resend-smoke.mjs",
+    "test:permissions": "node scripts/testing/live-permission-smoke.mjs",
     "test:ui": "node scripts/testing/ui-smoke.mjs",
     "test:session-entry": "node scripts/testing/session-entry-smoke.mjs",
     "test:workbench": "node scripts/testing/workbench-smoke.mjs",
