@@ -1,3 +1,4 @@
+import { openModels } from './navigation-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { mkdir, mkdtemp } from 'node:fs/promises';
 import path from 'node:path';
@@ -40,7 +41,7 @@ try {
       if (['codex', 'kimi', 'minimax'].includes(provider.protocol))
         await window.tongzhou.saveProvider({ ...provider, enabled: true });
   });
-  await page.getByRole('button', { name: /^模型/ }).click();
+  await openModels(page);
   await page
     .locator('.provider-card')
     .filter({ has: page.getByRole('heading', { name: 'OpenAI · ChatGPT', exact: true }) })
@@ -77,12 +78,12 @@ try {
     await dialog.getByRole('button', { name: '关闭', exact: true }).click();
     await page.getByRole('heading', { name: provider, exact: true }).waitFor();
   }
-  await page.getByRole('button', { name: '设置与优化', exact: true }).click();
+  await page.getByRole('button', { name: '设置', exact: true }).click();
   assert.equal(await page.locator('.auth-badge.connected').count(), 0);
   await page.getByRole('button', { name: '打开连接中心', exact: true }).click();
   assert.equal(await page.locator('.auth-badge.connected').count(), 0);
   await page.getByRole('heading', { name: '连接中心', exact: true }).waitFor();
-  await page.locator('.sidebar').getByRole('button', { name: '模型', exact: true }).click();
+  await openModels(page);
   assert.equal(await page.locator('.auth-badge.connected').count(), 2);
   console.log(
     'Account UI smoke passed: single-provider dialogs, verified badges, return navigation. States are fixtures.',

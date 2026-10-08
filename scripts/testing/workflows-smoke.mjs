@@ -214,7 +214,7 @@ try {
   );
   assert.equal((await page.evaluate(() => window.tongzhou.snapshot())).sessions.length, 1);
   checks.push('history quote and independent branch', 'archive deletion');
-  await page.getByRole('button', { name: '设置与优化', exact: true }).click();
+  await page.getByRole('button', { name: '设置', exact: true }).click();
   await page.getByRole('button', { name: '打开连接中心', exact: true }).click();
   await page.getByRole('button', { name: '服务与浏览器', exact: true }).click();
   await page.getByRole('button', { name: '添加 GitHub', exact: true }).click();

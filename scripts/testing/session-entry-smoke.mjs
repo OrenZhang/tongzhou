@@ -1,3 +1,4 @@
+import { openModels } from './navigation-helper.mjs';
 import { openModelMenu } from './choice-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
@@ -93,7 +94,7 @@ try {
   await page.keyboard.press('Escape');
   assert.deepEqual(options.sort(), ['key-ready', 'ready']);
   await page.getByLabel('消息', { exact: true }).fill('保留这份草稿');
-  await page.getByRole('button', { name: '模型', exact: true }).click();
+  await openModels(page);
   await page.getByRole('button', { name: '编辑 可用服务', exact: true }).click();
   await page.locator('.thinking-settings > summary').click();
   assert.equal(await page.getByLabel('模型思考', { exact: true }).inputValue(), 'on');
@@ -176,7 +177,7 @@ try {
   await page.getByRole('heading', { name: '恢复会话测试', exact: true }).waitFor();
   assert.equal(await page.getByLabel('消息', { exact: true }).inputValue(), '保留这份草稿');
   await page.getByText('可用服务：已停用', { exact: true }).waitFor();
-  await page.getByRole('button', { name: '模型', exact: true }).click();
+  await openModels(page);
   await page.getByRole('switch', { name: '启用连接 可用服务', exact: true }).check();
   await page.getByRole('button', { name: '返回会话', exact: true }).click();
   await page.waitForFunction(

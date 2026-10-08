@@ -1,3 +1,4 @@
+import { openModels } from './navigation-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { createServer } from 'node:http';
 import { mkdir, mkdtemp, writeFile, readFile, readdir, access } from 'node:fs/promises';
@@ -69,7 +70,7 @@ try {
     }, archive);
     await page.evaluate(() => window.tongzhou.installNetworkCore(true));
   } else await page.evaluate(() => window.tongzhou.installNetworkCore(false));
-  await page.getByRole('button', { name: /设置与优化/ }).click();
+  await page.getByRole('button', { name: /设置/ }).click();
   await page.getByRole('button', { name: /打开连接中心/ }).click();
   await page.getByRole('button', { name: '网络配置', exact: true }).click();
   await page.getByRole('button', { name: '添加配置', exact: true }).click();
@@ -181,7 +182,7 @@ try {
     () => page.evaluate((id) => window.tongzhou.deleteNetworkProfile(id), id),
     /取消使用/,
   );
-  await page.getByRole('button', { name: /^模型/ }).click();
+  await openModels(page);
   await page.getByRole('button', { name: '编辑 OpenAI · ChatGPT', exact: true }).click();
   assert.equal(await page.getByLabel('ChatGPT 网络方式', { exact: true }).inputValue(), 'managed');
   // Profile options arrive through IPC after the editor opens. Wait for that list

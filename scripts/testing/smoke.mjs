@@ -1,3 +1,4 @@
+import { openModels } from './navigation-helper.mjs';
 import { chooseOption, openModelMenu } from './choice-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { createServer } from 'node:http';
@@ -92,7 +93,7 @@ try {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.screenshot({ path: 'test-results/01-workspace.png' });
-  await page.getByRole('button', { name: /^模型/ }).click();
+  await openModels(page);
   await page.getByRole('button', { name: '添加连接', exact: true }).click();
   assert.equal(await page.getByLabel('历史上下文', { exact: true }).inputValue(), 'unlimited');
   await page.getByLabel('连接名称', { exact: true }).fill('本地测试服务');
@@ -333,7 +334,7 @@ try {
     'hiding logs must preserve tool evidence in history',
   );
   await page.screenshot({ path: 'test-results/05-conversation.png' });
-  await page.getByRole('button', { name: '设置与优化', exact: true }).click();
+  await page.getByRole('button', { name: '设置', exact: true }).click();
   await chooseOption(page, '全局默认权限', 'full-access');
   await page.waitForFunction(
     async () => (await window.tongzhou.snapshot()).defaultPermission === 'full-access',

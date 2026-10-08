@@ -40,7 +40,7 @@ try {
   await page.waitForSelector('.app-shell');
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.getByRole('button', { name: '设置与优化', exact: true }).hover();
+  await page.getByRole('button', { name: '设置', exact: true }).hover();
   assert.equal(
     await page
       .getByRole('button', { name: '删除项目 空项目', exact: true })

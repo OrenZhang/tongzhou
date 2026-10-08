@@ -132,7 +132,7 @@ try {
   await waitingTurn.locator('.process-toggle').click();
   await waitingTurn.getByText(/包含网络与服务端等待/).waitFor();
   // Reopening the session resets presentation, without restarting the running task.
-  await page.getByRole('button', { name: /设置与优化/ }).click();
+  await page.getByRole('button', { name: /设置/ }).click();
   await page.locator(`[data-session-id="${session.id}"]`).click();
   releaseFirst();
   await page.getByText('文件已检查，继续整理。', { exact: true }).waitFor();

@@ -1,3 +1,4 @@
+import { openModels } from './navigation-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -21,7 +22,7 @@ try {
   await app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows().forEach((w) => w.setIgnoreMouseEvents(true)),
   );
-  await page.getByRole('button', { name: /^模型/ }).click();
+  await openModels(page);
   await page.getByRole('button', { name: '编辑 OpenAI · ChatGPT', exact: true }).click();
   await page.getByRole('button', { name: '前往登录', exact: true }).click();
   await page.getByText('Codex 可用，尚未登录', { exact: false }).waitFor();
@@ -37,7 +38,7 @@ try {
   await page.getByRole('button', { name: '打开授权页面', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: '关闭', exact: true }).click();
   await page.getByRole('button', { name: '返回会话', exact: true }).click();
-  await page.getByRole('button', { name: /^模型/ }).click();
+  await openModels(page);
   await page.getByRole('button', { name: '编辑 OpenAI · ChatGPT', exact: true }).click();
   await page.getByRole('button', { name: '前往登录', exact: true }).click();
   await page.getByLabel('设备授权码', { exact: true }).waitFor();

@@ -692,7 +692,6 @@ export default function App() {
       items: [
         { id: 'agents', label: 'Agent', icon: Users },
         { id: 'knowledge', label: '智库', icon: BookOpen },
-        { id: 'providers', label: '模型', icon: Network },
         { id: 'extensions', label: '插件', icon: Puzzle },
       ],
     },
@@ -1121,9 +1120,6 @@ export default function App() {
                     >
                       <n.icon size={16} />
                       <span className="sidebar-nav-text">{n.label}</span>
-                      {n.id === 'providers' && (
-                        <span className="nav-count">{data.providers.length}</span>
-                      )}
                     </button>
                   ))}
                 </div>
@@ -1136,11 +1132,13 @@ export default function App() {
             <div className="sidebar-settings-row">
               <button
                 onClick={() => setView('settings')}
-                aria-current={view === 'settings' || view === 'connections' ? 'page' : undefined}
-                className={view === 'settings' || view === 'connections' ? 'active' : ''}
+                aria-current={
+                  ['settings', 'connections', 'providers'].includes(view) ? 'page' : undefined
+                }
+                className={['settings', 'connections', 'providers'].includes(view) ? 'active' : ''}
               >
                 <Settings2 size={16} />
-                <span className="sidebar-nav-text">设置与优化</span>
+                <span className="sidebar-nav-text">设置</span>
               </button>
               <UpdateControl api={api} />
             </div>
@@ -1160,6 +1158,12 @@ export default function App() {
               </button>
               <span>同舟</span>
               <ChevronRight size={13} />
+              {['providers', 'connections'].includes(view) && (
+                <>
+                  <span>设置</span>
+                  <ChevronRight size={13} />
+                </>
+              )}
               <strong>
                 {view === 'workspace'
                   ? (project?.name ?? (session ? '会话' : '新会话'))
@@ -1168,7 +1172,7 @@ export default function App() {
                       connections: '连接中心',
                       agents: 'Agent',
                       activity: '运行记录',
-                      settings: '设置与优化',
+                      settings: '设置',
                       extensions: '插件',
                       knowledge: '智库',
                       automations: '定时任务',
@@ -1880,6 +1884,9 @@ export default function App() {
           {view === 'providers' && (
             <main className="page">
               <div className="page-heading">
+                <button className="text-button" onClick={() => setView('settings')}>
+                  返回设置
+                </button>
                 <div className="page-title-row">
                   <div>
                     <h1>模型</h1>
@@ -2043,7 +2050,7 @@ export default function App() {
             <main className="page settings-page connections-page">
               <div className="page-heading">
                 <button className="text-button" onClick={() => setView('settings')}>
-                  返回设置与优化
+                  返回设置
                 </button>
                 <h1>连接中心</h1>
                 <p>将服务授权交给同舟保管，让 Agent 使用能力，无需把密码或令牌交给模型。</p>
@@ -2466,9 +2473,21 @@ export default function App() {
           {view === 'settings' && (
             <main className="page settings-page">
               <div className="page-heading">
-                <h1>设置与优化</h1>
+                <h1>设置</h1>
                 <p>同舟 · 开源多模型桌面工作台</p>
               </div>
+              <section className="settings-card settings-link">
+                <div className="settings-card-title">
+                  <Network size={22} />
+                  <div>
+                    <h3>模型</h3>
+                    <p>管理模型服务、订阅账号和 API 连接。</p>
+                  </div>
+                </div>
+                <button className="secondary" onClick={() => setView('providers')}>
+                  打开模型 <ArrowRight size={14} />
+                </button>
+              </section>
               <Appearance value={appearance} onChange={setAppearance} />
               <UpdateControl api={api} settings />
               <DataMaintenance api={api} />
@@ -2575,15 +2594,22 @@ export default function App() {
                 run: () => setView(n.id),
               })),
               {
+                id: 'providers',
+                title: '模型',
+                detail: '设置 · 模型服务、订阅账号和 API 连接',
+                icon: Network,
+                run: () => setView('providers'),
+              },
+              {
                 id: 'connections',
                 title: '连接中心',
-                detail: '设置与优化 · 服务、浏览器、通知和机器人',
+                detail: '设置 · 服务、浏览器、通知和机器人',
                 icon: Network,
                 run: () => setView('connections'),
               },
               {
                 id: 'settings',
-                title: '设置与优化',
+                title: '设置',
                 detail: '权限与本地数据',
                 icon: Settings2,
                 run: () => setView('settings'),

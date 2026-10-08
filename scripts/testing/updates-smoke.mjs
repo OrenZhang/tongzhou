@@ -11,7 +11,7 @@ const app = await electron.launch({ args: ['.'], env });
 try {
   const page = await app.firstWindow();
   await page.waitForSelector('.app-shell');
-  await page.getByRole('button', { name: '设置与优化', exact: true }).click();
+  await page.getByRole('button', { name: '设置', exact: true }).click();
   await page.getByRole('heading', { name: '版本更新' }).waitFor();
   assert.equal(await page.locator('.sidebar-update').count(), 0);
   const emit = (phase, extra = {}) =>

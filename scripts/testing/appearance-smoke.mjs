@@ -90,7 +90,7 @@ try {
   await page.reload();
   await page.waitForSelector('.app-shell');
   assert.equal(await page.locator('html').getAttribute('data-theme'), 'dark');
-  await nav('设置与优化');
+  await nav('设置');
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('DOM.enable');
   await cdp.send('CSS.enable');
@@ -118,7 +118,7 @@ try {
   );
   for (const style of ['石墨', '雾蓝', '暖砂']) {
     for (const theme of ['浅色', '深色']) {
-      await nav('设置与优化');
+      await nav('设置');
       await page.getByRole('button', { name: style, exact: true }).click();
       await page.getByRole('button', { name: theme, exact: true }).click();
       await page.locator('.settings-page').evaluate((el) => (el.scrollTop = 0));
@@ -164,7 +164,7 @@ try {
   await app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()[0].setContentSize(1000, 700),
   );
-  await nav('设置与优化');
+  await nav('设置');
   await page.getByLabel('界面字体', { exact: true }).selectOption('serif');
   await capture('narrow-serif-large');
   await page.getByRole('button', { name: '雾蓝', exact: true }).click();
@@ -175,7 +175,7 @@ try {
   assert.equal(await page.locator('html').getAttribute('data-style'), 'blue');
   assert.equal(await page.locator('html').getAttribute('data-theme'), 'dark');
   assert.equal(await page.locator('html').getAttribute('data-font'), 'serif');
-  await nav('设置与优化');
+  await nav('设置');
   assert.equal(await page.getByLabel('聊天字号', { exact: true }).inputValue(), '14');
   await page.getByRole('button', { name: '恢复默认外观', exact: true }).click();
   assert.equal(await page.locator('html').getAttribute('data-style'), 'graphite');

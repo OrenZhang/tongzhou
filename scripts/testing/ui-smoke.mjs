@@ -1,3 +1,4 @@
+import { openModels } from './navigation-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { build } from 'esbuild';
 import { createRequire } from 'node:module';
@@ -186,11 +187,10 @@ try {
     BrowserWindow.getAllWindows().forEach((w) => w.setIgnoreMouseEvents(true)),
   );
   const nav = async (name) => {
-    if (name === '连接中心') {
-      await page
-        .locator('.sidebar')
-        .getByRole('button', { name: '设置与优化', exact: true })
-        .click();
+    if (name === '模型') {
+      await openModels(page);
+    } else if (name === '连接中心') {
+      await page.locator('.sidebar').getByRole('button', { name: '设置', exact: true }).click();
       await page.getByRole('button', { name: '打开连接中心', exact: true }).click();
     } else await page.locator('.sidebar').getByRole('button', { name, exact: true }).click();
   };
@@ -222,6 +222,20 @@ try {
   await page.getByRole('combobox', { name: '搜索操作或会话' }).fill('模型');
   await page.keyboard.press('Enter');
   await page.getByRole('heading', { name: '模型', exact: true }).waitFor();
+  assert.equal(
+    await page.locator('.sidebar').getByRole('button', { name: '模型', exact: true }).count(),
+    0,
+  );
+  assert.equal(
+    await page
+      .locator('.sidebar')
+      .getByRole('button', { name: '设置', exact: true })
+      .getAttribute('aria-current'),
+    'page',
+  );
+  await page.getByRole('button', { name: '返回设置', exact: true }).click();
+  await page.getByRole('heading', { name: '设置', exact: true }).waitFor();
+  await page.getByRole('button', { name: '打开模型', exact: true }).click();
   checks.push('keyboard command search opens the selected real module');
   await page.getByLabel('搜索模型连接', { exact: true }).fill('does-not-exist');
   await page.getByText('没有匹配的连接，试试其他关键词。', { exact: true }).waitFor();
@@ -377,7 +391,7 @@ try {
     await page.getByLabel('类型', { exact: true }).selectOption('all');
     await nav('运行记录');
     await capture(`${width}-activity`);
-    await nav('设置与优化');
+    await nav('设置');
     await capture(`${width}-settings`);
     await page.keyboard.press(shortcut);
     await page.getByRole('combobox', { name: '搜索操作或会话' }).fill('项目');

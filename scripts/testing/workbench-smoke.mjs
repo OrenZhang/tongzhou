@@ -55,7 +55,7 @@ try {
     if (label === '连接中心') {
       await page
         .locator('.sidebar')
-        .getByRole('button', { name: '设置与优化', exact: true })
+        .getByRole('button', { name: '设置', exact: true })
         .click();
       await page.getByRole('button', { name: '打开连接中心', exact: true }).click();
     } else await page.locator('.sidebar').getByRole('button', { name: label, exact: true }).click();
@@ -495,7 +495,7 @@ try {
     'Git worktree capabilities remain available to agents without a configuration page',
     'isolated sessions group under their source and keep their actual directory binding',
   );
-  await nav('设置与优化');
+  await nav('设置');
   await page.getByRole('button', { name: '深色', exact: true }).click();
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
   await page.reload();
@@ -510,7 +510,7 @@ try {
       [width, height],
     );
     for (const theme of ['dark', 'light']) {
-      await nav('设置与优化');
+      await nav('设置');
       await page
         .getByRole('button', { name: theme === 'dark' ? '深色' : '浅色', exact: true })
         .click();
@@ -550,7 +550,7 @@ try {
       }
     }
   }
-  await nav('设置与优化');
+  await nav('设置');
   await page.getByRole('button', { name: '跟随系统', exact: true }).click();
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
