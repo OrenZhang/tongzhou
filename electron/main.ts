@@ -71,6 +71,7 @@ import { writeClipboardText } from './services/desktop/clipboard';
 import { DesktopComputer } from './services/desktop/computer';
 import { computerDiagnostic } from './services/desktop/computer-diagnostic';
 import { ComputerPermissions } from './services/desktop/computer-permissions';
+import { ComputerPermissionPanel } from './services/desktop/computer-permission-panel';
 import { Updates } from './services/desktop/updates';
 import { networkProfileSchema } from './services/network/network-config';
 import { NetworkProfiles } from './services/network/network-profiles';
@@ -108,6 +109,7 @@ let bots: Bots;
 let mcpAuth: McpAuth;
 const computer = new DesktopComputer();
 const computerPermissions = new ComputerPermissions();
+const computerPermissionPanel = new ComputerPermissionPanel(computerPermissions);
 const clientCommands = new ClientCommands();
 let quitting = false;
 const pendingImports = new Map<string, ProviderInput>();
@@ -1083,20 +1085,12 @@ function setup() {
       z.enum(['accessibility', 'screen']),
     ]),
     (permission) =>
-      computerPermissions.openSettings(z.enum(['accessibility', 'screen']).parse(permission)),
+      computerPermissionPanel.open(z.enum(['accessibility', 'screen']).parse(permission)),
   );
   register(
     'computerRevealApplication',
     manual('电脑控制', '在 Finder 中显示当前应用', 'extensions', '由用户选择需要授权的应用'),
     () => computerPermissions.revealApplication(),
-  );
-  register(
-    'computerDragApplication',
-    manual('电脑控制', '拖动当前应用到系统权限列表', 'extensions', '由用户拖动图标并开启系统权限'),
-    () => {
-      if (!window || window.isDestroyed()) throw new Error('应用窗口已关闭');
-      computerPermissions.startDrag(window.webContents);
-    },
   );
   let diagnosing = false;
   register(
@@ -1681,6 +1675,11 @@ async function createWindow() {
     },
   });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  window.on('focus', () => computerPermissionPanel.close());
+  window.on('closed', () => {
+    computerPermissionPanel.close();
+    window = undefined;
+  });
   window.webContents.on('will-navigate', (event, url) => {
     if (!trusted(url)) event.preventDefault();
   });
@@ -1734,6 +1733,7 @@ else {
     if (quitting || !runtime) return;
     event.preventDefault();
     quitting = true;
+    computerPermissionPanel.close();
     updates.dispose();
     globalShortcut.unregisterAll();
     accounts.dispose();

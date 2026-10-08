@@ -28,7 +28,7 @@ try {
   await app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows().forEach((w) => w.setIgnoreMouseEvents(true)),
   );
-  await page.getByRole('button', { name: /^模型与订阅/ }).click();
+  await page.getByRole('button', { name: /^模型/ }).click();
   const checks = [];
   for (const [engine, label] of [
     ['kimi', 'Kimi Code'],
@@ -56,7 +56,7 @@ try {
     await card.getByRole('button', { name: '打开授权页面', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: '关闭', exact: true }).click();
     await page.getByRole('button', { name: '返回会话', exact: true }).click();
-    await page.getByRole('button', { name: /^模型与订阅/ }).click();
+    await page.getByRole('button', { name: /^模型/ }).click();
     await page.getByRole('button', { name: `编辑 ${providerName}`, exact: true }).click();
     await page.getByRole('button', { name: '前往登录', exact: true }).click();
     await card.getByLabel(`${label} 设备码`, { exact: true }).waitFor();

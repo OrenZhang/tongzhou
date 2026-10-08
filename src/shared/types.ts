@@ -557,7 +557,6 @@ export interface TongzhouAPI {
   computerPermissionGuide(): Promise<ComputerPermissionGuide | null>;
   computerOpenPermissionSettings(permission: 'accessibility' | 'screen'): Promise<void>;
   computerRevealApplication(): Promise<void>;
-  computerDragApplication(): Promise<void>;
   computerSelfTest(): Promise<ComputerStatus>;
   emergencyStop(): Promise<void>;
   snapshot(): Promise<Snapshot>;

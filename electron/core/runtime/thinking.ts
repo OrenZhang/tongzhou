@@ -49,7 +49,7 @@ export function thinkingRequest(
         };
       if (p.maxOutputTokens < 2048)
         throw new Error(
-          '此 Claude 模型开启思考需要至少 2048 的单次最大输出 Tokens，请在模型与订阅调整。',
+          '此 Claude 模型开启思考需要至少 2048 的单次最大输出 Tokens，请在模型调整。',
         );
       return {
         body: {

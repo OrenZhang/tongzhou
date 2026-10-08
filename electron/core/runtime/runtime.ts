@@ -646,7 +646,7 @@ export class Runtime {
       throw new Error('已启用的 Skill 指令过长，请减少启用数量');
     const provider = this.store.get<Provider>('provider', input.providerId);
     if (provider.enabled === false)
-      throw new Error('此连接已停用，请在模型与订阅中启用，或选择其他连接。');
+      throw new Error('此连接已停用，请在模型中启用，或选择其他连接。');
     const project =
       session.projectId && !session.knowledgeJob
         ? this.store.get<Project>('project', session.projectId)

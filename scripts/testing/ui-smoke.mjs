@@ -219,9 +219,9 @@ try {
     true,
   );
   await page.keyboard.press('Tab');
-  await page.getByRole('combobox', { name: '搜索操作或会话' }).fill('模型与订阅');
+  await page.getByRole('combobox', { name: '搜索操作或会话' }).fill('模型');
   await page.keyboard.press('Enter');
-  await page.getByRole('heading', { name: '模型与订阅', exact: true }).waitFor();
+  await page.getByRole('heading', { name: '模型', exact: true }).waitFor();
   checks.push('keyboard command search opens the selected real module');
   await page.getByLabel('搜索模型连接', { exact: true }).fill('does-not-exist');
   await page.getByText('没有匹配的连接，试试其他关键词。', { exact: true }).waitFor();
@@ -352,7 +352,7 @@ try {
     await page.locator('.context-panel').waitFor();
     await page.locator('.turn-final').waitFor();
     await capture(`${width}-project`);
-    await nav('模型与订阅');
+    await nav('模型');
     await capture(`${width}-connections`);
     await page.getByRole('button', { name: '添加连接', exact: true }).click();
     await capture(`${width}-connection-editor`);

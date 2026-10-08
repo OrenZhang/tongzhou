@@ -181,7 +181,7 @@ try {
     () => page.evaluate((id) => window.tongzhou.deleteNetworkProfile(id), id),
     /取消使用/,
   );
-  await page.getByRole('button', { name: /^模型与订阅/ }).click();
+  await page.getByRole('button', { name: /^模型/ }).click();
   await page.getByRole('button', { name: '编辑 OpenAI · ChatGPT', exact: true }).click();
   assert.equal(await page.getByLabel('ChatGPT 网络方式', { exact: true }).inputValue(), 'managed');
   // Profile options arrive through IPC after the editor opens. Wait for that list

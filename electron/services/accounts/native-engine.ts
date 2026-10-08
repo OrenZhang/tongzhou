@@ -166,7 +166,7 @@ export class NativeClient extends EventEmitter {
       if (error.code === -32000)
         throw Object.assign(
           new Error(
-            `尚未登录 ${this.kind === 'kimi' ? 'Kimi' : 'MiniMax'}，请在模型与订阅中完成账号授权。`,
+            `尚未登录 ${this.kind === 'kimi' ? 'Kimi' : 'MiniMax'}，请在模型中完成账号授权。`,
           ),
           { code: -32000 },
         );

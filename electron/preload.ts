@@ -150,7 +150,6 @@ const api: TongzhouAPI = {
   computerOpenPermissionSettings: (permission) =>
     call('computerOpenPermissionSettings', permission),
   computerRevealApplication: () => call('computerRevealApplication'),
-  computerDragApplication: () => call('computerDragApplication'),
   computerSelfTest: () => call('computerSelfTest'),
   emergencyStop: () => call('emergencyStop'),
   snapshot: () => call('snapshot'),

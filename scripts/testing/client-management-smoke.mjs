@@ -226,7 +226,7 @@ try {
     await page.locator('.sidebar').getByRole('button', { name: '连接中心', exact: true }).count(),
     0,
   );
-  await page.locator('.sidebar').getByRole('button', { name: '模型与订阅', exact: true }).click();
+  await page.locator('.sidebar').getByRole('button', { name: '模型', exact: true }).click();
   assert.equal(await page.getByRole('button', { name: '服务与浏览器', exact: true }).count(), 0);
   await page.locator('.sidebar').getByRole('button', { name: '设置与优化', exact: true }).click();
   await page.getByRole('button', { name: '打开连接中心', exact: true }).click();

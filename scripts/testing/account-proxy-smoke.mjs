@@ -61,7 +61,7 @@ try {
   await app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()[0].setContentSize(1250, 900),
   );
-  await page.getByRole('button', { name: /^模型与订阅/ }).click();
+  await page.getByRole('button', { name: /^模型/ }).click();
   await page.getByRole('button', { name: '编辑 OpenAI · ChatGPT', exact: true }).click();
   await page.getByLabel('ChatGPT 网络方式', { exact: true }).selectOption('proxy');
   await page.getByLabel('ChatGPT 独立代理地址', { exact: true }).fill(proxyUrl);

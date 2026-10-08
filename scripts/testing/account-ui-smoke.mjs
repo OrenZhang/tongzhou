@@ -40,7 +40,7 @@ try {
       if (['codex', 'kimi', 'minimax'].includes(provider.protocol))
         await window.tongzhou.saveProvider({ ...provider, enabled: true });
   });
-  await page.getByRole('button', { name: /^模型与订阅/ }).click();
+  await page.getByRole('button', { name: /^模型/ }).click();
   await page
     .locator('.provider-card')
     .filter({ has: page.getByRole('heading', { name: 'OpenAI · ChatGPT', exact: true }) })
@@ -82,7 +82,7 @@ try {
   await page.getByRole('button', { name: '打开连接中心', exact: true }).click();
   assert.equal(await page.locator('.auth-badge.connected').count(), 0);
   await page.getByRole('heading', { name: '连接中心', exact: true }).waitFor();
-  await page.locator('.sidebar').getByRole('button', { name: '模型与订阅', exact: true }).click();
+  await page.locator('.sidebar').getByRole('button', { name: '模型', exact: true }).click();
   assert.equal(await page.locator('.auth-badge.connected').count(), 2);
   console.log(
     'Account UI smoke passed: single-provider dialogs, verified badges, return navigation. States are fixtures.',

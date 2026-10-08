@@ -466,7 +466,7 @@ export async function completeRequest(input: CompletionInput): Promise<Completio
           (calls.size
             ? '本次工具调用未执行，参数可能不完整；此前已完成的操作保留。'
             : '已收到的正文已保留。') +
-          '可在“模型与订阅 → 编辑该连接 → 单次最大输出 Tokens”调整后继续；服务或网关也可能另设上限。',
+          '可在“模型 → 编辑该连接 → 单次最大输出 Tokens”调整后继续；服务或网关也可能另设上限。',
       );
     const anthropicBlocks = new Map<string, Record<string, any>>();
     let finished = false;

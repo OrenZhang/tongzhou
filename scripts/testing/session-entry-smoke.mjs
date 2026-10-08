@@ -25,7 +25,7 @@ try {
     })),
   );
   assert.equal(await page.getByRole('button', { name: '工作空间', exact: true }).count(), 0);
-  await page.getByRole('button', { name: '管理模型与订阅', exact: true }).waitFor();
+  await page.getByRole('button', { name: '管理模型', exact: true }).waitFor();
   await page.getByRole('button', { name: '新建普通会话', exact: true }).click();
   await page.getByRole('heading', { name: '新会话', exact: true }).waitFor();
   const emptySession = (await page.evaluate(() => window.tongzhou.snapshot())).sessions[0];
@@ -93,7 +93,7 @@ try {
   await page.keyboard.press('Escape');
   assert.deepEqual(options.sort(), ['key-ready', 'ready']);
   await page.getByLabel('消息', { exact: true }).fill('保留这份草稿');
-  await page.getByRole('button', { name: '模型与订阅', exact: true }).click();
+  await page.getByRole('button', { name: '模型', exact: true }).click();
   await page.getByRole('button', { name: '编辑 可用服务', exact: true }).click();
   await page.locator('.thinking-settings > summary').click();
   assert.equal(await page.getByLabel('模型思考', { exact: true }).inputValue(), 'on');
@@ -176,7 +176,7 @@ try {
   await page.getByRole('heading', { name: '恢复会话测试', exact: true }).waitFor();
   assert.equal(await page.getByLabel('消息', { exact: true }).inputValue(), '保留这份草稿');
   await page.getByText('可用服务：已停用', { exact: true }).waitFor();
-  await page.getByRole('button', { name: '模型与订阅', exact: true }).click();
+  await page.getByRole('button', { name: '模型', exact: true }).click();
   await page.getByRole('switch', { name: '启用连接 可用服务', exact: true }).check();
   await page.getByRole('button', { name: '返回会话', exact: true }).click();
   await page.waitForFunction(

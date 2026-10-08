@@ -36,7 +36,7 @@ try {
   assert.equal(systemName.name, '同舟');
   assert.equal(systemName.executable, executablePath);
   checks.push('Development runtime is 同舟.app with the branded bundle identity and icon');
-  await app.evaluate(({ BrowserWindow, ipcMain, shell }) => {
+  await app.evaluate(({ app, BrowserWindow, ipcMain, shell }) => {
     globalThis.permissionStatus = {
       supported: true,
       platform: 'darwin',
@@ -53,36 +53,121 @@ try {
     shell.showItemInFolder = (file) => {
       globalThis.permissionCalls.reveal.push(file);
     };
-    BrowserWindow.getAllWindows()[0].webContents.startDrag = ({ file, icon }) => {
-      globalThis.permissionCalls.drag.push({ file, hasIcon: !icon.isEmpty() });
-    };
+    app.on('browser-window-created', (_, window) => {
+      window.webContents.startDrag = ({ file, icon }) => {
+        globalThis.permissionCalls.drag.push({
+          file,
+          hasIcon: !icon.isEmpty(),
+          size: icon.getSize(),
+        });
+      };
+    });
     BrowserWindow.getAllWindows()[0].setContentSize(1200, 1000);
   });
   await page.locator('.sidebar').getByRole('button', { name: '插件', exact: true }).click();
   const guide = page.getByRole('region', { name: 'macOS 授权引导', exact: true });
-  const draggable = guide.getByRole('button', {
-    name: `拖动 ${application.name} 到系统设置`,
-    exact: true,
-  });
-  await draggable.waitFor();
-  assert.equal(await draggable.getAttribute('draggable'), 'true');
+  assert.equal(await guide.locator('[draggable=true]').count(), 0);
   await guide.getByRole('button', { name: '打开辅助功能设置', exact: true }).click();
   await guide.getByRole('status').filter({ hasText: '已打开辅助功能设置' }).waitFor();
+  const firstPanel = app.windows().find((candidate) => candidate !== page);
+  await firstPanel.locator('#application').waitFor();
+  assert.equal(await firstPanel.evaluate(() => typeof window.tongzhou), 'undefined');
+  const options = await app.evaluate(({ BrowserWindow }) => {
+    const panel = BrowserWindow.getAllWindows().find((w) => w.getTitle() === '同舟授权助手');
+    return {
+      focusable: panel.isFocusable(),
+      focused: panel.isFocused(),
+      floating: panel.isAlwaysOnTop(),
+    };
+  });
+  assert.deepEqual(options, { focusable: false, focused: false, floating: true });
+  await firstPanel.screenshot({ path: path.join(root, 'authorization-panel.png') });
   await guide.getByRole('button', { name: '打开屏幕录制设置', exact: true }).click();
   await guide.getByRole('status').filter({ hasText: '已打开屏幕录制设置' }).waitFor();
-  await guide.getByRole('button', { name: '在 Finder 中显示', exact: true }).click();
-  await guide.getByRole('status').filter({ hasText: '已在 Finder 中选中' }).waitFor();
-  await draggable.dispatchEvent('dragstart');
-  await page.waitForFunction(() => window.tongzhou.computerPermissionGuide().then(() => true));
+  const panel = app.windows().find((candidate) => candidate !== page);
+  await panel.locator('#application').waitFor();
+  assert.equal(await panel.locator('#application').getAttribute('draggable'), 'true');
+  assert.equal(
+    await app.evaluate(
+      ({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows().filter((w) => w.getTitle() === '同舟授权助手').length,
+    ),
+    1,
+  );
+  await app.evaluate(({ BrowserWindow, ipcMain }) => {
+    const main = BrowserWindow.getAllWindows().find((w) => w.getTitle() !== '同舟授权助手');
+    ipcMain.emit('tongzhou:permission-panel-drag', {
+      sender: main.webContents,
+      senderFrame: main.webContents.mainFrame,
+    });
+    ipcMain.emit('tongzhou:permission-panel-close', {
+      sender: main.webContents,
+      senderFrame: main.webContents.mainFrame,
+    });
+  });
+  assert.equal(await panel.isClosed(), false);
+  assert.equal((await app.evaluate(() => globalThis.permissionCalls.drag)).length, 0);
+  await panel.getByRole('button', { name: '在 Finder 中显示', exact: true }).click();
+  await panel.locator('#application').dispatchEvent('dragstart');
+  await panel.waitForTimeout(100);
   const calls = await app.evaluate(() => globalThis.permissionCalls);
   assert.deepEqual(calls.settings, [
     'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility',
     'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture',
   ]);
   assert.deepEqual(calls.reveal, [application.path]);
-  assert.deepEqual(calls.drag, [{ file: application.path, hasIcon: true }]);
+  assert.deepEqual(calls.drag, [
+    { file: application.path, hasIcon: true, size: { width: 64, height: 64 } },
+  ]);
   checks.push(
-    'Real running .app bundle and native icon; renderer dragstart routes that bundle to startDrag; fixed settings links and Finder fallback',
+    'Only the nonactivating floating panel routes the verified .app to native drag; singleton, isolated preload, trusted sender gate, fixed settings links and Finder fallback',
+  );
+  const closed = panel.waitForEvent('close');
+  await panel.getByRole('button', { name: '关闭授权助手', exact: true }).click();
+  await closed;
+  assert.equal(
+    await app.evaluate(({ ipcMain }) => ipcMain.listenerCount('tongzhou:permission-panel-drag')),
+    0,
+  );
+  await app.evaluate(async ({ BrowserWindow }) => {
+    const target = new BrowserWindow({
+      title: '权限焦点测试',
+      width: 500,
+      height: 400,
+      show: false,
+    });
+    await target.loadURL(
+      'data:text/html,<title>权限焦点测试</title><p>仅用于验证授权浮窗不抢焦点</p>',
+    );
+    globalThis.permissionFocusTarget = target;
+    target.show();
+    target.focus();
+  });
+  await page.evaluate(() => window.tongzhou.computerOpenPermissionSettings('accessibility'));
+  const focused = await app.evaluate(({ BrowserWindow }) => ({
+    target: globalThis.permissionFocusTarget.id,
+    current: BrowserWindow.getFocusedWindow()?.id,
+  }));
+  assert.equal(
+    focused.current,
+    focused.target,
+    'Opening the panel must preserve the target window focus',
+  );
+  await app.evaluate(({ BrowserWindow }) => {
+    const main = BrowserWindow.getAllWindows().find((w) => w.getTitle() === '同舟 Tongzhou');
+    main.focus();
+  });
+  await page.waitForTimeout(100);
+  assert.equal(
+    await app.evaluate(
+      ({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows().filter((w) => w.getTitle() === '同舟授权助手').length,
+    ),
+    0,
+  );
+  await app.evaluate(() => globalThis.permissionFocusTarget.close());
+  checks.push(
+    'Native target-window focus survives panel creation; returning to the main window dismisses the panel',
   );
   await page.screenshot({ path: path.join(root, 'permissions-pending.png') });
   await app.evaluate(() => {

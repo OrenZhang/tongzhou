@@ -142,7 +142,7 @@ try {
   assert.equal(await page.locator('.artifact-strip .artifact-card').count(), 2);
   await page.screenshot({ path: path.join(root, 'chat-file-links.png'), animations: 'disabled' });
   assert.equal(await page.locator('.workspace-navigation').count(), 0);
-  for (const name of ['Agent', '智库', '模型与订阅', '插件', '运行记录', '定时任务'])
+  for (const name of ['Agent', '智库', '模型', '插件', '运行记录', '定时任务'])
     assert.equal(
       await page.locator('.sidebar-bottom').getByRole('button', { name, exact: true }).count(),
       1,

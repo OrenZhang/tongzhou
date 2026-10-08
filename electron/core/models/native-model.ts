@@ -130,6 +130,6 @@ export async function nativeModelConnection(
   } catch (error: any) {
     // Parser and SDK errors can contain the credential text. Never propagate them.
     if (/^(MiniMax|Kimi|此 |不是订阅|订阅令牌)/.test(error.message ?? '')) throw error;
-    throw new Error('订阅模型凭据读取或刷新失败，请在模型与订阅中重新登录。');
+    throw new Error('订阅模型凭据读取或刷新失败，请在模型中重新登录。');
   }
 }

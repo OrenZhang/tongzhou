@@ -692,7 +692,7 @@ export default function App() {
       items: [
         { id: 'agents', label: 'Agent', icon: Users },
         { id: 'knowledge', label: '智库', icon: BookOpen },
-        { id: 'providers', label: '模型与订阅', icon: Network },
+        { id: 'providers', label: '模型', icon: Network },
         { id: 'extensions', label: '插件', icon: Puzzle },
       ],
     },
@@ -1022,7 +1022,7 @@ export default function App() {
               )}
               <p className="footnote">
                 使用内置官方客户端管理登录与续期，凭据保存在同舟独立目录。任务统一由 Codex
-                核心执行。账号套餐与 API Key 分开配置；API / 套餐 Key 可在“模型与订阅”中添加。
+                核心执行。账号套餐与 API Key 分开配置；API / 套餐 Key 可在“模型”中添加。
               </p>
             </section>
           );
@@ -1164,7 +1164,7 @@ export default function App() {
                 {view === 'workspace'
                   ? (project?.name ?? (session ? '会话' : '新会话'))
                   : {
-                      providers: '模型与订阅',
+                      providers: '模型',
                       connections: '连接中心',
                       agents: 'Agent',
                       activity: '运行记录',
@@ -1819,7 +1819,7 @@ export default function App() {
                           : '先连接一个模型，即可开始聊天'}
                       </span>
                       <button className="text-button" onClick={() => setView('providers')}>
-                        管理模型与订阅 <ArrowRight size={13} />
+                        管理模型 <ArrowRight size={13} />
                       </button>
                     </div>
                   )}
@@ -1882,7 +1882,7 @@ export default function App() {
               <div className="page-heading">
                 <div className="page-title-row">
                   <div>
-                    <h1>模型与订阅</h1>
+                    <h1>模型</h1>
                     <p>管理模型服务与订阅账号，选择适合当前任务的模型。</p>
                   </div>
                 </div>

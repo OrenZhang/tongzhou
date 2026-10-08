@@ -92,7 +92,7 @@ try {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.screenshot({ path: 'test-results/01-workspace.png' });
-  await page.getByRole('button', { name: /^模型与订阅/ }).click();
+  await page.getByRole('button', { name: /^模型/ }).click();
   await page.getByRole('button', { name: '添加连接', exact: true }).click();
   assert.equal(await page.getByLabel('历史上下文', { exact: true }).inputValue(), 'unlimited');
   await page.getByLabel('连接名称', { exact: true }).fill('本地测试服务');
