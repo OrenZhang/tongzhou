@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import type { LocalGitlabAccount, PluginConfig, TongzhouAPI } from '../../shared/types';
 import { errorMessage } from '../../lib/feedback';
 
@@ -7,14 +7,17 @@ export function LocalGitlab({
   refresh,
   instance = 'https://gitlab.com',
   instances = [],
+  showInstanceInput = true,
   onConfigure,
 }: {
   api: TongzhouAPI;
   refresh: () => Promise<void>;
   instance?: string;
   instances?: string[];
+  showInstanceInput?: boolean;
   onConfigure: (plugin: PluginConfig) => void;
 }) {
+  const instancesId = useId();
   const [baseUrl, setBaseUrl] = useState(instance);
   const [accounts, setAccounts] = useState<LocalGitlabAccount[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -32,27 +35,29 @@ export function LocalGitlab({
   };
   return (
     <div className="local-github">
-      <label>
-        检测 GitLab 实例
-        <input
-          aria-label="检测 GitLab 实例"
-          type="url"
-          placeholder="https://gitlab.com"
-          value={baseUrl}
-          disabled={busy}
-          list="local-gitlab-instances"
-          onChange={(event) => {
-            setBaseUrl(event.target.value);
-            setAccounts(null);
-            setNotice('');
-          }}
-        />
-        <datalist id="local-gitlab-instances">
-          {[...new Set(['https://gitlab.com', ...instances])].map((url) => (
-            <option value={url} key={url} />
-          ))}
-        </datalist>
-      </label>
+      {showInstanceInput && (
+        <label>
+          检测 GitLab 实例
+          <input
+            aria-label="检测 GitLab 实例"
+            type="url"
+            placeholder="https://gitlab.com"
+            value={baseUrl}
+            disabled={busy}
+            list={instancesId}
+            onChange={(event) => {
+              setBaseUrl(event.target.value);
+              setAccounts(null);
+              setNotice('');
+            }}
+          />
+          <datalist id={instancesId}>
+            {[...new Set(['https://gitlab.com', ...instances])].map((url) => (
+              <option value={url} key={url} />
+            ))}
+          </datalist>
+        </label>
+      )}
       <div className="row">
         <span className="muted">复用本机已有登录</span>
         <button

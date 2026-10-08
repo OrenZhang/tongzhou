@@ -258,6 +258,29 @@ try {
     await dialog.getByRole('checkbox', { name: '在会话中启用此插件', exact: true }).isChecked(),
     false,
   );
+  assert.equal(await dialog.getByLabel('检测 GitLab 实例', { exact: true }).count(), 0);
+  await dialog.getByRole('button', { name: '检测本地账号', exact: true }).click();
+  await dialog
+    .getByRole('button', { name: '使用 local-gitlab-user 的GitLab CLI并配置', exact: true })
+    .waitFor();
+  await dialog.getByLabel('GitLab 实例地址', { exact: true }).fill('https://gitlab.com');
+  assert.equal(await dialog.getByRole('button', { name: /并配置$/ }).count(), 0);
+  await dialog
+    .getByLabel('GitLab 实例地址', { exact: true })
+    .fill('https://gitlab.fixture.example:8443');
+  await dialog.getByRole('button', { name: '检测本地账号', exact: true }).click();
+  await dialog
+    .getByRole('button', { name: '使用 local-gitlab-user 的Git 凭据并配置', exact: true })
+    .click();
+  await dialog
+    .getByText('本地账号已保存。请完成此 GitLab 实例的浏览器授权，再启用插件。')
+    .waitFor();
+  assert.equal(
+    await dialog.getByLabel('GitLab 实例地址', { exact: true }).inputValue(),
+    'https://gitlab.fixture.example:8443',
+  );
+  assert.ok(!(await dialog.innerText()).includes('fixture-local-gitlab-token'));
+  await page.screenshot({ path: 'test-results/local-gitlab-dialog.png' });
   await dialog.getByRole('button', { name: '关闭', exact: true }).click();
   const gitlabState = await page.evaluate(() => window.tongzhou.snapshot());
   const gitlabAccount = gitlabState.connectors.find((c) => c.kind === 'gitlab');

@@ -297,6 +297,15 @@ export function WorkPlugins({
     }
   };
   const current = edit ? data.plugins?.find((p) => p.id === edit.id) : undefined;
+  const configureLocalGitlab = (plugin: PluginConfig) => {
+    setSelectedConnections((old) => ({ ...old, gitlab: plugin.id }));
+    setEditingService('gitlab');
+    setLoginUrl('');
+    setToken('');
+    setSource('');
+    setNotice('本地账号已保存。请完成此 GitLab 实例的浏览器授权，再启用插件。');
+    setEdit({ ...plugin, secret: '' });
+  };
   const save = async () => {
     if (!edit) return;
     if (editingService === 'gitlab' && codeHost(edit) !== 'gitlab')
@@ -470,15 +479,7 @@ export function WorkPlugins({
                     instances={(data.connectors ?? [])
                       .filter((c) => c.kind === 'gitlab')
                       .map((c) => c.baseUrl)}
-                    onConfigure={(plugin) => {
-                      setSelectedConnections((old) => ({ ...old, gitlab: plugin.id }));
-                      setEditingService('gitlab');
-                      setLoginUrl('');
-                      setToken('');
-                      setSource('');
-                      setNotice('本地账号已保存。请完成此 GitLab 实例的浏览器授权，再启用插件。');
-                      setEdit({ ...plugin, secret: '' });
-                    }}
+                    onConfigure={configureLocalGitlab}
                   />
                 )}
               </article>
@@ -525,6 +526,14 @@ export function WorkPlugins({
                     }
                   />
                 </label>
+                <LocalGitlab
+                  key={edit.url}
+                  api={api}
+                  refresh={refresh}
+                  instance={edit.url.replace(/\/api\/v4\/mcp\/?$/, '')}
+                  showInstanceInput={false}
+                  onConfigure={configureLocalGitlab}
+                />
                 {(data.connectors ?? []).some((c) => c.kind === 'gitlab') && (
                   <label>
                     使用已有 GitLab 站点
