@@ -30,7 +30,7 @@ export function SessionPermission({
 }) {
   const selected = session.permission ?? defaultPermission;
   const actual = running?.config?.permission ?? effective;
-  const switching = running?.phase === '切换执行权限' || (running && actual !== effective);
+  const switching = running?.phase === '切换执行权限';
   return (
     <div className={'session-permission ' + selected}>
       <ChoicePicker
@@ -60,7 +60,9 @@ export function SessionPermission({
       ) : switching ? (
         <span role="status">正在切换权限…</span>
       ) : running ? (
-        <span>当前任务生效</span>
+        <span>
+          {actual === selected ? '当前任务生效' : `当前任务：${permissionLabels[actual]}`}
+        </span>
       ) : null}
     </div>
   );
