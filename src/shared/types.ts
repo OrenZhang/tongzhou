@@ -135,6 +135,12 @@ export interface ComputerStatus {
   accessibility: boolean;
   emergencyShortcut: boolean;
 }
+export interface ComputerPermissionGuide {
+  name: string;
+  path: string;
+  icon: string;
+  development: boolean;
+}
 export interface Project {
   gitConnectorId?: string;
   sourceProjectId?: string;
@@ -548,6 +554,10 @@ export interface TongzhouAPI {
   deleteSkill(id: string): Promise<void>;
   computerStatus(): Promise<ComputerStatus>;
   computerPermission(): Promise<ComputerStatus>;
+  computerPermissionGuide(): Promise<ComputerPermissionGuide | null>;
+  computerOpenPermissionSettings(permission: 'accessibility' | 'screen'): Promise<void>;
+  computerRevealApplication(): Promise<void>;
+  computerDragApplication(): Promise<void>;
   computerSelfTest(): Promise<ComputerStatus>;
   emergencyStop(): Promise<void>;
   snapshot(): Promise<Snapshot>;

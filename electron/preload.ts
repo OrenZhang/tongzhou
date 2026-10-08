@@ -146,6 +146,11 @@ const api: TongzhouAPI = {
   deleteSkill: (id) => call('deleteSkill', id),
   computerStatus: () => call('computerStatus'),
   computerPermission: () => call('computerPermission'),
+  computerPermissionGuide: () => call('computerPermissionGuide'),
+  computerOpenPermissionSettings: (permission) =>
+    call('computerOpenPermissionSettings', permission),
+  computerRevealApplication: () => call('computerRevealApplication'),
+  computerDragApplication: () => call('computerDragApplication'),
   computerSelfTest: () => call('computerSelfTest'),
   emergencyStop: () => call('emergencyStop'),
   snapshot: () => call('snapshot'),

@@ -102,3 +102,23 @@ ico.writeUInt32LE(22, 18);
 await mkdir('build', { recursive: true });
 await writeFile('build/icon.png', render(512));
 await writeFile('build/icon.ico', Buffer.concat([ico, png]));
+// PNG-backed ICNS entries are understood by modern macOS at every Dock scale.
+const iconEntries = [
+  ['icp4', 16],
+  ['icp5', 32],
+  ['icp6', 64],
+  ['ic07', 128],
+  ['ic08', 256],
+  ['ic09', 512],
+  ['ic10', 1024],
+].map(([type, size]) => {
+  const data = render(size);
+  const header = Buffer.alloc(8);
+  header.write(type, 0, 'ascii');
+  header.writeUInt32BE(data.length + 8, 4);
+  return Buffer.concat([header, data]);
+});
+const iconHeader = Buffer.alloc(8);
+iconHeader.write('icns', 0, 'ascii');
+iconHeader.writeUInt32BE(8 + iconEntries.reduce((size, entry) => size + entry.length, 0), 4);
+await writeFile('build/icon.icns', Buffer.concat([iconHeader, ...iconEntries]));

@@ -2013,6 +2013,103 @@ svg {
   padding: 14px 0;
   font-size: 12px;
 }
+.computer-permission-guide {
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-muted);
+}
+.computer-permission-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.computer-permission-guide p {
+  margin: 5px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--secondary-text);
+}
+.computer-permission-rows {
+  margin-top: 14px;
+}
+.computer-permission-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+.computer-permission-row strong {
+  font-size: 13px;
+}
+.computer-permission-row span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 10px;
+  font-size: 11px;
+}
+.permission-granted {
+  color: var(--success);
+}
+.permission-missing {
+  color: var(--muted);
+}
+.computer-permission-guide .computer-permission-instruction {
+  margin: 10px 0;
+  color: var(--ink);
+}
+.computer-permission-application-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.computer-permission-application {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  color: var(--ink);
+  background: var(--surface);
+  text-align: left;
+  cursor: grab;
+}
+.computer-permission-application:active {
+  cursor: grabbing;
+}
+.computer-permission-application:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.computer-permission-application img {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+}
+.computer-permission-application span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.computer-permission-application small {
+  font-size: 11px;
+  color: var(--muted);
+}
+.computer-permission-path {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  .computer-permission-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
 .capability-card .capability-diagnostic p {
   margin: 5px 0;
 }

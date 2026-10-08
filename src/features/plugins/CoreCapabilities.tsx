@@ -3,6 +3,7 @@ import { Copy, Monitor, Settings2, Terminal, ShieldCheck, Square, ArrowRight } f
 import { Spinner } from '../../components/components';
 import { errorMessage } from '../../lib/feedback';
 import { ClientCapabilityCatalog } from './ClientCapabilityCatalog';
+import { ComputerSystemPermissions } from './ComputerSystemPermissions';
 import type { ComputerStatus, Snapshot, TongzhouAPI } from '../../shared/types';
 
 type Operation = { pending?: string; message?: string; error?: boolean; desired?: boolean };
@@ -45,6 +46,23 @@ export function CoreCapabilities({
       live = false;
     };
   }, [api]);
+  useEffect(() => {
+    if (status?.platform !== 'darwin') return;
+    let live = true;
+    const refreshPermissions = () => {
+      void api.computerStatus().then(
+        (next) => {
+          if (live) setStatus(next);
+        },
+        () => {},
+      );
+    };
+    window.addEventListener('focus', refreshPermissions);
+    return () => {
+      live = false;
+      window.removeEventListener('focus', refreshPermissions);
+    };
+  }, [api, status?.platform]);
   const act = async (
     key: Capability,
     pending: string,
@@ -133,7 +151,8 @@ export function CoreCapabilities({
       </button>
     </div>
   );
-  const diagnostic = status?.diagnostic;
+  const diagnostic = status?.supported ? status.diagnostic : undefined;
+  const unsupported = !!status && !status.supported;
   const computerBusy = !!operations.computer.pending;
   const testing = operations.computer.pending === '正在检测，请保持测试窗口可见…';
   const permissionLabel =
@@ -142,7 +161,7 @@ export function CoreCapabilities({
       : status?.platform === 'darwin'
         ? `屏幕录制：${status.screen === 'granted' ? '已授权' : '待授权'} · 辅助功能：${status.accessibility ? '已授权' : '待授权'}`
         : status
-          ? '当前系统暂不支持电脑控制。'
+          ? `${status.platform === 'linux' ? 'Linux' : '当前系统'} 暂不支持电脑控制。`
           : '系统状态尚未加载，可点击刷新。';
   return (
     <div className="core-capabilities">
@@ -158,63 +177,76 @@ export function CoreCapabilities({
           {toggle('computer')}
         </div>
         <p className="capability-description">
-          可以截图、点击、输入文字、使用快捷键。开启后，在会话里告诉 Agent
-          要操作哪个窗口、完成什么任务。
+          {unsupported
+            ? '当前系统暂不支持此能力。可以继续在会话中使用项目文件、终端和客户端管理。'
+            : '可以截图、点击、输入文字、使用快捷键。开启后，在会话里告诉 Agent 要操作哪个窗口、完成什么任务。'}
         </p>
-        {example('computer')}
-        <div
-          className={
-            'capability-diagnostic ' +
-            (diagnostic ? (diagnostic.ok ? 'is-success' : 'is-error') : '')
-          }
-          aria-live="polite"
-        >
-          <strong>
-            {testing
-              ? '正在检测电脑控制'
-              : diagnostic
-                ? diagnostic.ok
-                  ? '上次检测通过'
-                  : '上次检测未通过'
-                : '尚未检测电脑控制'}
-          </strong>
-          <p>
-            {testing
-              ? '正在验证窗口识别、截图和中文输入。测试只操作新建的本地窗口，不会发送给模型。'
-              : diagnostic
-                ? errorMessage(diagnostic.detail)
-                : '启用开关不代表系统功能已就绪。可先运行一次本机检测，不需要连接模型。'}
-          </p>
-          {!testing && diagnostic && (
-            <small>
-              检测时间：{new Date(diagnostic.time).toLocaleString()} · 结果仅代表当时的本机状态
-            </small>
-          )}
-        </div>
-        <div className="capability-actions">
-          <button
-            className="secondary"
-            disabled={computerBusy || !status?.supported || running > 0}
-            onClick={() =>
-              void act('computer', '正在检测，请保持测试窗口可见…', async () => {
-                const next = await api.computerSelfTest();
-                setStatus(next);
-                if (!next.diagnostic?.ok)
-                  throw new Error(errorMessage(next.diagnostic?.detail ?? '检测未完成，请重试。'));
-                return '检测通过，可以返回会话使用电脑控制。';
-              })
+        {!unsupported && example('computer')}
+        {status && <ComputerSystemPermissions api={api} status={status} onStatus={setStatus} />}
+        {!unsupported && (
+          <div
+            className={
+              'capability-diagnostic ' +
+              (diagnostic ? (diagnostic.ok ? 'is-success' : 'is-error') : '')
             }
+            aria-live="polite"
           >
-            {testing ? <Spinner /> : <Monitor size={15} />}
-            {testing ? '检测中…' : diagnostic && !diagnostic.ok ? '重新检测' : '检测电脑控制'}
-          </button>
+            <strong>
+              {testing
+                ? '正在检测电脑控制'
+                : diagnostic
+                  ? diagnostic.ok
+                    ? '上次检测通过'
+                    : '上次检测未通过'
+                  : '尚未检测电脑控制'}
+            </strong>
+            <p>
+              {testing
+                ? '正在验证窗口识别、截图和中文输入。测试只操作新建的本地窗口，不会发送给模型。'
+                : diagnostic
+                  ? errorMessage(diagnostic.detail)
+                  : '启用开关不代表系统功能已就绪。可先运行一次本机检测，不需要连接模型。'}
+            </p>
+            {!testing && diagnostic && (
+              <small>
+                检测时间：{new Date(diagnostic.time).toLocaleString()} · 结果仅代表当时的本机状态
+              </small>
+            )}
+          </div>
+        )}
+        <div className="capability-actions">
+          {!unsupported && (
+            <button
+              className="secondary"
+              disabled={computerBusy || !status?.supported || running > 0}
+              onClick={() =>
+                void act('computer', '正在检测，请保持测试窗口可见…', async () => {
+                  const next = await api.computerSelfTest();
+                  setStatus(next);
+                  if (!next.diagnostic?.ok)
+                    throw new Error(
+                      errorMessage(next.diagnostic?.detail ?? '检测未完成，请重试。'),
+                    );
+                  return '检测通过，可以返回会话使用电脑控制。';
+                })
+              }
+            >
+              {testing ? <Spinner /> : <Monitor size={15} />}
+              {testing ? '检测中…' : diagnostic && !diagnostic.ok ? '重新检测' : '检测电脑控制'}
+            </button>
+          )}
           <button
             className="text-button"
             disabled={computerBusy}
             onClick={() =>
               void act('computer', '正在检查系统状态…', async () => {
-                setStatus(await api.computerPermission());
-                return '系统状态已刷新。是否可以截图和输入，请以电脑控制检测结果为准。';
+                const next = await (status?.platform === 'darwin'
+                  ? api.computerPermission()
+                  : api.computerStatus());
+                setStatus(next);
+                return next.supported
+                  ? '系统状态已刷新。是否可以截图和输入，请以电脑控制检测结果为准。'
+                  : '系统状态已刷新。当前系统暂不支持电脑控制。';
               })
             }
           >
@@ -249,7 +281,7 @@ export function CoreCapabilities({
           </p>
           <p>
             {status?.emergencyShortcut
-              ? '紧急停止快捷键：Ctrl / ⌘ + Alt + Esc。'
+              ? `紧急停止快捷键：${status.platform === 'darwin' ? '⌘ + Option' : 'Ctrl + Alt'} + Esc。`
               : '紧急停止快捷键不可用，运行时请使用停止任务按钮。'}
           </p>
         </details>

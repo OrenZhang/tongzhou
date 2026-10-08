@@ -1,17 +1,10 @@
 import { spawn } from 'node:child_process';
-import { createServer } from 'vite';
 import electron from 'electron';
 import { prepareMacDevelopmentApp } from './macos-dev-app.mjs';
-await import('./icon.mjs');
-await import('./build.mjs');
+
 const executable = await prepareMacDevelopmentApp(electron);
-const server = await createServer();
-await server.listen();
-const env = { ...process.env, TONGZHOU_DEV_URL: 'http://127.0.0.1:5173' };
+const env = { ...process.env };
 delete env.ELECTRON_RUN_AS_NODE;
 const child = spawn(executable, ['.'], { stdio: 'inherit', env });
-child.on('exit', async (code) => {
-  await server.close();
-  process.exit(code ?? 0);
-});
+child.on('exit', (code) => process.exit(code ?? 0));
 process.on('SIGINT', () => child.kill());

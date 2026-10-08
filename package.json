@@ -13,7 +13,7 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "build": "node scripts/icon.mjs && tsc --noEmit && vite build && node scripts/build.mjs",
-    "start": "electron .",
+    "start": "node scripts/start.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:desktop": "node scripts/testing/smoke.mjs",
@@ -42,6 +42,7 @@
     "test:capabilities": "node scripts/testing/capabilities-smoke.mjs",
     "test:management": "node scripts/testing/client-management-smoke.mjs",
     "test:computer": "node scripts/testing/computer-smoke.mjs",
+    "test:mac-permissions": "node scripts/testing/macos-permissions-smoke.mjs",
     "test:live": "node scripts/testing/live-coding-smoke.mjs",
     "test:package": "node scripts/testing/package-smoke.mjs",
     "test:latency": "node scripts/testing/chat-latency-smoke.mjs",
@@ -154,13 +155,15 @@
       "createDesktopShortcut": true
     },
     "mac": {
-      "icon": "build/icon.png",
+      "icon": "build/icon.icns",
       "target": [
         "dmg",
         "zip"
       ],
       "category": "public.app-category.developer-tools",
       "extendInfo": {
+        "CFBundleDisplayName": "同舟",
+        "CFBundleName": "同舟",
         "NSAppleEventsUsageDescription": "同舟需要在你批准后聚焦指定窗口并完成电脑操作。"
       }
     },

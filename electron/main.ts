@@ -13,6 +13,7 @@ import {
 } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import { randomUUID } from 'node:crypto';
+import { mkdirSync } from 'node:fs';
 import { realpath, stat, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -69,6 +70,7 @@ import { Feishu } from './services/channels/feishu';
 import { writeClipboardText } from './services/desktop/clipboard';
 import { DesktopComputer } from './services/desktop/computer';
 import { computerDiagnostic } from './services/desktop/computer-diagnostic';
+import { ComputerPermissions } from './services/desktop/computer-permissions';
 import { Updates } from './services/desktop/updates';
 import { networkProfileSchema } from './services/network/network-config';
 import { NetworkProfiles } from './services/network/network-profiles';
@@ -83,6 +85,13 @@ import { idSchema, redact, runSchema } from './services/storage/validation';
 
 if (process.env.TONGZHOU_USER_DATA) app.setPath('userData', process.env.TONGZHOU_USER_DATA);
 app.setName('Tongzhou');
+if (process.platform === 'darwin') {
+  // Keep the existing profile location when changing the displayed application name.
+  const profile = app.getPath('userData');
+  mkdirSync(profile, { recursive: true });
+  app.setPath('userData', profile);
+  app.setName('同舟');
+}
 app.on('session-created', (s) => s.setUserAgent(browserUserAgent(s.getUserAgent())));
 let window: BrowserWindow | undefined;
 let store: Store;
@@ -98,6 +107,7 @@ let feishu: Feishu;
 let bots: Bots;
 let mcpAuth: McpAuth;
 const computer = new DesktopComputer();
+const computerPermissions = new ComputerPermissions();
 const clientCommands = new ClientCommands();
 let quitting = false;
 const pendingImports = new Map<string, ProviderInput>();
@@ -1062,6 +1072,32 @@ function setup() {
       return computerStatus();
     },
   );
+  register(
+    'computerPermissionGuide',
+    operation('电脑控制', 'query', '查看 macOS 系统授权所需的当前应用', []),
+    () => computerPermissions.guide(),
+  );
+  register(
+    'computerOpenPermissionSettings',
+    manual('电脑控制', '打开 macOS 系统权限设置', 'extensions', '需要用户在系统设置中授权', [
+      z.enum(['accessibility', 'screen']),
+    ]),
+    (permission) =>
+      computerPermissions.openSettings(z.enum(['accessibility', 'screen']).parse(permission)),
+  );
+  register(
+    'computerRevealApplication',
+    manual('电脑控制', '在 Finder 中显示当前应用', 'extensions', '由用户选择需要授权的应用'),
+    () => computerPermissions.revealApplication(),
+  );
+  register(
+    'computerDragApplication',
+    manual('电脑控制', '拖动当前应用到系统权限列表', 'extensions', '由用户拖动图标并开启系统权限'),
+    () => {
+      if (!window || window.isDestroyed()) throw new Error('应用窗口已关闭');
+      computerPermissions.startDrag(window.webContents);
+    },
+  );
   let diagnosing = false;
   register(
     'computerSelfTest',
@@ -1608,6 +1644,7 @@ function setup() {
   );
 }
 async function createWindow() {
+  if (process.platform === 'darwin') app.dock?.setIcon(path.join(__dirname, '../build/icon.png'));
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
       ...(process.platform === 'darwin' ? [{ role: 'appMenu' as const }] : []),
