@@ -65,6 +65,9 @@ let app;
 try {
   app = await electron.launch({ args: ['.'], env });
   const page = await app.firstWindow();
+  await app.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows().forEach((w) => w.setIgnoreMouseEvents(true));
+  });
   page.setDefaultTimeout(15000);
   await page.setViewportSize({ width: 1100, height: 800 });
   await page.waitForSelector('.app-shell');
@@ -109,6 +112,29 @@ try {
   await page.getByLabel('消息', { exact: true }).press('Escape');
   await count(2);
   assert.equal(await page.getByLabel('消息', { exact: true }).inputValue(), '保留当前草稿');
+  const compact = async (width) => {
+    await page.setViewportSize({ width, height: 800 });
+    const approval = card('allow');
+    assert.equal(await approval.locator('pre').isVisible(), false);
+    const box = await approval.boundingBox();
+    assert.ok(box.height <= 38, 'collapsed approval occupies one compact row');
+    for (const label of ['拒绝', '批准本次']) {
+      const button = await approval.getByRole('button', { name: label, exact: true }).boundingBox();
+      assert.equal(button.height, 26);
+      assert.ok(button.x >= box.x && button.x + button.width <= box.x + box.width);
+      assert.ok(button.y >= box.y && button.y + button.height <= box.y + box.height);
+    }
+    const description = await approval.locator('.approval-description').boundingBox();
+    const actions = await approval.locator('.approval-actions').boundingBox();
+    assert.ok(description.width > 0 && description.x + description.width <= actions.x);
+  };
+  await compact(1100);
+  await card('allow').getByRole('button', { name: '查看操作详情', exact: true }).click();
+  assert.equal(await card('allow').locator('pre').isVisible(), true);
+  await card('allow').getByRole('button', { name: '收起操作详情', exact: true }).click();
+  await compact(820);
+  await page.screenshot({ path: path.join(root, 'approval-narrow.png'), animations: 'disabled' });
+  await compact(1100);
   for (const theme of ['light', 'dark']) {
     await page.evaluate(
       (theme) =>
@@ -150,7 +176,7 @@ try {
   await assert.rejects(readFile(path.join(project, 'cancel.txt')), { code: 'ENOENT' });
   assert.deepEqual(errors, []);
   console.log(
-    `Inline approval passed: no dialogs, explicit approve/reject, session isolation, background navigation, Escape and draft preserved, cancellation clears, light/dark screenshots. ${root}`,
+    `Inline approval passed: compact row, 26px buttons, collapsed details, narrow/light/dark layouts, explicit approve/reject, session isolation, background navigation, Escape and draft preserved, cancellation clears. ${root}`,
   );
 } finally {
   if (app) await app.close();

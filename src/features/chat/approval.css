@@ -15,33 +15,45 @@
   --approval-border: #704149;
 }
 .approval-count {
-  color: var(--approval-ink);
-  font-size: 12px;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .approval-card {
   background: var(--approval-fill);
   border: 1px solid var(--approval-border);
   border-radius: 9px;
-  padding: 12px 14px;
+  padding: 4px 8px;
   min-width: 0;
 }
-.approval-card header {
+.approval-row {
   display: flex;
   align-items: center;
   gap: 8px;
   color: var(--approval-ink);
-  font-size: 13px;
+  font-size: 12px;
 }
-.approval-card header strong {
-  overflow-wrap: anywhere;
+.approval-description {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.approval-card header span {
-  margin-left: auto;
+.approval-scope {
   white-space: nowrap;
   font-size: 11px;
 }
+.approval-details:not([hidden]) {
+  border-top: 1px solid var(--approval-border);
+  margin-top: 6px;
+}
 .approval-card pre {
-  margin: 10px 0;
+  margin: 8px 0 4px;
   max-height: 120px;
   overflow: auto;
   white-space: pre-wrap;
@@ -49,23 +61,30 @@
   color: var(--ink);
   font: 12px/1.6 var(--font-code);
 }
-.approval-card footer {
+.approval-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 6px;
+  flex-shrink: 0;
 }
-.approval-card footer small {
-  margin-right: auto;
+.approval-card .approval-actions button {
+  height: 26px;
+  min-height: 26px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.approval-card .approval-detail-toggle {
+  width: 26px;
+  padding: 3px;
   color: var(--approval-ink);
-  font-size: 11px;
 }
 .approval-card .approval-confirm {
   background: #b4232c;
   color: #fff;
   border: 1px solid #b4232c;
-  padding: 7px 12px;
-  border-radius: 8px;
 }
 .approval-card .approval-confirm:hover:not(:disabled) {
   background: #941d25;
@@ -73,7 +92,15 @@
 .approval-card [role='alert'] {
   color: var(--approval-ink);
   font-size: 12px;
-  margin-bottom: 8px;
+  margin-top: 6px;
+}
+@media (max-width: 900px) {
+  .approval-scope {
+    display: none;
+  }
+  .approval-row {
+    gap: 6px;
+  }
 }
 .topbar .approval-notice {
   color: #b4232c;
