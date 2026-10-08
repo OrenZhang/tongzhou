@@ -39,6 +39,7 @@ import {
   Network,
   Plus,
   Paperclip,
+  Puzzle,
   Radio,
   RefreshCw,
   Search,
@@ -685,14 +686,25 @@ export default function App() {
       setBusy(false);
     }
   };
-  const nav = [
-    { id: 'agents', label: 'Agent', icon: Users },
-    { id: 'knowledge', label: '智库', icon: BookOpen },
-    { id: 'providers', label: '模型与订阅', icon: Network },
-    { id: 'extensions', label: '插件', icon: Terminal },
-    { id: 'activity', label: '运行记录', icon: Activity },
-    { id: 'automations', label: '定时任务', icon: Clock3 },
+  const navGroups = [
+    {
+      label: '资源与工具',
+      items: [
+        { id: 'agents', label: 'Agent', icon: Users },
+        { id: 'knowledge', label: '智库', icon: BookOpen },
+        { id: 'providers', label: '模型与订阅', icon: Network },
+        { id: 'extensions', label: '插件', icon: Puzzle },
+      ],
+    },
+    {
+      label: '任务与记录',
+      items: [
+        { id: 'activity', label: '运行记录', icon: Activity },
+        { id: 'automations', label: '定时任务', icon: Clock3 },
+      ],
+    },
   ] as const;
+  const nav = navGroups.flatMap((group) => [...group.items]);
   const selectModel = (connection: string, selectedModel: string) => {
     setProviderId(connection);
     setModel(selectedModel);
@@ -1083,26 +1095,38 @@ export default function App() {
           />
           <div className="sidebar-bottom">
             <nav aria-label="管理与工具">
-              {nav.map((n) => (
-                <button
-                  key={n.id}
-                  aria-label={n.label}
-                  aria-current={view === n.id ? 'page' : undefined}
-                  className={view === n.id ? 'active' : ''}
-                  onClick={() => {
-                    if (n.id === 'knowledge') {
-                      setKnowledgeSection('workspace');
-                      setArtifactSession(undefined);
-                    }
-                    setView(n.id);
-                  }}
+              {navGroups.map((group) => (
+                <div
+                  className="sidebar-nav-group"
+                  role="group"
+                  aria-label={group.label}
+                  key={group.label}
                 >
-                  <n.icon size={17} />
-                  {n.label}
-                  {n.id === 'providers' && (
-                    <span className="nav-count">{data.providers.length}</span>
-                  )}
-                </button>
+                  <div className="sidebar-nav-label" aria-hidden="true">
+                    {group.label}
+                  </div>
+                  {group.items.map((n) => (
+                    <button
+                      key={n.id}
+                      aria-label={n.label}
+                      aria-current={view === n.id ? 'page' : undefined}
+                      className={view === n.id ? 'active' : ''}
+                      onClick={() => {
+                        if (n.id === 'knowledge') {
+                          setKnowledgeSection('workspace');
+                          setArtifactSession(undefined);
+                        }
+                        setView(n.id);
+                      }}
+                    >
+                      <n.icon size={16} />
+                      <span className="sidebar-nav-text">{n.label}</span>
+                      {n.id === 'providers' && (
+                        <span className="nav-count">{data.providers.length}</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
               ))}
             </nav>
             <div className="local-status">
@@ -1112,10 +1136,11 @@ export default function App() {
             <div className="sidebar-settings-row">
               <button
                 onClick={() => setView('settings')}
+                aria-current={view === 'settings' || view === 'connections' ? 'page' : undefined}
                 className={view === 'settings' || view === 'connections' ? 'active' : ''}
               >
-                <Settings2 size={17} />
-                设置与优化
+                <Settings2 size={16} />
+                <span className="sidebar-nav-text">设置与优化</span>
               </button>
               <UpdateControl api={api} />
             </div>
