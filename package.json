@@ -168,7 +168,6 @@
       "category": "public.app-category.developer-tools",
       "extendInfo": {
         "CFBundleDisplayName": "同舟",
-        "CFBundleName": "同舟",
         "NSAppleEventsUsageDescription": "同舟需要在你批准后聚焦指定窗口并完成电脑操作。"
       }
     },
