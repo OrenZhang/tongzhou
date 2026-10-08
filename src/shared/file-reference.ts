@@ -1,6 +1,7 @@
 export function projectFileReference(
   href: string,
   root: string,
+  file?: string,
 ): { path: string; line: number } | undefined {
   if (!href || !root || href.startsWith('#') || href.includes('?')) return;
   let value: string;
@@ -19,6 +20,16 @@ export function projectFileReference(
     if (!(windows ? value.toLowerCase().startsWith(base.toLowerCase()) : value.startsWith(base)))
       return;
     value = value.slice(base.length);
+  } else if (file) {
+    const parts = file.replaceAll('\\', '/').split('/').slice(0, -1);
+    for (const part of value.split('/')) {
+      if (part === '.') continue;
+      if (part === '..') {
+        if (!parts.length) return;
+        parts.pop();
+      } else parts.push(part);
+    }
+    value = parts.join('/');
   }
   value = value.replace(/^\.\//, '');
   if (

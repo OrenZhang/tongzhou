@@ -18,6 +18,8 @@ import type { Root, RootContent } from 'hast';
 import type { Project, TongzhouAPI } from '../../shared/types';
 import { diffLines, type ChangeScope } from '../../shared/project-context';
 import { highlight } from '../../components/markdown/highlight';
+import { Markdown } from '../../components/markdown/RichMarkdown';
+import { WorkspaceFileContext } from './WorkspaceFileContext';
 import './project-context.css';
 
 // Keyed effects ignore responses from a previously selected file/project/search.
@@ -71,6 +73,8 @@ const languageFor = (file: string) => {
         py: 'python',
         rs: 'rust',
         md: 'markdown',
+        markdown: 'markdown',
+        mdown: 'markdown',
         yml: 'yaml',
         sh: 'bash',
         ps1: 'powershell',
@@ -230,13 +234,19 @@ export function ProjectContext({
   const [changedFile, setChangedFile] = useState(textValue('changedFile'));
   const [diffLine, setDiffLine] = useState<{ line: number; side: '旧' | '新' }>();
   const [generating, setGenerating] = useState(false);
-  const [wrap, setWrap] = useState(false);
+  const [wrap, setWrap] = useState(saved.wrap !== false);
+  const [previewMode, setPreviewMode] = useState<'preview' | 'source'>(
+    saved.previewMode === 'source' || line > 0 ? 'source' : 'preview',
+  );
+  const isMarkdown = languageFor(selected) === 'markdown';
+  const documentPreview = isMarkdown && previewMode === 'preview';
   const [handledRequest, setHandledRequest] = useState(saved.handledRequest ?? 0);
   useEffect(() => {
     if (!fileRequest || fileRequest.key === handledRequest) return;
     setTab('files');
     setSelected(fileRequest.path);
     setLine(fileRequest.line);
+    setPreviewMode(fileRequest.line > 0 ? 'source' : 'preview');
     setHandledRequest(fileRequest.key);
   }, [fileRequest, handledRequest]);
   useEffect(() => {
@@ -252,9 +262,24 @@ export function ProjectContext({
         scope,
         changedFile,
         handledRequest,
+        previewMode,
+        wrap,
       }),
     );
-  }, [storageKey, tab, directory, query, mode, selected, line, scope, changedFile, handledRequest]);
+  }, [
+    storageKey,
+    tab,
+    directory,
+    query,
+    mode,
+    selected,
+    line,
+    scope,
+    changedFile,
+    handledRequest,
+    previewMode,
+    wrap,
+  ]);
   const refresh = () => setRevision((n) => n + 1);
   useEffect(() => {
     const timer = setTimeout(() => setSearch(query.trim()), 250);
@@ -305,6 +330,7 @@ export function ProjectContext({
   const openFile = (file: string, at = 0) => {
     setSelected(file);
     setLine(at);
+    setPreviewMode(at > 0 ? 'source' : 'preview');
   };
   const reference = (file: string, at = 0) =>
     onReference(`请查看项目文件 ${JSON.stringify(file)}${at ? ` 第 ${at} 行` : ''}：\n`);
@@ -511,14 +537,50 @@ export function ProjectContext({
                   : '只读预览'}
                 {line ? ` · 已选第 ${line} 行` : ''}
               </span>
-              <button aria-pressed={wrap} onClick={() => setWrap(!wrap)}>
-                换行
-              </button>
+              <div className="project-preview-actions">
+                {isMarkdown && (
+                  <div className="project-preview-modes" role="tablist" aria-label="文件显示方式">
+                    {(['preview', 'source'] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        role="tab"
+                        aria-selected={previewMode === mode}
+                        onClick={() => {
+                          setPreviewMode(mode);
+                          if (mode === 'preview') setLine(0);
+                        }}
+                      >
+                        {mode === 'preview' ? '预览' : '源码'}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {!documentPreview && (
+                  <button aria-pressed={wrap} onClick={() => setWrap(!wrap)}>
+                    换行
+                  </button>
+                )}
+              </div>
             </div>
             <Feedback error={source.error} loading={source.loading} />
-            {source.value !== undefined && (
-              <Source path={selected} text={source.value} line={line} onLine={setLine} />
-            )}
+            {source.value !== undefined &&
+              (documentPreview ? (
+                <section className="project-document" aria-label="Markdown 预览">
+                  <WorkspaceFileContext.Provider
+                    value={{ root: project.path, file: selected, open: openFile }}
+                  >
+                    <Markdown text={source.value} />
+                  </WorkspaceFileContext.Provider>
+                </section>
+              ) : (
+                <Source
+                  key={selected}
+                  path={selected}
+                  text={source.value}
+                  line={line}
+                  onLine={setLine}
+                />
+              ))}
           </section>
         )}
         {tab === 'changes' && (

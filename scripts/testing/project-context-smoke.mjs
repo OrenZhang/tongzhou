@@ -12,7 +12,37 @@ const repo = path.join(root, '示例项目');
 await mkdir(path.join(repo, 'src'), { recursive: true });
 const original = 'export const count = 1;\nexport function greet() {\n  return "hello";\n}\n';
 await writeFile(path.join(repo, 'src', 'hello.ts'), original);
-await writeFile(path.join(repo, 'README.md'), '# 示例项目\n\n项目功能回归。\n');
+const readme = [
+  '# 示例项目',
+  '',
+  '项目功能回归。' + '这是一段需要在窄侧栏中自动换行的说明。'.repeat(12),
+  '',
+  '## Getting Started',
+  '',
+  '- 安装依赖',
+  '- 启动开发服务',
+  '',
+  '> 仅在本地运行。',
+  '',
+  '```bash',
+  'npm run dev',
+  'echo ' + 'long-command-'.repeat(40),
+  '```',
+  '',
+  '| 名称 | 状态 | 长字段 |',
+  '| --- | --- | --- |',
+  '| demo | 可用 | ' + '字段'.repeat(50) + ' |',
+  '',
+  '[开发指南](./docs/guide.md)',
+  '',
+  '<script>window.untrustedDocument = true</script>',
+].join('\n');
+await writeFile(path.join(repo, 'README.md'), readme);
+await mkdir(path.join(repo, 'docs'));
+await writeFile(
+  path.join(repo, 'docs/guide.md'),
+  '# 开发指南\n\n[返回 README](../README.md)\n\n[定位源码行](../README.md#L3)\n',
+);
 const git = (args) => execFileSync('git', args, { cwd: repo, windowsHide: true, stdio: 'pipe' });
 git(['init', '-b', 'main']);
 git(['config', 'user.name', 'Fixture']);
@@ -62,6 +92,93 @@ try {
   if (await page.getByLabel('展开工作区', { exact: true }).count())
     await page.getByLabel('展开工作区', { exact: true }).click();
   const panel = page.getByLabel('项目上下文', { exact: true });
+  await panel.getByRole('button', { name: 'README.md', exact: true }).click();
+  const preview = panel.getByRole('region', { name: 'Markdown 预览', exact: true });
+  await preview.getByRole('heading', { name: '示例项目', exact: true }).waitFor();
+  assert.equal(
+    await preview.getByRole('heading', { name: 'Getting Started', exact: true }).count(),
+    1,
+  );
+  assert.equal(await preview.locator('li').count(), 2);
+  assert.equal(await preview.locator('table tbody tr').count(), 1);
+  assert.equal(await preview.locator('blockquote').count(), 1);
+  assert.match(await preview.locator('.code-block pre').innerText(), /npm run dev/);
+  assert.equal(await panel.getByLabel('文件源码', { exact: true }).count(), 0);
+  const fit = async () => {
+    const layout = await panel.evaluate((e) => {
+      const body = e.querySelector('.project-panel-body');
+      const doc = e.querySelector('.project-document');
+      const code = doc.querySelector('.code-block pre');
+      return {
+        outer: body.scrollWidth <= body.clientWidth + 1,
+        document: doc.getBoundingClientRect().right <= e.getBoundingClientRect().right + 1,
+        codeScroll: code.scrollWidth > code.clientWidth,
+      };
+    });
+    assert.ok(layout.outer, 'the side panel must not scroll horizontally');
+    assert.ok(layout.document, 'rendered document fits the side panel');
+    assert.ok(layout.codeScroll, 'long code scrolls inside its own block');
+  };
+  await fit();
+  assert.equal(await page.evaluate(() => window.untrustedDocument), undefined);
+  await page.screenshot({ path: path.join(root, 'markdown-preview-light.png') });
+  await panel.getByRole('tab', { name: '源码', exact: true }).click();
+  await panel.getByLabel('文件源码', { exact: true }).waitFor();
+  assert.equal(
+    await panel.getByRole('button', { name: '换行', exact: true }).getAttribute('aria-pressed'),
+    'true',
+  );
+  assert.equal(
+    await panel.locator('.project-source').evaluate((e) => e.scrollWidth <= e.clientWidth + 1),
+    true,
+  );
+  await panel.getByRole('button', { name: '换行', exact: true }).click();
+  assert.equal(
+    await panel.locator('.project-source').evaluate((e) => e.scrollWidth > e.clientWidth),
+    true,
+  );
+  await panel.getByRole('button', { name: '换行', exact: true }).click();
+  await panel.getByLabel('选择第 3 行', { exact: true }).click();
+  await panel.getByRole('tab', { name: '预览', exact: true }).click();
+  await panel.getByLabel('引用文件到会话', { exact: true }).click();
+  assert.doesNotMatch(await page.getByLabel('消息', { exact: true }).inputValue(), /第 3 行/);
+  await page.getByLabel('消息', { exact: true }).fill('');
+  await preview.getByRole('button', { name: '开发指南', exact: true }).click();
+  await preview.getByRole('heading', { name: '开发指南', exact: true }).waitFor();
+  await preview.getByRole('button', { name: '返回 README', exact: true }).click();
+  await preview.getByRole('heading', { name: '示例项目', exact: true }).waitFor();
+  await preview.getByRole('button', { name: '开发指南', exact: true }).click();
+  await preview.getByRole('button', { name: '定位源码行', exact: true }).click();
+  await panel.locator('.source-line.selected').waitFor();
+  assert.equal(
+    await panel.getByRole('tab', { name: '源码', exact: true }).getAttribute('aria-selected'),
+    'true',
+  );
+  await panel.getByRole('tab', { name: '预览', exact: true }).click();
+  await app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0].setContentSize(1000, 760),
+  );
+  await page.evaluate(() =>
+    window.tongzhou.setAppearance({
+      theme: 'dark',
+      style: 'graphite',
+      font: 'system',
+      textSize: 14,
+    }),
+  );
+  await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
+  await fit();
+  await page.screenshot({ path: path.join(root, 'markdown-preview-narrow-dark.png') });
+  await page.reload();
+  await preview.getByRole('heading', { name: '示例项目', exact: true }).waitFor();
+  await fit();
+  checks.push(
+    'Markdown renders headings, lists, quotes, table and code; narrow document fit, inner code scroll, preview/source switch, source wrapping, relative links and exact line navigation, reload persistence, untrusted HTML ignored',
+  );
+  await app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0].setContentSize(1440, 900),
+  );
+  await panel.getByLabel('返回文件列表', { exact: true }).click();
   await panel.getByRole('button', { name: 'src', exact: true }).click();
   await panel.getByRole('button', { name: 'hello.ts', exact: true }).click();
   await panel.locator('.hljs-keyword').first().waitFor();

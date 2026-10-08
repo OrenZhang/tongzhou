@@ -62,6 +62,7 @@
 .project-panel-body {
   flex: 1;
   min-height: 0;
+  min-width: 0;
   overflow: auto;
   padding-bottom: 12px;
 }
@@ -192,13 +193,67 @@
   white-space: nowrap;
   font-size: 12px;
 }
+.project-preview {
+  min-width: 0;
+  max-width: 100%;
+}
 .project-preview-options {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
   padding: 7px 12px;
   font-size: 10px;
   color: var(--muted);
+}
+.project-preview-actions,
+.project-preview-modes {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.project-preview-modes {
+  gap: 2px;
+  padding: 2px;
+  border-radius: 5px;
+  background: var(--surface-muted);
+}
+.project-preview-modes > button {
+  padding: 3px 7px;
+  border-radius: 3px;
+}
+.project-preview-modes > button[aria-selected='true'] {
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: 0 1px 3px #00000014;
+}
+.project-document {
+  padding: 12px 16px 20px;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.75;
+  user-select: text;
+}
+.project-document .markdown h1 {
+  font-size: 1.5em;
+}
+.project-document .markdown h2 {
+  font-size: 1.25em;
+}
+.project-document .markdown h3 {
+  font-size: 1.1em;
+}
+.project-document .markdown :is(.code-block, .diagram-block, .markdown-table) {
+  min-width: 0;
+  max-width: 100%;
+}
+.project-document .markdown .code-block pre {
+  padding: 10px 12px;
+  font-size: 12px;
+}
+.project-document .code-toolbar {
+  padding: 4px 8px;
 }
 .project-preview-options button {
   font-size: 10px;
@@ -252,7 +307,7 @@
 .project-context.wrap-code .diff-line {
   min-width: 0;
 }
-.project-context.wrap-code code {
+.project-context.wrap-code :is(.source-line, .diff-line) code {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   min-width: 0;

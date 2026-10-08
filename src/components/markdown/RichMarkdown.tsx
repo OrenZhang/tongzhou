@@ -232,7 +232,7 @@ export function MarkdownLink({
 }) {
   const [error, setError] = useState('');
   const files = useContext(WorkspaceFileContext);
-  const reference = files && href ? projectFileReference(href, files.root) : undefined;
+  const reference = files && href ? projectFileReference(href, files.root, files.file) : undefined;
   if (reference)
     return (
       <button
@@ -279,7 +279,9 @@ export const Markdown = memo(function Markdown({
       <ReactMarkdown
         skipHtml
         urlTransform={(url) =>
-          files && projectFileReference(url, files.root) ? url : defaultUrlTransform(url)
+          files && projectFileReference(url, files.root, files.file)
+            ? url
+            : defaultUrlTransform(url)
         }
         remarkPlugins={
           onKnowledgeLink ? [remarkGfm, remarkMath, remarkKnowledgeLinks] : [remarkGfm, remarkMath]

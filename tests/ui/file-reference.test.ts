@@ -15,6 +15,31 @@ describe('project file references', () => {
       line: 0,
     });
   });
+  it('resolves document links from the current file without leaving the project', () => {
+    expect(projectFileReference('./guide.md', '/work/app', 'docs/README.md')).toEqual({
+      path: 'docs/guide.md',
+      line: 0,
+    });
+    expect(projectFileReference('../src/main.ts#L12', '/work/app', 'docs/README.md')).toEqual({
+      path: 'src/main.ts',
+      line: 12,
+    });
+    expect(projectFileReference('/work/app/README.md', '/work/app', 'docs/README.md')).toEqual({
+      path: 'README.md',
+      line: 0,
+    });
+    expect(projectFileReference('./guide.md', 'C:\\work\\app', 'docs\\README.md')).toEqual({
+      path: 'docs/guide.md',
+      line: 0,
+    });
+    for (const link of [
+      '../../outside.md',
+      '%2e%2e/%2e%2e/outside.md',
+      '/work/elsewhere/a.md',
+      'javascript:alert(1)',
+    ])
+      expect(projectFileReference(link, '/work/app', 'docs/README.md')).toBeUndefined();
+  });
   it('rejects external roots, traversal, schemes and malformed encodings', () => {
     for (const value of [
       'C:/work/app-other/a.ts',
