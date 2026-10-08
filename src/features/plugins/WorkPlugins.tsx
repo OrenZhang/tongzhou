@@ -3,6 +3,7 @@ import { Plug, ExternalLink } from 'lucide-react';
 import { Modal } from '../../components/components';
 import { MarkdownLink } from '../../components/markdown/RichMarkdown';
 import { errorMessage } from '../../lib/feedback';
+import { LocalGithub } from './LocalGithub';
 import type { PluginConfig, PluginInput, Snapshot, TongzhouAPI } from '../../shared/types';
 import {
   codeHost,
@@ -458,6 +459,7 @@ export function WorkPlugins({
                   </button>
                 </div>
                 {installed?.catalog && <PluginToolList plugin={installed} />}
+                {p.id === 'github' && <LocalGithub api={api} refresh={refresh} />}
               </article>
             );
           })}

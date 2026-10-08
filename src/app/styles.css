@@ -349,6 +349,29 @@ svg {
   color: inherit;
   background: transparent;
 }
+.local-github {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+.local-github .row {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.local-github button {
+  min-height: 28px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.local-github-account {
+  margin-top: 8px;
+}
+.local-github p {
+  font-size: 12px;
+  margin-bottom: 0;
+}
 .session-actions {
   display: flex;
   gap: 1px;

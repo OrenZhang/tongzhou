@@ -3,6 +3,7 @@ import type { Store } from '../../services/storage/store';
 import type { Runtime } from '../../core/runtime/runtime';
 import {
   operation,
+  manual,
   workspaceOperation,
   type ClientRegistrar,
 } from '../../core/tools/client-commands';
@@ -15,6 +16,7 @@ import { PluginConnection, importSkillDirectory, pluginTool } from '../../core/t
 import { pluginSecret, pluginCredentialVersion } from './code-hosting';
 import { codeHost } from '../../../src/shared/code-hosting';
 import { isBuiltinSkill } from '../../../src/shared/builtin-skills';
+import { LocalGithubAccounts } from '../../services/accounts/local-github';
 import {
   createPersonalSkill,
   createSkillSchema,
@@ -30,6 +32,33 @@ export function registerPluginServices(
   connectors: Connectors,
   getWindow: () => BrowserWindow | undefined,
 ) {
+  const localGithub = new LocalGithubAccounts(store);
+  register(
+    'detectLocalGithubAccounts',
+    manual(
+      '插件',
+      '检测 Git 与 GitHub CLI 的本地 GitHub 登录，只返回身份和状态',
+      'extensions',
+      '请在 GitHub 插件中点击检测本地账号',
+    ),
+    () => localGithub.detect(),
+  );
+  register(
+    'enableLocalGithubAccount',
+    manual(
+      '插件',
+      '验证并使用已检测到的本地账号，保存加密凭据并启用 GitHub 插件',
+      'extensions',
+      '请在 GitHub 插件中选择账号并点击使用并启用',
+      [idSchema.describe('candidateId')],
+    ),
+    async (raw) => {
+      const id = await localGithub.enable(idSchema.parse(raw));
+      runtime.invalidateNative();
+      runtime.changed();
+      return id;
+    },
+  );
   register(
     'savePlugin',
     operation('插件', 'change', '保存或启停 MCP 插件配置，凭据在界面输入', [pluginSchema]),

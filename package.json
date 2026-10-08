@@ -32,6 +32,7 @@
     "test:ui": "node scripts/testing/ui-smoke.mjs",
     "test:session-entry": "node scripts/testing/session-entry-smoke.mjs",
     "test:workbench": "node scripts/testing/workbench-smoke.mjs",
+    "test:local-github": "node scripts/testing/local-github-smoke.mjs",
     "test:workspace-layout": "node scripts/testing/workspace-layout-smoke.mjs",
     "test:markdown": "node scripts/testing/markdown-smoke.mjs",
     "test:appearance": "node scripts/testing/appearance-smoke.mjs",

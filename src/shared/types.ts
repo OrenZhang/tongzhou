@@ -495,6 +495,8 @@ export interface TongzhouAPI {
   logoutPlugin(id: string): Promise<void>;
   cancelPluginLogin(id: string): Promise<void>;
   useGithubConnector(pluginId: string, connectorId: string): Promise<void>;
+  detectLocalGithubAccounts(): Promise<LocalGithubAccount[]>;
+  enableLocalGithubAccount(candidateId: string): Promise<string>;
   listWorktrees(projectId: string): Promise<WorktreeInfo[]>;
   createWorktree(projectId: string, branch: string, ref: string): Promise<Project>;
   removeWorktree(projectId: string): Promise<void>;
@@ -645,6 +647,14 @@ export interface Connector {
   status?: 'configured' | 'connected' | 'error';
   account?: string;
   checkedAt?: number;
+  localSource?: 'git' | 'gh';
+}
+export interface LocalGithubAccount {
+  id: string;
+  source: 'git' | 'gh';
+  status: 'verified' | 'unavailable' | 'unverified';
+  account?: string;
+  expiresAt?: number;
 }
 export interface BotConfig {
   id: string;
