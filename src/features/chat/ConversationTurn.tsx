@@ -1,5 +1,6 @@
 import { Copy, GitBranch, Quote, Terminal, Brain, Pencil } from 'lucide-react';
 import type { Message } from '../../shared/types';
+import { toolLabel } from '../../shared/tool-labels';
 import {
   turnEntries,
   finalTurnEntry,
@@ -140,7 +141,7 @@ export function ConversationTurn({
         <details key={entry.key} className="process-tool" data-entry-kind="tool-result">
           <summary>
             <Terminal size={13} />
-            {m.toolName ?? '工具结果'}
+            {toolLabel(m.toolName)}
             {m.status === 'error' ? ' · 未完成' : ''}
           </summary>
           <pre>{entry.text}</pre>

@@ -22,6 +22,7 @@ import { Markdown } from './markdown/RichMarkdown';
 export { Markdown } from './markdown/RichMarkdown';
 import { createPortal } from 'react-dom';
 import type { Message } from '../shared/types';
+import { toolLabel } from '../shared/tool-labels';
 export function AuthBadge({
   connected,
   pending = false,
@@ -417,7 +418,7 @@ export function ChatMessage({ message: m, footer }: { message: Message; footer?:
       <div className="tool-message">
         <button onClick={() => setOpen(!open)}>
           <Terminal size={14} />
-          <span>{m.toolName ?? '工具结果'}</span>
+          <span>{toolLabel(m.toolName)}</span>
           {m.status === 'error' ? (
             <X size={13} aria-label="未完成" />
           ) : (

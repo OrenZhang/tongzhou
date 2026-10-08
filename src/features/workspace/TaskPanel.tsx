@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { TongzhouAPI } from '../../shared/types';
+import { toolLabel } from '../../shared/tool-labels';
 import type { HistoryMatch, TaskState } from '../../shared/task';
 import './task-panel.css';
 
@@ -335,7 +336,7 @@ export function TaskPanel({
             evidence.map((e) => (
               <details key={e.id} className="task-block">
                 <summary>
-                  {e.toolName || '工具'} · {e.status === 'error' ? '失败' : '已返回结果'}
+                  {toolLabel(e.toolName, '工具')} · {e.status === 'error' ? '失败' : '已返回结果'}
                 </summary>
                 <pre>{e.content}</pre>
               </details>
