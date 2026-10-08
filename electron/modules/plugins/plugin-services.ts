@@ -17,6 +17,8 @@ import { pluginSecret, pluginCredentialVersion } from './code-hosting';
 import { codeHost } from '../../../src/shared/code-hosting';
 import { isBuiltinSkill } from '../../../src/shared/builtin-skills';
 import { LocalGithubAccounts } from '../../services/accounts/local-github';
+import { LocalGitlabAccounts, gitlabInstance } from '../../services/accounts/local-gitlab';
+import { z } from 'zod';
 import {
   createPersonalSkill,
   createSkillSchema,
@@ -33,6 +35,34 @@ export function registerPluginServices(
   getWindow: () => BrowserWindow | undefined,
 ) {
   const localGithub = new LocalGithubAccounts(store);
+  const localGitlab = new LocalGitlabAccounts(store);
+  register(
+    'detectLocalGitlabAccounts',
+    manual(
+      '插件',
+      '检测指定 GitLab 实例的 Git 和 GitLab CLI 本地登录，只返回身份和来源',
+      'extensions',
+      '请在 GitLab 插件中填写实例并检测本地账号',
+      [z.string().trim().min(1).max(2000).describe('baseUrl')],
+    ),
+    (raw) => localGitlab.detect(gitlabInstance(z.string().max(2000).parse(raw))),
+  );
+  register(
+    'useLocalGitlabAccount',
+    manual(
+      '插件',
+      '保存已验证的本地 GitLab 账号并准备同一实例的 MCP 浏览器授权配置',
+      'extensions',
+      '请在 GitLab 插件中选择本地账号并点击使用并配置',
+      [idSchema.describe('candidateId')],
+    ),
+    async (raw) => {
+      const plugin = await localGitlab.use(idSchema.parse(raw));
+      runtime.invalidateNative();
+      runtime.changed();
+      return plugin;
+    },
+  );
   register(
     'detectLocalGithubAccounts',
     manual(

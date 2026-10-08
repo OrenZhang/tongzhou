@@ -1,70 +1,29 @@
-import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import os from 'node:os';
 import type { LocalGithubAccount, PluginConfig, PluginTool } from '../../../src/shared/types';
 import { githubMcpUrl } from '../../../src/shared/code-hosting';
 import { PluginConnection, pluginTool } from '../../core/tools/extensions';
-import { minimalEnv } from '../../core/tools/workspace';
 import { serviceFetch } from '../network/service-network';
 import type { Store } from '../storage/store';
 
-type Source = LocalGithubAccount['source'];
-type Command = (command: string, args: string[], input?: string) => Promise<string>;
-const localCommand: Command = (command, args, input) =>
-  new Promise((resolve, reject) => {
-    const env = {
-      ...minimalEnv(),
-      ...(process.platform === 'darwin'
-        ? { PATH: `${process.env.PATH ?? ''}:/opt/homebrew/bin:/usr/local/bin` }
-        : {}),
-      ...(process.env.GH_CONFIG_DIR ? { GH_CONFIG_DIR: process.env.GH_CONFIG_DIR } : {}),
-      ...(process.env.XDG_CONFIG_HOME ? { XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME } : {}),
-      GIT_TERMINAL_PROMPT: '0',
-      GCM_INTERACTIVE: 'never',
-      GH_PROMPT_DISABLED: '1',
-    };
-    // Do not put credentials on argv or propagate stdout/stderr through errors.
-    const child = execFile(
-      command,
-      args,
-      {
-        cwd: os.homedir(),
-        env,
-        windowsHide: true,
-        timeout: 10000,
-        maxBuffer: 65536,
-      },
-      (error, stdout) => (error ? reject(new Error('未能读取本地登录状态')) : resolve(stdout)),
-    );
-    child.stdin?.on('error', () => {});
-    child.stdin?.end(input ?? '');
-  });
+import {
+  credentialToken,
+  localCredentialCommand,
+  readGitCredential,
+  type LocalCredentialCommand,
+} from './local-credentials';
 
-export async function readLocalGithubCredential(source: Source, run: Command = localCommand) {
-  let token: string;
-  if (source === 'git') {
-    const output = await run(
-      'git',
-      ['-c', 'core.askPass=', '-c', 'credential.interactive=false', 'credential', 'fill'],
-      'protocol=https\nhost=github.com\n\n',
-    );
-    const fields = Object.fromEntries(
-      output
-        .trim()
-        .split(/\r?\n/)
-        .map((line) => {
-          const at = line.indexOf('=');
-          return [line.slice(0, at), line.slice(at + 1)];
-        }),
-    );
-    if (fields.protocol !== 'https' || fields.host !== 'github.com')
-      throw new Error('本地凭据不属于 GitHub 官方站点');
-    token = fields.password ?? '';
-  } else token = await run('gh', ['auth', 'token', '--hostname', 'github.com']);
-  token = token.trim();
-  if (!token || token.length > 10000 || /[\s\x00-\x1f\x7f]/.test(token))
-    throw new Error('未检测到可用的 GitHub 凭据');
-  return token;
+type Source = LocalGithubAccount['source'];
+export async function readLocalGithubCredential(
+  source: Source,
+  run: LocalCredentialCommand = localCredentialCommand,
+) {
+  try {
+    return source === 'git'
+      ? await readGitCredential(new URL('https://github.com'), run)
+      : credentialToken(await run('gh', ['auth', 'token', '--hostname', 'github.com']));
+  } catch {
+    throw new Error('未检测到可用的 GitHub 官方站点凭据');
+  }
 }
 
 export async function verifyLocalGithubIdentity(token: string) {

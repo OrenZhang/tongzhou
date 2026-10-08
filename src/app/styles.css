@@ -368,6 +368,21 @@ svg {
 .local-github-account {
   margin-top: 8px;
 }
+.local-github-account > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.local-github label {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.local-github input {
+  min-width: 0;
+  width: 100%;
+  font-size: 12px;
+  padding: 5px 8px;
+}
 .local-github p {
   font-size: 12px;
   margin-bottom: 0;

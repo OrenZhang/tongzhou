@@ -14,6 +14,7 @@ await build({
     contents: `
     export { Store } from './electron/services/storage/store';
     export { LocalGithubAccounts, readLocalGithubCredential } from './electron/services/accounts/local-github';
+    export { LocalGitlabAccounts, readLocalGitlabCredential } from './electron/services/accounts/local-gitlab';
     export { setServiceTransport } from './electron/services/network/service-network';`,
     resolveDir: process.cwd(),
     loader: 'ts',
@@ -28,6 +29,13 @@ let validIdentity = false,
   validMcp = false;
 const requests = [];
 const server = createServer(async (req, res) => {
+  if (req.url === '/api/v4/user') {
+    assert.equal(req.headers.authorization, 'Bearer fixture-local-gitlab-token');
+    requests.push(req.url);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ id: 42, username: 'local-gitlab-user' }));
+    return;
+  }
   assert.equal(req.headers.authorization, 'Bearer fixture-local-github-token');
   requests.push(req.url);
   if (req.url === '/user') {
@@ -94,6 +102,8 @@ try {
         Store,
         LocalGithubAccounts,
         readLocalGithubCredential,
+        LocalGitlabAccounts,
+        readLocalGitlabCredential,
         setServiceTransport,
       } = require(config.bundle);
       const store = new Store(config.db, {
@@ -102,7 +112,14 @@ try {
       });
       setServiceTransport((input, init) => {
         const url = new URL(input instanceof Request ? input.url : String(input));
-        if (!['api.github.com', 'api.githubcopilot.com'].includes(url.hostname))
+        if (
+          ![
+            'api.github.com',
+            'api.githubcopilot.com',
+            'gitlab.com',
+            'gitlab.fixture.example',
+          ].includes(url.hostname)
+        )
           throw new Error('Unexpected fixture destination');
         return fetch(config.local + url.pathname, init);
       });
@@ -123,6 +140,28 @@ try {
       ipcMain.removeHandler('tongzhou:enableLocalGithubAccount');
       ipcMain.handle('tongzhou:detectLocalGithubAccounts', () => local.detect());
       ipcMain.handle('tongzhou:enableLocalGithubAccount', (_event, id) => local.enable(id));
+      const gitlab = new LocalGitlabAccounts(store, {
+        read: (source, baseUrl) =>
+          readLocalGitlabCredential(
+            source,
+            baseUrl,
+            async (command, args, input, includeStderr) => {
+              const host = new URL(baseUrl).host;
+              if (source === 'git') {
+                if (command !== 'git' || input !== `protocol=https\nhost=${host}\n\n`)
+                  throw new Error('Invalid GitLab fixture query');
+                return `protocol=https\nhost=${host}\npassword=fixture-local-gitlab-token\n`;
+              }
+              if (command !== 'glab' || args[3] !== host || !includeStderr)
+                throw new Error('Invalid CLI fixture query');
+              return `${host}\n  ✓ Token found in keyring: fixture-local-gitlab-token\n`;
+            },
+          ),
+      });
+      ipcMain.removeHandler('tongzhou:detectLocalGitlabAccounts');
+      ipcMain.removeHandler('tongzhou:useLocalGitlabAccount');
+      ipcMain.handle('tongzhou:detectLocalGitlabAccounts', (_event, url) => gitlab.detect(url));
+      ipcMain.handle('tongzhou:useLocalGitlabAccount', (_event, id) => gitlab.use(id));
     },
     {
       bundle,
@@ -181,6 +220,69 @@ try {
   await use.waitFor();
   assert.ok(await card.evaluate((el) => el.scrollWidth <= el.clientWidth + 2));
   await page.screenshot({ path: 'test-results/local-github-narrow.png' });
+  await page.getByLabel('搜索插件', { exact: true }).fill('GitLab');
+  const gitlabCard = page
+    .locator('.provider-card')
+    .filter({ has: page.getByRole('heading', { name: 'GitLab 仓库工具', exact: true }) });
+  await gitlabCard.getByRole('button', { name: '检测本地账号', exact: true }).click();
+  await gitlabCard
+    .getByRole('button', { name: '使用 local-gitlab-user 的GitLab CLI并配置', exact: true })
+    .waitFor();
+  const instance = gitlabCard.getByLabel('检测 GitLab 实例', { exact: true });
+  await instance.fill('https://gitlab.fixture.example:8443');
+  assert.equal(
+    await gitlabCard.getByRole('button', { name: /并配置$/ }).count(),
+    0,
+    'changing instances clears old candidates',
+  );
+  await gitlabCard.getByRole('button', { name: '检测本地账号', exact: true }).click();
+  await gitlabCard
+    .getByRole('button', { name: '使用 local-gitlab-user 的GitLab CLI并配置', exact: true })
+    .waitFor();
+  assert.ok(!(await gitlabCard.innerText()).includes('fixture-local-gitlab-token'));
+  assert.ok(await gitlabCard.evaluate((el) => el.scrollWidth <= el.clientWidth + 2));
+  await page.screenshot({ path: 'test-results/local-gitlab-detected.png' });
+  await gitlabCard
+    .getByRole('button', { name: '使用 local-gitlab-user 的Git 凭据并配置', exact: true })
+    .click();
+  const dialog = page.getByRole('dialog');
+  await dialog
+    .getByRole('heading', { name: '连接 GitLab · local-gitlab-user（本地）', exact: true })
+    .waitFor();
+  assert.equal(
+    await dialog.getByLabel('GitLab 实例地址', { exact: true }).inputValue(),
+    'https://gitlab.fixture.example:8443',
+  );
+  assert.equal(await dialog.getByRole('button', { name: '浏览器授权', exact: true }).count(), 1);
+  assert.equal(
+    await dialog.getByRole('checkbox', { name: '在会话中启用此插件', exact: true }).isChecked(),
+    false,
+  );
+  await dialog.getByRole('button', { name: '关闭', exact: true }).click();
+  const gitlabState = await page.evaluate(() => window.tongzhou.snapshot());
+  const gitlabAccount = gitlabState.connectors.find((c) => c.kind === 'gitlab');
+  const gitlabPlugin = gitlabState.plugins.find(
+    (p) => p.name === 'GitLab · local-gitlab-user（本地）',
+  );
+  assert.ok(gitlabAccount.hasSecret);
+  assert.equal(gitlabAccount.baseUrl, 'https://gitlab.fixture.example:8443');
+  assert.equal(gitlabPlugin.url, 'https://gitlab.fixture.example:8443/api/v4/mcp');
+  assert.equal(gitlabPlugin.authMode, 'oauth');
+  assert.equal(gitlabPlugin.enabled, false);
+  assert.equal(gitlabPlugin.connectorId, undefined);
+  assert.ok(!gitlabPlugin.hasSecret, 'Git credentials must not be mistaken for MCP authorization');
+  assert.ok(!JSON.stringify(gitlabState).includes('fixture-local-gitlab-token'));
+  await gitlabCard.getByRole('button', { name: '检测本地账号', exact: true }).click();
+  await gitlabCard
+    .getByRole('button', { name: '使用 local-gitlab-user 的Git 凭据并配置', exact: true })
+    .click();
+  await dialog.getByRole('button', { name: '关闭', exact: true }).click();
+  assert.equal(
+    (await page.evaluate(() => window.tongzhou.snapshot())).connectors.filter(
+      (c) => c.kind === 'gitlab',
+    ).length,
+    1,
+  );
   await app.close();
   app = await electron.launch({ args: ['.'], env });
   page = await app.firstWindow();
@@ -201,6 +303,9 @@ try {
   const persisted = await page.evaluate(() => window.tongzhou.snapshot());
   assert.ok(persisted.plugins.find((p) => p.id === plugin.id).hasSecret);
   assert.ok(!JSON.stringify(persisted).includes('fixture-local-github-token'));
+  assert.ok(persisted.connectors.find((c) => c.id === gitlabAccount.id).hasSecret);
+  assert.equal(persisted.plugins.find((p) => p.id === gitlabPlugin.id).url, gitlabPlugin.url);
+  assert.ok(!JSON.stringify(persisted).includes('fixture-local-gitlab-token'));
   assert.ok(requests.includes('/user') && requests.includes('/mcp/'));
   await writeFile(
     'test-results/local-github-report.json',
@@ -215,6 +320,10 @@ try {
           'no token in UI or snapshots',
           'repeat enable deduplication',
           'reload and narrow layout',
+          'GitLab Git and CLI detection for official and self-managed sites',
+          'changing instances invalidates displayed results',
+          'GitLab account import prepares isolated MCP browser authorization',
+          'GitLab repeat import, encrypted credentials and main-process restart',
         ],
       },
       null,
@@ -222,7 +331,7 @@ try {
     ),
   );
   console.log(
-    'Local GitHub smoke passed: detection, verification, enable, redaction, persistence and layout.',
+    'Local code hosting smoke passed: GitHub enable, GitLab detection and authorization preparation, redaction, restart and layout.',
   );
 } catch (error) {
   await (await app.firstWindow()).screenshot({ path: 'test-results/local-github-failure.png' });

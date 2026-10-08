@@ -497,6 +497,8 @@ export interface TongzhouAPI {
   useGithubConnector(pluginId: string, connectorId: string): Promise<void>;
   detectLocalGithubAccounts(): Promise<LocalGithubAccount[]>;
   enableLocalGithubAccount(candidateId: string): Promise<string>;
+  detectLocalGitlabAccounts(baseUrl: string): Promise<LocalGitlabAccount[]>;
+  useLocalGitlabAccount(candidateId: string): Promise<PluginConfig>;
   listWorktrees(projectId: string): Promise<WorktreeInfo[]>;
   createWorktree(projectId: string, branch: string, ref: string): Promise<Project>;
   removeWorktree(projectId: string): Promise<void>;
@@ -647,7 +649,7 @@ export interface Connector {
   status?: 'configured' | 'connected' | 'error';
   account?: string;
   checkedAt?: number;
-  localSource?: 'git' | 'gh';
+  localSource?: 'git' | 'gh' | 'glab';
 }
 export interface LocalGithubAccount {
   id: string;
@@ -655,6 +657,10 @@ export interface LocalGithubAccount {
   status: 'verified' | 'unavailable' | 'unverified';
   account?: string;
   expiresAt?: number;
+}
+export interface LocalGitlabAccount extends Omit<LocalGithubAccount, 'source'> {
+  source: 'git' | 'glab';
+  baseUrl: string;
 }
 export interface BotConfig {
   id: string;

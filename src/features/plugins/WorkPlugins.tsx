@@ -4,6 +4,7 @@ import { Modal } from '../../components/components';
 import { MarkdownLink } from '../../components/markdown/RichMarkdown';
 import { errorMessage } from '../../lib/feedback';
 import { LocalGithub } from './LocalGithub';
+import { LocalGitlab } from './LocalGitlab';
 import type { PluginConfig, PluginInput, Snapshot, TongzhouAPI } from '../../shared/types';
 import {
   codeHost,
@@ -460,6 +461,26 @@ export function WorkPlugins({
                 </div>
                 {installed?.catalog && <PluginToolList plugin={installed} />}
                 {p.id === 'github' && <LocalGithub api={api} refresh={refresh} />}
+                {p.id === 'gitlab' && (
+                  <LocalGitlab
+                    key={installed?.url ?? 'gitlab'}
+                    api={api}
+                    refresh={refresh}
+                    instance={installed?.url.replace(/\/api\/v4\/mcp\/?$/, '')}
+                    instances={(data.connectors ?? [])
+                      .filter((c) => c.kind === 'gitlab')
+                      .map((c) => c.baseUrl)}
+                    onConfigure={(plugin) => {
+                      setSelectedConnections((old) => ({ ...old, gitlab: plugin.id }));
+                      setEditingService('gitlab');
+                      setLoginUrl('');
+                      setToken('');
+                      setSource('');
+                      setNotice('本地账号已保存。请完成此 GitLab 实例的浏览器授权，再启用插件。');
+                      setEdit({ ...plugin, secret: '' });
+                    }}
+                  />
+                )}
               </article>
             );
           })}
