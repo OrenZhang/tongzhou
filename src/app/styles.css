@@ -2662,6 +2662,34 @@ input[type='checkbox'] {
   gap: 2px;
   opacity: 0.7;
 }
+.message-editor {
+  width: min(480px, 100%);
+  margin-left: auto;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+.message-editor textarea {
+  display: block;
+  width: 100%;
+  field-sizing: content;
+  min-height: 42px;
+  max-height: 180px;
+  resize: none;
+  line-height: 1.6;
+}
+.message-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+.message-editor-actions button {
+  min-height: 28px;
+  padding: 4px 10px;
+  font-size: 12px;
+}
 .chat-message:hover .message-actions,
 .message-actions:focus-within {
   opacity: 1;

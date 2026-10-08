@@ -440,24 +440,27 @@ export function ChatMessage({ message: m, footer }: { message: Message; footer?:
         )}
       </div>
     );
+  const meta = (
+    <div className="message-meta">
+      {m.role !== 'user' && m.agent && m.agent !== '同舟' && <strong>{m.agent}</strong>}
+      {m.model && <span>{m.model}</span>}
+      <time>
+        {new Date(m.createdAt).toLocaleTimeString('zh-CN', {
+          hour: '2-digit',
+          minute: '2-digit',
+        })}
+      </time>
+      {m.status === 'streaming' && <Spinner />}
+      {m.status === 'interrupted' && <span>已中断</span>}
+    </div>
+  );
   return (
     <article
       className={'chat-message ' + m.role}
       aria-label={m.role === 'user' ? '你的消息' : '助手回复'}
     >
       <div className="message-body">
-        <div className="message-meta">
-          {m.role !== 'user' && m.agent && m.agent !== '同舟' && <strong>{m.agent}</strong>}
-          {m.model && <span>{m.model}</span>}
-          <time>
-            {new Date(m.createdAt).toLocaleTimeString('zh-CN', {
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-          </time>
-          {m.status === 'streaming' && <Spinner />}
-          {m.status === 'interrupted' && <span>已中断</span>}
-        </div>
+        {m.role !== 'user' && meta}
         <div className="message-content">
           <AttachmentCards items={m.attachments} />
           <Markdown
@@ -472,7 +475,14 @@ export function ChatMessage({ message: m, footer }: { message: Message; footer?:
             <code>{t.arguments.slice(0, 120)}</code>
           </div>
         ))}
-        {footer}
+        {m.role === 'user' ? (
+          <div className="user-message-footer">
+            {meta}
+            {footer}
+          </div>
+        ) : (
+          footer
+        )}
       </div>
     </article>
   );

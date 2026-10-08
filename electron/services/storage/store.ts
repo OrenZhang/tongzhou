@@ -253,6 +253,21 @@ export class Store {
       .run(message.id, message.sessionId, JSON.stringify(message));
     return message;
   }
+  replaceUnansweredMessage(message: Message, previousRunId: string): string[] {
+    const removed = this.messages(message.sessionId)
+      .filter((m) => m.runId === previousRunId && m.id !== message.id)
+      .map((m) => m.id);
+    this.db.exec('BEGIN');
+    try {
+      for (const id of removed) this.db.prepare('DELETE FROM messages WHERE id=?').run(id);
+      this.message(message);
+      this.db.exec('COMMIT');
+      return removed;
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
   messagesPage(sessionId: string, before?: string, limit = 100): Message[] {
     this.get<Session>('session', sessionId);
     const cursor = before

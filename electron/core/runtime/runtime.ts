@@ -14,6 +14,7 @@ import { projectDeletionTargets } from '../../../src/shared/projects';
 import { codexThinking, thinkingRequest } from './thinking';
 import { IdleTimeout } from './idle-timeout';
 import { modelErrorMessage } from './errors';
+import { conversationTurns, editableTurnPrompt } from '../../../src/shared/turns';
 import { randomUUID } from 'node:crypto';
 import { Attachments } from '../../modules/artifacts/attachments';
 import { Artifacts } from '../../modules/artifacts/artifacts';
@@ -584,7 +585,28 @@ export class Runtime {
   isActive(id: string) {
     return this.active.has(id);
   }
-  start(input: RunInput): string {
+  start(input: RunInput, resendMessageId?: string): string {
+    let replaced: Message | undefined;
+    if (resendMessageId) {
+      const last = conversationTurns(
+        input.sessionId,
+        this.store.messages(input.sessionId),
+        this.store.list<Run>('run'),
+        this.store.list<RunEvent>('runEvent'),
+      ).at(-1);
+      replaced = last && editableTurnPrompt(last);
+      if (!replaced || replaced.id !== resendMessageId)
+        throw new Error('仅最后一条未收到回复的失败或中断消息支持编辑重发');
+      if (
+        this.store
+          .list<PendingInput>('pendingInput')
+          .some(
+            (p) => p.sessionId === input.sessionId && ['queued', 'dispatching'].includes(p.status),
+          )
+      )
+        throw new Error('请先处理当前会话的排队消息');
+      input = { ...input, attachmentIds: replaced.attachments?.map((a) => a.id) };
+    }
     const contentContext = this.store.get<Session>('session', input.sessionId).contentContext;
     if (contentContext) this.knowledge.assertUsable(contentContext.documentId);
     const attachments = this.attachments.resolve(input.attachmentIds);
@@ -667,6 +689,7 @@ export class Runtime {
     )
       throw new Error('请先配置此连接的 API 密钥。');
     const run: Run = {
+      ...(replaced ? { retryOf: replaced.runId } : {}),
       id: randomUUID(),
       sessionId: session.id,
       providerId: provider.id,
@@ -699,13 +722,28 @@ export class Runtime {
           : session.title,
       updatedAt: Date.now(),
     });
+    if (replaced) {
+      const message: Message = {
+        ...replaced,
+        content: input.prompt,
+        attachments,
+        runId: run.id,
+        sequence: this.nextSequence(run.id),
+        createdAt: Date.now(),
+        status: 'complete',
+      };
+      const removed = this.store.replaceUnansweredMessage(message, replaced.runId!);
+      this.emit({ type: 'messages-removed', sessionId: session.id, ids: removed });
+      this.emit({ type: 'message', message });
+    }
     if (session.model && (session.model !== input.model || session.providerId !== provider.id))
       this.add(
         session.id,
         'system',
         `已切换至 ${provider.name} / ${input.model}。可移植历史将交接给新模型。`,
+        replaced ? { runId: run.id } : {},
       );
-    this.add(session.id, 'user', input.prompt, { runId: run.id, attachments });
+    if (!replaced) this.add(session.id, 'user', input.prompt, { runId: run.id, attachments });
     const controller = new AbortController();
     // Defer to a microtask so the active slot exists before completion/finally can run.
     const promise = Promise.resolve().then(async () => {

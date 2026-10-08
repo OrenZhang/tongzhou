@@ -1,4 +1,4 @@
-import { Copy, GitBranch, Quote, Terminal, Brain } from 'lucide-react';
+import { Copy, GitBranch, Quote, Terminal, Brain, Pencil } from 'lucide-react';
 import type { Message } from '../../shared/types';
 import {
   turnEntries,
@@ -10,7 +10,7 @@ import {
 import { ChatMessage, Markdown } from '../../components/components';
 import { TurnProcess } from './RunActivity';
 import { AttachmentCards } from '../../components/files/Attachments';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 interface Actions {
   onCopy: (message: Message) => void;
@@ -25,9 +25,20 @@ function MessageActions({
   onBranch,
   onCopy,
   branchDisabled,
-}: Actions & { message: Message }) {
+  onEdit,
+}: Actions & { message: Message; onEdit?: () => void }) {
   return (
     <div className="message-actions">
+      {onEdit && (
+        <button
+          className="icon-button"
+          aria-label="编辑并重发"
+          title="编辑这条未收到回复的消息后重新发送"
+          onClick={onEdit}
+        >
+          <Pencil size={14} />
+        </button>
+      )}
       <button
         className="icon-button"
         aria-label="复制消息"
@@ -61,10 +72,24 @@ export function ConversationTurn({
   turn,
   delivery,
   artifacts,
+  editableMessageId,
+  resendDisabled,
+  onResend,
   ...actions
-}: Actions & { turn: Turn; delivery?: ReactNode; artifacts?: ReactNode }) {
+}: Actions & {
+  turn: Turn;
+  delivery?: ReactNode;
+  artifacts?: ReactNode;
+  editableMessageId?: string;
+  resendDisabled?: boolean;
+  onResend?: (message: Message, text: string) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [editedText, setEditedText] = useState('');
+  const [resending, setResending] = useState(false);
   const first = turn.messages[0];
   const prompt = first?.role === 'user' ? first : undefined;
+  const editable = !!prompt && prompt.id === editableMessageId && !!onResend;
   const response = prompt ? turn.messages.slice(1) : turn.messages;
   const assistants = response.filter((m) => m.role === 'assistant');
   const assistant = assistants[0];
@@ -153,9 +178,80 @@ export function ConversationTurn({
       data-turn-key={turn.key}
       aria-label="会话轮次"
     >
-      {prompt && (
-        <ChatMessage message={prompt} footer={<MessageActions message={prompt} {...actions} />} />
-      )}
+      {prompt &&
+        (editing && editable ? (
+          <form
+            className="message-editor"
+            aria-label="编辑未完成消息"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              if (
+                resending ||
+                resendDisabled ||
+                (!editedText.trim() && !prompt.attachments?.length)
+              )
+                return;
+              setResending(true);
+              try {
+                await onResend!(prompt, editedText);
+                setEditing(false);
+              } catch {
+                // The host reports the error; retain the user's edits for another attempt.
+              } finally {
+                setResending(false);
+              }
+            }}
+          >
+            <AttachmentCards items={prompt.attachments} />
+            <textarea
+              aria-label="编辑未完成的消息"
+              rows={1}
+              autoFocus
+              value={editedText}
+              disabled={resending}
+              onChange={(event) => setEditedText(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape' && !resending) setEditing(false);
+              }}
+            />
+            <div className="message-editor-actions">
+              <button
+                type="button"
+                className="secondary"
+                disabled={resending}
+                onClick={() => setEditing(false)}
+              >
+                取消
+              </button>
+              <button
+                type="submit"
+                disabled={
+                  resending || resendDisabled || (!editedText.trim() && !prompt.attachments?.length)
+                }
+              >
+                {resending ? '发送中…' : '重新发送'}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <ChatMessage
+            message={prompt}
+            footer={
+              <MessageActions
+                message={prompt}
+                {...actions}
+                onEdit={
+                  editable
+                    ? () => {
+                        setEditedText(prompt.content);
+                        setEditing(true);
+                      }
+                    : undefined
+                }
+              />
+            }
+          />
+        ))}
       {hasResponse && (
         <article className={'chat-message assistant' + (active ? ' is-active' : '')}>
           <div className="message-body">

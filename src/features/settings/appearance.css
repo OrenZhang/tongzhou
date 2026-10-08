@@ -299,22 +299,31 @@ code,
 .chat-message.user .markdown {
   color: inherit;
 }
-.chat-message.user .message-meta {
-  position: absolute;
-  right: 88px;
-  bottom: 4px;
+.user-message-footer {
+  display: flex;
+  align-items: center;
   justify-content: flex-end;
-  height: 18px;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 4px;
+}
+.chat-message.user .message-meta {
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  height: 26px;
   margin: 0;
+}
+.chat-message.user .message-meta time {
+  white-space: nowrap;
 }
 .chat-message.user .message-meta > strong,
 .chat-message.user .message-meta > span {
   display: none;
 }
 .chat-message.user .message-actions {
-  order: 2;
+  flex: 0 0 auto;
   justify-content: flex-end;
-  margin-top: 4px;
+  margin: 0;
 }
 .chat-message.user .message-meta {
   opacity: 0;

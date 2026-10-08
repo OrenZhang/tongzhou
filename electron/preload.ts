@@ -136,6 +136,7 @@ const api: TongzhouAPI = {
   cancelInput: (id) => call('cancelInput', id),
   resumeInput: (id) => call('resumeInput', id),
   editInput: (id, prompt) => call('editInput', id, prompt),
+  resendMessage: (id, input) => call('resendMessage', id, input),
   deleteSession: (id) => call('deleteSession', id),
   savePlugin: (p) => call('savePlugin', p),
   deletePlugin: (id) => call('deletePlugin', id),

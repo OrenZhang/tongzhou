@@ -73,7 +73,7 @@ import { CommandPalette } from '../components/controls/CommandPalette';
 import { PendingInputs, useRunEvents } from '../features/chat/RunActivity';
 import { ConversationTurn } from '../features/chat/ConversationTurn';
 import { ApprovalQueue } from '../features/chat/ApprovalQueue';
-import { conversationTurns } from '../shared/turns';
+import { conversationTurns, editableTurnPrompt } from '../shared/turns';
 import { providerUnavailableReason } from '../shared/provider-availability';
 import { InputModePicker, inputModes } from '../features/chat/InputModePicker';
 import { SessionNavigator } from '../features/chat/SessionNavigator';
@@ -474,6 +474,8 @@ export default function App() {
           if (i < 0) return [...old, event.message];
           return old.map((m, j) => (j === i ? event.message : m));
         });
+      if (event.type === 'messages-removed' && event.sessionId === sessionRef.current)
+        setMessages((old) => old.filter((m) => !event.ids.includes(m.id)));
       if (event.type !== 'message' && event.type !== 'run-event' && !refreshTimer.current)
         refreshTimer.current = setTimeout(() => {
           refreshTimer.current = null;
@@ -1470,6 +1472,31 @@ export default function App() {
                           <ConversationTurn
                             key={turn.key}
                             turn={turn}
+                            editableMessageId={
+                              !running && !session?.archived && turn === turns.at(-1)
+                                ? editableTurnPrompt(turn)?.id
+                                : undefined
+                            }
+                            resendDisabled={busy || !providerReady || !model.trim() || !providerId}
+                            onResend={async (message, text) => {
+                              setBusy(true);
+                              try {
+                                await api.resendMessage(message.id, {
+                                  sessionId,
+                                  prompt: text,
+                                  providerId,
+                                  model,
+                                  agentId,
+                                  attachmentIds: message.attachments?.map((a) => a.id),
+                                });
+                                await refresh();
+                              } catch (error) {
+                                report(error);
+                                throw error;
+                              } finally {
+                                setBusy(false);
+                              }
+                            }}
                             artifacts={
                               <ArtifactCards
                                 key={artifactRevision}

@@ -219,6 +219,7 @@ export interface Session {
   archived: boolean;
 }
 export interface Run {
+  retryOf?: string;
   knowledgeReferences?: import('./knowledge').KnowledgeReference[];
   usageReported?: boolean;
   workspace?: { before: string; after?: string };
@@ -285,6 +286,7 @@ export interface CodexAuthState {
   };
 }
 export type AppEvent =
+  | { type: 'messages-removed'; sessionId: string; ids: string[] }
   | { type: 'update'; state: import('./updates').UpdateState }
   | { type: 'appearance'; value: Partial<import('./appearance').AppearancePreferences> }
   | {
@@ -541,6 +543,7 @@ export interface TongzhouAPI {
   cancelInput(id: string): Promise<void>;
   resumeInput(id: string): Promise<void>;
   editInput(id: string, prompt: string): Promise<void>;
+  resendMessage(messageId: string, input: RunInput): Promise<void>;
   deleteSession(id: string): Promise<void>;
   savePlugin(plugin: PluginInput): Promise<void>;
   deletePlugin(id: string): Promise<void>;

@@ -8,6 +8,33 @@ export interface ConversationTurn {
   events: RunEvent[];
 }
 
+/** Only an unanswered terminal attempt can be replaced; tool work is already history. */
+export function editableTurnPrompt(turn: ConversationTurn): Message | undefined {
+  const prompt = turn.messages[0];
+  if (
+    prompt?.role !== 'user' ||
+    !turn.run ||
+    !['failed', 'interrupted'].includes(turn.run.status) ||
+    turn.messages.some(
+      (m) =>
+        (m.role === 'user' && m.id !== prompt.id) ||
+        m.role === 'tool' ||
+        (m.role === 'assistant' &&
+          (!!m.content.trim() ||
+            !!m.toolCalls?.length ||
+            !!m.attachments?.length ||
+            !!m.images?.length ||
+            !!m.artifactIds?.length ||
+            !!m.reasoningContent ||
+            !!m.anthropicContent?.length ||
+            !!m.responseReasoning?.length)),
+    ) ||
+    turn.events.some((e) => ['tool', 'reasoning'].includes(e.type) && !!e.text.trim())
+  )
+    return;
+  return prompt;
+}
+
 export type TurnEntry =
   | { key: string; time: number; seq?: number; message: Message; text: string }
   | { key: string; time: number; seq?: number; event: RunEvent };

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { Store } from '../../electron/services/storage/store';
 import { Runtime } from '../../electron/core/runtime/runtime';
 import { Attachments } from '../../electron/modules/artifacts/attachments';
+import type { Message, Run, RunEvent } from '../../src/shared/types';
 
 const fake = vi.hoisted(() => ({
   calls: [] as any[],
@@ -127,6 +128,139 @@ async function fixture() {
     },
   };
 }
+
+function unanswered(f: Awaited<ReturnType<typeof fixture>>, extra: Partial<Message>[] = []) {
+  const run: Run = {
+    id: 'failed-attempt',
+    sessionId: f.input.sessionId,
+    providerId: f.input.providerId,
+    model: f.input.model,
+    agentName: '同舟',
+    status: 'failed',
+    startedAt: 1,
+    endedAt: 2,
+    inputTokens: 0,
+    outputTokens: 0,
+    error: '连接失败',
+  };
+  f.store.put('run', run);
+  const prompt: Message = {
+    id: 'unanswered-prompt',
+    sessionId: run.sessionId,
+    runId: run.id,
+    role: 'user',
+    content: '原始失败请求',
+    createdAt: 1,
+    status: 'complete',
+  };
+  f.store.message(prompt);
+  for (const [index, message] of extra.entries())
+    f.store.message({ ...prompt, id: 'extra-' + index, role: 'assistant', ...message });
+  f.store.message({
+    ...prompt,
+    id: 'failure-notice',
+    role: 'system',
+    content: run.error!,
+    status: 'error',
+  });
+  return { run, prompt };
+}
+
+describe('editing unanswered messages', () => {
+  it('replaces the prompt once, preserves attachments and prior replies, and clears the old error', async () => {
+    const f = await fixture();
+    f.store.message({
+      id: 'previous-user',
+      sessionId: f.input.sessionId,
+      role: 'user',
+      content: '历史问题',
+      createdAt: 0,
+    });
+    f.store.message({
+      id: 'previous-reply',
+      sessionId: f.input.sessionId,
+      role: 'assistant',
+      content: '历史回答',
+      createdAt: 0,
+    });
+    const { run, prompt } = unanswered(f, [{ content: '', status: 'error' }]);
+    const attachment = new Attachments(f.store, f.root).save({
+      name: 'source.txt',
+      mimeType: 'text/plain',
+      data: Buffer.from('attachment evidence').toString('base64'),
+    });
+    f.store.message({ ...prompt, attachments: [attachment] });
+    const next = f.runtime.start(
+      { ...f.input, prompt: '修改后的请求', attachmentIds: [] },
+      prompt.id,
+    );
+    expect(() => f.runtime.start({ ...f.input, prompt: '重复发送' }, prompt.id)).toThrow();
+    await f.runtime.waitForIdle();
+    const messages = f.store.messages(f.input.sessionId);
+    expect(messages.filter((m) => m.id === prompt.id)).toHaveLength(1);
+    expect(messages.find((m) => m.id === prompt.id)).toMatchObject({
+      content: '修改后的请求',
+      runId: next,
+      attachments: [attachment],
+    });
+    expect(messages.some((m) => ['failure-notice', 'extra-0'].includes(m.id))).toBe(false);
+    expect(messages.find((m) => m.id === 'previous-reply')?.content).toBe('历史回答');
+    expect(f.store.get<Run>('run', run.id).status).toBe('failed');
+    expect(f.store.get<Run>('run', next)).toMatchObject({ status: 'completed', retryOf: run.id });
+    const input = JSON.stringify(fake.calls.find((c) => c.method === 'turn/start')?.params.input);
+    expect(input).toContain('修改后的请求');
+    expect(input).not.toContain('原始失败请求');
+    expect(input).not.toContain('连接失败');
+  });
+  it('keeps the failed message and error when the selected connection cannot start', async () => {
+    const f = await fixture();
+    const { prompt } = unanswered(f);
+    const before = f.store.messages(f.input.sessionId);
+    f.store.saveProvider({
+      ...f.store.providers().find((p) => p.id === f.input.providerId)!,
+      enabled: false,
+    });
+    expect(() => f.runtime.start({ ...f.input, prompt: '修改后的请求' }, prompt.id)).toThrow(
+      '已停用',
+    );
+    expect(f.store.messages(f.input.sessionId)).toEqual(before);
+    expect(f.store.list('run')).toHaveLength(1);
+  });
+  it.each([
+    { content: '部分回复', status: 'error' },
+    { role: 'tool', content: '工具已经执行' },
+    { content: '', toolCalls: [{ id: 'call', name: 'test', arguments: '{}' }] },
+  ] as Partial<Message>[])(
+    'rejects rewriting a failed attempt that already produced output: %j',
+    async (extra) => {
+      const f = await fixture();
+      const { prompt } = unanswered(f, [extra]);
+      const before = f.store.messages(f.input.sessionId);
+      expect(() => f.runtime.start({ ...f.input, prompt: '修改' }, prompt.id)).toThrow(
+        '未收到回复',
+      );
+      expect(f.store.messages(f.input.sessionId)).toEqual(before);
+    },
+  );
+  it('rejects reasoning-only output and an older failed turn after a later message', async () => {
+    const f = await fixture();
+    const { run, prompt } = unanswered(f);
+    const event: RunEvent = {
+      id: 'thinking',
+      sessionId: run.sessionId,
+      runId: run.id,
+      type: 'reasoning',
+      text: '已开始思考',
+      seq: 1,
+      time: 2,
+    };
+    f.store.put('runEvent', event);
+    expect(() => f.runtime.start({ ...f.input, prompt: '修改' }, prompt.id)).toThrow('未收到回复');
+    f.store.remove('runEvent', event.id);
+    f.store.message({ ...prompt, id: 'later-user', runId: undefined, content: '后续请求' });
+    expect(() => f.runtime.start({ ...f.input, prompt: '修改' }, prompt.id)).toThrow('最后一条');
+  });
+});
 describe('locked Codex resume and steer contracts', () => {
   it.each(['openai-chat', 'openai-responses', 'anthropic', 'gemini', 'minimax', 'kimi'] as const)(
     'always delegates %s conversations to Codex with a model-only transport',

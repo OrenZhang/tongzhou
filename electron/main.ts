@@ -1036,6 +1036,17 @@ function setup() {
     (id, prompt) => runtime.editInput(idSchema.parse(id), z.string().max(100000).parse(prompt)),
   );
   register(
+    'resendMessage',
+    manual(
+      '会话',
+      '编辑并重发最后一条未收到回复的消息',
+      'workspace',
+      '请由用户在原消息的编辑入口修改并重新发送',
+      [idSchema.describe('messageId'), runSchema],
+    ),
+    (id, input) => runtime.start(runSchema.parse(input), idSchema.parse(id)),
+  );
+  register(
     'deleteSession',
     operation(
       '会话',
