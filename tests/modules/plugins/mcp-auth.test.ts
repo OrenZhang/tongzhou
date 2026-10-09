@@ -237,6 +237,23 @@ it('can clear auth for a newly created plugin before its configuration is saved'
   expect(() => service.logout('new-plugin')).not.toThrow();
   expect(s.list('plugin')).toEqual([]);
 });
+it('removes obsolete GitHub client-credential prompts after upgrading to built-in login', () => {
+  const s = store();
+  s.put('plugin', {
+    ...plugin,
+    url: 'https://api.githubcopilot.com/mcp/',
+    oauthStatus: 'error',
+    oauthError: '请配置 Client ID 和 Client Secret',
+  });
+  const service = new McpAuth(
+    s,
+    () => {},
+    async () => {},
+  );
+  cleanups.push(() => service.dispose());
+  expect(s.get<PluginConfig>('plugin', plugin.id)).toMatchObject({ oauthStatus: 'none' });
+  expect(s.get<PluginConfig>('plugin', plugin.id).oauthError).toBeUndefined();
+});
 function store() {
   const s = new Store(':memory:', {
     encrypt: (v) => Buffer.from(v).toString('base64'),

@@ -305,6 +305,12 @@ export class McpAuth {
     for (const p of store.list<PluginConfig>('plugin'))
       if (p.oauthStatus === 'waiting' || p.oauthStatus === 'starting')
         this.status(p.id, 'error', '上次授权已中断，请重新授权。');
+      else if (
+        codeHost(p) === 'github' &&
+        p.oauthStatus === 'error' &&
+        /Client\s*ID|Client\s*Secret|自动注册/.test(p.oauthError ?? '')
+      )
+        this.status(p.id, 'none');
   }
   status(id: string, status: PluginConfig['oauthStatus'], error?: string) {
     const p = this.store.list<PluginConfig>('plugin').find((p) => p.id === id);
