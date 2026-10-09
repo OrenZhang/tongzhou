@@ -36,12 +36,6 @@ export function ConnectionsPanel({
   const [busy, setBusy] = useState('');
   const [armed, setArmed] = useState('');
   const [send, setSend] = useState<{ id: string; text: string } | null>(null);
-  const [login, setLogin] = useState<{
-    id: string;
-    url: string;
-    code: string;
-    expiresAt: number;
-  } | null>(null);
   const act = async (key: string, fn: () => Promise<unknown>, success = '已保存') => {
     setBusy(key);
     setNotice('');
@@ -92,145 +86,92 @@ export function ConnectionsPanel({
         <>
           <div className="collection-toolbar">
             <div>
-              <h2>代码托管账号与浏览器</h2>
-              <p>
-                认证只需配置一次。Agent 通过已授权连接使用服务，模型不会收到保存的密码、令牌或
-                Cookie。
-              </p>
+              <h2>浏览器账号</h2>
+              <p>按账号独立保存网站登录态，模型不会收到保存的 Cookie。</p>
             </div>
           </div>
-          <div className="row">
-            {(['github', 'gitlab', 'browser'] as const).map((kind) => (
-              <button
-                className="secondary"
-                key={kind}
-                onClick={() => {
-                  setNotice('');
-                  setConnector({
-                    id: crypto.randomUUID(),
-                    name:
-                      kind === 'browser' ? '浏览器账号' : kind === 'github' ? 'GitHub' : 'GitLab',
-                    kind,
-                    enabled: true,
-                    baseUrl:
-                      kind === 'github'
-                        ? 'https://github.com'
-                        : kind === 'gitlab'
-                          ? 'https://gitlab.com'
-                          : 'https://',
-                  });
-                }}
-              >
-                添加 {kind === 'browser' ? '浏览器账号' : kind === 'github' ? 'GitHub' : 'GitLab'}
-              </button>
-            ))}
-          </div>
+          <button
+            className="secondary"
+            onClick={() => {
+              setNotice('');
+              setConnector({
+                id: crypto.randomUUID(),
+                name: '浏览器账号',
+                kind: 'browser',
+                enabled: true,
+                baseUrl: 'https://',
+              });
+            }}
+          >
+            添加浏览器账号
+          </button>
           <div className="provider-grid service-connections">
-            {(data.connectors ?? []).map((c) => (
-              <article className="provider-card" key={c.id}>
-                <div className="row service-card-heading">
-                  <h3>{c.name}</h3>
-                  <span className="tag">
-                    {!c.enabled
-                      ? '已停用'
-                      : c.status === 'connected'
-                        ? '✓ 已验证' + (c.account ? ' · ' + c.account : '')
-                        : c.kind === 'browser'
-                          ? '独立登录态'
-                          : c.status === 'error'
-                            ? '验证失败'
-                            : '未验证'}
-                  </span>
-                </div>
-                <p>{c.baseUrl}</p>
-                <div className="row service-card-actions">
-                  <button
-                    className="secondary"
-                    onClick={() => {
-                      setNotice('');
-                      setConnector({ ...c, secret: '' });
-                    }}
-                  >
-                    管理
-                  </button>
-                  <button
-                    disabled={!!busy}
-                    onClick={() =>
-                      void act(c.id, () => api.saveConnector({ ...c, enabled: !c.enabled }))
-                    }
-                  >
-                    {c.enabled ? '停用' : '启用'}
-                  </button>
-                  {c.kind !== 'browser' && (
+            {(data.connectors ?? [])
+              .filter((c) => c.kind === 'browser')
+              .map((c) => (
+                <article className="provider-card" key={c.id}>
+                  <div className="row service-card-heading">
+                    <h3>{c.name}</h3>
+                    <span className="tag">{c.enabled ? '独立登录态' : '已停用'}</span>
+                  </div>
+                  <p>{c.baseUrl}</p>
+                  <div className="row service-card-actions">
                     <button
-                      disabled={!!busy || !c.enabled}
-                      onClick={() => void act(c.id, () => api.testConnector(c.id))}
+                      className="secondary"
+                      onClick={() => {
+                        setNotice('');
+                        setConnector({ ...c });
+                      }}
                     >
-                      验证账号
+                      管理
                     </button>
-                  )}
-                  <button
-                    disabled={!c.enabled || !!busy}
-                    onClick={() =>
-                      void act(
-                        c.id,
-                        () => api.openBrowserProfile(c.id),
-                        '已打开独立浏览器；完成登录后可关闭窗口',
-                      )
-                    }
-                  >
-                    打开浏览器
-                  </button>
-                  {c.kind !== 'browser' && (
                     <button
-                      disabled={!!busy || !c.enabled}
+                      disabled={!!busy}
+                      onClick={() =>
+                        void act(c.id, () => api.saveConnector({ ...c, enabled: !c.enabled }))
+                      }
+                    >
+                      {c.enabled ? '停用' : '启用'}
+                    </button>
+                    <button
+                      disabled={!c.enabled || !!busy}
                       onClick={() =>
                         void act(
                           c.id,
-                          async () => setLogin({ id: c.id, ...(await api.loginConnector(c.id)) }),
-                          '请在官方页面完成设备授权',
+                          () => api.openBrowserProfile(c.id),
+                          '已打开独立浏览器；完成登录后可关闭窗口',
                         )
                       }
                     >
-                      {c.kind === 'gitlab' ? '浏览器授权' : '设备授权'}
+                      打开浏览器
                     </button>
-                  )}
-                  <button
-                    className="text-button danger"
-                    onClick={() =>
-                      destructive('clear-' + c.id, () => api.clearBrowserProfile(c.id))
-                    }
-                  >
-                    {armed === 'clear-' + c.id ? '确认清除登录态' : '清除登录态'}
-                  </button>
-                  <button
-                    className="text-button danger"
-                    onClick={() => destructive(c.id, () => api.deleteConnector(c.id))}
-                  >
-                    {armed === c.id ? '确认删除账号及登录态' : '删除'}
-                  </button>
-                </div>
-              </article>
-            ))}
+                    <button
+                      className="text-button danger"
+                      onClick={() =>
+                        destructive('clear-' + c.id, () => api.clearBrowserProfile(c.id))
+                      }
+                    >
+                      {armed === 'clear-' + c.id ? '确认清除登录态' : '清除登录态'}
+                    </button>
+                    <button
+                      className="text-button danger"
+                      onClick={() => destructive(c.id, () => api.deleteConnector(c.id))}
+                    >
+                      {armed === c.id ? '确认删除账号及登录态' : '删除'}
+                    </button>
+                  </div>
+                </article>
+              ))}
           </div>
-          {!(data.connectors ?? []).length && !connector && (
+          {!(data.connectors ?? []).some((c) => c.kind === 'browser') && !connector && (
             <div className="empty-state compact">
               <Globe2 size={28} />
-              <h3>连接你的服务账号</h3>
-              <p>
-                代码托管账号用于克隆、拉取和推送；浏览器登录态按账号独立保存，可配合电脑控制操作网页。
-              </p>
+              <h3>添加浏览器账号</h3>
+              <p>独立保存网站登录态，可配合电脑控制操作网页。应用认证在插件页管理。</p>
             </div>
           )}
           {connector && (
-            <Modal
-              title={
-                connector.kind === 'browser'
-                  ? '配置浏览器账号'
-                  : `${connector.kind === 'github' ? 'GitHub' : 'GitLab'} 账号认证`
-              }
-              onClose={() => setConnector(null)}
-            >
+            <Modal title="配置浏览器账号" onClose={() => setConnector(null)}>
               <form
                 className="connection-form"
                 onSubmit={(e) => {
@@ -244,12 +185,6 @@ export function ConnectionsPanel({
                 {notice && (
                   <p role="status" className="info-strip">
                     {notice}
-                  </p>
-                )}
-                {connector.kind !== 'browser' && (
-                  <p>
-                    授权用于仓库读写。保存后可在会话中让 Agent
-                    使用该账号克隆仓库，或拉取和推送项目代码。
                   </p>
                 )}
                 <label>
@@ -269,110 +204,17 @@ export function ConnectionsPanel({
                     onChange={(e) => setConnector({ ...connector, baseUrl: e.target.value })}
                   />
                 </label>
-                {connector.kind !== 'browser' && (
-                  <label>
-                    访问令牌（留空保留已存令牌）
-                    <input
-                      type="password"
-                      autoComplete="off"
-                      value={connector.secret ?? ''}
-                      onChange={(e) => setConnector({ ...connector, secret: e.target.value })}
-                    />
-                  </label>
-                )}
-                {connector.kind !== 'browser' && (
-                  <details>
-                    <summary>
-                      {connector.kind === 'github'
-                        ? '使用 GitHub 设备授权'
-                        : '使用 GitLab 浏览器授权'}
-                    </summary>
-                    <label>
-                      OAuth App Client ID
-                      <input
-                        value={connector.clientId ?? ''}
-                        onChange={(e) => setConnector({ ...connector, clientId: e.target.value })}
-                      />
-                    </label>
-                  </details>
-                )}
-                {connector.kind === 'github' && (
-                  <p>
-                    访问令牌需授权目标仓库；推送需 Contents 读写权限。使用设备授权时填写已启用
-                    Device Flow 的 OAuth App Client ID，保存后点击「设备授权」。
-                  </p>
-                )}
-                {connector.kind === 'gitlab' && (
-                  <p>
-                    访问令牌需具备 read_repository / write_repository 和 read_user 权限。OAuth
-                    公共应用的回调地址：http://127.0.0.1:17437/connector/callback。
-                  </p>
-                )}
-                {connector.kind === 'browser' && (
-                  <p>独立浏览器保存本站登录态，不读取系统浏览器 Cookie。</p>
-                )}
+                <p>独立浏览器保存本站登录态，不读取系统浏览器 Cookie。</p>
                 <div className="row">
                   <button className="primary" disabled={!!busy}>
                     保存
                   </button>
-                  {connector.kind !== 'browser' && (
-                    <button
-                      type="button"
-                      disabled={!!busy}
-                      onClick={() =>
-                        void act('connector-test', async () => {
-                          await api.saveConnector(connector);
-                          const result = await api.testConnector(connector.id);
-                          setConnector(null);
-                          return result;
-                        })
-                      }
-                    >
-                      保存并验证
-                    </button>
-                  )}
                   <button type="button" onClick={() => setConnector(null)}>
                     取消
                   </button>
                 </div>
               </form>
             </Modal>
-          )}
-          {login && (
-            <div className="connection-form">
-              <h3>账号授权</h3>
-              <p>
-                在{' '}
-                <a href={login.url} target="_blank" rel="noreferrer">
-                  {login.url}
-                </a>
-                {login.code ? (
-                  <>
-                    {' '}
-                    输入 <strong>{login.code}</strong>
-                  </>
-                ) : (
-                  ' 完成登录'
-                )}
-              </p>
-              <p>
-                授权后自动校验账号身份。到期时间：{new Date(login.expiresAt).toLocaleTimeString()}
-              </p>
-              <button
-                onClick={() =>
-                  void act(
-                    login.id,
-                    async () => {
-                      await api.cancelConnectorLogin(login.id);
-                      setLogin(null);
-                    },
-                    '已结束授权等待',
-                  )
-                }
-              >
-                关闭授权
-              </button>
-            </div>
           )}
         </>
       )}

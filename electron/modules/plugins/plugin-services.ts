@@ -13,7 +13,7 @@ import type { AgentProfile, PluginConfig } from '../../../src/shared/types';
 import type { Connectors } from '../../services/accounts/connectors';
 import { McpAuth, pluginOAuth, pluginAuthIdentity } from './mcp-auth';
 import { PluginConnection, importSkillDirectory, pluginTool } from '../../core/tools/extensions';
-import { pluginSecret, pluginCredentialVersion } from './code-hosting';
+import { pluginSecret, pluginCredentialVersion, verifyGithubPluginToken } from './code-hosting';
 import { codeHost } from '../../../src/shared/code-hosting';
 import { isBuiltinSkill } from '../../../src/shared/builtin-skills';
 import { LocalGithubAccounts } from '../../services/accounts/local-github';
@@ -51,7 +51,7 @@ export function registerPluginServices(
     'useLocalGitlabAccount',
     manual(
       '插件',
-      '保存已验证的本地 GitLab 账号并准备同一实例的 MCP 浏览器授权配置',
+      '保存已验证的本地 GitLab Token 并准备同一实例的官方 API 插件配置',
       'extensions',
       '请在 GitLab 插件中选择本地账号并点击使用并配置',
       [idSchema.describe('candidateId')],
@@ -105,6 +105,25 @@ export function registerPluginServices(
           previous.connectorId !== config.connectorId ||
           JSON.stringify(previous.args) !== JSON.stringify(config.args));
       const clientSecretChanged = !!oauthClientSecret || !!clearOAuthClientSecret;
+      if (codeHost(config) && config.authMode !== 'oauth' && !config.connectorId) {
+        let token = '';
+        try {
+          const headers = new Headers(
+            JSON.parse(
+              secret ||
+                (!identityChanged && !clearSecret ? store.secret('plugin_' + config.id) : '') ||
+                '{}',
+            ),
+          );
+          token =
+            headers.get('Authorization')?.match(/^Bearer\s+(\S+)$/i)?.[1] ??
+            (codeHost(config) === 'gitlab' ? (headers.get('PRIVATE-TOKEN') ?? '') : '');
+        } catch {
+          /* Only a valid provider token may be saved. */
+        }
+        if (!token || /\s/.test(token))
+          throw new Error('请配置有效的 Token，或选择本地检测保存的账号');
+      }
       if (identityChanged || clearSecret || clientSecretChanged) mcpAuth.logout(config.id);
       store.saveSecret(
         'plugin_oauth_client_' + config.id,
@@ -166,9 +185,12 @@ export function registerPluginServices(
     async (raw) => {
       const p = store.get<PluginConfig>('plugin', idSchema.parse(raw));
       const credentials = pluginCredentialVersion(store, p);
-      const c = new PluginConnection(p, pluginSecret(store, p), pluginOAuth(store, p));
+      let c: PluginConnection | undefined;
       try {
+        c = new PluginConnection(p, pluginSecret(store, p), pluginOAuth(store, p));
         const signal = AbortSignal.timeout(30000);
+        if (codeHost(p) === 'github' && p.authMode !== 'oauth')
+          await verifyGithubPluginToken(pluginSecret(store, p), signal);
         await c.connect(signal);
         const catalog = (await c.tools(signal)).map(pluginTool);
         const current = store.get<PluginConfig>('plugin', p.id);
@@ -180,8 +202,18 @@ export function registerPluginServices(
         store.put('plugin', { ...p, catalog, checkedAt: Date.now() });
         runtime.changed();
         return catalog;
+      } catch (error) {
+        const current = store.get<PluginConfig>('plugin', p.id);
+        if (
+          JSON.stringify(current) === JSON.stringify(p) &&
+          pluginCredentialVersion(store, p) === credentials
+        ) {
+          store.put('plugin', { ...p, catalog: undefined, checkedAt: undefined });
+          runtime.changed();
+        }
+        throw error;
       } finally {
-        await c.close();
+        await c?.close();
       }
     },
   );

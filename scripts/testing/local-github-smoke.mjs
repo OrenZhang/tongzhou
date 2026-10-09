@@ -26,14 +26,27 @@ await build({
   external: ['electron'],
 });
 let validIdentity = false,
-  validMcp = false;
+  validMcp = false,
+  validGitlab = true;
 const requests = [];
 const server = createServer(async (req, res) => {
   if (req.url === '/api/v4/user') {
     assert.equal(req.headers.authorization, 'Bearer fixture-local-gitlab-token');
     requests.push(req.url);
+    res.writeHead(validGitlab ? 200 : 401, { 'Content-Type': 'application/json' });
+    res.end(
+      JSON.stringify(
+        validGitlab
+          ? { id: 42, username: 'local-gitlab-user' }
+          : { message: 'fixture-local-gitlab-token' },
+      ),
+    );
+    return;
+  }
+  if (req.url?.startsWith('/api/v4/projects')) {
+    assert.equal(req.headers.authorization, 'Bearer fixture-local-gitlab-token');
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ id: 42, username: 'local-gitlab-user' }));
+    res.end(JSON.stringify([{ id: 1, name: 'Fixture' }]));
     return;
   }
   assert.equal(req.headers.authorization, 'Bearer fixture-local-github-token');
@@ -96,7 +109,7 @@ try {
     window.blur();
   });
   await app.evaluate(
-    ({ ipcMain, safeStorage }, config) => {
+    ({ ipcMain, safeStorage, session }, config) => {
       const require = process.getBuiltinModule('module').createRequire(config.bundle);
       const {
         Store,
@@ -110,7 +123,7 @@ try {
         encrypt: (value) => safeStorage.encryptString(value).toString('base64'),
         decrypt: (value) => safeStorage.decryptString(Buffer.from(value, 'base64')),
       });
-      setServiceTransport((input, init) => {
+      const route = (input, init) => {
         const url = new URL(input instanceof Request ? input.url : String(input));
         if (
           ![
@@ -121,8 +134,11 @@ try {
           ].includes(url.hostname)
         )
           throw new Error('Unexpected fixture destination');
-        return fetch(config.local + url.pathname, init);
-      });
+        return fetch(config.local + url.pathname + url.search, init);
+      };
+      setServiceTransport(route);
+      // Exercise the real plugin save/check handlers without sending fixture secrets externally.
+      session.fromPartition('tongzhou-service-network').fetch = route;
       const local = new LocalGithubAccounts(store, {
         read: (source) =>
           readLocalGithubCredential(source, async (command, args, input) => {
@@ -212,10 +228,24 @@ try {
   await page.locator('.sidebar').getByRole('button', { name: '插件', exact: true }).click();
   await page.getByRole('button', { name: /^内置插件/ }).click();
   await page.getByLabel('搜索插件', { exact: true }).fill('GitHub');
-  await card.getByText('凭据已保存 · 已启用', { exact: false }).waitFor();
+  await card.getByText('连接已验证 · 已启用', { exact: false }).waitFor();
   await app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()[0].setContentSize(820, 700),
   );
+  await card.getByRole('button', { name: '管理连接', exact: true }).click();
+  const githubDialog = page.getByRole('dialog');
+  assert.equal(
+    await githubDialog.getByLabel('认证方式', { exact: true }).locator('option').count(),
+    2,
+  );
+  await githubDialog.getByLabel('认证方式', { exact: true }).selectOption('oauth');
+  await githubDialog.getByText('GitHub OAuth2 应用配置', { exact: true }).waitFor();
+  assert.equal(await githubDialog.getByLabel('访问令牌（留空保留）', { exact: true }).count(), 0);
+  await githubDialog.getByLabel('认证方式', { exact: true }).selectOption('headers');
+  await githubDialog.getByLabel('Token 来源', { exact: true }).selectOption(plugin.connectorId);
+  await githubDialog.getByRole('button', { name: '保存并检查', exact: true }).click();
+  await githubDialog.getByText('✓ 插件连接检查通过', { exact: true }).waitFor();
+  await githubDialog.getByRole('button', { name: '关闭', exact: true }).click();
   await card.getByRole('button', { name: '检测本地账号', exact: true }).click();
   await use.waitFor();
   assert.ok(await card.evaluate((el) => el.scrollWidth <= el.clientWidth + 2));
@@ -253,7 +283,8 @@ try {
     await dialog.getByLabel('GitLab 实例地址', { exact: true }).inputValue(),
     'https://gitlab.fixture.example:8443',
   );
-  assert.equal(await dialog.getByRole('button', { name: '浏览器授权', exact: true }).count(), 1);
+  assert.equal(await dialog.getByLabel('认证方式', { exact: true }).inputValue(), 'headers');
+  assert.equal(await dialog.getByRole('button', { name: '浏览器授权', exact: true }).count(), 0);
   assert.equal(
     await dialog.getByRole('checkbox', { name: '在会话中启用此插件', exact: true }).isChecked(),
     false,
@@ -273,13 +304,38 @@ try {
     .getByRole('button', { name: '使用 local-gitlab-user 的Git 凭据并配置', exact: true })
     .click();
   await dialog
-    .getByText('本地账号已保存。请完成此 GitLab 实例的浏览器授权，再启用插件。')
+    .getByText('本地账号已保存。可点击「保存并检查」验证 Token 工具连接，再启用插件。')
     .waitFor();
   assert.equal(
     await dialog.getByLabel('GitLab 实例地址', { exact: true }).inputValue(),
     'https://gitlab.fixture.example:8443',
   );
   assert.ok(!(await dialog.innerText()).includes('fixture-local-gitlab-token'));
+  assert.equal(await dialog.getByLabel('认证方式', { exact: true }).locator('option').count(), 2);
+  await dialog.getByRole('button', { name: '保存并检查', exact: true }).click();
+  await dialog.getByText('✓ 插件连接检查通过', { exact: true }).waitFor();
+  let checkedGitlab = (await page.evaluate(() => window.tongzhou.snapshot())).plugins.find(
+    (p) => p.name === 'GitLab · local-gitlab-user（本地）',
+  );
+  assert.deepEqual(
+    checkedGitlab.catalog.map((t) => t.name),
+    ['gitlab_api_read', 'gitlab_api_write'],
+  );
+  validGitlab = false;
+  await dialog.getByRole('button', { name: '保存并检查', exact: true }).click();
+  await dialog.getByText('GitLab Token 已失效或无效，请更新认证', { exact: false }).waitFor();
+  checkedGitlab = (await page.evaluate(() => window.tongzhou.snapshot())).plugins.find(
+    (p) => p.id === checkedGitlab.id,
+  );
+  assert.equal(checkedGitlab.catalog, undefined, 'failed recheck invalidates stale verified tools');
+  validGitlab = true;
+  await dialog.getByLabel('认证方式', { exact: true }).selectOption('oauth');
+  assert.equal(await dialog.getByRole('button', { name: '浏览器授权', exact: true }).count(), 1);
+  assert.equal(await dialog.getByLabel('访问令牌（留空保留）', { exact: true }).count(), 0);
+  await dialog.getByLabel('认证方式', { exact: true }).selectOption('headers');
+  await dialog.getByLabel('Token 来源', { exact: true }).selectOption(checkedGitlab.connectorId);
+  await dialog.getByRole('button', { name: '保存并检查', exact: true }).click();
+  await dialog.getByText('✓ 插件连接检查通过', { exact: true }).waitFor();
   await page.screenshot({ path: 'test-results/local-gitlab-dialog.png' });
   await dialog.getByRole('button', { name: '关闭', exact: true }).click();
   const gitlabState = await page.evaluate(() => window.tongzhou.snapshot());
@@ -290,10 +346,10 @@ try {
   assert.ok(gitlabAccount.hasSecret);
   assert.equal(gitlabAccount.baseUrl, 'https://gitlab.fixture.example:8443');
   assert.equal(gitlabPlugin.url, 'https://gitlab.fixture.example:8443/api/v4/mcp');
-  assert.equal(gitlabPlugin.authMode, 'oauth');
+  assert.equal(gitlabPlugin.authMode, 'headers');
   assert.equal(gitlabPlugin.enabled, false);
-  assert.equal(gitlabPlugin.connectorId, undefined);
-  assert.ok(!gitlabPlugin.hasSecret, 'Git credentials must not be mistaken for MCP authorization');
+  assert.equal(gitlabPlugin.connectorId, gitlabAccount.id);
+  assert.ok(gitlabPlugin.hasSecret, 'Token mode resolves the verified bound account');
   assert.ok(!JSON.stringify(gitlabState).includes('fixture-local-gitlab-token'));
   await gitlabCard.getByRole('button', { name: '检测本地账号', exact: true }).click();
   await gitlabCard
@@ -322,10 +378,31 @@ try {
   card = page
     .locator('.provider-card')
     .filter({ has: page.getByRole('heading', { name: 'GitHub 仓库工具', exact: true }) });
-  await card.getByText('凭据已保存 · 已启用', { exact: false }).waitFor();
+  await card.getByText('连接已验证 · 已启用', { exact: false }).waitFor();
   const persisted = await page.evaluate(() => window.tongzhou.snapshot());
   assert.ok(persisted.plugins.find((p) => p.id === plugin.id).hasSecret);
   assert.ok(!JSON.stringify(persisted).includes('fixture-local-github-token'));
+  await page.locator('.sidebar').getByRole('button', { name: '设置', exact: true }).click();
+  await page.getByRole('button', { name: '打开连接中心', exact: true }).click();
+  await page.getByRole('button', { name: '服务与浏览器', exact: true }).click();
+  assert.equal(await page.getByRole('button', { name: '添加 GitHub', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: '添加 GitLab', exact: true }).count(), 0);
+  assert.equal(await page.locator('.service-connections .provider-card').count(), 0);
+  await page.getByRole('button', { name: '添加浏览器账号', exact: true }).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('heading', { name: '配置浏览器账号', exact: true })
+    .waitFor();
+  assert.ok(
+    (await page.evaluate(() => window.tongzhou.snapshot())).connectors.some(
+      (c) => c.kind === 'github',
+    ),
+  );
+  assert.ok(
+    (await page.evaluate(() => window.tongzhou.snapshot())).connectors.some(
+      (c) => c.kind === 'gitlab',
+    ),
+  );
   assert.ok(persisted.connectors.find((c) => c.id === gitlabAccount.id).hasSecret);
   assert.equal(persisted.plugins.find((p) => p.id === gitlabPlugin.id).url, gitlabPlugin.url);
   assert.ok(!JSON.stringify(persisted).includes('fixture-local-gitlab-token'));
@@ -354,7 +431,7 @@ try {
     ),
   );
   console.log(
-    'Local code hosting smoke passed: GitHub enable, GitLab detection and authorization preparation, redaction, restart and layout.',
+    'Local code hosting smoke passed: GitHub enable, GitLab token detection and configuration, redaction, restart and layout.',
   );
 } catch (error) {
   await (await app.firstWindow()).screenshot({ path: 'test-results/local-github-failure.png' });

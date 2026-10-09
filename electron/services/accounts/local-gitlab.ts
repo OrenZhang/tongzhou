@@ -128,22 +128,30 @@ export class LocalGitlabAccounts {
       throw new Error('检测结果已过期，请重新检测本地账号');
     const site = createHash('sha256').update(baseUrl).digest('hex').slice(0, 16);
     const connectorId = `local-gitlab-${site}-${source}-${account.id}`;
-    const pluginId = `tongzhou-${connectorId}`;
+    const pluginId = `tongzhou-${connectorId}-token`;
     const previous = this.store.list<PluginConfig>('plugin').find((p) => p.id === pluginId);
-    if (previous && (previous.url !== baseUrl + '/api/v4/mcp' || previous.authMode !== 'oauth'))
+    if (previous && (previous.url !== baseUrl + '/api/v4/mcp' || previous.authMode !== 'headers'))
       throw new Error('插件配置已变更，请从管理连接中配置');
-    const plugin: PluginConfig = previous ?? {
-      id: pluginId,
-      name: `GitLab · ${account.login}（本地）`,
-      transport: 'http',
-      command: '',
-      args: [],
-      url: baseUrl + '/api/v4/mcp',
-      authMode: 'oauth',
-      enabled: false,
-      readOnlyTools: [],
-    };
-    // Git/API credentials do not replace the MCP-specific OAuth grant.
+    const plugin: PluginConfig = previous
+      ? {
+          ...previous,
+          ...(this.store.secret('connector_' + connectorId) !== candidate.token
+            ? { catalog: undefined, checkedAt: undefined }
+            : {}),
+        }
+      : {
+          id: pluginId,
+          name: `GitLab · ${account.login}（本地）`,
+          transport: 'http',
+          command: '',
+          args: [],
+          url: baseUrl + '/api/v4/mcp',
+          authMode: 'headers',
+          connectorId,
+          enabled: false,
+          readOnlyTools: [],
+        };
+    // Token mode uses the official REST API and never changes existing MCP OAuth grants.
     this.store.db.exec('BEGIN');
     try {
       this.store.saveSecret('connector_' + connectorId, candidate.token);

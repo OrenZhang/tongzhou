@@ -245,7 +245,7 @@ export class McpAuth {
       (!config.oauthClientId || !this.store.hasSecret('plugin_oauth_client_' + id))
     ) {
       const message =
-        'GitHub 浏览器授权需要你自己的 OAuth App Client ID 和 Client Secret；GitHub 不支持自动注册应用。也可选择访问令牌或复用连接中心已授权的 GitHub 账号。';
+        'GitHub OAuth2 需要已注册 OAuth App 或 GitHub App 的 Client ID 和 Client Secret；不支持自动注册应用。请在插件中配置应用，或选择 Token 配置。';
       this.status(id, 'error', message);
       throw new Error(message);
     }

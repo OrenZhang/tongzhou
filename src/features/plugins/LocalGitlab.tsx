@@ -111,7 +111,7 @@ export function LocalGitlab({
         </div>
       ))}
       {accounts && (
-        <p className="muted">账号可用于 Git 操作；仓库插件需完成对应实例的浏览器授权。</p>
+        <p className="muted">检测到的 Token 可用于 GitLab 官方 API；保存后检查连接和项目权限。</p>
       )}
       {notice && (
         <p className="muted" role="status">

@@ -217,12 +217,12 @@ try {
   await page.getByRole('button', { name: '设置', exact: true }).click();
   await page.getByRole('button', { name: '打开连接中心', exact: true }).click();
   await page.getByRole('button', { name: '服务与浏览器', exact: true }).click();
-  await page.getByRole('button', { name: '添加 GitHub', exact: true }).click();
+  await page.getByRole('button', { name: '添加浏览器账号', exact: true }).click();
   const form = page.locator('.connection-form');
-  await form.getByLabel('名称', { exact: true }).fill('测试 GitHub');
-  await form.getByLabel('访问令牌', { exact: false }).fill('fixture-token');
+  await form.getByLabel('名称', { exact: true }).fill('测试浏览器');
+  await form.getByLabel('站点地址', { exact: true }).fill('https://example.test');
   await form.getByRole('button', { name: '保存', exact: true }).click();
-  await page.getByRole('heading', { name: '测试 GitHub', exact: true }).waitFor();
+  await page.getByRole('heading', { name: '测试浏览器', exact: true }).waitFor();
   await page.getByRole('button', { name: '渠道通知', exact: true }).click();
   await page.getByRole('button', { name: '添加 飞书', exact: true }).click();
   await form.getByLabel('名称', { exact: true }).fill('合成飞书');

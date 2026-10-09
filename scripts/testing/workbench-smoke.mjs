@@ -297,14 +297,24 @@ try {
     'bot credentials and read-only disabled defaults remain separate from notification targets',
   );
   await page.getByRole('button', { name: '服务与浏览器', exact: true }).click();
-  await page.getByRole('button', { name: '添加 GitHub', exact: true }).click();
-  await dialog.getByLabel('名称', { exact: true }).fill('仓库测试账号');
-  await dialog
-    .getByLabel('访问令牌（留空保留已存令牌）', { exact: true })
-    .fill('fixture-github-token');
-  await capture('github-account');
+  assert.equal(await page.getByRole('button', { name: '添加 GitHub', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: '添加 GitLab', exact: true }).count(), 0);
+  await page.getByRole('button', { name: '添加浏览器账号', exact: true }).click();
+  await dialog.getByLabel('名称', { exact: true }).fill('浏览器测试账号');
+  await dialog.getByLabel('站点地址', { exact: true }).fill('https://example.test');
   await dialog.getByRole('button', { name: '保存', exact: true }).click();
   await dialog.waitFor({ state: 'hidden' });
+  // Legacy account fixtures remain usable from plugin Token mode after the old UI is removed.
+  await page.evaluate(() =>
+    window.tongzhou.saveConnector({
+      id: 'fixture-github',
+      name: '仓库测试账号',
+      kind: 'github',
+      baseUrl: 'https://github.com',
+      enabled: true,
+      secret: 'fixture-github-token',
+    }),
+  );
   const connector = await page.evaluate(async () =>
     (await window.tongzhou.snapshot()).connectors.find((c) => c.kind === 'github'),
   );
@@ -400,8 +410,9 @@ try {
     .locator('.work-plugins')
     .getByRole('button', { name: '配置插件', exact: true })
     .click();
-  assert.equal(await dialog.getByLabel('认证来源', { exact: true }).inputValue(), 'saved');
-  assert.equal(await dialog.getByLabel('GitHub 账号', { exact: true }).inputValue(), connector.id);
+  assert.equal(await dialog.getByLabel('认证方式', { exact: true }).inputValue(), 'headers');
+  await dialog.getByLabel('Token 来源', { exact: true }).selectOption(connector.id);
+  assert.equal(await dialog.getByLabel('Token 来源', { exact: true }).inputValue(), connector.id);
   assert.equal(await dialog.getByText('高级：自定义 GitHub OAuth 应用').count(), 0);
   await capture('github-saved-auth');
   await dialog.getByRole('button', { name: '保存连接', exact: true }).click();
@@ -415,11 +426,11 @@ try {
     .locator('.work-plugins')
     .getByRole('button', { name: '管理连接', exact: true })
     .click();
-  assert.equal(await dialog.getByLabel('认证来源', { exact: true }).inputValue(), 'saved');
+  assert.equal(await dialog.getByLabel('认证方式', { exact: true }).inputValue(), 'headers');
   assert.equal(githubPlugin.connectorId, connector.id);
-  await dialog.getByText('✓ 凭据已保存', { exact: true }).waitFor();
-  await dialog.getByLabel('认证来源', { exact: true }).selectOption('oauth');
-  await dialog.getByLabel('认证来源', { exact: true }).selectOption('token');
+  assert.equal(await dialog.getByLabel('Token 来源', { exact: true }).inputValue(), connector.id);
+  await dialog.getByLabel('认证方式', { exact: true }).selectOption('oauth');
+  await dialog.getByLabel('认证方式', { exact: true }).selectOption('headers');
   await dialog
     .getByLabel('访问令牌（留空保留）', { exact: true })
     .fill('fixture-github-independent-token');
@@ -436,12 +447,11 @@ try {
     .locator('.work-plugins')
     .getByRole('button', { name: '管理连接', exact: true })
     .click();
-  await dialog.getByLabel('认证来源', { exact: true }).selectOption('oauth');
-  await dialog.getByText('高级：自定义 GitHub OAuth 应用', { exact: true }).click();
+  await dialog.getByLabel('认证方式', { exact: true }).selectOption('oauth');
   await dialog.getByRole('button', { name: '浏览器授权', exact: true }).click();
   await dialog
     .getByRole('alert')
-    .filter({ hasText: /GitHub 浏览器授权需要/ })
+    .filter({ hasText: /GitHub OAuth2 需要/ })
     .waitFor();
   assert.ok(!(await dialog.innerText()).includes('Error invoking remote method'));
   await capture('github-oauth-requirements');
@@ -458,6 +468,8 @@ try {
   await dialog
     .getByLabel('GitLab 实例地址', { exact: true })
     .fill('https://gitlab.fixture.example');
+  assert.equal(await dialog.getByLabel('认证方式', { exact: true }).inputValue(), 'headers');
+  await dialog.getByLabel('认证方式', { exact: true }).selectOption('oauth');
   assert.equal(await dialog.getByRole('button', { name: '浏览器授权', exact: true }).count(), 1);
   assert.equal(await dialog.getByLabel('访问令牌（留空保留）', { exact: true }).count(), 0);
   await capture('gitlab-self-managed');
@@ -486,6 +498,10 @@ try {
     await dialog.getByLabel('GitLab 实例地址', { exact: true }).inputValue(),
     'https://gitlab.com',
   );
+  assert.equal(await dialog.getByLabel('认证方式', { exact: true }).inputValue(), 'headers');
+  await dialog
+    .getByLabel('访问令牌（留空保留）', { exact: true })
+    .fill('fixture-other-gitlab-token');
   await dialog.getByRole('button', { name: '保存连接', exact: true }).click();
   await dialog.waitFor({ state: 'hidden' });
   await page.getByLabel('GitLab 仓库工具 连接', { exact: true }).selectOption(gitlabPlugin.id);

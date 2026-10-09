@@ -83,10 +83,10 @@ describe('GitLab local accounts', () => {
     const plugin = await f.accounts.use(result[0].id);
     expect(plugin).toMatchObject({
       url: 'https://gitlab.com/api/v4/mcp',
-      authMode: 'oauth',
+      authMode: 'headers',
       enabled: false,
     });
-    expect(plugin.connectorId).toBeUndefined();
+    expect(plugin.connectorId).toMatch(/^local-gitlab-/);
     expect(f.store.hasSecret('plugin_' + plugin.id)).toBe(false);
     const account = f.store.list<any>('connector')[0];
     expect(account).toMatchObject({
@@ -101,7 +101,7 @@ describe('GitLab local accounts', () => {
     );
     await expect(f.accounts.use(result[0].id)).rejects.toThrow('过期');
   });
-  it('keeps self-managed and official identities separate and preserves existing MCP authorization on repeat import', async () => {
+  it('keeps self-managed and official identities separate and preserves token mode configuration and leaves separate MCP authorization untouched', async () => {
     const f = fixture();
     const official = await f.accounts.detect('https://gitlab.com');
     const custom = await f.accounts.detect('https://git.example:8443');
@@ -112,14 +112,12 @@ describe('GitLab local accounts', () => {
     f.store.put('plugin', {
       ...p2,
       enabled: true,
-      oauthStatus: 'authorized',
       catalog: [{ name: 'read_project' }],
     });
     const next = await f.accounts.detect('https://git.example:8443');
     expect(await f.accounts.use(next[0].id)).toMatchObject({
       id: p2.id,
       enabled: true,
-      oauthStatus: 'authorized',
       catalog: [{ name: 'read_project' }],
     });
     expect(f.store.list('plugin')).toHaveLength(2);

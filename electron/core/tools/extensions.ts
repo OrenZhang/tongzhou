@@ -29,6 +29,7 @@ import {
   pluginCredentialVersion,
   pluginSecret,
 } from '../../modules/plugins/code-hosting';
+import { GitlabApiConnection, gitlabApiTools } from '../../modules/plugins/gitlab-api';
 
 export function pluginTool(tool: any): PluginTool {
   return {
@@ -47,6 +48,12 @@ export function pluginTool(tool: any): PluginTool {
 }
 
 export function isReadOnlyTool(config: PluginConfig, tool: PluginTool) {
+  if (
+    codeHost(config) === 'gitlab' &&
+    config.authMode === 'headers' &&
+    tool.name === 'gitlab_api_write'
+  )
+    return false;
   return (
     config.readOnlyTools.includes(tool.name) ||
     (!!codeHost(config) &&
@@ -174,6 +181,7 @@ export function mcpName(id: string, name: string) {
 export class PluginConnection {
   readonly client = new Client(clientIdentity, { capabilities: {} });
   private secretValues: string[] = [];
+  private gitlabApi?: GitlabApiConnection;
   constructor(
     readonly config: PluginConfig,
     private secret: string,
@@ -187,6 +195,11 @@ export class PluginConnection {
       value,
       ...(/^(?:Bearer|Basic)\s+(.+)$/i.exec(value)?.slice(1) ?? []),
     ]);
+    if (codeHost(this.config) === 'gitlab' && this.config.authMode === 'headers') {
+      this.gitlabApi = new GitlabApiConnection(this.config, this.secret);
+      await this.gitlabApi.connect(signal);
+      return;
+    }
     const headers = codeHostHeaders(this.config);
     for (const [key, value] of Object.entries(credentials)) headers.set(key, value);
     const transport =
@@ -219,6 +232,8 @@ export class PluginConnection {
     }
   }
   async tools(signal: AbortSignal) {
+    signal.throwIfAborted();
+    if (this.gitlabApi) return gitlabApiTools;
     const tools: any[] = [];
     let cursor: string | undefined;
     const cursors = new Set<string>();
@@ -243,6 +258,7 @@ export class PluginConnection {
   }
   async call(name: string, args: Record<string, unknown>, signal: AbortSignal, generated = false) {
     try {
+      if (this.gitlabApi) return await this.gitlabApi.call(name, args, signal);
       const result = normalizeOutput(
         await this.client.callTool({ name, arguments: args }, undefined, {
           signal,
