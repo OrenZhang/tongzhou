@@ -122,7 +122,7 @@ describe('built-in skill creator and personal skills', () => {
       });
       expect(result.isError).toBeUndefined();
       const saved = JSON.parse(result.text!);
-      expect(skillInstructions(store, agent)).toContain(saved.id);
+      expect(skillInstructions(store)).toContain(saved.id);
       const reader = new ToolScope(
         new AbortController().signal,
         async () => true,

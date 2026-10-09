@@ -20,12 +20,10 @@ export function Extensions({
   api,
   data,
   refresh,
-  report,
 }: {
   api: TongzhouAPI;
   data: Snapshot;
   refresh: () => Promise<void>;
-  report: (e: unknown) => void;
 }) {
   const [tab, setTab] = useState<'core' | 'builtin' | 'personal'>('core');
   const [adding, setAdding] = useState(false);

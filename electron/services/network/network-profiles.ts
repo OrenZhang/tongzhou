@@ -8,7 +8,6 @@ import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { stringify } from 'yaml';
 import type { Store } from '../storage/store';
-import type { Provider } from '../../../src/shared/types';
 import type { ProviderNetwork } from '../../../src/shared/provider-network';
 import type { NetworkProfile, NetworkProfileInput } from '../../../src/shared/network-profile';
 import { networkProfileSchema, parseNetworkConfig, runtimeNetworkConfig } from './network-config';

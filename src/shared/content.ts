@@ -1,4 +1,4 @@
-import type { KnowledgeDocument, KnowledgeFolder, KnowledgeSummary } from './knowledge';
+import type { KnowledgeFolder, KnowledgeSummary } from './knowledge';
 export interface ContentLibrary {
   id: string;
   name: string;
@@ -27,16 +27,4 @@ export interface ContentRun {
   agentId?: string;
   prompt: string;
   selection?: { start: number; end: number; text: string };
-}
-/** Providers implement only supported capabilities; the core never assumes remote write access. */
-export interface ContentSourceAdapter {
-  id: string;
-  capabilities: readonly ('browse' | 'read' | 'pull' | 'push')[];
-  browse(parent?: string): Promise<{ id: string; title: string; container: boolean }[]>;
-  read(id: string): Promise<{ title: string; content: string; revision?: string; url?: string }>;
-  push?(
-    document: KnowledgeDocument,
-    remoteId?: string,
-    expectedRevision?: string,
-  ): Promise<{ id: string; revision?: string }>;
 }

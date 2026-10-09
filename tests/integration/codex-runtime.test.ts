@@ -316,7 +316,12 @@ describe('live execution permissions', () => {
       config: { permission: 'full-access' },
     });
     expect(
-      await f.runtime.ask(f.input.sessionId, 'next tool', '{}', new AbortController().signal),
+      await f.runtime.approvalQueue.ask(
+        f.input.sessionId,
+        'next tool',
+        '{}',
+        new AbortController().signal,
+      ),
     ).toBe(true);
     complete();
     await f.runtime.waitForIdle();
@@ -353,7 +358,7 @@ describe('live execution permissions', () => {
     const asking = fake.calls.filter((c) => c.method === 'thread/start').at(-1).params;
     expect(asking).toMatchObject({ sandbox: 'workspace-write', approvalPolicy: 'untrusted' });
     expect(asking.dynamicTools.some((t: any) => t.name === 'write_file')).toBe(true);
-    const decision = f.runtime.ask(
+    const decision = f.runtime.approvalQueue.ask(
       f.input.sessionId,
       'requires approval',
       '{}',
@@ -361,7 +366,7 @@ describe('live execution permissions', () => {
     );
     const approval = f.runtime.snapshot().approvals[0];
     expect(approval).toBeDefined();
-    f.runtime.approve(approval.id, false);
+    f.runtime.approvalQueue.approve(approval.id, false);
     expect(await decision).toBe(false);
     complete();
     await f.runtime.waitForIdle();
@@ -553,7 +558,7 @@ describe('locked Codex resume and steer contracts', () => {
     );
     const latest = fake.instances.at(-1);
     f.store.put('session', { ...f.store.get<any>('session', f.input.sessionId), archived: true });
-    await f.runtime.deleteSession(f.input.sessionId);
+    await f.runtime.sessions.deleteSession(f.input.sessionId);
     expect(latest.stopped).toBe(true);
   });
   it('passes actual images into Codex turns and model handoffs', async () => {

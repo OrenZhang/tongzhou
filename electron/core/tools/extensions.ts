@@ -616,7 +616,7 @@ export class ToolScope {
   }
 }
 
-export function skillInstructions(store: Store, agent: AgentProfile) {
+export function skillInstructions(store: Store) {
   return store
     .list<SkillRecord>('skill')
     .filter((s) => s.enabled)

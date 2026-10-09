@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtemp, readFile, rm, mkdir, symlink, writeFile, realpath } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, symlink, writeFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { Store } from '../../electron/services/storage/store';

@@ -27,7 +27,6 @@ import {
 import { projectFamilyId } from '../../../src/shared/projects';
 import { KnowledgeMemory, cleanMemory, memoryBody, memoryEntryKey } from './knowledge-memory';
 import type { KnowledgeReference } from '../../../src/shared/knowledge';
-import { redact } from '../../services/storage/validation';
 
 const id = z.string().uuid();
 export const knowledgeInput = z.object({
@@ -727,7 +726,7 @@ export class Knowledge {
   state(
     query = '',
     projectId?: string,
-    sessionId?: string,
+    _sessionId?: string,
     folderId?: string | null,
   ): KnowledgeState {
     const docs = this.all();

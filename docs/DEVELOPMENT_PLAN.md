@@ -214,7 +214,7 @@ ROADMAP 中更早的长期方向保留，不隐式扩大本次首轮门槛：
 | 项目任务      | 真实模型自主读代码、修改、运行测试、纠错及续接                       | 外部验收脚本判定产物，保存 diff、命令证据与人工干预      |
 | 打包实机      | Windows 与 macOS 安装、权限、内置运行时、重启与升级                  | macOS 需要实际环境；只构建成功不算实机通过               |
 
-已有命令复用：`npm test`、`npm run typecheck`、`npm run build`、`npm run test:desktop`、`npm run test:extensions`、`npm run test:bridge`。现有 native / auth / computer smoke 脚本按实际入口整理统一脚本名称后使用。新增测试脚本和夹具属于实施产物，本计划不声称它们已存在。
+已有命令复用：`npm test`、`npm run typecheck`、`npm run build`、`npm run test:desktop`、`npm run test:extensions`、`npm run test:dynamic-tools`。现有 native / auth / computer smoke 脚本按实际入口整理统一脚本名称后使用。新增测试脚本和夹具属于实施产物，本计划不声称它们已存在。
 
 ### 6.2 聊天与稳定性用例
 

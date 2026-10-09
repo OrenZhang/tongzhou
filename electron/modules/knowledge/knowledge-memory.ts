@@ -5,7 +5,6 @@ import type { Store } from '../../services/storage/store';
 import type { Run, Session } from '../../../src/shared/types';
 import {
   memoryCategories,
-  type KnowledgeDocument,
   type KnowledgeSource,
   type MemoryEntry,
 } from '../../../src/shared/knowledge';

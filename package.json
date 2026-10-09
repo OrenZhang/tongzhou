@@ -24,7 +24,7 @@
     "dist:win": "npm run build && electron-builder --win --publish never",
     "dist:mac": "npm run build && electron-builder --mac --publish never",
     "test:extensions": "node scripts/testing/extensions-smoke.mjs",
-    "test:bridge": "node scripts/testing/bridge-smoke.mjs",
+    "test:dynamic-tools": "node scripts/testing/dynamic-tools-smoke.mjs",
     "test:workflows": "node scripts/testing/workflows-smoke.mjs",
     "test:turns": "node scripts/testing/turn-process-smoke.mjs",
     "test:message-resend": "node scripts/testing/message-resend-smoke.mjs",
@@ -138,7 +138,6 @@
     "asarUnpack": [
       "node_modules/**/*",
       "build/computer/**/*",
-      "dist-electron/tool-proxy.cjs",
       "dist-electron/node-request-identity.cjs",
       "dist-electron/network-core-host.cjs",
       "dist-electron/builtin-mcp.cjs",

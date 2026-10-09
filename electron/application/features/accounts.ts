@@ -1,7 +1,6 @@
 import { clipboard, shell } from 'electron';
 import { z } from 'zod';
 import { manual, operation, workspaceOperation } from '../../core/tools/client-commands';
-import { read } from '../../core/tools/workspace';
 import { writeClipboardText } from '../../services/desktop/clipboard';
 import { idSchema } from '../../services/storage/validation';
 import type { Plugin } from 'cordis';

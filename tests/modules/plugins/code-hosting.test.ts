@@ -17,7 +17,6 @@ import { PluginConnection, ToolScope, mcpName } from '../../../electron/core/too
 import { PluginOAuthProvider, pluginOAuthScope } from '../../../electron/modules/plugins/mcp-auth';
 import { Store } from '../../../electron/services/storage/store';
 import { setServiceTransport } from '../../../electron/services/network/service-network';
-import { toolBridge } from '../../../electron/core/tools/tool-bridge';
 import { userAgent } from '../../../electron/services/network/request-identity';
 
 const cleanup: (() => unknown | Promise<unknown>)[] = [];
@@ -184,33 +183,22 @@ async function fixture() {
 }
 
 describe('complete code hosting plugin catalogs', () => {
-  it('discovers both complete paginated catalogs lazily, searches/describes and calls through the native bridge', async () => {
+  it('discovers both complete paginated catalogs lazily, searches/describes and calls through the current tool scope', async () => {
     const f = await fixture();
-    const { scope, controller, approve } = await f.prepare();
+    const { scope, approve } = await f.prepare();
     expect(scope.specs).toHaveLength(3);
     expect(f.requests).toHaveLength(0);
-    const bridge = await toolBridge(scope, controller.signal);
-    cleanup.push(() => bridge.close());
-    const call = async (p: PluginConfig, args: any) => {
-      const response = await fetch(bridge.config.env[0].value, {
-        method: 'POST',
-        headers: { Authorization: 'Bearer ' + bridge.config.env[1].value },
-        body: JSON.stringify({ method: 'call', name: mcpName(p.id, 'discover'), arguments: args }),
-      });
-      return response.json();
-    };
+    const call = (p: PluginConfig, args: any) => scope.call(mcpName(p.id, 'discover'), args);
     for (const p of [f.github, f.gitlab]) {
       const first = await call(p, { action: 'list' });
-      expect(JSON.parse(first.content[0].text)).toMatchObject({ total: 246, nextOffset: 10 });
-      const last = JSON.parse((await call(p, { action: 'list', offset: 240 })).content[0].text);
+      expect(JSON.parse(first.text)).toMatchObject({ total: 246, nextOffset: 10 });
+      const last = JSON.parse((await call(p, { action: 'list', offset: 240 })).text);
       expect(last.nextOffset).toBeNull();
       expect(last.tools).toHaveLength(6);
-      const search = JSON.parse(
-        (await call(p, { action: 'list', query: 'failed jobs' })).content[0].text,
-      );
+      const search = JSON.parse((await call(p, { action: 'list', query: 'failed jobs' })).text);
       expect(search.tools.map((t: any) => t.name)).toEqual(['rerun_failed_jobs']);
       const schema = JSON.parse(
-        (await call(p, { action: 'describe', tool: 'rerun_failed_jobs' })).content[0].text,
+        (await call(p, { action: 'describe', tool: 'rerun_failed_jobs' })).text,
       );
       expect(schema.inputSchema.required).toEqual(['repository']);
       const result = await call(p, {
@@ -219,8 +207,8 @@ describe('complete code hosting plugin catalogs', () => {
         arguments: { repository: 'group/project' },
       });
       expect(result.isError).toBe(false);
-      expect(result.content[0].text).toContain('REDACTED');
-      expect(result.content[0].text).not.toContain('secret-fixture');
+      expect(result.text).toContain('REDACTED');
+      expect(result.text).not.toContain('secret-fixture');
     }
     expect(approve).toHaveBeenCalledTimes(2);
     expect(approve.mock.calls[0][0]).toContain('rerun_failed_jobs');

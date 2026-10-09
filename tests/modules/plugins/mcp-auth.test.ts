@@ -10,10 +10,7 @@ import {
   oauthFetch,
 } from '../../../electron/modules/plugins/mcp-auth';
 import type { PluginConfig } from '../../../src/shared/types';
-import {
-  serviceFetch,
-  setServiceTransport,
-} from '../../../electron/services/network/service-network';
+import { setServiceTransport } from '../../../electron/services/network/service-network';
 const cleanups: (() => any)[] = [];
 afterEach(async () => {
   for (const close of cleanups.splice(0).reverse()) await close();

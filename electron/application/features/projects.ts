@@ -24,6 +24,7 @@ export const projectsPlugin: Plugin.Object<void> = {
     'tzIpc',
     'tzStore',
     'tzRuntime',
+    'tzSessions',
     'tzChannels',
     'tzFeishu',
     'tzDesktop',
@@ -40,7 +41,7 @@ export const projectsPlugin: Plugin.Object<void> = {
     register(
       'projectDeletionPreview',
       operation('项目与 Git', 'query', '核对项目内全部会话（包含归档与子会话）', [idSchema]),
-      (id) => runtime.projectDeletionPreview(idSchema.parse(id)),
+      (id) => ctx.tzSessions.projectDeletionPreview(idSchema.parse(id)),
     );
     register(
       'listWorktrees',
@@ -198,7 +199,7 @@ export const projectsPlugin: Plugin.Object<void> = {
       ),
       (id, expectedSessionIds) => {
         if (worktreeActivity.count) throw new Error('正在处理工作树，请完成后再删除项目。');
-        const deleted = runtime.deleteProject(
+        const deleted = ctx.tzSessions.deleteProject(
           idSchema.parse(id),
           z.array(idSchema).optional().parse(expectedSessionIds),
         );

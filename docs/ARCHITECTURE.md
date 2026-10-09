@@ -44,7 +44,7 @@ Electron 主进程持有数据库、网络、文件及引擎进程。React 仅�
 | `browser-profiles.ts`                                               | 持久化浏览器分区、登录态清理、外部页面隔离                            |
 | `channels.ts` / `feishu.ts`                                         | Webhook、飞书扫码 / 应用消息 / WS、规则、幂等和入站绑定               |
 | `extensions.ts` / `builtin-mcp.ts`                                  | 全局 MCP / Skills、目录缓存、延迟连接、内置网页与时间                 |
-| `tool-bridge.ts` / `tool-proxy.ts`                                  | 认证的 loopback 连接与 stdio MCP 适配                                 |
+| `codex-execution.ts`                                                | Codex 动态工具目录、调用调度与当前任务作用域                          |
 | `client-commands.ts`                                                | GUI 与会话共用的客户端查询、受审批的配置变更                          |
 | `workspace.ts` / `project-init.ts`                                  | 搜索、读取、哈希修改、命令、路径检查、项目说明初始化                  |
 | `computer.ts` / `computer-diagnostic.ts`                            | 各平台电脑操作、截图坐标和窗口绑定、本机功能自检                      |

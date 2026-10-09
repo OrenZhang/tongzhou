@@ -34,7 +34,7 @@ jobs:
       - run: npm run test:account-proxy
       - run: npm run test:managed-network
       - run: npm run test:extensions
-      - run: npm run test:bridge
+      - run: npm run test:dynamic-tools
       - run: npm run test:workflows
       - run: npm run test:turns
       - run: npm run test:ui

@@ -1,9 +1,9 @@
 import { build } from 'esbuild';
 import { spawn } from 'node:child_process';
 import { rm } from 'node:fs/promises';
-const output = 'dist-electron/bridge-smoke.cjs';
+const output = 'dist-electron/dynamic-tools-smoke.cjs';
 await build({
-  entryPoints: ['scripts/testing/bridge-smoke.ts'],
+  entryPoints: ['scripts/testing/dynamic-tools-smoke.ts'],
   outfile: output,
   bundle: true,
   platform: 'node',

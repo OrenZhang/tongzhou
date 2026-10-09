@@ -1,9 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { Message } from '../../../src/shared/types';
 
-// Conservative text heuristic, not a claim about any model's token capacity.
-// Zero removes the manual threshold; runtime still compacts automatically.
-export const AUTO_HISTORY_CHARS = 180000;
 export function isContextOverflow(error: unknown): boolean {
   const text = error instanceof Error ? error.message : String(error);
   return /context_length_exceeded|context[_ ](?:window|length).*(?:exceed|limit|full)|maximum context|prompt.{0,60}too long|input.{0,60}too long|上下文.{0,20}(?:超出|超限|已满)/i.test(

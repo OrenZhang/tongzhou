@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, globalShortcut, Menu, nativeTheme, session } from 'electron';
+import { app, BrowserWindow, dialog, globalShortcut, Menu, nativeTheme } from 'electron';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';

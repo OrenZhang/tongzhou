@@ -35,7 +35,7 @@ const suites = [
   'managed-network',
   'native',
   'updates',
-  'bridge',
+  'dynamic-tools',
   'request-identity',
   'node-identity',
   'codex-identity',

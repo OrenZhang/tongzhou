@@ -10,7 +10,16 @@ import '../context';
 
 export const sessionsPlugin: Plugin.Object<void> = {
   name: 'tongzhou-sessions',
-  inject: ['tzIpc', 'tzStore', 'tzRuntime', 'tzChannels', 'tzFeishu', 'tzDesktop'],
+  inject: [
+    'tzIpc',
+    'tzStore',
+    'tzRuntime',
+    'tzSessions',
+    'tzApprovals',
+    'tzChannels',
+    'tzFeishu',
+    'tzDesktop',
+  ],
   apply(ctx) {
     const register = ctx.tzIpc.scoped(ctx);
     const store = ctx.tzStore;
@@ -140,7 +149,7 @@ export const sessionsPlugin: Plugin.Object<void> = {
       ),
       async (id) => {
         idSchema.parse(id);
-        await runtime.deleteSession(id);
+        await ctx.tzSessions.deleteSession(id);
         channels.abort(id);
         feishu.sync();
       },
@@ -219,7 +228,7 @@ export const sessionsPlugin: Plugin.Object<void> = {
       ]),
       (raw, patch) => {
         const id = idSchema.parse(raw);
-        if (runtime.isDeleting(id)) throw new Error('会话正在删除，请稍候');
+        if (ctx.tzSessions.isDeleting(id)) throw new Error('会话正在删除，请稍候');
         const update = z
           .object({
             title: z.string().trim().min(1).max(120).optional(),
@@ -289,7 +298,7 @@ export const sessionsPlugin: Plugin.Object<void> = {
         '只有用户可以审批，Agent 不能批准自身或其他会话的操作',
         [idSchema, z.boolean()],
       ),
-      (id, allow) => runtime.approve(idSchema.parse(id), z.boolean().parse(allow)),
+      (id, allow) => ctx.tzApprovals.approve(idSchema.parse(id), z.boolean().parse(allow)),
     );
     register(
       'exportSession',

@@ -68,6 +68,6 @@
 
 ## 可复现证据
 
-- 自动化：`npm test`、`npm run build`、`test:desktop`、`test:auth`、`test:extensions`、`test:bridge`、`test:workflows`、`test:native`、`test:package`。
+- 自动化：`npm test`、`npm run build`、`test:desktop`、`test:auth`、`test:extensions`、`test:dynamic-tools`、`test:workflows`、`test:native`、`test:package`。
 - 真实电脑 / 模型：使用显式测试开关，在忽略的独立目录内执行，不读写用户项目，也不发送实际渠道通知。
 - 各次失败保留在测试输出和验证报告中；不能以“模型声称完成”代替外部断言，不把缺账号记为通过。

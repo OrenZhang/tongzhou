@@ -105,10 +105,12 @@ describe('conversation input and lifecycle changes', () => {
       config: { permission: 'full-access' },
     });
     const signal = new AbortController().signal;
-    expect(await f.runtime.ask(f.input.sessionId, '普通操作', '{}', signal)).toBe(true);
-    const deletion = f.runtime.ask(f.input.sessionId, '删除文档', '{}', signal, true);
+    expect(await f.runtime.approvalQueue.ask(f.input.sessionId, '普通操作', '{}', signal)).toBe(
+      true,
+    );
+    const deletion = f.runtime.approvalQueue.ask(f.input.sessionId, '删除文档', '{}', signal, true);
     expect(f.runtime.snapshot().approvals).toHaveLength(1);
-    f.runtime.approve(f.runtime.snapshot().approvals[0].id, false);
+    f.runtime.approvalQueue.approve(f.runtime.snapshot().approvals[0].id, false);
     expect(await deletion).toBe(false);
     f.store.remove('run', 'deletion-confirmation');
   });
@@ -821,7 +823,7 @@ describe('conversation input and lifecycle changes', () => {
     const s = f.store.get<any>('session', f.input.sessionId);
     const last = f.store.messages(s.id).at(-1)!;
     f.store.put('session', { ...s, archived: true });
-    await f.runtime.deleteSession(s.id);
+    await f.runtime.sessions.deleteSession(s.id);
     expect(f.store.messages(s.id)).toHaveLength(0);
     expect(f.runtime.events(s.id)).toHaveLength(0);
     expect(() => f.store.message(last)).toThrow();
@@ -892,7 +894,7 @@ describe('agent execution lifecycle', () => {
     f.store.setCapability('computer', true);
     f.runtime.start({ ...f.input, sessionId: session.id });
     await expect.poll(() => f.runtime.snapshot().approvals.length).toBe(1);
-    f.runtime.approve(f.runtime.snapshot().approvals[0].id, true);
+    f.runtime.approvalQueue.approve(f.runtime.snapshot().approvals[0].id, true);
     await f.runtime.waitForIdle();
     expect(executed).toBe(1);
     expect(JSON.stringify(f.requests[1])).toContain(
@@ -1093,7 +1095,7 @@ describe('agent execution lifecycle', () => {
     f.runtime.start(f.input);
     await expect.poll(() => f.runtime.snapshot().approvals.length).toBe(1);
     await expect(readFile(path.join(f.root, 'result.txt'))).rejects.toThrow();
-    f.runtime.approve(f.runtime.snapshot().approvals[0].id, true);
+    f.runtime.approvalQueue.approve(f.runtime.snapshot().approvals[0].id, true);
     await f.runtime.waitForIdle();
     expect(await readFile(path.join(f.root, 'result.txt'), 'utf8')).toBe('hello from model');
     expect(f.store.list<Run>('run')[0]).toMatchObject({

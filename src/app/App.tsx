@@ -1668,9 +1668,7 @@ export default function App() {
               />
             </main>
           )}
-          {view === 'extensions' && (
-            <Extensions api={api} data={data} refresh={refresh} report={report} />
-          )}
+          {view === 'extensions' && <Extensions api={api} data={data} refresh={refresh} />}
           {view === 'automations' && (
             <main className="page">
               <header className="page-heading">

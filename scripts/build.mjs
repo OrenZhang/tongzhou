@@ -1,6 +1,7 @@
 import { build } from 'esbuild';
-import { cp, mkdir } from 'node:fs/promises';
+import { cp, mkdir, rm } from 'node:fs/promises';
 import './prepare-pty.mjs';
+await rm('dist-electron', { recursive: true, force: true });
 await mkdir('dist-electron/skills', { recursive: true });
 await cp('skills/skill-creator', 'dist-electron/skills/skill-creator', { recursive: true });
 await build({
@@ -43,14 +44,6 @@ await build({
   target: 'node22',
 });
 
-await build({
-  entryPoints: ['electron/core/tools/tool-proxy.ts'],
-  outfile: 'dist-electron/tool-proxy.cjs',
-  bundle: true,
-  platform: 'node',
-  format: 'cjs',
-  target: 'node22',
-});
 await build({
   entryPoints: ['electron/modules/plugins/builtin-mcp.ts'],
   outfile: 'dist-electron/builtin-mcp.cjs',
