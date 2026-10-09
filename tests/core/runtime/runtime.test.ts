@@ -1198,3 +1198,13 @@ describe('agent execution lifecycle', () => {
     expect(f.store.list('agent')).toHaveLength(3);
   });
 });
+
+it('rejects new runs and queued inputs once shutdown starts', async () => {
+  const { runtime, input } = await fixture(() => []);
+  const shutdown = runtime.stop();
+  expect(runtime.stop()).toBe(shutdown);
+  expect(() => runtime.start(input)).toThrow('应用正在退出');
+  await expect(runtime.enqueue(input, 'next')).rejects.toThrow('应用正在退出');
+  await expect(runtime.team(input, ['builder'])).rejects.toThrow('应用正在退出');
+  await runtime.waitForIdle();
+});

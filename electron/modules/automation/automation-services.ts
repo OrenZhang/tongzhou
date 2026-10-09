@@ -12,7 +12,7 @@ import type { MemoryJob } from '../knowledge/knowledge-memory';
 import { projectFamilyId } from '../../../src/shared/projects';
 export function registerAutomationServices(
   register: (name: string, definition: ClientOperation, handler: (...args: any[]) => any) => void,
-  runtime: Runtime,
+  runtime: Pick<Runtime, 'automations' | 'store' | 'knowledge'>,
 ) {
   const a = runtime.automations,
     id = z.string().uuid();

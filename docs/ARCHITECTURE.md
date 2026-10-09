@@ -1,6 +1,6 @@
 # 同舟架构
 
-日期：2026-10-07。实现状态及验证边界见 [实施状态](IMPLEMENTATION_STATUS.md)、[验证记录](VALIDATION.md)。
+日期：2026-10-09。实现状态及验证边界见 [实施状态](IMPLEMENTATION_STATUS.md)、[验证记录](VALIDATION.md)。
 
 ## 调用关系
 
@@ -26,9 +26,9 @@ Electron 主进程持有数据库、网络、文件及引擎进程。React 仅�
 
 ## 模块
 
-源码按 `electron/core`、`electron/modules`、`electron/services` 分层，界面按 `src/features` 组织，完整目录和新增功能约定见 [代码目录与模块边界](CODE_STRUCTURE.md)。下表的文件名指对应目录中的实现。
+源码按 `electron/application`、`electron/core`、`electron/modules`、`electron/services` 分层，界面按 `src/features` 组织，完整目录和新增功能约定见 [代码目录与模块边界](CODE_STRUCTURE.md)。下表的文件名指对应目录中的实现。
 
-客户端管理通过业务入口的注册元数据自动生成目录与调度：UI 和 Agent 调用同一个处理器，新增模块不维护工具白名单。参数、读写权限与本人操作入口随业务一起声明。详见 [客户端能力注册](CLIENT_CAPABILITIES.md)。模型与订阅是侧栏独立页面；非模型连接使用 settings → connections，插件使用 extensions。
+客户端管理通过业务入口的注册元数据自动生成目录与调度：UI 和 Agent 调用同一个处理器，新增模块不维护工具白名单。参数、读写权限与本人操作入口随业务一起声明。详见 [客户端能力注册](CLIENT_CAPABILITIES.md)。模型管理位于设置，代码托管认证位于插件，连接中心负责浏览器、渠道和网络。
 
 | 文件                                                                | 职责                                                                  |
 | ------------------------------------------------------------------- | --------------------------------------------------------------------- |
@@ -50,7 +50,24 @@ Electron 主进程持有数据库、网络、文件及引擎进程。React 仅�
 | `computer.ts` / `computer-diagnostic.ts`                            | 各平台电脑操作、截图坐标和窗口绑定、本机功能自检                      |
 | `src/features/connections/ConnectionsPanel.tsx` / `RunActivity.tsx` | 连接中心、渠道、认证记录、公开运行过程和输入队列                      |
 
-文件路径均相对 `electron/`，UI 文件除外。当前仍在小型代码库中按文件划分，没有为目录层级重写已有接口。
+文件路径均相对 `electron/`，UI 文件除外。应用装配由 Cordis 插件组合，现有 preload 方法和数据格式保持兼容。
+
+## Cordis 应用装配
+
+锁定 `cordis@4.0.0-rc.10`。`main.ts` 负责 Electron 应用身份、窗口、安全设置、系统快捷键与启动/退出；`application/application.ts` 组装主进程应用，`application/kernel.ts` 封装 Cordis 生命周期。
+
+- `application/services.ts` 声明基础服务插件，通过 `inject` 获取依赖、`ctx.provide()` 发布服务。存储、领域服务、任务执行、网络、认证、浏览器与渠道按依赖顺序挂载；挂载时缺少依赖直接报错。
+- `application/features/` 分功能注册项目、会话、知识、内容、模型账号、插件、权限及桌面操作。新增功能在 `application/features.ts` 中组合，主入口无需增加业务处理器。
+- `application/context.ts` 定义服务类型。知识库、内容库、作品和任务服务通过独立依赖注入；模块注册函数接受所需的有限接口，执行操作通过 `tzExecution` 调用。
+- `application/client-ipc.ts` 将 IPC 和 Agent 能力目录作为同一 Cordis effect 注册。上下文释放时同时撤销两者；注册失败回滚目录，避免残留或重复入口。主窗口与主 frame 来源验证、参数验证、审批和凭据脱敏仍在原有边界执行。
+
+退出先关闭新调用入口，停止并等待运行任务与进行中的业务调用，再按挂载顺序的逆序逐个等待插件释放，最后关闭数据库。启动失败也会释放已挂载资源。资源清理失败被汇总报告，其余服务继续清理；数据库不会提前于运行任务关闭。
+
+执行调度保留在 `core/runtime/runtime.ts`。Codex / 订阅模型执行适配位于 `codex-execution.ts`；审批队列位于 `approval-queue.ts`；状态汇总位于 `snapshot.ts`；会话删除和项目清理位于 `modules/sessions/session-lifecycle.ts`。`domain-services.ts` 构建共享持久化服务，桌面启动时由 Cordis 注入，独立执行测试可以直接构建 Runtime。
+
+界面的模型配置和登录面板位于 `src/features/connections/ProviderConnectionDialog.tsx` 与 `AccountLoginPanel.tsx`，模型预设独立维护；App 负责跨页面协调。Cordis 当前只装配同舟内置可信模块；用户配置的 MCP 服务继续通过既有传输、认证与权限路径运行。此阶段没有提供任意 npm 插件加载器或插件市场。
+
+本次不修改数据库 schema、用户数据位置、会话 ID 或外部协议。账号 OAuth 的实际登录、模型计费和渠道权限仍由各服务实现决定。
 
 ## 会话与恢复
 
@@ -64,7 +81,7 @@ Session 是产品事实来源，Run 冻结模型、账号、角色、权限和�
 
 默认模型上下文窗口为保守的 128000 tokens；已有手动字符设置按 4 字符约 1 token 转换为窗口（最低 4096），80% 处交给 Codex 自动压缩。这是兼容旧设置的预算，不代表服务商承诺的模型容量。上游上下文超限映射为标准错误供 Codex 处理。
 
-删除先标记父子会话停止接收输入，再取消并等待收尾，清理应用私有工作目录，事务删除关联对象；渠道入站绑定解除。独立分支和用户项目保留。schema 1 升级通过 `VACUUM INTO` 备份一致快照；只迁移未修改的原始角色种子，保留用户角色。
+删除要求会话已归档且父子会话均无运行任务；检查通过后标记父子会话停止接收输入，清理应用私有工作目录，事务删除关联对象；渠道入站绑定解除。独立分支和用户项目保留。schema 1 升级通过 `VACUUM INTO` 备份一致快照；只迁移未修改的原始角色种子，保留用户角色。
 
 ## 能力与权限
 

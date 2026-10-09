@@ -32,3 +32,7 @@ Node.js 22.23.3 is distributed through the node npm package. Copyright Node.js c
 Mihomo v1.19.32: https://github.com/MetaCubeX/mihomo/tree/v1.19.32
 Optional, independently executed network core downloaded directly from upstream by the user; no Mihomo binary is redistributed in Tongzhou packages. GPL-3.0; see docs/MIHOMO-LICENSE.txt. Source and official release archives: https://github.com/MetaCubeX/mihomo/releases/tag/v1.19.32.
 fflate 0.8.2 (MIT) is used to decode checksum-verified core archives; original license remains in its dependency distribution.
+
+Cordis: https://github.com/cordiverse/cordis
+cordis 4.0.0-rc.10, MIT. Used for built-in service dependency injection and plugin lifecycle management.
+Cordis and its dependencies retain their original license notices in the dependency distributions.

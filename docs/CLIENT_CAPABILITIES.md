@@ -48,3 +48,9 @@ test:management 用独立数据库和本地合成模型，检查目录与全部�
 ## 写入与删除
 
 内容、目录和作品保存使用 `confirmation: none`；删除业务数据使用 `confirmation: always`，完全开放会话也会显示对话内确认。普通聊天可以直接保存到指定目录，创建文档时省略 ID 与 version，编辑时读取当前版本。后台记忆、整理及定时任务仍受范围限制。普通文件写入由 Codex 原生工具负责，业务保存负责数据库、来源、版本与索引，不直接操作内部数据库。
+
+## Cordis 注册生命周期
+
+功能插件位于 `electron/application/features/`，声明 `inject` 后从上下文取得服务，使用 `ctx.tzIpc.scoped(ctx)` 获取注册函数。现有 `operation`、`manual` 和 `workspaceOperation` 定义继续复用。此注册函数将 IPC 和能力目录绑定到当前 Cordis 上下文；释放插件会同时移除两处入口，重新挂载不会累积注册。
+
+资源由服务插件创建并在自身上下文中登记清理。应用退出时停止接收新接口调用，等待任务及已有调用完成，再撤销接口、释放服务。模块内不要另建全局 Runtime 或直接绕过注册桥调用 `ipcMain.handle`。

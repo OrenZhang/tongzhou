@@ -12,7 +12,7 @@ import { serviceFetch } from '../../services/network/service-network';
 export function registerTaskServices(
   register: (name: string, definition: ClientOperation, handler: (...args: any[]) => any) => void,
   store: Store,
-  runtime: Runtime,
+  runtime: Pick<Runtime, 'snapshot' | 'terminals' | 'memories' | 'checkpoints' | 'start'>,
   dataDir: string,
 ) {
   const session = idSchema.describe('sessionId'),

@@ -60,6 +60,10 @@ GitHub 和 GitLab 的认证统一在 **插件 → 内置插件** 管理，选择
 
 智库的使用流程、来源核对与本地数据说明见 [本地智库与每日记忆](docs/KNOWLEDGE-CENTER.md)。
 
+## 开发架构
+
+客户端使用 Electron + React + TypeScript，主进程通过 Cordis 组合内置服务和功能插件，统一依赖注入、接口注册与生命周期。任务执行由 Codex 核心与同舟模型适配层协作，本地资料使用 SQLite 保存。新增功能按领域注册，资源随模块释放；详细边界见 [架构设计](docs/ARCHITECTURE.md) 和 [代码目录](docs/CODE_STRUCTURE.md)。
+
 ## 了解更多
 
 [贡献指南](CONTRIBUTING.md) · [架构设计](docs/ARCHITECTURE.md) · [代码目录](docs/CODE_STRUCTURE.md) · [发布流程](docs/RELEASING.md) · [实际开发示例](examples/miniapp-admin/README.md)

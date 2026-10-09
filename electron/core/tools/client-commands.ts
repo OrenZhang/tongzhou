@@ -103,7 +103,11 @@ export class ClientCommands {
       (operation.access === 'manual' && (!operation.reason || !operation.view))
     )
       throw new Error('客户端操作缺少模块、说明或手动入口：' + name);
-    this.handlers.set(name, { operation, handler });
+    const entry = { operation, handler };
+    this.handlers.set(name, entry);
+    return () => {
+      if (this.handlers.get(name) === entry) this.handlers.delete(name);
+    };
   }
 
   describe(filter: { module?: string; method?: string } = {}): ClientCatalog {

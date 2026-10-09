@@ -69,6 +69,7 @@
     "@wecom/aibot-node-sdk": "1.0.7",
     "@xterm/addon-fit": "0.11.0",
     "@xterm/xterm": "6.0.0",
+    "cordis": "4.0.0-rc.10",
     "diff": "9.0.0",
     "dingtalk-stream": "2.1.6-beta.1",
     "dompurify": "3.4.16",

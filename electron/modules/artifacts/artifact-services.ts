@@ -9,7 +9,10 @@ import { libraryIdSchema } from '../content/content';
 
 export function registerArtifactServices(
   register: (name: string, operation: ClientOperation, handler: (...args: any[]) => any) => void,
-  runtime: Runtime,
+  runtime: Pick<
+    Runtime,
+    'artifacts' | 'store' | 'content' | 'knowledge' | 'automations' | 'changed'
+  >,
 ) {
   const a = runtime.artifacts,
     id = z.string().uuid();

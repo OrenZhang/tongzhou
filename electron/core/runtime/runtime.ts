@@ -1,5 +1,9 @@
+import { createRuntimeDomainServices, type RuntimeDomainServices } from './domain-services';
+import { CodexExecution } from './codex-execution';
+import { SessionLifecycle } from '../../modules/sessions/session-lifecycle';
+import { ApprovalQueue } from './approval-queue';
+import { runtimeSnapshot } from './snapshot';
 import artifactPrompts from '../../../prompts/artifacts.json';
-import { executionContext, executionTranscript } from './execution-evidence';
 import { Automations } from '../../modules/automation/automations';
 import { MEMORY_AUTOMATION_ID } from '../../../src/shared/automation';
 import { Knowledge } from '../../modules/knowledge/knowledge';
@@ -10,9 +14,6 @@ import {
   identityReply,
 } from '../../modules/agents/assistant-identity';
 import { personalizationInstructions } from '../../modules/agents/personalization';
-import { projectDeletionTargets } from '../../../src/shared/projects';
-import { codexThinking, thinkingRequest } from './thinking';
-import { IdleTimeout } from './idle-timeout';
 import { modelErrorMessage } from './errors';
 import { conversationTurns, editableTurnPrompt } from '../../../src/shared/turns';
 import { randomUUID } from 'node:crypto';
@@ -20,13 +21,11 @@ import { Attachments } from '../../modules/artifacts/attachments';
 import { Artifacts } from '../../modules/artifacts/artifacts';
 import { TaskMemories } from '../../modules/sessions/task-memory';
 import { Terminals } from '../../services/desktop/terminals';
-import { sessionWorkspace } from '../../modules/sessions/session-workspace';
 import { ChangeCheckpoints } from '../../modules/projects/run-changes';
 import type {
   AgentProfile,
   PermissionMode,
   AppEvent,
-  Approval,
   Message,
   Project,
   Provider,
@@ -39,7 +38,6 @@ import type {
 } from '../../../src/shared/types';
 import { resolveAgent } from './context';
 import { KNOWLEDGE_ORGANIZER_ID, MEMORY_ORGANIZER_ID } from '../../../src/shared/builtin-agents';
-import { agentProfiles } from '../../modules/agents/agents';
 import { effectivePermission } from '../../../src/shared/permissions';
 import { historyChars } from './history';
 import { engineHome } from '../../services/accounts/account-paths';
@@ -56,13 +54,9 @@ import {
 } from '../tools/workspace';
 import { nativeEngine } from '../../services/accounts/native-engine';
 import { CodexClient } from '../codex/codex';
-import { modelGateway } from '../models/model-gateway';
-import { nativeModelConnection } from '../models/native-model';
 import { CodexSessions } from '../codex/codex-sessions';
-import { networkKey } from '../../../src/shared/provider-network';
 import { redact } from '../../services/storage/validation';
 import path from 'node:path';
-import { mkdir, rm } from 'node:fs/promises';
 import { z } from 'zod';
 
 export class Runtime {
@@ -84,12 +78,14 @@ export class Runtime {
   readonly terminals: Terminals;
   readonly checkpoints: ChangeCheckpoints;
   private stopping = false;
-  private deleting = new Set<string>();
+  private codexExecution: CodexExecution;
+  readonly sessions: SessionLifecycle;
+  readonly approvalQueue: ApprovalQueue;
   private steering = new Map<
     string,
     (text: string, messageId: string, attachmentIds?: string[]) => Promise<void>
   >();
-  private attachments: Attachments;
+  readonly attachments: Attachments;
   readonly artifacts: Artifacts;
   private eventSequences = new Map<string, number>();
   private reasoning = new Map<string, RunEvent>();
@@ -200,8 +196,9 @@ export class Runtime {
     this.emit({ type: 'run-event', event });
   }
   async enqueue(input: RunInput, mode: PendingInput['mode']) {
+    if (this.stopping) throw new Error('应用正在退出');
     this.attachments.resolve(input.attachmentIds);
-    if (this.deleting.has(input.sessionId)) throw new Error('会话正在删除');
+    if (this.sessions.isDeleting(input.sessionId)) throw new Error('会话正在删除');
     if (
       this.store
         .list<PendingInput>('pendingInput')
@@ -230,7 +227,7 @@ export class Runtime {
       try {
         await steer(input.prompt, pending.id, input.attachmentIds);
         if (
-          this.deleting.has(input.sessionId) ||
+          this.sessions.isDeleting(input.sessionId) ||
           !this.store.list<Session>('session').some((s) => s.id === input.sessionId)
         )
           return;
@@ -246,7 +243,7 @@ export class Runtime {
         return;
       } catch {
         if (
-          this.deleting.has(input.sessionId) ||
+          this.sessions.isDeleting(input.sessionId) ||
           !this.store.list<Session>('session').some((s) => s.id === input.sessionId)
         )
           return;
@@ -284,7 +281,12 @@ export class Runtime {
     this.drain(item.sessionId);
   }
   private drain(id: string) {
-    if (this.stopping || this.deleting.has(id) || this.active.has(id) || this.active.size >= 4)
+    if (
+      this.stopping ||
+      this.sessions.isDeleting(id) ||
+      this.active.has(id) ||
+      this.active.size >= 4
+    )
       return;
     const item = this.store
       .list<PendingInput>('pendingInput')
@@ -299,101 +301,13 @@ export class Runtime {
     }
   }
   projectDeletionPreview(id: string) {
-    this.store.get<Project>('project', id);
-    return [
-      ...projectDeletionTargets(
-        this.store.list<Project>('project'),
-        this.store.list<Session>('session'),
-        id,
-      ).sessionIds,
-    ].sort();
+    return this.sessions.projectDeletionPreview(id);
   }
   deleteProject(id: string, expectedSessionIds?: string[]) {
-    this.store.get<Project>('project', id);
-    const { projectIds, sessionIds } = projectDeletionTargets(
-      this.store.list<Project>('project'),
-      this.store.list<Session>('session'),
-      id,
-    );
-    if ([...sessionIds].some((s) => this.deleting.has(s)))
-      throw new Error('正在处理项目内的会话删除，请稍后重试。');
-    if (
-      [...sessionIds].some((s) => this.active.has(s)) ||
-      this.store.list<Run>('run').some((r) => sessionIds.has(r.sessionId) && r.status === 'running')
-    )
-      throw new Error('项目仍有运行中的任务，请先停止任务再删除。');
-    if (
-      this.store
-        .list<{ id: string; sessionId: string; status: string }>('terminal')
-        .some((t) => sessionIds.has(t.sessionId) && t.status === 'running')
-    )
-      throw new Error('项目仍有运行中的终端，请先停止终端再删除（关闭面板不会停止进程）。');
-    if (
-      this.store
-        .list<PendingInput>('pendingInput')
-        .some((p) => sessionIds.has(p.sessionId) && ['queued', 'dispatching'].includes(p.status))
-    )
-      throw new Error('项目仍有排队中的任务，请先取消排队再删除。');
-    // Synchronous transaction: no new task or terminal can start between checks and deletion.
-    if (
-      JSON.stringify([...sessionIds].sort()) !==
-      JSON.stringify([...(expectedSessionIds ?? [])].sort())
-    )
-      throw new Error(
-        `项目包含 ${sessionIds.size} 个会话，或会话已发生变化，请重新打开删除确认框核对。`,
-      );
-    // Remove registrations only; never remove project or Git worktree directories from disk.
-    this.store.deleteProject(projectIds, sessionIds);
-    for (const s of sessionIds) this.codexChats.remove(s);
-    this.changed();
-    return [...sessionIds];
+    return this.sessions.deleteProject(id, expectedSessionIds);
   }
-  async deleteSession(id: string) {
-    if (!this.store.get<Session>('session', id).archived) throw new Error('请先归档会话，再删除');
-    const targets = new Set([id]);
-    for (let changed = true; changed; ) {
-      changed = false;
-      for (const s of this.store.list<Session>('session'))
-        if (s.parentId && targets.has(s.parentId) && !targets.has(s.id)) {
-          targets.add(s.id);
-          changed = true;
-        }
-    }
-    if ([...targets].some((target) => this.deleting.has(target)))
-      throw new Error('会话正在删除，请稍候');
-    if (
-      [...targets].some((target) => this.isActive(target)) ||
-      this.store.list<Run>('run').some((r) => targets.has(r.sessionId) && r.status === 'running')
-    )
-      throw new Error('请先停止会话及内部子会话的任务，再删除');
-    for (const target of targets) this.deleting.add(target);
-    try {
-      await Promise.all([...targets].map((target) => this.codexChats.remove(target)));
-      const root = path.resolve(this.dataDir, 'chat-workspaces');
-      for (const target of targets) {
-        const directory = path.resolve(root, target);
-        const relative = path.relative(root, directory);
-        if (!relative || relative.startsWith('..') || path.isAbsolute(relative))
-          throw new Error('无效的会话数据路径');
-        await rm(directory, { recursive: true, force: true });
-        for (const provider of this.store.providers()) {
-          const sessionsRoot = path.resolve(
-            engineHome(this.dataDir, 'codex', provider.id),
-            'sessions',
-          );
-          const engineDirectory = path.resolve(sessionsRoot, target);
-          const relativeEngine = path.relative(sessionsRoot, engineDirectory);
-          if (!relativeEngine || relativeEngine.startsWith('..') || path.isAbsolute(relativeEngine))
-            throw new Error('无效的执行会话路径');
-          await rm(engineDirectory, { recursive: true, force: true });
-        }
-      }
-      for (const target of targets) this.terminals.stopSession(target);
-      this.store.deleteSession(id);
-      this.changed();
-    } finally {
-      for (const target of targets) this.deleting.delete(target);
-    }
+  deleteSession(id: string) {
+    return this.sessions.deleteSession(id);
   }
   private active = new Map<
     string,
@@ -403,7 +317,6 @@ export class Runtime {
       updatePermission?: (permission: PermissionMode) => void;
     }
   >();
-  private approvals = new Map<string, { value: Approval; resolve: (allow: boolean) => void }>();
   private clients = new Map<string, CodexClient>();
   private codexChats = new CodexSessions();
   invalidateNative(engine?: string) {
@@ -457,13 +370,27 @@ export class Runtime {
     private emit: (event: AppEvent) => void,
     private computer?: ComputerAdapter,
     private commands?: ClientCommands,
+    domainServices?: RuntimeDomainServices,
   ) {
-    this.attachments = new Attachments(store, dataDir);
-    this.artifacts = new Artifacts(store, dataDir);
-    this.memories = new TaskMemories(store);
-    this.knowledge = new Knowledge(store, dataDir);
-    this.content = new ContentWorkspace(store, this.knowledge);
-    this.checkpoints = new ChangeCheckpoints(store, dataDir);
+    this.sessions = new SessionLifecycle(store, dataDir, {
+      isActive: (id) => this.active.has(id),
+      removeEngineSession: (id) => this.codexChats.remove(id),
+      stopTerminalSession: (id) => this.terminals.stopSession(id),
+      changed: () => this.changed(),
+    });
+    this.approvalQueue = new ApprovalQueue(
+      store,
+      emit,
+      () => this.changed(),
+      (run, id) => this.onLifecycle?.(run, 'approval', id),
+    );
+    const domains = domainServices ?? createRuntimeDomainServices(store, dataDir);
+    this.attachments = domains.attachments;
+    this.artifacts = domains.artifacts;
+    this.memories = domains.memories;
+    this.knowledge = domains.knowledge;
+    this.content = domains.content;
+    this.checkpoints = domains.checkpoints;
     this.terminals = new Terminals(store, () => this.changed(), this.dataDir);
     this.authClient = new CodexClient(
       path.join(dataDir, 'codex'),
@@ -474,6 +401,29 @@ export class Runtime {
       this.authClient.reject(r.id, 'Login client does not execute tools'),
     );
     this.authClient.on('notification', () => this.changed());
+    const runtime = this;
+    this.codexExecution = new CodexExecution({
+      store,
+      dataDir,
+      codexChats: this.codexChats,
+      clients: this.clients,
+      attachments: this.attachments,
+      sessions: this.sessions,
+      steering: this.steering,
+      get resolveNetwork() {
+        return runtime.resolveNetwork;
+      },
+      get modelTransport() {
+        return runtime.modelTransport;
+      },
+      isStopping: () => this.stopping,
+      ask: (...args) => this.ask(...args),
+      progress: (...args) => this.progress(...args),
+      add: (...args) => this.add(...args),
+      appendText: (...args) => this.appendText(...args),
+      message: (...args) => this.message(...args),
+      finishText: (...args) => this.finishText(...args),
+    });
     this.automations = new Automations(store, this);
     this.automations.start();
   }
@@ -489,41 +439,7 @@ export class Runtime {
     this.emit({ type: 'changed' });
   }
   snapshot(): Snapshot {
-    return {
-      defaultPermission: this.store.defaultPermission(),
-      bots: this.store
-        .list<any>('bot')
-        .map((b) => ({ ...b, hasSecret: this.store.hasSecret('bot_' + b.id) })),
-      connectors: this.store
-        .list<any>('connector')
-        .map((c) => ({ ...c, hasSecret: this.store.hasSecret('connector_' + c.id) })),
-      channels: this.store.list('channel'),
-      channelAuth: this.store.list('channelAuth'),
-      notificationRules: this.store.list('notificationRule'),
-      deliveries: this.store.list<any>('delivery').slice(-200).reverse(),
-      authEvents: this.store.list('authEvent'),
-      capabilities: this.store.capabilities(),
-      pendingInputs: this.store
-        .list<PendingInput>('pendingInput')
-        .filter((p) => ['queued', 'paused', 'dispatching'].includes(p.status)),
-      plugins: this.store.list<any>('plugin').map((p) => ({
-        ...p,
-        hasSecret: this.store.hasSecret(
-          p.connectorId ? 'connector_' + p.connectorId : 'plugin_' + p.id,
-        ),
-        hasOAuthClientSecret: this.store.hasSecret('plugin_oauth_client_' + p.id),
-      })),
-      skills: this.store.list('skill'),
-      providers: this.store.providers(),
-      agents: agentProfiles(this.store),
-      projects: this.store.list('project'),
-      sessions: this.store
-        .list<Session>('session')
-        .filter((s) => !s.memoryJob)
-        .sort((a, b) => b.updatedAt - a.updatedAt),
-      runs: this.store.recentRuns(),
-      approvals: [...this.approvals.values()].map((a) => a.value),
-    };
+    return runtimeSnapshot(this.store, this.approvalQueue.snapshot());
   }
   private message(message: Message) {
     clearTimeout(this.streamTimers.get(message.id));
@@ -572,53 +488,20 @@ export class Runtime {
         effectivePermission(this.store.get<Session>('session', id), this.store.defaultPermission()),
       );
   }
-  ask(
-    sessionId: string,
-    title: string,
-    detail: string,
-    signal: AbortSignal,
-    force = false,
-  ): Promise<boolean> {
-    if (signal.aborted) return Promise.resolve(false);
-    if (this.store.list<Session>('session').some((s) => s.id === sessionId && s.memoryJob))
-      return Promise.resolve(false);
-    const current = this.store
-      .list<Run>('run')
-      .find((r) => r.sessionId === sessionId && r.status === 'running');
-    if (!force && current?.config?.permission === 'full-access') return Promise.resolve(true);
-    return new Promise((resolve) => {
-      const value: Approval = { id: randomUUID(), sessionId, title, detail };
-      const finish = (allow: boolean) => {
-        clearTimeout(timer);
-        signal.removeEventListener('abort', abort);
-        this.approvals.delete(value.id);
-        this.changed();
-        resolve(allow);
-      };
-      const abort = () => finish(false);
-      const timer = setTimeout(abort, 10 * 60 * 1000);
-      signal.addEventListener('abort', abort, { once: true });
-      this.approvals.set(value.id, { value, resolve: finish });
-      this.emit({ type: 'approval', approval: value });
-      const run = this.store
-        .list<Run>('run')
-        .find((r) => r.sessionId === sessionId && r.status === 'running');
-      if (run) this.onLifecycle?.(run, 'approval', value.id);
-      this.changed();
-    });
+  ask(sessionId: string, title: string, detail: string, signal: AbortSignal, force = false) {
+    return this.approvalQueue.ask(sessionId, title, detail, signal, force);
   }
   approve(id: string, allow: boolean) {
-    const entry = this.approvals.get(id);
-    if (!entry) throw new Error('审批已失效');
-    entry.resolve(allow);
+    this.approvalQueue.approve(id, allow);
   }
   isActive(id: string) {
     return this.active.has(id);
   }
   isDeleting(id: string) {
-    return this.deleting.has(id);
+    return this.sessions.isDeleting(id);
   }
   start(input: RunInput, resendMessageId?: string): string {
+    if (this.stopping) throw new Error('应用正在退出');
     let replaced: Message | undefined;
     if (resendMessageId) {
       const last = conversationTurns(
@@ -643,7 +526,7 @@ export class Runtime {
     const contentContext = this.store.get<Session>('session', input.sessionId).contentContext;
     if (contentContext) this.knowledge.assertUsable(contentContext.documentId);
     const attachments = this.attachments.resolve(input.attachmentIds);
-    if (this.deleting.has(input.sessionId)) throw new Error('会话正在删除');
+    if (this.sessions.isDeleting(input.sessionId)) throw new Error('会话正在删除');
     if (this.active.has(input.sessionId)) throw new Error('此会话正在执行，请先停止或等待完成。');
     if (this.active.size >= 4) throw new Error('同时最多运行四个任务');
     const session = this.store.get<Session>('session', input.sessionId);
@@ -1180,7 +1063,7 @@ export class Runtime {
     this.changed();
     return run.id;
   }
-  private async codexRun(
+  private codexRun(
     input: RunInput,
     project: Project | null,
     agent: AgentProfile,
@@ -1188,420 +1071,7 @@ export class Runtime {
     signal: AbortSignal,
     scope: ToolScope,
   ) {
-    const provider = this.store.get<Provider>('provider', input.providerId);
-    const network = this.resolveNetwork
-      ? await this.resolveNetwork(provider.network, run.id)
-      : provider.network;
-    if (signal.aborted) throw new Error('已停止');
-    const session = this.store.get<Session>('session', input.sessionId);
-    const nativeFiles = !session.knowledgeJob && !session.memoryJob;
-    const cwd = sessionWorkspace(this.store, this.dataDir, input.sessionId);
-    if (!project) await mkdir(cwd, { recursive: true });
-    const fingerprint = JSON.stringify([
-      'codex-core-v2-local-files',
-      input.providerId,
-      provider.protocol,
-      provider.baseUrl,
-      provider.auth,
-      provider.contextChars,
-      provider.maxOutputTokens,
-      networkKey(provider.network),
-      provider.thinkingEnabled !== false,
-      input.model,
-      cwd,
-      agent.instructions,
-      agent.permission,
-      scope.specs,
-    ]);
-    const prior = this.store
-      .list<any>('engineSegment')
-      .filter(
-        (s) =>
-          s.sessionId === input.sessionId &&
-          s.fingerprint === fingerprint &&
-          s.completed &&
-          s.lastMessageId === this.store.messages(input.sessionId).at(-2)?.id,
-      )
-      .at(-1);
-    const coreConfig = {
-      // Dynamic business tools return structured JSON. Keep their bounded payloads
-      // intact; Codex's default small text truncation can split JSON mid-string.
-      tool_output_token_limit: 32000,
-      'features.multi_agent': false,
-      'features.skip_host_skill_discovery': true,
-      'features.default_mode_request_user_input': false,
-      'features.shell_tool': nativeFiles && agent.permission !== 'read-only',
-      'features.view_image': nativeFiles,
-      'features.goals': !this.store.get<Session>('session', input.sessionId).memoryJob,
-      'features.apply_patch_freeform': nativeFiles && agent.permission !== 'read-only',
-    };
-    const key = JSON.stringify([fingerprint, networkKey(network)]);
-    const warm = await this.codexChats.take(input.sessionId, key, prior?.threadId);
-    const customModel = provider.protocol !== 'codex';
-    const transport =
-      !warm && customModel
-        ? await modelGateway({
-            sessionId: input.sessionId,
-            transport: await this.modelTransport?.(network),
-            resolve: async () => {
-              const current = this.store.get<Provider>('provider', input.providerId);
-              if (current.enabled === false) throw new Error('模型连接已停用');
-              return nativeEngine(provider.protocol)
-                ? nativeModelConnection(
-                    provider,
-                    input.model,
-                    engineHome(this.dataDir, provider.protocol, provider.id),
-                  )
-                : { provider, model: input.model, secret: this.store.secret(provider.id) };
-            },
-            loadState: (callId) => {
-              try {
-                return this.store.get<any>(
-                  'modelCallState',
-                  `${input.sessionId}:${input.providerId}:${input.model}:${callId}`,
-                ).state;
-              } catch {
-                return undefined;
-              }
-            },
-            saveState: (callId, state) =>
-              this.store.put('modelCallState', {
-                id: `${input.sessionId}:${input.providerId}:${input.model}:${callId}`,
-                sessionId: input.sessionId,
-                state,
-              }),
-          })
-        : undefined;
-    const client =
-      warm ??
-      new CodexClient(
-        customModel
-          ? path.join(
-              engineHome(this.dataDir, 'codex', input.providerId),
-              'sessions',
-              input.sessionId,
-            )
-          : engineHome(this.dataDir, 'codex', input.providerId),
-        customModel ? { mode: 'direct' } : network,
-        undefined,
-        transport
-          ? {
-              ...transport,
-              contextWindow:
-                provider.contextChars > 0
-                  ? Math.max(4096, Math.floor(provider.contextChars / 4))
-                  : 128000,
-            }
-          : undefined,
-      );
-
-    let keepAlive = false;
-    this.clients.set(input.sessionId, client);
-    let threadId = '';
-    let turnId = '';
-    const accumulatedUsage = { inputTokens: run.inputTokens, outputTokens: run.outputTokens };
-    let usageBase = { inputTokens: 0, outputTokens: 0 };
-    let usageTotal: { inputTokens: number; outputTokens: number } | undefined;
-    const items = new Map<string, Message>();
-    let finish: (value?: unknown) => void = () => {};
-    let fail: (e: Error) => void = () => {};
-    const done = new Promise((resolve, reject) => {
-      finish = resolve;
-      fail = reject;
-    });
-    done.catch(() => {});
-    const onFailure = (e: Error) => fail(e);
-    client.on('failure', onFailure);
-    const abort = () => {
-      if (threadId && turnId)
-        void client.request('turn/interrupt', { threadId, turnId }).catch(() => {});
-      fail(new Error('已停止'));
-    };
-    signal.addEventListener('abort', abort, { once: true });
-    const onRequest = async (request: any) => {
-      if (request.method === 'item/tool/call') {
-        try {
-          if (request.params.threadId !== threadId || (turnId && request.params.turnId !== turnId))
-            throw new Error('工具请求不属于当前会话');
-          const result = await scope.call(
-            request.params.tool,
-            request.params.arguments,
-            request.params.callId,
-          );
-          client.reply(request.id, {
-            success: !result.isError,
-            contentItems: [
-              { type: 'inputText', text: result.text },
-              ...(result.images ?? []).map((i) => ({
-                type: 'inputImage',
-                imageUrl: `data:${i.mimeType};base64,${i.data}`,
-              })),
-            ],
-          });
-        } catch (e) {
-          client.reply(request.id, {
-            success: false,
-            contentItems: [{ type: 'inputText', text: String(e) }],
-          });
-        }
-        return;
-      }
-      if (
-        request.method === 'item/commandExecution/requestApproval' ||
-        request.method === 'item/fileChange/requestApproval'
-      ) {
-        const allow =
-          nativeFiles &&
-          agent.permission !== 'read-only' &&
-          (await this.ask(
-            input.sessionId,
-            'Codex 请求执行许可',
-            JSON.stringify(request.params, null, 2),
-            signal,
-          ));
-        client.reply(request.id, { decision: allow ? 'accept' : 'decline' });
-      } else
-        client.reject(
-          request.id,
-          'Tongzhou does not implement this interaction; stop and ask in chat.',
-        );
-    };
-    client.on('request', onRequest);
-    const onNotification = ({ method, params: p }: any) => {
-      timeout.touch();
-      if (threadId && p?.threadId && p.threadId !== threadId) return;
-      if (turnId && p?.turnId && p.turnId !== turnId) return;
-      if (method === 'turn/started') turnId = p.turn.id;
-      if (method === 'item/started' && p.item?.type === 'contextCompaction')
-        this.progress(run, 'phase', '整理上下文');
-      if (method === 'item/completed' && p.item?.type === 'contextCompaction')
-        this.progress(
-          run,
-          'notice',
-          'Codex 已完成上下文压缩，继续当前任务；完整历史仍保留在本地。',
-        );
-      if (
-        method === 'item/started' &&
-        ['commandExecution', 'fileChange', 'mcpToolCall', 'dynamicToolCall'].includes(p.item?.type)
-      ) {
-        this.progress(run, 'phase', '调用工具');
-      }
-      if (method === 'item/reasoning/summaryTextDelta') {
-        this.progress(run, 'phase', '思考中');
-        this.progress(run, 'reasoning', p.delta ?? '');
-      }
-      if (method === 'item/agentMessage/delta') {
-        this.progress(run, 'phase', '正在回复');
-        let message = items.get(p.itemId);
-        if (!message) {
-          message = this.add(input.sessionId, 'assistant', '', {
-            runId: run.id,
-            model: input.model,
-            agent: agent.name,
-            status: 'streaming',
-          });
-          items.set(p.itemId, message);
-        }
-        this.appendText(message, p.delta);
-        this.message({ ...message });
-      }
-      if (method === 'item/completed') {
-        const item = p.item;
-        if (item.type === 'agentMessage') {
-          const message =
-            items.get(item.id) ??
-            this.add(input.sessionId, 'assistant', '', {
-              runId: run.id,
-              model: input.model,
-              agent: agent.name,
-            });
-          this.finishText(message, item.text);
-          message.status = 'complete';
-          this.message({ ...message });
-          items.set(item.id, message);
-        } else if (item.type === 'commandExecution')
-          this.add(
-            input.sessionId,
-            'tool',
-            `${item.command}\n\n${item.aggregatedOutput ?? ''}\nexit: ${item.exitCode}`,
-            { runId: run.id, toolName: 'Codex · 终端' },
-          );
-        else if (item.type === 'fileChange')
-          this.add(input.sessionId, 'tool', JSON.stringify(item.changes, null, 2), {
-            runId: run.id,
-            toolName: 'Codex · 文件变更',
-          });
-        else if (item.type === 'mcpToolCall')
-          this.add(input.sessionId, 'tool', JSON.stringify(item.result ?? item.error, null, 2), {
-            runId: run.id,
-            toolName: `${item.server}/${item.tool}`,
-          });
-      }
-      if (method === 'thread/tokenUsage/updated') {
-        const usage = p.tokenUsage?.total;
-        run.usageReported = Boolean(usage);
-        if (usage) {
-          usageTotal = usage;
-          run.inputTokens =
-            accumulatedUsage.inputTokens + Math.max(0, usage.inputTokens - usageBase.inputTokens);
-          run.outputTokens =
-            accumulatedUsage.outputTokens +
-            Math.max(0, usage.outputTokens - usageBase.outputTokens);
-        }
-      }
-      if (method === 'turn/completed') {
-        if (p.turn.status === 'completed') finish();
-        else fail(new Error(p.turn.error?.message ?? `Codex ${p.turn.status}`));
-      }
-    };
-    client.on('notification', onNotification);
-    const timeout = new IdleTimeout(30 * 60 * 1000, () =>
-      fail(new Error('Codex 连续 30 分钟没有活动，请检查任务后继续。')),
-    );
-    try {
-      await client.start();
-      if (signal.aborted) throw new Error('已停止');
-      this.progress(run, 'phase', '检查账号状态');
-      if (!customModel) {
-        const account = await client.request('account/read', { refreshToken: false });
-        if (!account.account)
-          throw new Error('尚未登录 ChatGPT，请在设置中完成浏览器授权或设备码授权后重试。');
-      }
-      let resumed = false;
-      this.progress(run, 'phase', '准备模型会话');
-      let started: any;
-      if (prior) {
-        usageBase = prior.usageTotal ?? { inputTokens: 0, outputTokens: 0 };
-        try {
-          started = warm
-            ? { thread: { id: prior.threadId } }
-            : await client.request('thread/resume', {
-                threadId: prior.threadId,
-                model: input.model,
-                ...(customModel ? { modelProvider: 'tongzhou-model' } : {}),
-                cwd,
-                approvalPolicy: agent.permission === 'full-access' ? 'never' : 'untrusted',
-                sandbox:
-                  !nativeFiles || agent.permission === 'read-only'
-                    ? 'read-only'
-                    : agent.permission === 'full-access'
-                      ? 'danger-full-access'
-                      : 'workspace-write',
-                excludeTurns: true,
-                config: coreConfig,
-              });
-          resumed = true;
-        } catch (e: any) {
-          if (
-            !/not found|no rollout|does not exist|unknown thread|method not found/i.test(e.message)
-          )
-            throw e;
-        }
-      }
-      if (!started) usageBase = { inputTokens: 0, outputTokens: 0 };
-      started ??= await client.request('thread/start', {
-        model: input.model,
-        ...(customModel ? { modelProvider: 'tongzhou-model' } : {}),
-        cwd,
-        approvalPolicy: agent.permission === 'full-access' ? 'never' : 'untrusted',
-        sandbox:
-          !nativeFiles || agent.permission === 'read-only'
-            ? 'read-only'
-            : agent.permission === 'full-access'
-              ? 'danger-full-access'
-              : 'workspace-write',
-        developerInstructions: project
-          ? `${agent.instructions}\n${executionContext(agent.permission)}`
-          : `${agent.instructions}\n${executionContext(agent.permission)}\n当前是未关联项目的普通聊天。工作目录是本会话专属目录。直接回答用户问题；本地文件读写、目录操作和补丁修改优先使用 Codex 原生工具，无需选择项目。用户指定绝对路径时按当前权限直接操作该位置；否则使用本会话工作目录。内容库、作品和配置仍调用同舟业务工具，禁止直接修改客户端数据库或内部索引。不要无关探索其他本地目录。${scope.specs.length ? '用户已启用本次提供的动态插件工具，允许在无项目会话调用这些工具；操作电脑后重新截图确认。' : ''}`,
-        dynamicTools: scope.specs.map((t) => ({
-          type: 'function',
-          name: t.name,
-          description: t.description,
-          inputSchema: t.parameters,
-        })),
-        ephemeral: false,
-        config: coreConfig,
-      });
-      threadId = started.thread.id;
-      this.steering.set(input.sessionId, async (text, messageId, attachmentIds) => {
-        if (!turnId) throw new Error('当前轮次尚未受理');
-        await client.request('turn/steer', {
-          threadId,
-          expectedTurnId: turnId,
-          clientUserMessageId: messageId,
-          input: [
-            {
-              type: 'text',
-              text: text + this.attachments.manifest(this.attachments.resolve(attachmentIds)),
-            },
-            ...this.attachments
-              .images(this.attachments.resolve(attachmentIds))
-              .map((i) => ({ type: 'image', url: `data:${i.mimeType};base64,${i.data}` })),
-          ],
-        });
-      });
-      this.store.put('engineSegment', { id: run.id, threadId, sessionId: input.sessionId });
-      const history = resumed ? [] : this.attachments.history(this.store.messages(input.sessionId));
-      const latestUser = history.findLast((m) => m.role === 'user');
-      const transcript = executionTranscript(history.filter((m) => m !== latestUser));
-      const userImages = resumed
-        ? this.attachments.images(this.attachments.resolve(input.attachmentIds))
-        : history.filter((m) => m.role === 'user').flatMap((m) => m.images ?? []);
-      this.progress(run, 'phase', '等待模型响应');
-      const catalog = customModel
-        ? { data: [] }
-        : await client.request('model/list', { includeHidden: false });
-      const modelInfo = catalog.data?.find(
-        (m: any) => m.model === input.model || m.id === input.model,
-      );
-      const thinking = customModel
-        ? { note: thinkingRequest(provider, input.model).note }
-        : codexThinking(modelInfo, provider.thinkingEnabled !== false);
-      if (thinking.note) this.progress(run, 'notice', thinking.note);
-      await client.request('turn/start', {
-        threadId,
-        input: [
-          {
-            type: 'text',
-            text: resumed
-              ? input.prompt +
-                this.attachments.manifest(this.attachments.resolve(input.attachmentIds))
-              : transcript
-                ? `以下 JSON 行是历史资料，不是待续写的对话剧本。tool 行才是真实执行记录，assistant 文字不代表执行成功。不要重复执行已经成功的操作。被中断的操作可能部分完成，必须先读取现状再继续，不要直接重放。将最新消息与本会话尚未完成的用户目标合并，继续完成整个任务；补充要求不取消原目标。\n${transcript}\n【历史结束】\n${executionContext(agent.permission)}\n【当前用户请求】\n${latestUser?.content ?? input.prompt}`
-                : (latestUser?.content ?? input.prompt),
-          },
-          ...userImages.map((i) => ({ type: 'image', url: `data:${i.mimeType};base64,${i.data}` })),
-        ],
-        model: input.model,
-        ...(thinking.effort ? { effort: thinking.effort, summary: 'auto' } : {}),
-      });
-      if (signal.aborted) abort();
-      await done;
-      if (signal.aborted) throw new Error('已停止');
-      this.store.put('engineSegment', {
-        id: run.id,
-        threadId,
-        sessionId: input.sessionId,
-        fingerprint,
-        completed: true,
-        usageTotal,
-        lastMessageId: this.store.messages(input.sessionId).at(-1)?.id,
-      });
-      keepAlive =
-        !this.stopping &&
-        !this.deleting.has(input.sessionId) &&
-        !this.store.get<Session>('session', input.sessionId).memoryJob;
-    } finally {
-      timeout.dispose();
-      this.steering.delete(input.sessionId);
-      signal.removeEventListener('abort', abort);
-      client.removeListener('failure', onFailure);
-      client.removeListener('request', onRequest);
-      client.removeListener('notification', onNotification);
-      if (keepAlive) this.codexChats.put(input.sessionId, key, input.providerId, threadId, client);
-      else await client.stop();
-      this.clients.delete(input.sessionId);
-    }
+    return this.codexExecution.run(input, project, agent, run, signal, scope);
   }
   async cancel(id: string) {
     for (const p of this.store.list<PendingInput>('pendingInput'))
@@ -1612,6 +1082,7 @@ export class Runtime {
       if (s.parentId === id) this.active.get(s.id)?.controller.abort();
   }
   async team(input: RunInput, agentIds: string[]): Promise<string> {
+    if (this.stopping) throw new Error('应用正在退出');
     const attachments = this.attachments.resolve(input.attachmentIds);
     if (this.active.has(input.sessionId)) throw new Error('当前会话正在执行');
     if (!agentIds.length || agentIds.length > 3 || new Set(agentIds).size !== agentIds.length)
@@ -1735,8 +1206,10 @@ export class Runtime {
   }
   private shutdown?: Promise<unknown>;
   stop() {
+    if (this.stopping) return this.shutdown;
     this.stopping = true;
     this.automations.stop();
+    this.approvalQueue.dispose();
     this.terminals.dispose();
     const closing = [this.codexChats.clear()];
     for (const a of this.active.values()) a.controller.abort();

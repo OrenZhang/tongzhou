@@ -6,7 +6,11 @@ import type { Session } from '../../../src/shared/types';
 import { builtinAgent } from '../../../src/shared/builtin-agents';
 import { saveAgentProfile } from './agents';
 
-export function registerAgentServices(register: ClientRegistrar, store: Store, runtime: Runtime) {
+export function registerAgentServices(
+  register: ClientRegistrar,
+  store: Store,
+  runtime: Pick<Runtime, 'changed'>,
+) {
   register(
     'saveAgent',
     operation('Agent', 'change', '新增或修改 Agent 角色配置', [agentSchema]),

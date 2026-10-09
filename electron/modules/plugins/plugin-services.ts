@@ -29,7 +29,7 @@ import {
 export function registerPluginServices(
   register: ClientRegistrar,
   store: Store,
-  runtime: Runtime,
+  runtime: Pick<Runtime, 'changed' | 'invalidateNative'>,
   mcpAuth: McpAuth,
   connectors: Connectors,
   getWindow: () => BrowserWindow | undefined,

@@ -241,7 +241,12 @@ try {
       [
         'electron/main.ts',
         ...(await readdir('electron', { recursive: true }))
-          .filter((file) => file.endsWith('-services.ts'))
+          .filter(
+            (file) =>
+              file.endsWith('-services.ts') ||
+              (file.replaceAll('\\', '/').startsWith('application/features/') &&
+                file.endsWith('.ts')),
+          )
           .map((file) => 'electron/' + file),
       ].map((file) => readFile(file, 'utf8')),
     )

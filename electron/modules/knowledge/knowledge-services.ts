@@ -23,7 +23,7 @@ import type { Session } from '../../../src/shared/types';
 export function registerKnowledgeServices(
   register: (name: string, definition: ClientOperation, handler: (...args: any[]) => any) => void,
   store: Store,
-  runtime: Runtime,
+  runtime: Pick<Runtime, 'knowledge' | 'changed' | 'processMemory' | 'start' | 'automations'>,
 ) {
   const k = runtime.knowledge;
   const rawRegister = register;

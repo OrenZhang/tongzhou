@@ -13,7 +13,7 @@ import { builtinAgent } from '../../../src/shared/builtin-agents';
 export function registerContentServices(
   register: (name: string, definition: ClientOperation, handler: (...args: any[]) => any) => void,
   store: Store,
-  runtime: Runtime,
+  runtime: Pick<Runtime, 'content' | 'knowledge' | 'changed' | 'start' | 'automations'>,
 ) {
   const c = runtime.content,
     k = runtime.knowledge;
