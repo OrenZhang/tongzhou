@@ -145,7 +145,9 @@ try {
   assert.equal(await page.getByRole('switch', { name: /允许 AI 与客户端使用/ }).count(), 0);
   assert.equal(await page.getByRole('button', { name: '标记就绪', exact: true }).isEnabled(), true);
   await page.getByLabel('文档正文', { exact: true }).click();
-  await page.getByLabel('文档正文', { exact: true }).press('Control+Home');
+  await page
+    .getByLabel('文档正文', { exact: true })
+    .press(process.platform === 'darwin' ? 'Meta+ArrowUp' : 'Control+Home');
   await page.getByLabel('文档正文', { exact: true }).press('Shift+ArrowRight');
   await page.getByLabel('文档正文', { exact: true }).press('Shift+ArrowRight');
   await page.getByText('选中 2 字符', { exact: true }).waitFor();
