@@ -1,3 +1,4 @@
+import { desktopDocumentHost } from '../../services/desktop/document-host';
 import { registerContentServices } from '../../modules/content/content-services';
 import type { Plugin } from 'cordis';
 import '../context';
@@ -9,6 +10,7 @@ export const contentPlugin: Plugin.Object<void> = {
     const register = ctx.tzIpc.scoped(ctx);
     const store = ctx.tzStore;
     const services = {
+      files: desktopDocumentHost,
       content: ctx.tzContent,
       knowledge: ctx.tzKnowledge,
       changed: ctx.tzEvents.changed,

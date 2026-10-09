@@ -44,6 +44,14 @@ async function imports(file: string) {
   return references;
 }
 describe('architectural dependency boundaries', () => {
+  it.each(['C:\\repo\\electron\\core\\codex\\execution', '/repo/electron/core/codex/execution'])(
+    'detects forbidden engine imports on either platform: %s',
+    (reference) => {
+      expect(
+        /\/core\/codex\/(codex|execution|codex-sessions)$/.test(reference.replaceAll('\\', '/')),
+      ).toBe(true);
+    },
+  );
   it('keeps business modules and channels independent of the concrete scheduler and Codex engine', async () => {
     const sources = [
       ...(await files('electron/modules')),
@@ -54,7 +62,7 @@ describe('architectural dependency boundaries', () => {
       for (const reference of await imports(file))
         if (
           /\/core\/(runtime\/(runtime|task-scheduler|codex-execution)|codex\/(codex|execution))$/.test(
-            reference,
+            reference.replaceAll('\\', '/'),
           )
         )
           violations.push(`${file} -> ${reference}`);
@@ -69,14 +77,14 @@ describe('architectural dependency boundaries', () => {
       const references = await imports(file);
       expect(
         references.filter((reference) =>
-          /\/core\/codex\/(codex|execution|codex-sessions)$/.test(reference),
+          /\/core\/codex\/(codex|execution|codex-sessions)$/.test(reference.replaceAll('\\', '/')),
         ),
         file,
       ).toEqual([]);
       if (!file.endsWith('task-scheduler.ts'))
         expect(
           references.filter((reference) =>
-            /\/(task-scheduler|task-system|runtime)$/.test(reference),
+            /\/(task-scheduler|task-system|runtime)$/.test(reference.replaceAll('\\', '/')),
           ),
           file,
         ).toEqual([]);

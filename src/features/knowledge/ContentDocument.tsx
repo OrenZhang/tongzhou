@@ -1,7 +1,17 @@
+import {
+  Check,
+  PencilLine,
+  MoreHorizontal,
+  Folder,
+  ArrowUp,
+  Square,
+  LoaderCircle,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { ArtifactCards } from '../artifacts/Artifacts';
 import type { KnowledgeDocument, KnowledgeFolder, KnowledgeRead } from '../../shared/knowledge';
 import type { Message, Snapshot, TongzhouAPI } from '../../shared/types';
+import { ChoicePicker } from '../../components/controls/ChoicePicker';
 import { Markdown, Modal } from '../../components/components';
 import { knowledgeFolderPath } from '../../shared/knowledge';
 
@@ -15,7 +25,6 @@ export function ContentDocument({
   onChange,
   onOpen,
   onDelete,
-  onInspect,
   onArtifact,
 }: {
   api: TongzhouAPI;
@@ -26,7 +35,6 @@ export function ContentDocument({
   onChange(): Promise<void>;
   onOpen(id: string): void;
   onDelete(): void;
-  onInspect(): void;
   onArtifact?(id: string): void;
 }) {
   const [read, setRead] = useState<KnowledgeRead>();
@@ -38,20 +46,21 @@ export function ContentDocument({
   const key = 'tongzhou-content-draft:' + documentId;
   const [error, setError] = useState('');
   const [status, setStatus] = useState('正在读取…');
-  const [preview, setPreview] = useState(false);
+  const [preview, setPreview] = useState(true);
+  const menu = useRef<HTMLDetailsElement>(null);
   const [history, setHistory] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [sessionId, setSessionId] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [prompt, setPrompt] = useState('');
   const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
   const [providerId, setProviderId] = useState(
     data.providers.find((p) => p.enabled !== false)?.id ?? '',
   );
   const [model, setModel] = useState(
     data.providers.find((p) => p.enabled !== false)?.models[0] ?? '',
   );
-  const [agentId, setAgentId] = useState('');
   const [selection, setSelection] = useState<{ start: number; end: number; text: string }>();
   const dirty = () =>
     !!base.current &&
@@ -209,6 +218,19 @@ export function ContentDocument({
       off();
     };
   }, [sessionId]);
+  useEffect(() => {
+    const close = (event: PointerEvent | KeyboardEvent) => {
+      if (event instanceof KeyboardEvent && event.key !== 'Escape') return;
+      if (event instanceof KeyboardEvent || !menu.current?.contains(event.target as Node))
+        menu.current?.removeAttribute('open');
+    };
+    document.addEventListener('pointerdown', close);
+    document.addEventListener('keydown', close);
+    return () => {
+      document.removeEventListener('pointerdown', close);
+      document.removeEventListener('keydown', close);
+    };
+  }, []);
   const active = data.runs.some((r) => r.sessionId === sessionId && r.status === 'running');
   const lastRun = data.runs
     .filter((r) => r.sessionId === sessionId)
@@ -220,6 +242,29 @@ export function ContentDocument({
     } catch (e) {
       setError(String(e));
     }
+  };
+  const sendMessage = () => {
+    if (!prompt.trim() || !providerId || !model || active || sendingRef.current || !read) return;
+    sendingRef.current = true;
+    setSending(true);
+    void perform(async () => {
+      try {
+        await save();
+        const result = await api.contentRun({
+          documentId,
+          version: base.current!.version,
+          providerId,
+          model,
+          prompt,
+          selection,
+        });
+        setSessionId(result.sessionId);
+        setPrompt('');
+      } finally {
+        sendingRef.current = false;
+        setSending(false);
+      }
+    });
   };
   const copy = async () => {
     const d = await api.contentWrite({
@@ -242,109 +287,96 @@ export function ContentDocument({
         )}
         {draft && read ? (
           <>
-            <input
-              className="content-title"
-              aria-label="文档标题"
-              maxLength={180}
-              readOnly={read.document.origin === 'import'}
-              value={draft.title}
-              onChange={(e) => setValue({ ...draft, title: e.target.value })}
-            />
-            <div className="content-editor-actions">
-              <small role="status">
-                {status} · v{base.current?.version}
-              </small>
-              <button className="text-button" onClick={() => setPreview(!preview)}>
-                {preview ? '编辑正文' : '预览'}
-              </button>
-              <button
-                className="text-button"
-                disabled={read.document.origin === 'import'}
-                onClick={() => void perform(save)}
-              >
-                保存
-              </button>
-              <button
-                className="text-button"
-                onClick={() =>
-                  void perform(async () => {
-                    await save();
-                    await api.contentReady(documentId, base.current!.version);
-                    setStatus('当前版本已就绪，匹配的自动化已加入队列');
-                  })
-                }
-              >
-                标记就绪
-              </button>
-              <button className="text-button" onClick={() => void perform(copy)}>
-                另存副本
-              </button>
-              <button
-                className="text-button"
-                onClick={() =>
-                  void perform(async () => {
-                    await save();
-                    await load();
-                    setHistory(!history);
-                  })
-                }
-              >
-                版本记录
-              </button>
-              <button
-                className="text-button"
-                onClick={() =>
-                  void perform(async () => {
-                    await save();
-                    await api.contentExport(documentId);
-                  })
-                }
-              >
-                导出
-              </button>
-              <button
-                className="text-button"
-                onClick={() =>
-                  void perform(async () => {
-                    await save();
-                    onInspect();
-                  })
-                }
-              >
-                来源与整理
-              </button>
-              <button className="text-button danger" onClick={() => setDeleting(true)}>
-                删除
-              </button>
-            </div>
-            <div className="content-location">
-              <label>
-                目录{' '}
-                <select
-                  aria-label="文档目录"
-                  value={read.document.folderId ?? ''}
-                  onChange={(e) =>
-                    void perform(async () => {
-                      await save();
-                      await api.knowledgeMove(
-                        documentId,
-                        e.target.value || null,
-                        base.current!.version,
-                      );
-                      await load(true);
-                      await onChange();
-                    })
-                  }
+            <header className="content-document-header">
+              <div className="content-document-heading">
+                <input
+                  className="content-title"
+                  aria-label="文档标题"
+                  maxLength={180}
+                  readOnly={preview || read.document.origin === 'import'}
+                  value={draft.title}
+                  onChange={(e) => setValue({ ...draft, title: e.target.value })}
+                />
+                <div className="content-editor-actions">
+                  {read.document.origin !== 'import' && (
+                    <button
+                      className="icon-button"
+                      aria-label={preview ? '编辑正文' : '完成编辑'}
+                      title={preview ? '编辑正文' : '完成编辑（自动保存）'}
+                      onClick={() => {
+                        if (preview) setPreview(false);
+                        else
+                          void perform(async () => {
+                            await save();
+                            setPreview(true);
+                            setSelection(undefined);
+                          });
+                      }}
+                    >
+                      {preview ? <PencilLine size={16} /> : <Check size={16} />}
+                    </button>
+                  )}
+                  <details ref={menu} className="content-document-menu">
+                    <summary aria-label="更多文档操作" title="更多文档操作">
+                      <MoreHorizontal size={18} />
+                    </summary>
+                    <div
+                      className="content-document-menu-panel"
+                      onClick={(e) => {
+                        if ((e.target as HTMLElement).closest('button'))
+                          menu.current?.removeAttribute('open');
+                      }}
+                    >
+                      <button className="text-button" onClick={() => void perform(copy)}>
+                        另存副本
+                      </button>
+                      <button
+                        className="text-button"
+                        onClick={() =>
+                          void perform(async () => {
+                            await save();
+                            await load();
+                            setHistory(!history);
+                          })
+                        }
+                      >
+                        版本记录
+                      </button>
+                      <button
+                        className="text-button"
+                        onClick={() =>
+                          void perform(async () => {
+                            await save();
+                            await api.contentExport(documentId);
+                          })
+                        }
+                      >
+                        导出
+                      </button>
+                      <button className="text-button danger" onClick={() => setDeleting(true)}>
+                        删除
+                      </button>
+                    </div>
+                  </details>
+                </div>
+              </div>
+              <div className="content-document-info">
+                <span
+                  className="content-document-path"
+                  title={knowledgeFolderPath(folders, read.document.folderId) || '未分类'}
                 >
-                  <option value="">未分类</option>
-                  {folders.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {knowledgeFolderPath(folders, f.id)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
+                  <Folder size={13} />
+                  {knowledgeFolderPath(folders, read.document.folderId) || '未分类'}
+                </span>
+                <small role="status">
+                  {status} · v{base.current?.version}
+                </small>
+                <small>{draft.content.length.toLocaleString()} 字符</small>
+                <small title={new Date(read.document.updatedAt).toLocaleString()}>
+                  更新于 {new Date(read.document.updatedAt).toLocaleDateString()}
+                </small>
+              </div>
+            </header>
             {conflict.current && (
               <button className="secondary" onClick={() => void perform(() => load(true))}>
                 丢弃本地草稿并载入最新正文
@@ -387,8 +419,24 @@ export function ContentDocument({
               </div>
             )}
             {preview ? (
-              <article className="content-body-preview">
-                <Markdown text={draft.content} />
+              <article className="content-body-preview" aria-label="文档内容" tabIndex={0}>
+                {draft.content ? (
+                  <Markdown
+                    text={draft.content}
+                    onKnowledgeLink={(target) => {
+                      const link = read.links.find((item) => item.target === target);
+                      if (link?.id) onOpen(link.id);
+                      else
+                        setError(
+                          link?.ambiguous
+                            ? '存在同名文档，请使用文档 ID 关联。'
+                            : '关联文档不存在或已删除。',
+                        );
+                    }}
+                  />
+                ) : (
+                  <p className="muted">暂无内容</p>
+                )}
               </article>
             ) : (
               <textarea
@@ -452,55 +500,6 @@ export function ContentDocument({
             <strong>文档对话</strong>
             <small>{read?.document.title}</small>
           </header>
-          <div className="content-chat-settings">
-            <select
-              aria-label="文档对话连接"
-              value={providerId}
-              disabled={active || sending}
-              onChange={(e) => {
-                setProviderId(e.target.value);
-                setModel(data.providers.find((p) => p.id === e.target.value)?.models[0] ?? '');
-              }}
-            >
-              <option value="">选择模型连接</option>
-              {data.providers
-                .filter((p) => p.enabled !== false)
-                .map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-            </select>
-            <select
-              aria-label="文档对话模型"
-              value={model}
-              disabled={active || sending}
-              onChange={(e) => setModel(e.target.value)}
-            >
-              {data.providers
-                .find((p) => p.id === providerId)
-                ?.models.map((m) => (
-                  <option key={m} value={m}>
-                    {data.providers.find((p) => p.id === providerId)?.modelLabels?.[m] ?? m}
-                  </option>
-                ))}
-            </select>
-            <select
-              aria-label="文档处理 Agent"
-              value={agentId}
-              disabled={active || sending}
-              onChange={(e) => setAgentId(e.target.value)}
-            >
-              <option value="">同舟 · 通用助手</option>
-              {data.agents
-                .filter((a) => !a.builtin)
-                .map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-            </select>
-          </div>
           <div className="content-chat-messages">
             {!messages.length && <p className="muted">围绕当前文档提问，或描述需要修改的内容。</p>}
             {messages
@@ -534,60 +533,81 @@ export function ContentDocument({
             )}
           </div>
           <div className="content-chat-compose">
-            <div className="row">
-              <small title="以当前文档或选段为上下文，可按需读取同库中可访问的资料">
-                {selection ? `选中 ${selection.text.length} 字符` : '当前文档'}
-              </small>
-              {selection && (
-                <button className="text-button" onClick={() => setSelection(undefined)}>
-                  清除选段
-                </button>
-              )}
-            </div>
-            <textarea
-              aria-label="文档处理要求"
-              rows={4}
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="例如：润色选中的段落并保存；按标题拆分成多份文档…"
-            />
-            <div className="row">
-              {active ? (
-                <button
-                  className="secondary"
-                  onClick={() => void perform(() => api.cancel(sessionId))}
-                >
-                  停止处理
-                </button>
-              ) : (
-                <button
-                  className="primary"
-                  disabled={!prompt.trim() || !providerId || !model || sending || !read}
-                  onClick={() =>
-                    void perform(async () => {
-                      setSending(true);
-                      try {
-                        await save();
-                        const result = await api.contentRun({
-                          documentId,
-                          version: base.current!.version,
-                          providerId,
-                          model,
-                          agentId,
-                          prompt,
-                          selection,
-                        });
-                        setSessionId(result.sessionId);
-                        setPrompt('');
-                      } finally {
-                        setSending(false);
-                      }
-                    })
-                  }
-                >
-                  {sending ? '正在发送…' : '发送处理要求'}
-                </button>
-              )}
+            <div className="content-chat-input">
+              <div className="row">
+                <small title="以当前文档或选段为上下文，可按需读取同库中可访问的资料">
+                  {selection ? `选中 ${selection.text.length} 字符` : '当前文档'}
+                </small>
+                {selection && (
+                  <button className="text-button" onClick={() => setSelection(undefined)}>
+                    清除选段
+                  </button>
+                )}
+              </div>
+              <textarea
+                aria-label="文档处理要求"
+                rows={2}
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                onKeyDown={(e) => {
+                  if (
+                    e.key !== 'Enter' ||
+                    e.shiftKey ||
+                    e.nativeEvent.isComposing ||
+                    e.keyCode === 229
+                  )
+                    return;
+                  e.preventDefault();
+                  if (!e.repeat) sendMessage();
+                }}
+                placeholder="提问，或描述想如何修改文档…"
+              />
+              <div className="content-chat-toolbar">
+                <div className="content-chat-settings">
+                  <ChoicePicker
+                    label="文档对话模型"
+                    value={JSON.stringify([providerId, model])}
+                    options={data.providers
+                      .filter((p) => p.enabled !== false)
+                      .flatMap((p) =>
+                        p.models.map((m) => ({
+                          value: JSON.stringify([p.id, m]),
+                          label: p.modelLabels?.[m] ?? m,
+                          detail: p.name,
+                        })),
+                      )}
+                    placeholder="选择模型"
+                    onChange={(value) => {
+                      const [provider, selectedModel] = JSON.parse(value) as [string, string];
+                      setProviderId(provider);
+                      setModel(selectedModel);
+                    }}
+                    disabled={active || sending}
+                    compact
+                    searchable
+                  />
+                </div>
+                {active ? (
+                  <button
+                    className="content-chat-send"
+                    aria-label="停止处理"
+                    title="停止处理"
+                    onClick={() => void perform(() => api.cancel(sessionId))}
+                  >
+                    <Square size={14} fill="currentColor" />
+                  </button>
+                ) : (
+                  <button
+                    className="primary content-chat-send"
+                    aria-label="发送处理要求"
+                    title={sending ? '正在发送…' : '发送（Enter），Shift+Enter 换行'}
+                    disabled={!prompt.trim() || !providerId || !model || sending || !read}
+                    onClick={sendMessage}
+                  >
+                    {sending ? <LoaderCircle size={16} className="spin" /> : <ArrowUp size={17} />}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </aside>

@@ -20,6 +20,7 @@ node_modules/
 /local-data/
 /tongzhou-data/
 /.tongzhou/
+/.tzhou/
 /tmp/
 /temp/
 *.log

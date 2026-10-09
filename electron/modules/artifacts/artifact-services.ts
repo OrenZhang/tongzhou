@@ -1,19 +1,18 @@
+import type { DocumentHost } from '../content/document-host';
 import type { DomainServices } from '../domain-services';
 import type { ChangePublisher } from '../../core/task-contracts';
 import type { Automations } from '../automation/automations';
 import type { Store } from '../../services/storage/store';
-import { dialog, shell } from 'electron';
-import { writeFile } from 'node:fs/promises';
 import { z } from 'zod';
 import { workspaceOperation, type ClientOperation } from '../../core/tools/client-commands';
 import { artifactQuerySchema } from './artifacts';
-import { absolutePathSchema, writeLocalFile } from '../../services/storage/file-transfer';
+import { absolutePathSchema } from '../../services/storage/file-transfer';
 import { libraryIdSchema } from '../content/content';
 
 export function registerArtifactServices(
   register: (name: string, operation: ClientOperation, handler: (...args: any[]) => any) => void,
   services: Pick<DomainServices, 'artifacts' | 'content' | 'knowledge'> &
-    ChangePublisher & { automations: Automations; store: Store },
+    ChangePublisher & { files: DocumentHost; automations: Automations; store: Store },
 ) {
   const a = services.artifacts,
     id = z.string().uuid();
@@ -48,11 +47,10 @@ export function registerArtifactServices(
   define('artifactOpen', '打开作品原件或外部链接', [id], async (v) => {
     const item = a.read(v);
     if (item.remoteUrl) {
-      await shell.openExternal(item.remoteUrl);
+      await services.files.openExternal(item.remoteUrl);
       return;
     }
-    const error = await shell.openPath(a.openPath(v));
-    if (error) throw new Error(error);
+    await services.files.openPath(a.openPath(v));
   });
   define(
     'artifactExport',
@@ -68,11 +66,8 @@ export function registerArtifactServices(
     async (v, targetPath, expectedSha256) => {
       const item = a.read(v),
         bytes = a.bytes(v);
-      if (targetPath) return writeLocalFile(targetPath, bytes, expectedSha256);
-      const target = await dialog.showSaveDialog({ title: '下载作品', defaultPath: item.name });
-      if (target.canceled || !target.filePath) return false;
-      await writeFile(target.filePath, bytes);
-      return true;
+      if (targetPath) return services.files.writeTo(targetPath, bytes, expectedSha256);
+      return !!(await services.files.saveCopy(bytes, '下载作品', item.name));
     },
   );
   define('artifactDelete', '删除保存的作品副本，不修改原始项目文件', [id], (v) => {

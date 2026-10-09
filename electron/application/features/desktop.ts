@@ -1,3 +1,4 @@
+import { taskSnapshot } from '../../core/runtime/snapshot';
 import { clipboard, shell } from 'electron';
 import { z } from 'zod';
 import { manual, operation, workspaceOperation } from '../../core/tools/client-commands';
@@ -8,7 +9,7 @@ import '../context';
 
 export const desktopPlugin: Plugin.Object<void> = {
   name: 'tongzhou-desktop',
-  inject: ['tzIpc', 'tzStore', 'tzTasks', 'tzCommands', 'tzDesktop'],
+  inject: ['tzIpc', 'tzStore', 'tzTasks', 'tzCommands', 'tzDesktop', 'tzApprovals'],
   apply(ctx) {
     const register = ctx.tzIpc.scoped(ctx);
     const store = ctx.tzStore;
@@ -24,6 +25,9 @@ export const desktopPlugin: Plugin.Object<void> = {
         [],
       ),
       () => services.snapshot(),
+    );
+    register('taskSnapshot', operation('会话', 'query', '查询会话、队列、运行和批准状态', []), () =>
+      taskSnapshot(store, ctx.tzApprovals.snapshot()),
     );
     const permissionSchema = z.enum(['read-only', 'ask', 'full-access']);
     register(

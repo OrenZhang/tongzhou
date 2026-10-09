@@ -77,7 +77,7 @@ export class ContentWorkspace {
     private knowledge: Knowledge,
   ) {}
   libraries(): ContentLibrary[] {
-    const saved = this.store.list<ContentLibrary>('contentLibrary');
+    const saved = this.knowledge.libraries.list();
     return [
       { id: 'default', name: '我的内容', version: 1 },
       ...saved.filter((l) => l.id !== 'default'),
@@ -99,7 +99,7 @@ export class ContentWorkspace {
       throw new Error('已有同名内容库');
     if (!old && this.libraries().length >= 100) throw new Error('最多支持 100 个内容库');
     const next = { id: old?.id ?? randomUUID(), name: p.name, version: (old?.version ?? 0) + 1 };
-    this.store.put('contentLibrary', next);
+    this.knowledge.libraries.put(next);
     return next;
   }
   deleteLibrary(id: string, version: number) {
@@ -111,7 +111,7 @@ export class ContentWorkspace {
       this.knowledge.folders().some((f) => f.libraryId === id)
     )
       throw new Error('请先移除库内文档和目录，再删除空内容库');
-    this.store.remove('contentLibrary', id);
+    this.knowledge.libraries.remove(id);
   }
   state(libraryId: string, query = '', sessionId?: string): ContentState {
     this.library(libraryId);
@@ -185,6 +185,7 @@ export class ContentWorkspace {
     return {
       ...summarize(doc),
       persisted: true,
+      path: this.knowledge.documents.file(doc.id),
       totalChars: doc.content.length,
       sha256: createHash('sha256').update(doc.content).digest('hex'),
     };

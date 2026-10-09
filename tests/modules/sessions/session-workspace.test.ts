@@ -14,11 +14,13 @@ describe('session workspace routing', () => {
         a = store.createSession(),
         b = store.createSession();
       expect(sessionWorkspace(store, root, project.id)).toBe(path.join(root, 'project'));
-      expect(sessionWorkspace(store, root, a.id)).toBe(path.join(root, 'chat-workspaces', a.id));
+      expect(sessionWorkspace(store, root, a.id)).toBe(
+        path.join(root, '.tzhou', 'chat-workspaces', a.id),
+      );
       expect(sessionWorkspace(store, root, a.id)).not.toBe(sessionWorkspace(store, root, b.id));
       store.put('session', { ...project, knowledgeJob: true });
       expect(sessionWorkspace(store, root, project.id)).toBe(
-        path.join(root, 'chat-workspaces', project.id),
+        path.join(root, '.tzhou', 'chat-workspaces', project.id),
       );
       store.put('session', { ...a, id: '../../escape' });
       expect(() => sessionWorkspace(store, root, '../../escape')).toThrow('无效');

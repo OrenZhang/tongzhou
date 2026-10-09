@@ -4,8 +4,6 @@ import { AutomationCenter } from '../automation/AutomationCenter';
 import { KnowledgeGraphView } from './KnowledgeGraphView';
 import { Personalization } from './Personalization';
 import { ContentWorkspace } from './ContentWorkspace';
-import { KnowledgeAssertions } from './KnowledgeAssertions';
-import { MultiValueInput } from '../../components/controls/MultiValueInput';
 import { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
@@ -14,31 +12,25 @@ import {
   FileText,
   FolderOpen,
   History,
-  Link2,
   NotebookPen,
-  Plus,
   RefreshCw,
   Search,
   Sparkles,
-  Upload,
   Trash2,
 } from 'lucide-react';
 import type { Session, Snapshot, TongzhouAPI } from '../../shared/types';
 import type {
   KnowledgeDocument,
-  KnowledgeInput,
   KnowledgeKind,
   KnowledgeRead,
   KnowledgeState,
 } from '../../shared/knowledge';
 import { ChoicePicker } from '../../components/controls/ChoicePicker';
-import { KnowledgeFolders, wikiFolderOptions } from './KnowledgeFolders';
-import { knowledgeFolderPath } from '../../shared/knowledge';
-import { Field, Markdown, Modal } from '../../components/components';
+import { Markdown, Modal } from '../../components/components';
 import './knowledge.css';
 
 const labels = { source: '笔记与原件', wiki: '整理文档', memory: '每日记忆' };
-const statuses = { ready: '已收录', draft: '待核对', archived: '已归档' };
+const statuses = { ready: '已核对', draft: '待核对', archived: '已归档' };
 export function KnowledgeCenter({
   api,
   data,
@@ -62,7 +54,7 @@ export function KnowledgeCenter({
 }) {
   const [state, setState] = useState<KnowledgeState>();
   const [section, setSection] = useState<
-    'workspace' | 'documents' | 'knowledge' | 'personalization' | 'automation' | 'artifacts'
+    'workspace' | 'knowledge' | 'personalization' | 'automation' | 'artifacts'
   >(initialSection);
   useEffect(() => setSection(initialSection), [initialSection, artifactSession]);
   const [contentTarget, setContentTarget] = useState<{ id: string; libraryId: string } | undefined>(
@@ -72,10 +64,7 @@ export function KnowledgeCenter({
   const [query, setQuery] = useState('');
   const [project, setProject] = useState('*');
   const [kind, setKind] = useState<KnowledgeKind | 'all' | 'issues'>('all');
-  const [folder, setFolder] = useState('*');
-  const [moving, setMoving] = useState<{ doc: KnowledgeDocument; folderId: string }>();
   const [selected, setSelected] = useState<KnowledgeRead>();
-  const [edit, setEdit] = useState<KnowledgeInput>();
   const [deleting, setDeleting] = useState<KnowledgeDocument>();
   const [reviewing, setReviewing] = useState<KnowledgeDocument>();
   const [memoryEdit, setMemoryEdit] = useState<{
@@ -84,7 +73,6 @@ export function KnowledgeCenter({
     content: string;
     remove?: boolean;
   }>();
-  const [preview, setPreview] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -96,7 +84,6 @@ export function KnowledgeCenter({
       query,
       project === '*' ? undefined : project,
       sessionId || undefined,
-      section === 'documents' ? folder || null : undefined,
     );
     if (token === request.current) setState(value);
   };
@@ -106,7 +93,7 @@ export function KnowledgeCenter({
       clearTimeout(timer);
       request.current++;
     };
-  }, [query, project, sessionId, data.runs, kind, folder, section]);
+  }, [query, project, sessionId, data.runs, kind, section]);
   const action = async (fn: () => Promise<void>) => {
     setBusy(true);
     setError('');
@@ -128,45 +115,17 @@ export function KnowledgeCenter({
   const open = (id: string) =>
     void action(async () => {
       const result = await api.knowledgeRead(id);
-      setSelected(result);
       if (result.document.kind === 'memory') {
+        setSelected(result);
         setSection('knowledge');
         setKnowledgeView('daily');
         setKind('memory');
       } else {
-        setSection('documents');
-        if (kind === 'memory') setKind('all');
+        setSelected(undefined);
+        setContentTarget({ id, libraryId: result.document.libraryId ?? 'default' });
+        setSection('workspace');
       }
     });
-  const startEdit = (doc?: KnowledgeDocument) => {
-    setPreview(false);
-    setEdit(
-      doc
-        ? {
-            id: doc.id,
-            version: doc.version,
-            title: doc.title,
-            content: doc.content,
-            kind: doc.kind,
-            folderId: doc.folderId,
-            projectId: doc.projectId,
-            tags: doc.tags,
-            status: doc.status,
-            assertions: doc.assertions,
-            sourceIds: doc.sources.filter((s) => s.version).map((s) => s.id),
-          }
-        : {
-            title: '',
-            content: '',
-            kind: 'source',
-            folderId: folder !== '*' ? folder || null : undefined,
-            projectId: project !== '*' && project ? project : undefined,
-            tags: [],
-            sourceIds: [],
-            status: 'ready',
-          },
-    );
-  };
   useEffect(() => {
     if (initialSection === 'artifacts') return;
     if (initialDocument?.libraryId) {
@@ -174,9 +133,7 @@ export function KnowledgeCenter({
       setSection('workspace');
     } else if (initialDocument) open(initialDocument.id);
   }, [initialDocument, initialSection]);
-  const scopedDocuments = (state?.documents ?? []).filter((d) =>
-    section === 'documents' ? d.kind !== 'memory' : d.kind === 'memory',
-  );
+  const scopedDocuments = (state?.documents ?? []).filter((d) => d.kind === 'memory');
   const issueIds = new Set(state?.issues.map((issue) => issue.id) ?? []);
   const pendingCount = scopedDocuments.filter((d) => issueIds.has(d.id)).length;
   const visible = scopedDocuments.filter(
@@ -211,7 +168,7 @@ export function KnowledgeCenter({
         </button>
         <button
           role="tab"
-          aria-selected={section === 'workspace' || section === 'documents'}
+          aria-selected={section === 'workspace'}
           onClick={() => setSection('workspace')}
         >
           <NotebookPen size={18} />
@@ -258,7 +215,7 @@ export function KnowledgeCenter({
           </span>
         </button>
       </div>
-      {(section === 'documents' || section === 'knowledge') && (
+      {section === 'knowledge' && (
         <WorkspaceToolbar
           context={
             <ChoicePicker
@@ -285,33 +242,6 @@ export function KnowledgeCenter({
           >
             <Search size={15} />
             Agent 排查
-          </button>
-          <button
-            className="secondary"
-            disabled={busy}
-            onClick={() =>
-              void action(async () => {
-                const result = await api.knowledgeImport(
-                  project !== '*' && project ? project : undefined,
-                );
-                setNotice(
-                  `已导入 ${result.imported.length} 份资料${result.errors.length ? '；' + result.errors.join('；') : ''}`,
-                );
-                if (result.imported[0]) {
-                  setSelected(await api.knowledgeRead(result.imported[0].id));
-                  setSection('documents');
-                  setKind('all');
-                  setFolder('*');
-                }
-              })
-            }
-          >
-            <Upload size={15} />
-            导入
-          </button>
-          <button className="primary" onClick={() => startEdit()}>
-            <Plus size={16} />
-            新建笔记
           </button>
         </WorkspaceToolbar>
       )}
@@ -350,18 +280,13 @@ export function KnowledgeCenter({
     );
   if (section === 'workspace')
     return (
-      <section className="page knowledge-page">
+      <section className="page knowledge-page knowledge-content-page">
         {heading}
         <ContentWorkspace
+          key={contentTarget?.libraryId ?? 'default'}
           api={api}
           data={data}
           initialDocument={contentTarget}
-          onInspect={open}
-          onSources={() => {
-            setSection('documents');
-            setKind('all');
-            setSelected(undefined);
-          }}
           onArtifact={onArtifact}
         />
       </section>
@@ -385,18 +310,6 @@ export function KnowledgeCenter({
   return (
     <section className="page knowledge-page">
       {heading}
-      {section === 'documents' && (
-        <button
-          className="text-button"
-          onClick={() => {
-            if (doc) setContentTarget({ id: doc.id, libraryId: doc.libraryId ?? 'default' });
-            setSection('workspace');
-          }}
-        >
-          <ArrowLeft size={14} />
-          返回内容库
-        </button>
-      )}
       <details className="knowledge-maintenance">
         <summary>
           整理与维护 <small>后台记忆 · 本地目录 · 索引</small>
@@ -522,12 +435,7 @@ export function KnowledgeCenter({
               {(
                 [
                   ['all', '全部'],
-                  ...(section === 'documents'
-                    ? ([
-                        ['source', '笔记与原件'],
-                        ['wiki', '整理文档'],
-                      ] as const)
-                    : ([['memory', '每日记忆']] as const)),
+                  ['memory', '每日记忆'],
                   ['issues', '待整理'],
                 ] as const
               ).map(([value, label]) => (
@@ -535,15 +443,11 @@ export function KnowledgeCenter({
                   key={value}
                   aria-pressed={kind === value}
                   title={
-                    value === 'source'
-                      ? '原始想法、手写笔记和上传原件'
-                      : value === 'wiki'
-                        ? '由知识整理 Agent 提炼的文档，保留来源与核对状态'
-                        : value === 'issues'
-                          ? '当前范围内需要核对或补充的资料数量，每份只计一次'
-                          : value === 'all'
-                            ? '查看当前范围内的全部资料'
-                            : '按日期查看整理的会话记忆'
+                    value === 'issues'
+                      ? '当前范围内需要核对的记忆'
+                      : value === 'all'
+                        ? '查看当前范围内的全部记忆'
+                        : '按日期查看整理的会话记忆'
                   }
                   onClick={() => setKind(value)}
                 >
@@ -552,21 +456,6 @@ export function KnowledgeCenter({
                 </button>
               ))}
             </div>
-            {section === 'documents' && (
-              <KnowledgeFolders
-                api={api}
-                folders={state?.folders ?? []}
-                selected={folder}
-                onSelect={(id) => {
-                  setFolder(id);
-                  setSelected(undefined);
-                }}
-                onChanged={async () => {
-                  setSelected(undefined);
-                  await refresh();
-                }}
-              />
-            )}
             <div className="knowledge-list" aria-label="知识资料列表">
               {visible.map((d) => (
                 <button
@@ -594,7 +483,7 @@ export function KnowledgeCenter({
               )}
             </div>
             <small className="knowledge-count">
-              {visible.length} 项结果 · 共 {state?.total ?? 0} 份资料
+              {visible.length} 项结果 · 共 {scopedDocuments.length} 份记忆
             </small>
           </aside>
           <main
@@ -612,11 +501,6 @@ export function KnowledgeCenter({
                       {statuses[doc.status]} · v{doc.version}
                     </span>
                     <h2>{doc.title}</h2>
-                    {doc.kind !== 'memory' && (
-                      <p className="knowledge-section-hint">
-                        {knowledgeFolderPath(state?.folders ?? [], doc.folderId) || '未分类'}
-                      </p>
-                    )}
                   </div>
                   <button
                     className="icon-button"
@@ -639,48 +523,9 @@ export function KnowledgeCenter({
                         }}
                       >
                         <Check size={14} />
-                        核对并收录
+                        核对记忆
                       </button>
                     )}
-                  <button
-                    className="secondary"
-                    disabled={
-                      busy || !session || doc.status === 'archived' || doc.indexed === false
-                    }
-                    title={
-                      !session
-                        ? '请先在会话中选择模型'
-                        : '使用知识整理 Agent 的配置生成整理文档与结构化知识草稿'
-                    }
-                    onClick={() =>
-                      void action(async () => {
-                        const id = await api.knowledgeOrganize(session!.id, [doc.id]);
-                        const snapshot = await api.snapshot();
-                        onSession(snapshot.sessions.find((s) => s.id === id)!);
-                      })
-                    }
-                  >
-                    <Sparkles size={14} />让 Agent 整理
-                  </button>
-                  {doc.kind !== 'memory' && doc.status !== 'archived' && (
-                    <button className="text-button" onClick={() => startEdit(doc)}>
-                      <NotebookPen size={14} />
-                      {doc.origin === 'import' ? '编辑信息' : '编辑'}
-                    </button>
-                  )}
-                  {doc.kind !== 'memory' && (
-                    <button
-                      className="text-button"
-                      disabled={busy}
-                      onClick={() => {
-                        setError('');
-                        setMoving({ doc, folderId: doc.folderId ?? '' });
-                      }}
-                    >
-                      <FolderOpen size={14} />
-                      移动到目录
-                    </button>
-                  )}
                   <button
                     className="text-button danger"
                     disabled={busy}
@@ -854,33 +699,11 @@ export function KnowledgeCenter({
                 <div className="knowledge-welcome-icon">
                   <BookOpen size={30} />
                 </div>
-                <h2>让每次工作，都留下积累</h2>
-                <p>导入参考文件，记下一个想法，或让 Agent 从会话中整理知识。</p>
-                <div className="knowledge-steps">
-                  <div>
-                    <FileText size={19} />
-                    <strong>保留资料</strong>
-                    <span>上传文件与手写笔记</span>
-                  </div>
-                  <div>
-                    <Sparkles size={19} />
-                    <strong>整理知识</strong>
-                    <span>关联来源，持续补充</span>
-                  </div>
-                  <div>
-                    <Link2 size={19} />
-                    <strong>用于任务</strong>
-                    <span>Agent 按任务检索、阅读</span>
-                  </div>
-                </div>
-                <button className="primary" onClick={() => startEdit()}>
-                  <Plus size={15} />
-                  写第一条笔记
+                <h2>每日记忆</h2>
+                <p>在这里查看和修正从会话中整理的记忆。</p>
+                <button className="secondary" onClick={() => setSection('automation')}>
+                  管理记忆任务
                 </button>
-                <small>
-                  文本文件可全文检索；其他文件保存原件并标记为待提取。AI 草稿需核对。Agent
-                  会根据任务自行检索和阅读所需内容。
-                </small>
               </div>
             )}
           </main>
@@ -936,7 +759,7 @@ export function KnowledgeCenter({
         </Modal>
       )}
       {reviewing && (
-        <Modal title="核对并收录" compact onClose={() => !busy && setReviewing(undefined)}>
+        <Modal title="核对记忆" compact onClose={() => !busy && setReviewing(undefined)}>
           <div className="modal-content confirmation-content">
             <p>
               确认已阅读“<strong>{reviewing.title}</strong>”并对照来源核对内容？
@@ -972,7 +795,7 @@ export function KnowledgeCenter({
                   await api.knowledgeReview(reviewing.id, reviewing.version);
                   setSelected(await api.knowledgeRead(reviewing.id));
                   setReviewing(undefined);
-                  setNotice('已核对并收录');
+                  setNotice('记忆已核对');
                 })
               }
             >
@@ -1021,198 +844,6 @@ export function KnowledgeCenter({
               }
             >
               {busy ? '删除中…' : '确认永久删除'}
-            </button>
-          </div>
-        </Modal>
-      )}
-      {moving && (
-        <Modal title="移动 整理文档" compact onClose={() => !busy && setMoving(undefined)}>
-          <div className="modal-content wiki-folder-editor">
-            <p>{moving.doc.title}</p>
-            <Field label="目标目录">
-              <ChoicePicker
-                label="文档目标目录"
-                searchable
-                value={moving.folderId}
-                options={wikiFolderOptions(state?.folders ?? [])}
-                onChange={(folderId) => setMoving({ ...moving, folderId })}
-              />
-            </Field>
-            {error && (
-              <p className="error" role="alert">
-                {error}
-              </p>
-            )}
-          </div>
-          <div className="modal-footer">
-            <button className="secondary" disabled={busy} onClick={() => setMoving(undefined)}>
-              取消
-            </button>
-            <button
-              className="primary"
-              disabled={busy || moving.folderId === (moving.doc.folderId ?? '')}
-              onClick={() =>
-                void action(async () => {
-                  const moved = await api.knowledgeMove(
-                    moving.doc.id,
-                    moving.folderId || null,
-                    moving.doc.version,
-                  );
-                  setSelected(await api.knowledgeRead(moved.id));
-                  if (kind === 'wiki') setFolder(moved.folderId ?? '');
-                  setMoving(undefined);
-                  setNotice('整理文档已移动，正文与来源引用已保留');
-                })
-              }
-            >
-              确认移动
-            </button>
-          </div>
-        </Modal>
-      )}
-      {edit && (
-        <Modal
-          title={edit.id ? '编辑知识资料' : '新建笔记'}
-          wide
-          onClose={() => !busy && setEdit(undefined)}
-        >
-          <div className="modal-content knowledge-editor">
-            <div className="form-grid">
-              <Field label="标题">
-                <input
-                  aria-label="知识标题"
-                  value={edit.title}
-                  onChange={(e) => setEdit({ ...edit, title: e.target.value })}
-                />
-              </Field>
-              <Field label="类型">
-                <input
-                  aria-label="知识类型"
-                  readOnly
-                  value={
-                    edit.kind === 'wiki'
-                      ? '整理文档 · Agent 生成'
-                      : edit.kind === 'memory'
-                        ? '每日记忆'
-                        : '笔记与原件'
-                  }
-                />
-              </Field>
-              <Field label="归属空间">
-                <ChoicePicker
-                  label="笔记归属空间"
-                  value={edit.projectId ?? ''}
-                  options={scopeOptions.filter((o) => o.value !== '*')}
-                  onChange={(projectId) => setEdit({ ...edit, projectId: projectId || undefined })}
-                />
-              </Field>
-              {edit.kind !== 'memory' && (
-                <Field label="文档目录">
-                  <ChoicePicker
-                    label="文档所属目录"
-                    searchable
-                    value={edit.folderId ?? ''}
-                    options={wikiFolderOptions(state?.folders ?? [])}
-                    onChange={(folderId) => setEdit({ ...edit, folderId: folderId || null })}
-                  />
-                </Field>
-              )}
-              <Field label="标签">
-                <MultiValueInput
-                  label="知识标签"
-                  value={edit.tags ?? []}
-                  onChange={(tags) => setEdit({ ...edit, tags })}
-                />
-              </Field>
-            </div>
-            <div className="knowledge-edit-tabs">
-              <button aria-pressed={!preview} onClick={() => setPreview(false)}>
-                Markdown
-              </button>
-              <button aria-pressed={preview} onClick={() => setPreview(true)}>
-                预览
-              </button>
-            </div>
-            {preview ? (
-              <div className="knowledge-edit-preview">
-                <Markdown text={edit.content || '暂无内容'} />
-              </div>
-            ) : (
-              <textarea
-                aria-label="知识正文"
-                value={edit.content}
-                readOnly={doc?.id === edit.id && doc?.origin === 'import'}
-                placeholder="写下内容、结论、适用范围，或仍需要确认的问题…"
-                onChange={(e) => setEdit({ ...edit, content: e.target.value })}
-              />
-            )}
-            <KnowledgeAssertions
-              value={edit.assertions ?? []}
-              onChange={(assertions) => setEdit({ ...edit, assertions })}
-              sources={(state?.documents ?? []).filter((d) => edit.sourceIds?.includes(d.id))}
-            />
-            {edit.kind !== 'memory' && (
-              <details className="knowledge-source-options">
-                <summary>关联来源 · {edit.sourceIds?.length ?? 0}</summary>
-                {state?.documents
-                  .filter((d) => d.id !== edit.id)
-                  .map((d) => (
-                    <label key={d.id}>
-                      <input
-                        type="checkbox"
-                        checked={edit.sourceIds?.includes(d.id) ?? false}
-                        onChange={(e) =>
-                          setEdit({
-                            ...edit,
-                            sourceIds: e.target.checked
-                              ? [...(edit.sourceIds ?? []), d.id]
-                              : (edit.sourceIds ?? []).filter((id) => id !== d.id),
-                          })
-                        }
-                      />
-                      {d.title}
-                    </label>
-                  ))}
-              </details>
-            )}
-            {edit.kind === 'wiki' && (
-              <label className="knowledge-confirm">
-                <input
-                  type="checkbox"
-                  checked={edit.status === 'ready'}
-                  onChange={(e) =>
-                    setEdit({ ...edit, status: e.target.checked ? 'ready' : 'draft' })
-                  }
-                />
-                已核对内容与来源
-              </label>
-            )}
-            {error && (
-              <p role="alert" className="error">
-                {error}
-              </p>
-            )}
-          </div>
-          <div className="modal-footer">
-            <button className="secondary" disabled={busy} onClick={() => setEdit(undefined)}>
-              取消
-            </button>
-            <button
-              className="primary"
-              disabled={busy || !edit.title.trim()}
-              onClick={() =>
-                void action(async () => {
-                  const saved = await api.knowledgeSave(edit);
-                  setSelected(await api.knowledgeRead(saved.id));
-                  setSection('documents');
-                  setKind('all');
-                  setEdit(undefined);
-                  setNotice('资料已保存到本地');
-                })
-              }
-            >
-              <Check size={15} />
-              保存资料
             </button>
           </div>
         </Modal>

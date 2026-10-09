@@ -1,3 +1,4 @@
+import { taskToolPreparation } from './task-tools';
 import type { ExecutionNetwork } from '../core/task-contracts';
 import type { Store } from '../services/storage/store';
 import { Terminals } from '../services/desktop/terminals';
@@ -93,12 +94,19 @@ export async function createTaskSystem(
       if (cleanupErrors.length) throw new AggregateError(cleanupErrors, '部分任务资源未能正常释放');
     })());
   try {
-    tasks = new TaskScheduler(store, dataDir, events.publish, computer, commands, {
+    tasks = new TaskScheduler(store, dataDir, events.publish, {
       ...domains,
       events,
       sessions,
       approvals,
-      terminals,
+      prepareTools: taskToolPreparation(
+        store,
+        domains,
+        terminals,
+        events.changed,
+        computer,
+        commands,
+      ),
       projectUnavailable,
       createExecution: (callbacks) =>
         (execution = new CodexExecution({

@@ -45,6 +45,6 @@ button.file-link:hover {
 }
 .project-file-row:not([data-directory='true']) > span:not(.git-status),
 .task-file > button.text-button,
-.content-document-list > button > span {
+.content-file-row > span {
   color: var(--file-link);
 }

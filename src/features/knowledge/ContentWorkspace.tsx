@@ -1,6 +1,6 @@
 import { WorkspaceToolbar } from '../workspace/WorkspaceToolbar';
 import { useEffect, useRef, useState } from 'react';
-import { FileText, MessageSquare, Plus, Upload, History } from 'lucide-react';
+import { FileText, MessageSquare, Plus, Upload } from 'lucide-react';
 import type { Snapshot, TongzhouAPI } from '../../shared/types';
 import type { ContentState } from '../../shared/content';
 import { KnowledgeFolders } from './KnowledgeFolders';
@@ -11,15 +11,11 @@ export function ContentWorkspace({
   api,
   data,
   initialDocument,
-  onInspect,
-  onSources,
   onArtifact,
 }: {
   api: TongzhouAPI;
   data: Snapshot;
   initialDocument?: { id: string; libraryId: string };
-  onInspect(id: string): void;
-  onSources(): void;
   onArtifact?(id: string): void;
 }) {
   const [library] = useState(initialDocument?.libraryId ?? 'default');
@@ -71,6 +67,7 @@ export function ContentWorkspace({
       title: '未命名文档',
       content: '',
     });
+    setQuery('');
     setDocumentId(doc.id);
   };
   return (
@@ -78,28 +75,12 @@ export function ContentWorkspace({
       <WorkspaceToolbar className="content-toolbar">
         <button
           className="icon-button"
-          aria-label="查看来源记录"
-          title="查看文档来源与版本记录"
-          onClick={onSources}
-        >
-          <History size={16} />
-        </button>
-        <button
-          className="icon-button"
           title={chat ? '收起文档对话' : '打开文档对话'}
           aria-label="切换文档对话"
           aria-pressed={chat}
           aria-expanded={chat}
           aria-controls="content-document-chat"
-          onClick={() => {
-            setChat(!chat);
-            if (!chat && window.innerWidth <= 1150)
-              requestAnimationFrame(() =>
-                document
-                  .getElementById('content-document-chat')
-                  ?.scrollIntoView({ block: 'start', behavior: 'smooth' }),
-              );
-          }}
+          onClick={() => setChat(!chat)}
         >
           <MessageSquare size={17} />
         </button>
@@ -112,7 +93,10 @@ export function ContentWorkspace({
                 library,
                 folder === '*' || !folder ? undefined : folder,
               );
-              if (result.imported[0]) setDocumentId(result.imported[0].id);
+              if (result.imported[0]) {
+                setQuery('');
+                setDocumentId(result.imported[0].id);
+              }
               if (result.errors.length) setError(result.errors.join('；'));
             })
           }
@@ -143,31 +127,13 @@ export function ContentWorkspace({
             folders={state?.folders ?? []}
             libraryId={library}
             selected={folder}
+            documents={state?.documents ?? []}
+            selectedDocument={documentId}
+            onOpenDocument={setDocumentId}
+            searching={!!query.trim()}
             onSelect={setFolder}
             onChanged={refresh}
           />
-          <div className="content-document-list">
-            {state?.documents
-              .filter((d) => folder === '*' || (d.folderId ?? '') === folder)
-              .map((d) => (
-                <button
-                  key={d.id}
-                  className={documentId === d.id ? 'selected' : ''}
-                  onClick={() => setDocumentId(d.id)}
-                >
-                  <FileText size={14} />
-                  <span>
-                    {d.title}
-                    <small>
-                      {d.origin === 'import' ? '原件' : d.contentType || '文档'} · v{d.version}
-                    </small>
-                  </span>
-                </button>
-              ))}
-            {!state?.documents.length && (
-              <p className="muted">新建文档或导入资料，开始维护你的内容。</p>
-            )}
-          </div>
         </aside>
         {documentId ? (
           <ContentDocument
@@ -178,8 +144,10 @@ export function ContentWorkspace({
             folders={state?.folders ?? []}
             showChat={chat}
             onChange={refresh}
-            onOpen={setDocumentId}
-            onInspect={() => onInspect(documentId)}
+            onOpen={(id) => {
+              setQuery('');
+              setDocumentId(id);
+            }}
             onArtifact={onArtifact}
             onDelete={() => {
               setDocumentId('');

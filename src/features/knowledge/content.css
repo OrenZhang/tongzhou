@@ -1,8 +1,15 @@
+.knowledge-content-page {
+  overflow: hidden;
+}
+.knowledge-content-page > .content-workspace {
+  flex: 1;
+  min-height: 0;
+}
 .content-workspace {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  min-height: 600px;
+  min-height: 0;
 }
 .content-toolbar {
   display: flex;
@@ -14,48 +21,34 @@
   flex: 1;
 }
 .content-layout {
+  flex: 1;
   display: grid;
-  grid-template-columns: 210px minmax(300px, 1fr);
-  min-height: 620px;
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-columns: 240px minmax(300px, 1fr);
+  min-height: 0;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--surface);
   overflow: hidden;
 }
 .content-layout.with-chat {
-  grid-template-columns: 190px minmax(270px, 1fr) minmax(280px, 340px);
+  grid-template-columns: 240px minmax(270px, 1fr) minmax(280px, 340px);
 }
 .content-tree {
   padding: 14px;
   border-right: 1px solid var(--border);
   min-width: 0;
-  max-height: calc(100vh - 260px);
+  min-height: 0;
+  overscroll-behavior: contain;
   overflow: auto;
 }
 .content-tree > input {
   width: 100%;
   margin-bottom: 14px;
 }
-.content-document-list button {
-  width: 100%;
-  display: flex;
-  align-items: flex-start;
-  text-align: left;
-  gap: 8px;
-  padding: 10px 6px;
-  border-radius: 6px;
-  overflow-wrap: anywhere;
-}
-.content-document-list button.selected {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-.content-document-list small {
-  display: block;
-  color: var(--muted);
-  margin-top: 4px;
-}
 .content-editor {
+  min-height: 0;
+  overflow: hidden;
   padding: 20px;
   display: flex;
   flex-direction: column;
@@ -82,20 +75,20 @@
 .content-body {
   width: 100%;
   flex: 1;
-  min-height: 420px;
-  resize: vertical;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  resize: none;
   line-height: 1.9;
   font: inherit;
   padding: 14px;
 }
 .content-body-preview {
   flex: 1;
-  min-height: 420px;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
   overflow-wrap: anywhere;
-}
-.content-location {
-  font-size: 12px;
-  color: var(--muted);
 }
 .content-versions {
   background: var(--surface-muted);
@@ -116,10 +109,11 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
-  max-height: calc(100vh - 220px);
-  min-height: 620px;
+  overflow: hidden;
+  min-height: 0;
 }
 .content-chat header {
+  flex-shrink: 0;
   padding: 16px;
   border-bottom: 1px solid var(--border);
 }
@@ -129,20 +123,10 @@
   margin-top: 6px;
   overflow-wrap: anywhere;
 }
-.content-chat-settings {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 10px 14px;
-}
-.content-chat-settings select {
-  min-width: 0;
-  max-width: 100%;
-  flex: 1 1 100px;
-}
 .content-chat-messages {
   flex: 1;
-  min-height: 150px;
+  min-height: 0;
+  overscroll-behavior: contain;
   overflow: auto;
   padding: 14px;
 }
@@ -155,13 +139,90 @@
   color: var(--muted);
 }
 .content-chat-compose {
-  padding: 14px;
-  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  padding: 10px;
+}
+.content-chat-input {
+  padding: 8px;
+  border: 1px solid var(--control-border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 2px 8px #00000004;
+}
+.content-chat-input:focus-within {
+  border-color: var(--muted);
+}
+.content-chat-input > .row {
+  min-height: 20px;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.content-chat-input .text-button {
+  min-height: 20px;
+  height: 20px;
+  padding: 0;
+  margin-left: auto;
+  font-size: 11px;
 }
 .content-chat-compose textarea {
+  display: block;
   width: 100%;
-  margin: 10px 0;
-  resize: vertical;
+  min-height: 40px;
+  height: 44px;
+  max-height: 120px;
+  margin: 2px 0 4px;
+  padding: 4px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  line-height: 1.65;
+  resize: none;
+}
+.content-chat-compose textarea:focus {
+  outline: none;
+  box-shadow: none;
+}
+.content-chat-toolbar {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.content-chat-settings {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  gap: 2px;
+}
+.content-chat-settings .choice-trigger.compact {
+  width: auto;
+  max-width: 100%;
+  min-height: 26px;
+  height: 26px;
+  padding: 3px 5px;
+  gap: 5px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  font-size: 11px;
+}
+.content-chat-settings .choice-trigger > svg {
+  flex-shrink: 0;
+  width: 12px;
+}
+.content-chat-settings .choice-trigger:hover:not(:disabled),
+.content-chat-settings .choice-trigger[aria-expanded='true'] {
+  background: var(--surface-muted);
+}
+.content-chat-toolbar .content-chat-send {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  border-radius: 50%;
 }
 .content-empty {
   grid-column: 2;
@@ -174,29 +235,176 @@
   text-align: center;
 }
 @media (max-width: 1150px) {
-  .content-layout.with-chat {
-    grid-template-columns: 170px minmax(260px, 1fr);
+  .content-layout {
+    grid-template-columns: 160px minmax(0, 1fr);
   }
-  .content-chat {
-    grid-column: 1 / -1;
-    border-left: 0;
-    border-top: 1px solid var(--border);
-    min-height: 400px;
-    max-height: 600px;
+  .content-layout.with-chat {
+    grid-template-columns: 160px minmax(0, 1fr) 260px;
+  }
+  .knowledge-content-page .content-editor {
+    padding: 14px;
   }
 }
-@media (max-width: 700px) {
-  .content-layout,
-  .content-layout.with-chat {
-    grid-template-columns: 1fr;
-  }
-  .content-tree {
-    max-height: 220px;
-    border-right: 0;
-    border-bottom: 1px solid var(--border);
-  }
-  .content-chat,
-  .content-empty {
-    grid-column: 1;
-  }
+.content-editor > :not(.content-body):not(.content-body-preview) {
+  flex-shrink: 0;
+}
+.content-document-menu-panel {
+  max-height: min(340px, calc(100dvh - 400px));
+  overflow: auto;
+}
+
+/* Files belong to their directory, with a single scroll surface for the whole tree. */
+.content-tree .wiki-folders {
+  border: 0;
+  padding: 0;
+}
+.content-tree .wiki-folder-tree {
+  max-height: none;
+  overflow: visible;
+}
+.content-tree .wiki-folder-heading {
+  margin-bottom: 10px;
+}
+.content-tree .wiki-folder-row {
+  min-height: 30px;
+}
+.content-file-row {
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--secondary-text);
+  text-align: left;
+  font-size: 12px;
+  line-height: 20px;
+}
+.content-file-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.content-file-row svg {
+  flex: none;
+  color: var(--muted);
+}
+.content-file-row:hover {
+  color: var(--accent);
+  background: var(--hover-surface);
+}
+.content-file-row[aria-current] {
+  color: var(--file-link);
+  background: color-mix(in srgb, var(--file-link) 12%, transparent);
+}
+.content-file-row[aria-current] svg {
+  color: inherit;
+}
+.content-document-header {
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.content-document-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.content-document-heading .content-title {
+  flex: 1;
+  min-width: 0;
+}
+.content-document-heading .content-editor-actions {
+  flex: none;
+  flex-wrap: nowrap;
+  padding: 0;
+  border: 0;
+  gap: 2px;
+}
+.content-document-info {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  color: var(--muted);
+  margin-top: 8px;
+  font-size: 11px;
+}
+.content-document-info small {
+  font-size: inherit;
+}
+.content-document-path {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.content-document-path svg {
+  flex: none;
+}
+.content-document-menu {
+  position: relative;
+}
+.content-document-menu > summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  color: var(--muted);
+}
+.content-document-menu > summary::-webkit-details-marker {
+  display: none;
+}
+.content-document-menu > summary:hover,
+.content-document-menu[open] > summary {
+  color: var(--accent);
+}
+.content-document-menu-panel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 210px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 28px #0002;
+}
+.content-document-menu-panel > button {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  text-align: left;
+  border-radius: 4px;
+}
+.content-document-menu-panel > button:hover {
+  background: var(--hover-surface);
+}
+.content-editor .content-body {
+  padding: 8px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.content-tree .wiki-folder-row .wiki-folder-toggle,
+.content-tree .wiki-folder-spacer {
+  width: 16px;
+  min-width: 16px;
+}
+.content-tree .wiki-folder-name {
+  color: var(--ink);
+  padding: 5px 0;
 }

@@ -200,31 +200,33 @@ describe('long conversations and concurrent changes', () => {
       grandchild = s.createSession(null, child.id);
     const branch = s.createSession();
     for (const session of [parent, child, grandchild]) {
-      await mkdir(path.join(root, 'chat-workspaces', session.id), { recursive: true });
-      await writeFile(path.join(root, 'chat-workspaces', session.id, 'temp'), 'owned');
+      await mkdir(path.join(root, '.tzhou', 'chat-workspaces', session.id), { recursive: true });
+      await writeFile(path.join(root, '.tzhou', 'chat-workspaces', session.id, 'temp'), 'owned');
     }
     await writeFile(path.join(root, 'user-project.txt'), 'preserve');
     s.put('channel', { id: 'bound', sessionId: grandchild.id, inbound: true, enabled: true });
     await expect(system.sessions.deleteSession(parent.id)).rejects.toThrow('请先归档');
     expect(s.get<any>('channel', 'bound').inbound).toBe(true);
-    expect(await readFile(path.join(root, 'chat-workspaces', grandchild.id, 'temp'), 'utf8')).toBe(
-      'owned',
-    );
+    expect(
+      await readFile(path.join(root, '.tzhou', 'chat-workspaces', grandchild.id, 'temp'), 'utf8'),
+    ).toBe('owned');
     expect(s.list('session')).toHaveLength(4);
     s.put('session', { ...parent, archived: true });
     s.put('run', { id: 'running-child', sessionId: grandchild.id, status: 'running' });
     await expect(system.sessions.deleteSession(parent.id)).rejects.toThrow('请先停止');
     expect(s.get<any>('run', 'running-child').status).toBe('running');
     expect(s.get<any>('channel', 'bound').inbound).toBe(true);
-    expect(await readFile(path.join(root, 'chat-workspaces', grandchild.id, 'temp'), 'utf8')).toBe(
-      'owned',
-    );
+    expect(
+      await readFile(path.join(root, '.tzhou', 'chat-workspaces', grandchild.id, 'temp'), 'utf8'),
+    ).toBe('owned');
     expect(s.list('session')).toHaveLength(4);
     s.put('run', { id: 'running-child', sessionId: grandchild.id, status: 'completed' });
     await system.sessions.deleteSession(parent.id);
     expect(s.list<any>('session').map((v) => v.id)).toEqual([branch.id]);
     expect(s.get<any>('channel', 'bound').inbound).toBe(false);
-    await expect(access(path.join(root, 'chat-workspaces', grandchild.id))).rejects.toThrow();
+    await expect(
+      access(path.join(root, '.tzhou', 'chat-workspaces', grandchild.id)),
+    ).rejects.toThrow();
     expect(await readFile(path.join(root, 'user-project.txt'), 'utf8')).toBe('preserve');
   });
 });

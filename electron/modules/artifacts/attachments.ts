@@ -1,3 +1,4 @@
+import { FileRecords, managedDirectory, assertLocalPath } from '../../services/storage/local-files';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -20,13 +21,18 @@ export const attachmentUploadSchema = z.object({
     .regex(/^[A-Za-z0-9+/]*={0,2}$/),
 });
 export class Attachments {
-  constructor(
-    private store: Store,
-    private dataDir: string,
-  ) {}
+  readonly root: string;
+  readonly records: FileRecords<Attachment>;
+  constructor(store: Store, dataDir: string) {
+    this.root = managedDirectory(dataDir, 'attachments');
+    this.records = new FileRecords(path.join(this.root, 'records'));
+    this.records.migrate(store, 'attachment');
+  }
   private file(id: string) {
     z.uuid().parse(id);
-    return path.join(this.dataDir, 'attachments', id);
+    const file = path.join(this.root, id);
+    assertLocalPath(path.dirname(this.root), file);
+    return file;
   }
   save(raw: unknown): Attachment {
     const input = attachmentUploadSchema.parse(raw);
@@ -60,13 +66,13 @@ export class Attachments {
     };
     mkdirSync(path.dirname(this.file(item.id)), { recursive: true, mode: 0o700 });
     writeFileSync(this.file(item.id), bytes, { flag: 'wx', mode: 0o600 });
-    this.store.put('attachment', item);
+    this.records.put(item);
     return item;
   }
   resolve(ids: string[] = []) {
     if (ids.length > MAX_ATTACHMENTS || new Set(ids).size !== ids.length)
       throw new Error('每条消息最多 6 个不重复附件');
-    const items = ids.map((id) => this.store.get<Attachment>('attachment', z.uuid().parse(id)));
+    const items = ids.map((id) => this.records.get(z.uuid().parse(id)));
     if (items.reduce((sum, a) => sum + a.size, 0) > MAX_TURN_ATTACHMENT_BYTES)
       throw new Error('单条消息附件总大小不能超过 12 MB');
     for (const a of items) this.bytes(a);

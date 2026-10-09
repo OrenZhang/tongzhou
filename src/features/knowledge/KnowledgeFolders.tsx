@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ChevronDown,
   ChevronRight,
   Folder,
+  FileText,
   FolderPlus,
   MoreHorizontal,
   Trash2,
@@ -13,6 +14,7 @@ import type { TongzhouAPI } from '../../shared/types';
 import {
   knowledgeFolderBranch,
   knowledgeFolderPath,
+  type KnowledgeSummary,
   type KnowledgeFolder,
   type KnowledgeFolderInput,
 } from '../../shared/knowledge';
@@ -33,6 +35,10 @@ export function KnowledgeFolders({
   onSelect,
   onChanged,
   libraryId,
+  documents,
+  selectedDocument,
+  onOpenDocument,
+  searching = false,
 }: {
   api: TongzhouAPI;
   folders: KnowledgeFolder[];
@@ -40,6 +46,10 @@ export function KnowledgeFolders({
   onSelect(id: string): void;
   onChanged(): Promise<void>;
   libraryId?: string;
+  documents?: KnowledgeSummary[];
+  selectedDocument?: string;
+  onOpenDocument?(id: string): void;
+  searching?: boolean;
 }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<KnowledgeFolderInput>();
@@ -68,17 +78,58 @@ export function KnowledgeFolders({
     }
   };
   const branch = editing?.id ? knowledgeFolderBranch(folders, editing.id) : new Set<string>();
+  const activeFolder = documents?.find((d) => d.id === selectedDocument)?.folderId;
+  const ancestorIds = (folderId?: string) => {
+    const result = new Set<string>();
+    while (folderId && !result.has(folderId)) {
+      result.add(folderId);
+      folderId = folders.find((f) => f.id === folderId)?.parentId;
+    }
+    return result;
+  };
+  const revealPath = [...ancestorIds(activeFolder)].join(',');
+  useEffect(() => {
+    setCollapsed(
+      (previous) => new Set([...previous].filter((id) => !revealPath.split(',').includes(id))),
+    );
+  }, [selectedDocument, revealPath]);
+  const matches = new Set(documents?.flatMap((d) => [...ancestorIds(d.folderId)]));
+  const fileRows = (folderId: string | undefined, depth: number) =>
+    documents
+      ?.filter((d) => (d.folderId || undefined) === folderId)
+      .sort((a, b) =>
+        a.derivation && b.derivation && a.derivation.batchId === b.derivation.batchId
+          ? a.derivation.index - b.derivation.index
+          : a.title.localeCompare(b.title, 'zh-CN', { numeric: true }),
+      )
+      .map((d) => (
+        <button
+          key={d.id}
+          className="content-file-row"
+          data-document-id={d.id}
+          aria-current={selectedDocument === d.id ? 'page' : undefined}
+          title={d.title}
+          style={{ paddingLeft: 20 + depth * 12 }}
+          onClick={() => {
+            onSelect(d.folderId ?? '');
+            onOpenDocument?.(d.id);
+          }}
+        >
+          <FileText size={14} />
+          <span>{d.title}</span>
+        </button>
+      ));
   const tree = (parentId?: string, depth = 0): React.ReactNode =>
     folders
-      .filter((f) => f.parentId === parentId)
+      .filter((f) => f.parentId === parentId && (!searching || matches.has(f.id)))
       .map((folder) => {
-        const children = folders.some((f) => f.parentId === folder.id);
-        const closed = collapsed.has(folder.id);
+        const children = !!documents || folders.some((f) => f.parentId === folder.id);
+        const closed = !searching && collapsed.has(folder.id);
         return (
-          <div key={folder.id}>
+          <div key={folder.id} data-folder-id={folder.id}>
             <div
               className="wiki-folder-row"
-              data-selected={selected === folder.id}
+              data-selected={selected === folder.id && !selectedDocument}
               style={{ paddingLeft: depth * 12 }}
             >
               {children ? (
@@ -104,7 +155,14 @@ export function KnowledgeFolders({
                 className="wiki-folder-name"
                 aria-pressed={selected === folder.id}
                 title={knowledgeFolderPath(folders, folder.id)}
-                onClick={() => onSelect(folder.id)}
+                onClick={() => {
+                  onSelect(folder.id);
+                  setCollapsed((previous) => {
+                    const next = new Set(previous);
+                    next.delete(folder.id);
+                    return next;
+                  });
+                }}
               >
                 <Folder size={14} />
                 <span>{folder.name}</span>
@@ -118,7 +176,12 @@ export function KnowledgeFolders({
                 <MoreHorizontal size={15} />
               </button>
             </div>
-            {children && !closed && tree(folder.id, depth + 1)}
+            {children && !closed && (
+              <div className="wiki-folder-children">
+                {tree(folder.id, depth + 1)}
+                {fileRows(folder.id, depth + 1)}
+              </div>
+            )}
           </div>
         );
       });
@@ -138,27 +201,39 @@ export function KnowledgeFolders({
             <FolderPlus size={15} />
           </button>
         </div>
-        <button
-          className="wiki-folder-root"
-          aria-pressed={selected === '*'}
-          onClick={() => onSelect('*')}
-        >
-          全部文档
-        </button>
-        <button
-          className="wiki-folder-root"
-          aria-pressed={selected === ''}
-          onClick={() => onSelect('')}
-        >
-          未分类
-        </button>
-        <div className="wiki-folder-tree">{tree()}</div>
+        {!documents && (
+          <>
+            <button
+              className="wiki-folder-root"
+              aria-pressed={selected === '*'}
+              onClick={() => onSelect('*')}
+            >
+              全部文档
+            </button>
+            <button
+              className="wiki-folder-root"
+              aria-pressed={selected === ''}
+              onClick={() => onSelect('')}
+            >
+              未分类
+            </button>
+          </>
+        )}
+        <div className="wiki-folder-tree">
+          {tree()}
+          {fileRows(undefined, 0)}
+        </div>
+        {documents && !documents.length && (
+          <p className="muted">{searching ? '没有匹配的文档' : '暂无文档'}</p>
+        )}
         {error && !editing && !deleting && (
           <p className="danger" role="alert">
             {error}
           </p>
         )}
-        {!folders.length && <p className="muted">按项目或主题新建目录，逐步整理知识页。</p>}
+        {!documents && !folders.length && (
+          <p className="muted">按项目或主题新建目录，逐步整理知识页。</p>
+        )}
       </nav>
       {editing && (
         <Modal

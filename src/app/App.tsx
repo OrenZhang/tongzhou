@@ -1,4 +1,4 @@
-import type { View } from './views';
+import { useNavigation } from './useNavigation';
 import { protocolLabels } from '../features/connections/provider-presets';
 import { AccountLoginPanel } from '../features/connections/AccountLoginPanel';
 import { ProviderConnectionDialog } from '../features/connections/ProviderConnectionDialog';
@@ -96,48 +96,31 @@ export default function App() {
     key: number;
   }>();
   const api = window.tongzhou;
+  const {
+    view,
+    setView,
+    knowledgeTarget,
+    setKnowledgeTarget,
+    knowledgeSection,
+    setKnowledgeSection,
+    sidebarOpen,
+    setSidebarOpen,
+    paletteOpen,
+    setPaletteOpen,
+  } = useNavigation(api);
   const { data, loaded, refresh, notice, setNotice, report, perform } = useApplicationState(api);
   const restoredSession = useRef(false);
-  const [view, setView] = useState<View>('workspace');
-  const [knowledgeTarget, setKnowledgeTarget] = useState<{ id: string; libraryId: string }>();
   const [attachmentPreview, setAttachmentPreview] = useState<Attachment>();
   const [artifactId, setArtifactId] = useState<string>();
   const [artifactOrganizing, setArtifactOrganizing] = useState(false);
   const [artifactSession, setArtifactSession] = useState<string>();
   const [artifactRevision, setArtifactRevision] = useState(0);
-  const [knowledgeSection, setKnowledgeSection] = useState<'workspace' | 'artifacts'>('workspace');
   const [connectionInitialTab, setConnectionInitialTab] = useState<'accounts' | 'network'>(
     'accounts',
   );
-  const [sidebarOpen, setSidebarOpen] = useState(
-    () => localStorage.getItem('tongzhou-sidebar') !== 'closed',
-  );
-  const [paletteOpen, setPaletteOpen] = useState(false);
   const [providerQuery, setProviderQuery] = useState('');
   const [runQuery, setRunQuery] = useState('');
   const [runFilter, setRunFilter] = useState('all');
-  useEffect(() => {
-    localStorage.setItem('tongzhou-sidebar', sidebarOpen ? 'open' : 'closed');
-  }, [sidebarOpen]);
-  useEffect(() => {
-    const shortcuts = (e: KeyboardEvent) => {
-      if (e.isComposing || !(e.ctrlKey || e.metaKey)) return;
-      if (e.key.toLowerCase() === 'k' && !document.querySelector('.modal-backdrop')) {
-        e.preventDefault();
-        setPaletteOpen(true);
-      }
-      if (
-        e.key.toLowerCase() === 'b' &&
-        !document.querySelector('.modal-backdrop') &&
-        !(e.target instanceof Element && e.target.closest('input,textarea,[contenteditable=true]'))
-      ) {
-        e.preventDefault();
-        setSidebarOpen((open) => !open);
-      }
-    };
-    window.addEventListener('keydown', shortcuts);
-    return () => window.removeEventListener('keydown', shortcuts);
-  }, []);
   const {
     accountStates,
     authProviderId,
@@ -286,13 +269,6 @@ export default function App() {
     if (previous) activateSession(previous);
     else if (saved) localStorage.removeItem('tongzhou-last-session');
   }, [loaded, data.sessions]);
-  useEffect(
-    () =>
-      api.onEvent((event) => {
-        if (event.type === 'navigate') setView(event.view);
-      }),
-    [api],
-  );
   useEffect(() => {
     if (!sessionRef.current && !sessionId && !providerId && availableProviders.length) {
       setProviderId(availableProviders[0].id);

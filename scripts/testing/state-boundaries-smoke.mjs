@@ -84,7 +84,7 @@ try {
   await page.getByText('当前会话正文', { exact: true }).waitFor();
   assert.equal(await page.getByText('迟到的旧会话正文', { exact: true }).count(), 0);
 
-  // Two refreshes resolve in reverse order. The older snapshot must not win.
+  // A second invalidation waits for the in-flight snapshot, then refreshes again.
   await page.locator('.sidebar').getByRole('button', { name: 'Agent', exact: true }).click();
   const baseline = await page.evaluate(() => window.tongzhou.snapshot());
   await app.evaluate(({ ipcMain, BrowserWindow }) => {
@@ -100,25 +100,41 @@ try {
   await app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()[0].webContents.send('tongzhou:event', { type: 'changed' }),
   );
+  await page.waitForTimeout(120);
+  assert.equal(await app.evaluate(() => globalThis.stateSnapshots.length), 1);
+  await app.evaluate((_, baseline) => globalThis.stateSnapshots[0](baseline), baseline);
   await waitRequests('stateSnapshots', 2);
   await app.evaluate((_, baseline) => {
-    const snapshot = (name) => ({
+    globalThis.stateSnapshots[1]({
       ...baseline,
       agents: baseline.agents.map((agent) =>
-        agent.name === '编辑后角色' ? { ...agent, name } : agent,
+        agent.name === '编辑后角色' ? { ...agent, name: '较新的快照角色' } : agent,
       ),
     });
-    globalThis.stateSnapshots[1](snapshot('较新的快照角色'));
-    globalThis.stateSnapshots[0](snapshot('迟到的旧快照角色'));
   }, baseline);
   await page.getByRole('heading', { name: '较新的快照角色', exact: true }).waitFor();
   assert.equal(
     await page.getByRole('heading', { name: '迟到的旧快照角色', exact: true }).count(),
     0,
   );
+  await app.evaluate(({ ipcMain, BrowserWindow }, baseline) => {
+    globalThis.stateTaskReads = 0;
+    ipcMain.removeHandler('tongzhou:taskSnapshot');
+    ipcMain.handle('tongzhou:taskSnapshot', () => {
+      globalThis.stateTaskReads++;
+      return { sessions: baseline.sessions, runs: baseline.runs, approvals: baseline.approvals };
+    });
+    BrowserWindow.getAllWindows()[0].webContents.send('tongzhou:event', {
+      type: 'changed',
+      scope: 'tasks',
+    });
+  }, baseline);
+  await page.waitForTimeout(200);
+  assert.equal(await app.evaluate(() => globalThis.stateTaskReads), 1);
+  assert.equal(await app.evaluate(() => globalThis.stateSnapshots.length), 2);
   assert.deepEqual(errors, []);
   console.log(
-    'State boundaries passed: Agent create/edit, stale chat history and out-of-order snapshots.',
+    'State boundaries passed: Agent create/edit, stale chat history and serialized snapshots and task-only refreshes.',
   );
 } finally {
   await app.close();

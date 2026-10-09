@@ -305,7 +305,7 @@ export type AppEvent =
   | { type: 'run-event'; event: RunEvent }
   | { type: 'native-auth'; state: NativeAuthState }
   | { type: 'codex-auth'; state: CodexAuthState }
-  | { type: 'changed' }
+  | { type: 'changed'; scope?: 'tasks' }
   | { type: 'message'; message: Message }
   | { type: 'approval'; approval: Approval };
 export interface RunInput {
@@ -570,6 +570,7 @@ export interface TongzhouAPI {
   computerSelfTest(): Promise<ComputerStatus>;
   emergencyStop(): Promise<void>;
   snapshot(): Promise<Snapshot>;
+  taskSnapshot(): Promise<TaskSnapshot>;
   messages(sessionId: string, options?: { before?: string; limit?: number }): Promise<Message[]>;
   saveProvider(provider: ProviderInput): Promise<Provider>;
   deleteProvider(id: string): Promise<void>;
@@ -736,3 +737,8 @@ declare global {
     tongzhou: TongzhouAPI;
   }
 }
+
+export type TaskSnapshot = Pick<
+  Snapshot,
+  'defaultPermission' | 'pendingInputs' | 'sessions' | 'runs' | 'approvals'
+>;

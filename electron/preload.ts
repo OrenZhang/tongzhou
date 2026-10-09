@@ -158,6 +158,7 @@ const api: TongzhouAPI = {
   computerSelfTest: () => call('computerSelfTest'),
   emergencyStop: () => call('emergencyStop'),
   snapshot: () => call('snapshot'),
+  taskSnapshot: () => call('taskSnapshot'),
   messages: (id, options) => call('messages', id, options),
   saveProvider: (p) => call('saveProvider', p),
   deleteProvider: (id) => call('deleteProvider', id),

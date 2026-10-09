@@ -49,8 +49,8 @@ describe('generic content workspace', () => {
       libraryId: f.library.id,
       parentId: root.id,
     });
-    f.store.put('knowledgeFolder', { ...root, usageEnabled: false });
-    f.store.put('knowledgeFolder', { ...child, usageEnabled: false });
+    f.knowledge.directoryRecords.put({ ...root, usageEnabled: false });
+    f.knowledge.directoryRecords.put({ ...child, usageEnabled: false });
     const doc = f.content.write({
       libraryId: f.library.id,
       folderId: child.id,
@@ -82,7 +82,7 @@ describe('generic content workspace', () => {
     expect(new Knowledge(f.store, f.root).usable(unfiled)).toBe(true);
     f.knowledge.bind(f.session.id, [doc.id]);
     expect(f.knowledge.search('更新正文', f.session.id).some((d) => d.id === doc.id)).toBe(true);
-    f.store.put('knowledge', { ...unfiled, status: 'archived' });
+    f.knowledge.documents.put({ ...unfiled, status: 'archived' });
     expect((await scope.call('content_read', { id: doc.id })).isError).toBe(true);
   });
   it('removes the directory permission API from client discovery', () => {

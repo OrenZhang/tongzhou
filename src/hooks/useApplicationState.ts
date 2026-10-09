@@ -1,3 +1,4 @@
+import { SnapshotLoader } from '../lib/snapshot-loader';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Snapshot, TongzhouAPI } from '../shared/types';
 import { errorMessage } from '../lib/feedback';
@@ -15,15 +16,11 @@ export function useApplicationState(api: TongzhouAPI) {
   const [data, setData] = useState(empty);
   const [loaded, setLoaded] = useState(false);
   const [notice, setNotice] = useState('');
-  const request = useRef(0);
+  const loader = useRef<SnapshotLoader | null>(null);
   const report = useCallback((error: unknown) => setNotice(errorMessage(error)), []);
   const refresh = useCallback(async () => {
-    const version = ++request.current;
-    const snapshot = await api.snapshot();
-    if (version !== request.current) return;
-    setData(snapshot);
-    setLoaded(true);
-  }, [api]);
+    await loader.current?.load();
+  }, []);
   const perform = useCallback(
     async <T>(fn: () => Promise<T>): Promise<T | undefined> => {
       try {
@@ -36,18 +33,28 @@ export function useApplicationState(api: TongzhouAPI) {
   );
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
-    void refresh().catch(report);
+    const current = new SnapshotLoader(api, (snapshot, full) => {
+      setData((previous) => ({ ...previous, ...snapshot }));
+      if (full) setLoaded(true);
+    });
+    loader.current = current;
+    let full = false;
+    void current.load().catch(report);
     const unsubscribe = api.onEvent((event) => {
-      if (event.type === 'message' || event.type === 'run-event' || timer) return;
+      if (!['changed', 'approval'].includes(event.type)) return;
+      full ||= event.type === 'changed' && event.scope !== 'tasks';
+      if (timer) return;
       timer = setTimeout(() => {
         timer = undefined;
-        void refresh().catch(report);
+        void current.load(full).catch(report);
+        full = false;
       }, 80);
     });
     return () => {
       unsubscribe();
       clearTimeout(timer);
-      request.current++;
+      current.dispose();
+      if (loader.current === current) loader.current = null;
     };
   }, [api, refresh, report]);
   useEffect(() => {

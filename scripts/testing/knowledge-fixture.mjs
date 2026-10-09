@@ -26,7 +26,8 @@ export async function seedKnowledge(profile, seed) {
   const knowledge = new Knowledge(store, profile);
   try {
     return await seed({
-      knowledgeSave: (input) => knowledge.save(input, input.kind === 'wiki' ? 'agent' : 'manual'),
+      knowledgeSave: (input, extra = {}) =>
+        knowledge.save(input, input.kind === 'wiki' ? 'agent' : 'manual', extra),
       knowledgeFolderSave: (input) => knowledge.saveFolder(input),
     });
   } finally {

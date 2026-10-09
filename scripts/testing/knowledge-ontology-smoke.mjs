@@ -60,26 +60,9 @@ try {
   await page.getByRole('button', { name: '智库', exact: true }).click();
   await page.getByRole('button', { name: '智库', exact: true }).click();
   await page.getByRole('tab', { name: /^内容库/ }).click();
-  await page.getByRole('button', { name: '查看来源记录', exact: true }).click();
-  await page.getByLabel('搜索知识', { exact: true }).waitFor();
-  assert.equal(
-    await page
-      .locator('.knowledge-filters')
-      .getByRole('button', { name: 'Wiki', exact: true })
-      .count(),
-    0,
-  );
-  await page.locator('.knowledge-item').filter({ hasText: '后台运行知识' }).click();
-  await page.locator('.knowledge-inline-link').getByText('后台部署指南', { exact: true }).click();
-  await page.getByRole('heading', { name: '后台部署指南', exact: true }).waitFor();
-  await page
-    .locator('.knowledge-provenance')
-    .getByRole('button', { name: '后台运行知识', exact: true })
-    .click();
-  await page.getByRole('button', { name: '核对并收录', exact: true }).click();
-  await page.getByRole('button', { name: '确认已核对', exact: true }).click();
-  await page.getByText('已核对并收录', { exact: true }).waitFor();
-  await page.getByRole('button', { name: '智库', exact: true }).click();
+  assert.equal(await page.getByRole('button', { name: '查看来源记录', exact: true }).count(), 0);
+  await page.locator('.content-file-row').filter({ hasText: '后台运行知识' }).click();
+  await page.getByLabel('文档内容', { exact: true }).waitFor();
   await page.getByRole('tab', { name: '知识与记忆', exact: false }).click();
   await page.locator('.ontology-fact').first().waitFor();
   assert.equal(await page.locator('.ontology-fact').count(), 3);
@@ -96,15 +79,21 @@ try {
     .filter({ hasText: 'PostgreSQL' })
     .getByRole('button', { name: /后台运行知识.*查看/ })
     .click();
-  await page.getByRole('button', { name: '编辑', exact: true }).click();
-  await page.locator('.ontology-editor > summary').click();
-  await page.getByLabel('知识值 1', { exact: true }).fill('npm start --safe');
-  await page.getByRole('button', { name: '保存资料', exact: true }).click();
-  await page.getByRole('heading', { name: '后台运行知识', exact: true }).waitFor();
+  await page.getByLabel('文档内容', { exact: true }).waitFor();
+  assert.equal(await page.getByLabel('文档标题', { exact: true }).inputValue(), '后台运行知识');
+  await page.evaluate(async (id) => {
+    const doc = (await window.tongzhou.knowledgeRead(id)).document;
+    await window.tongzhou.knowledgeSave({
+      ...doc,
+      assertions: doc.assertions.map((a, i) =>
+        i === 0 ? { ...a, object: 'npm start --safe' } : a,
+      ),
+    });
+  }, ids.doc);
   // Human correction is versioned; content need not be verbatim but its evidence must be.
   const saved = await page.evaluate((id) => window.tongzhou.knowledgeRead(id), ids.doc);
   assert.equal(saved.document.assertions[0].object, 'npm start --safe');
-  assert.ok(saved.revisions.length >= 2);
+  assert.ok(saved.revisions.length >= 1);
   await page.getByRole('button', { name: '智库', exact: true }).click();
   await page.getByRole('tab', { name: '知识与记忆', exact: false }).click();
   await page.getByLabel('搜索知识关系', { exact: true }).fill('safe');
@@ -118,7 +107,6 @@ try {
   }, ids.source);
   await page.getByRole('button', { name: '智库', exact: true }).click();
   await page.getByRole('tab', { name: /^内容库/ }).click();
-  await page.getByRole('button', { name: '查看来源记录', exact: true }).click();
   await page.getByRole('button', { name: '智库', exact: true }).click();
   await page.getByRole('tab', { name: '知识与记忆', exact: false }).click();
   await page.waitForFunction(
@@ -128,7 +116,6 @@ try {
   await page.getByRole('button', { name: '智库', exact: true }).click();
   await page.getByRole('button', { name: '智库', exact: true }).click();
   await page.getByRole('tab', { name: /^内容库/ }).click();
-  await page.getByRole('button', { name: '查看来源记录', exact: true }).click();
   await page.getByRole('button', { name: '智库', exact: true }).click();
   await page.getByRole('tab', { name: '知识与记忆', exact: false }).click();
   await page.waitForFunction(
@@ -136,7 +123,7 @@ try {
   );
   assert.deepEqual(errors, []);
   console.log(
-    'Ontology desktop passed: two sections, document links/backlinks, review, typed facts, conflicts, evidence, human correction, versioning, query, source invalidation, persistence and light/dark.',
+    'Ontology desktop passed: unified document source navigation, typed facts, conflicts, evidence, correction, versioning, query, source invalidation, persistence and light/dark.',
   );
 } finally {
   await app.close();

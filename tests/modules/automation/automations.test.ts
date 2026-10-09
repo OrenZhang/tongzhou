@@ -195,7 +195,7 @@ describe('content workflow execution', () => {
     const rule = f.rule({ trigger: 'ready' });
     f.a.event('ready', f.doc.id);
     expect(f.jobs()).toHaveLength(1);
-    f.store.put('knowledge', { ...f.knowledge.get(f.doc.id), status: 'archived' });
+    f.knowledge.documents.put({ ...f.knowledge.get(f.doc.id), status: 'archived' });
     f.a.tick();
     expect(f.runtime.start).not.toHaveBeenCalled();
     expect(f.jobs()[0].status).toBe('failed');
@@ -595,7 +595,7 @@ describe('automation client capability sharing', () => {
       () => {},
     );
     commands.attach(scope, false, () => true, session.id);
-    f.store.put('knowledge', { ...f.knowledge.get(f.doc.id), status: 'archived' });
+    f.knowledge.documents.put({ ...f.knowledge.get(f.doc.id), status: 'archived' });
     try {
       const list = JSON.parse(
         (await scope.call('client_query', { method: 'automationList', args: [session.id] })).text!,

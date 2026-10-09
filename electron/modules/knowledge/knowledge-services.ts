@@ -1,3 +1,4 @@
+import type { DocumentHost } from '../content/document-host';
 import type { DomainServices } from '../domain-services';
 import type { TaskService } from '../../core/task-contracts';
 import type { ChangePublisher } from '../../core/task-contracts';
@@ -10,8 +11,6 @@ import {
 } from '../agents/personalization';
 import { KNOWLEDGE_ORGANIZER_ID } from '../../../src/shared/builtin-agents';
 import { agentProfile, agentConnection } from '../agents/agents';
-import { dialog, shell } from 'electron';
-import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import {
   operation,
@@ -28,7 +27,11 @@ export function registerKnowledgeServices(
   store: Store,
   services: Pick<DomainServices, 'knowledge'> &
     Pick<TaskService, 'start'> &
-    ChangePublisher & { automations: Automations; processMemory: Automations['processMemory'] },
+    ChangePublisher & {
+      files: DocumentHost;
+      automations: Automations;
+      processMemory: Automations['processMemory'];
+    },
 ) {
   const k = services.knowledge;
   const rawRegister = register;
@@ -63,7 +66,7 @@ export function registerKnowledgeServices(
   register(
     'personalizationState',
     workspaceOperation(store, '智库', 'query', '查看个性与长期偏好'),
-    () => personalizationState(store),
+    () => personalizationState(store, services.knowledge),
   );
   register(
     'savePersonalization',
@@ -75,7 +78,7 @@ export function registerKnowledgeServices(
       [personalizationSchema],
     ),
     (value) => {
-      const result = savePersonalization(store, value);
+      const result = savePersonalization(store, value, services.knowledge);
       services.changed();
       return result;
     },
@@ -314,17 +317,17 @@ export function registerKnowledgeServices(
     async (projectId, filePaths) => {
       const chosen = filePaths
         ? { filePaths }
-        : await dialog.showOpenDialog({
-            title: '导入知识资料',
-            properties: ['openFile', 'multiSelections'],
-          });
+        : { filePaths: await services.files.chooseFiles('导入知识资料') };
       const imported = [],
         errors: string[] = [];
       for (const file of chosen.filePaths) {
         try {
-          if ((await stat(file)).size > 25 * 1024 * 1024) throw new Error('超过 25 MB');
           imported.push(
-            k.importFile(path.basename(file), await readFile(file), projectId ?? undefined),
+            k.importFile(
+              path.basename(file),
+              await services.files.readImport(file),
+              projectId ?? undefined,
+            ),
           );
         } catch (error) {
           errors.push(
@@ -340,8 +343,7 @@ export function registerKnowledgeServices(
     'knowledgeOpenFolder',
     workspaceOperation(store, '智库', 'change', '打开知识资料本地目录'),
     async () => {
-      const error = await shell.openPath(k.root);
-      if (error) throw new Error(error);
+      await services.files.openPath(k.root);
     },
   );
   register(

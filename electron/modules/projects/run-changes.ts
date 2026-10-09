@@ -1,3 +1,4 @@
+import { managedDirectory } from '../../services/storage/local-files';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile, readdir, lstat, rm } from 'node:fs/promises';
 import path from 'node:path';
@@ -16,7 +17,7 @@ export class ChangeCheckpoints {
     private dataDir: string,
   ) {}
   private root() {
-    return path.join(this.dataDir, 'checkpoints');
+    return managedDirectory(this.dataDir, 'checkpoints');
   }
   private blob(id: string) {
     if (!/^[a-f0-9]{64}$/.test(id)) throw new Error('无效检查点');

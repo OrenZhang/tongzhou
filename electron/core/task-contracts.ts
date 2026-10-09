@@ -72,3 +72,15 @@ export interface ExecutionNetwork {
   resolve(network?: ProviderNetwork, runId?: string): Promise<ProviderNetwork | undefined>;
   transport?(network?: ProviderNetwork): Promise<typeof fetch>;
 }
+
+/** Per-run tool preparation supplied by the application composition layer. */
+export type TaskToolPreparation = (context: {
+  scope: ToolScope;
+  session: import('../../src/shared/types').Session;
+  agent: import('../../src/shared/types').AgentProfile;
+  project: import('../../src/shared/types').Project | null;
+  run: import('../../src/shared/types').Run;
+  signal: AbortSignal;
+  ask(title: string, detail: string): Promise<boolean>;
+  progress(text: string): void;
+}) => Promise<void>;

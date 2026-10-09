@@ -771,16 +771,24 @@ describe('conversation input and lifecycle changes', () => {
   });
   it('refreshes personality and preferences in existing and new conversations', async () => {
     const f = await fixture(() => [text('answer')]);
-    const profile = savePersonalization(f.store, {
-      ...readPersonalization(f.store),
-      soul: '温和的技术导师',
-      userPreferences: '称呼我小林',
-    });
+    const profile = savePersonalization(
+      f.store,
+      {
+        ...readPersonalization(f.store),
+        soul: '温和的技术导师',
+        userPreferences: '称呼我小林',
+      },
+      f.system.domains.knowledge,
+    );
     const agent = f.store.get<any>('agent', 'builder');
     f.store.put('agent', { ...agent, soul: '用小例子解释代码' });
     f.runtime.start({ ...f.input, prompt: '解释版本控制' });
     await f.runtime.waitForIdle();
-    savePersonalization(f.store, { ...profile, userPreferences: '称呼我小周' });
+    savePersonalization(
+      f.store,
+      { ...profile, userPreferences: '称呼我小周' },
+      f.system.domains.knowledge,
+    );
     for (const sessionId of [f.input.sessionId, f.store.createSession().id]) {
       f.runtime.start({ ...f.input, sessionId, prompt: '解释提交的用途' });
       await f.runtime.waitForIdle();

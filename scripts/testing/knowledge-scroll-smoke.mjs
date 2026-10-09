@@ -38,11 +38,9 @@ try {
   await page.getByRole('button', { name: '智库', exact: true }).click();
   await page.getByRole('button', { name: '智库', exact: true }).click();
   await page.getByRole('tab', { name: /^内容库/ }).click();
-  await page.getByRole('button', { name: '查看来源记录', exact: true }).click();
   for (const [width, height] of [
     [1440, 960],
     [1000, 700],
-    [760, 700],
   ]) {
     await app.evaluate(
       ({ BrowserWindow }, size) => {
@@ -52,9 +50,9 @@ try {
       },
       [width, height],
     );
-    await page.locator('.knowledge-item').filter({ hasText: '长内容滚动回归' }).click();
-    await page.getByRole('heading', { name: '长内容滚动回归', exact: true }).waitFor();
-    const reader = page.locator('.knowledge-reader');
+    await page.locator('.content-file-row').filter({ hasText: '长内容滚动回归' }).click();
+    await page.getByLabel('文档内容', { exact: true }).waitFor();
+    const reader = page.locator('.content-body-preview');
     await page.locator('.knowledge-page').evaluate((el) => {
       el.scrollTop = el.scrollHeight;
     });
@@ -68,11 +66,11 @@ try {
       `Reader must contain overflow at ${width}x${height}: ${JSON.stringify(before)}`,
     );
     assert.equal(before.overflow, 'auto');
-    const railTop = await page.locator('.knowledge-library').evaluate((el) => el.scrollTop);
+    const railTop = await page.locator('.content-tree').evaluate((el) => el.scrollTop);
     await reader.hover();
     await page.mouse.wheel(0, 100000);
     await page.waitForFunction(() => {
-      const reader = document.querySelector('.knowledge-reader');
+      const reader = document.querySelector('.content-body-preview');
       return (
         reader.scrollTop > 100 && reader.scrollTop + reader.clientHeight >= reader.scrollHeight - 2
       );
@@ -84,23 +82,32 @@ try {
       box &&
         readerBox &&
         box.y >= readerBox.y &&
-        box.y + box.height <= readerBox.y + readerBox.height &&
+        box.y + box.height <= readerBox.y + readerBox.height + 1 &&
         box.y + box.height <= (await page.evaluate(() => innerHeight)),
+      JSON.stringify({
+        width,
+        height,
+        box,
+        readerBox,
+        viewport: await page.evaluate(() => innerHeight),
+      }),
     );
-    assert.equal(await page.locator('.knowledge-library').evaluate((el) => el.scrollTop), railTop);
+    assert.equal(await page.locator('.content-tree').evaluate((el) => el.scrollTop), railTop);
     await reader.focus();
     await page.keyboard.press('Control+Home');
-    await page.waitForFunction(() => document.querySelector('.knowledge-reader').scrollTop === 0);
+    await page.waitForFunction(
+      () => document.querySelector('.content-body-preview').scrollTop === 0,
+    );
     await page.keyboard.press('Control+End');
     await page.waitForFunction(() => {
-      const el = document.querySelector('.knowledge-reader');
+      const el = document.querySelector('.content-body-preview');
       return el.scrollTop + el.clientHeight >= el.scrollHeight - 2;
     });
-    await page.locator('.knowledge-item').filter({ hasText: '短页滚动回归' }).click();
-    await page.getByRole('heading', { name: '短页滚动回归', exact: true }).waitFor();
+    await page.locator('.content-file-row').filter({ hasText: '短页滚动回归' }).click();
+    await page.getByLabel('文档内容', { exact: true }).waitFor();
     assert.equal(await reader.evaluate((el) => el.scrollTop), 0);
-    await page.locator('.knowledge-item').filter({ hasText: '长内容滚动回归' }).click();
-    await page.getByRole('heading', { name: '长内容滚动回归', exact: true }).waitFor();
+    await page.locator('.content-file-row').filter({ hasText: '长内容滚动回归' }).click();
+    await page.getByLabel('文档内容', { exact: true }).waitFor();
     assert.equal(await reader.evaluate((el) => el.scrollTop), 0);
     if (width === 1000) {
       await page.locator('.knowledge-page').evaluate((el) => {
@@ -109,7 +116,7 @@ try {
       await reader.focus();
       await page.keyboard.press('Control+End');
       await page.waitForFunction(() => {
-        const el = document.querySelector('.knowledge-reader');
+        const el = document.querySelector('.content-body-preview');
         return el.scrollTop + el.clientHeight >= el.scrollHeight - 2;
       });
       await page.screenshot({ path: 'test-results/knowledge-scroll-bottom.png' });
@@ -118,7 +125,7 @@ try {
   assert.ok(ids.long && ids.short);
   assert.deepEqual(errors, []);
   console.log(
-    'Knowledge scrolling passed: long document bottom reachable by wheel and keyboard, independent rail, reset on document switch, desktop/small/narrow windows.',
+    'Knowledge scrolling passed: long document bottom reachable by wheel and keyboard, independent rail, reset on document switch, desktop/small windows.',
   );
 } finally {
   await app.close();

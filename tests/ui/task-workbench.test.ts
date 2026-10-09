@@ -208,8 +208,10 @@ describe('encrypted work-data backups', () => {
     writeFileSync(path.join(root, 'attachments', orphan), 'orphan');
     store.put('attachment', { id: draft, name: 'draft.txt' });
     expect(new DataMaintenance(store, root).cleanUnused().files).toBe(1);
-    expect(readFileSync(path.join(root, 'attachments', draft), 'utf8')).toBe('unsent draft');
-    expect(existsSync(path.join(root, 'attachments', orphan))).toBe(false);
+    expect(readFileSync(path.join(root, '.tzhou', 'attachments', draft), 'utf8')).toBe(
+      'unsent draft',
+    );
+    expect(existsSync(path.join(root, '.tzhou', 'attachments', orphan))).toBe(false);
   });
   it('rejects archive path traversal before writing and exports no private diagnostics', () => {
     const { root, store } = fixture(),

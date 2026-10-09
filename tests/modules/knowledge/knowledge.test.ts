@@ -132,7 +132,7 @@ describe('local knowledge lifecycle', () => {
     expect(retained.sources).toEqual(wiki.sources);
     expect(k.restore(wiki.id, 1, retained.version).folderId).toBeUndefined();
     expect(new Knowledge(store, root).get(wiki.id).content).toBe(wiki.content);
-    expect(existsSync(path.join(k.root, 'wiki', `${wiki.id}.md`))).toBe(true);
+    expect(existsSync(path.join(k.root, 'documents', `${wiki.id}.md`))).toBe(true);
   });
   it('rejects invalid directory trees and folder assignments', () => {
     const { k } = fixture();
@@ -218,7 +218,7 @@ describe('local knowledge lifecycle', () => {
     expect(k.get(saved.id).status).toBe('ready');
   });
   it('directly deletes current versions, removes files and pins, and preserves dependent Wiki evidence', () => {
-    const { k, root, store } = fixture();
+    const { k, store } = fixture();
     const session = store.createSession();
     store.put('session', { ...session, knowledgeJob: true });
     const source = k.importFile('原文.txt', Buffer.from('source evidence'));
@@ -233,9 +233,9 @@ describe('local knowledge lifecycle', () => {
     const changed = k.save({ ...source, title: '更新原文标题' });
     expect(() => k.delete(source.id, source.version)).toThrow('资料已更新');
     const files = [
-      path.join(k.root, 'sources', `${source.id}.md`),
+      path.join(k.root, 'documents', `${source.id}.md`),
       path.join(k.root, 'files', source.blob!),
-      path.join(k.root, 'revisions', `${source.id}-1.json`),
+      path.join(k.root, 'history', `${source.id}~1.json`),
     ];
     expect(files.every(existsSync)).toBe(true);
     k.delete(source.id, changed.version);
@@ -254,10 +254,8 @@ describe('local knowledge lifecycle', () => {
       source.id,
     );
     expect(k.search('source').some((d) => d.id === source.id)).toBe(false);
-    expect(readFileSync(path.join(root, 'knowledge/index.md'), 'utf8')).not.toContain(source.id);
-    expect(
-      store.db.prepare('SELECT id FROM knowledge_search WHERE id=?').get(source.id),
-    ).toBeUndefined();
+    expect(readFileSync(path.join(k.root, 'index.md'), 'utf8')).not.toContain(source.id);
+    expect(k.all().find((d) => d.id === source.id)).toBeUndefined();
   });
   it('refuses a replaced vault folder before deleting any files', () => {
     const { k, root } = fixture();
@@ -265,11 +263,11 @@ describe('local knowledge lifecycle', () => {
     const changed = k.save({ ...source, title: '更新标题' });
     const outside = path.join(root, 'outside');
     mkdirSync(outside);
-    const revisions = path.join(k.root, 'revisions');
+    const revisions = path.join(k.root, 'history');
     rmSync(revisions, { recursive: true });
     symlinkSync(outside, revisions, 'junction');
     expect(() => k.delete(source.id, changed.version)).toThrow('符号链接');
-    expect(existsSync(path.join(k.root, 'sources', `${source.id}.md`))).toBe(true);
+    expect(existsSync(path.join(k.root, 'documents', `${source.id}.md`))).toBe(true);
     expect(existsSync(path.join(k.root, 'files', source.blob!))).toBe(true);
     expect(k.get(source.id).status).toBe('ready');
   });
@@ -283,7 +281,9 @@ describe('local knowledge lifecycle', () => {
     expect(k.search('库存')[0].id).toBe(d.id);
     expect(k.search('transactional')[0].id).toBe(d.id);
     expect(k.read(d.id).outline).toEqual([{ title: '库存规则', line: 1, level: 1 }]);
-    expect(readFileSync(path.join(root, 'knowledge', 'files', d.blob!), 'utf8')).toBe(d.content);
+    expect(readFileSync(path.join(root, '.tzhou', 'knowledge', 'files', d.blob!), 'utf8')).toBe(
+      d.content,
+    );
     expect(() => k.save({ ...d, content: 'changed' })).toThrow('原文');
     const pdf = k.importFile('report.pdf', Buffer.from('%PDF binary'));
     expect(pdf.indexed).toBe(false);
@@ -497,12 +497,14 @@ describe('local knowledge lifecycle', () => {
     clean.push(() => rmSync(target, { recursive: true, force: true }));
     new DataMaintenance(store, target).prepareRestore(bytes, 'long-backup-password');
     applyPendingRestore(target);
-    expect(readFileSync(path.join(target, 'knowledge', 'files', d.blob!), 'utf8')).toBe(
+    expect(readFileSync(path.join(target, '.tzhou', 'knowledge', 'files', d.blob!), 'utf8')).toBe(
       'persistent knowledge',
     );
-    expect(readFileSync(path.join(target, 'knowledge', 'index.md'), 'utf8')).toContain('guide.txt');
+    expect(readFileSync(path.join(target, '.tzhou', 'knowledge', 'index.md'), 'utf8')).toContain(
+      'guide.txt',
+    );
     expect(
-      JSON.parse(readFileSync(path.join(target, 'knowledge', 'folders.json'), 'utf8')),
+      JSON.parse(readFileSync(path.join(target, '.tzhou', 'knowledge', 'folders.json'), 'utf8')),
     ).toEqual([folder]);
     const restoredStore = new Store(path.join(target, 'tongzhou.db'), {
       encrypt: (s) => s,

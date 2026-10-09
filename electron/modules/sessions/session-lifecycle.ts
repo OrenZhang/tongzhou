@@ -1,3 +1,4 @@
+import { managedDirectory } from '../../services/storage/local-files';
 import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import type { Project, Session, Run, PendingInput } from '../../../src/shared/types';
@@ -93,7 +94,7 @@ export class SessionLifecycle {
     for (const target of targets) this.deleting.add(target);
     try {
       await Promise.all([...targets].map((target) => this.ports.removeEngineSession(target)));
-      const root = path.resolve(this.dataDir, 'chat-workspaces');
+      const root = managedDirectory(this.dataDir, 'chat-workspaces');
       for (const target of targets) {
         const directory = path.resolve(root, target);
         const relative = path.relative(root, directory);

@@ -204,25 +204,6 @@ textarea:focus {
 .content-tree {
   padding: var(--space-4) var(--space-3);
 }
-.content-document-list {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  margin-top: var(--space-3);
-}
-.content-document-list button {
-  padding: 12px 10px;
-  border-radius: 8px;
-  line-height: 1.5;
-  gap: 10px;
-}
-.content-document-list small {
-  font-size: 11px;
-  margin-top: 5px;
-}
-.content-document-list button:hover:not(.selected) {
-  background: var(--hover-surface);
-}
 .wiki-folder-row {
   min-height: 34px;
 }
@@ -266,10 +247,6 @@ textarea:focus {
 .content-chat header {
   padding: 18px 16px;
 }
-.content-chat-settings {
-  padding: 12px 16px;
-  gap: 8px;
-}
 .content-chat-messages {
   padding: 16px;
 }
@@ -279,16 +256,6 @@ textarea:focus {
 }
 .content-chat-message > small {
   font-size: 11px;
-}
-.content-chat-compose {
-  padding: 16px;
-  background: var(--surface-muted);
-  border-top-color: var(--hairline);
-}
-.content-chat-compose textarea {
-  background: var(--surface);
-  padding: 12px;
-  line-height: 1.7;
 }
 .composer {
   border-color: var(--control-border);
@@ -335,14 +302,50 @@ textarea:focus {
   border-radius: 16px;
   box-shadow: var(--panel-shadow);
 }
-.modal-header,
-.modal-content,
-.modal-footer {
-  padding: 20px 24px;
+.modal-heading {
+  padding: 12px 18px;
+  align-items: center;
+}
+.modal-heading h2 {
+  font-size: 16px;
+}
+.modal-heading .icon-button {
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 4px;
+}
+.modal-content {
+  padding: 14px 18px;
 }
 .modal-footer {
+  padding: 10px 18px;
   gap: 8px;
   background: var(--surface);
+}
+.modal .field {
+  gap: 4px;
+  margin-bottom: 12px;
+}
+.modal .field:last-child,
+.modal .form-grid > .field {
+  margin-bottom: 0;
+}
+.modal .form-grid {
+  gap: 12px;
+}
+.modal .field input:not([type='checkbox']):not([type='radio']),
+.modal .field select,
+.modal .field .choice-trigger,
+.modal .field .model-picker-trigger {
+  min-height: 32px;
+  padding: 6px 9px;
+  line-height: 18px;
+}
+.modal-footer > button {
+  min-height: 32px;
+  padding: 6px 12px;
+  line-height: 18px;
 }
 .choice-panel,
 .model-picker-panel {
@@ -408,10 +411,11 @@ textarea:focus {
     width: 15px;
     height: 15px;
   }
-  .modal-header,
+  .modal-heading,
   .modal-content,
   .modal-footer {
-    padding: 16px;
+    padding-left: 16px;
+    padding-right: 16px;
   }
 }
 

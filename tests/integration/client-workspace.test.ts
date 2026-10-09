@@ -1,3 +1,4 @@
+import { desktopDocumentHost } from '../../electron/services/desktop/document-host';
 import { afterEach, expect, it, vi } from 'vitest';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -26,6 +27,7 @@ function fixture() {
   const session = store.createSession();
   const commands = new ClientCommands();
   const runtime = {
+    files: desktopDocumentHost,
     store,
     knowledge,
     content,
@@ -90,7 +92,8 @@ it('discovers contentWrite, saves to a specified nested directory and reads the 
   expect(ask).not.toHaveBeenCalled();
   const reopened = new Store(f.database, f.crypto);
   try {
-    expect(reopened.get<any>('knowledge', saved.id)).toMatchObject(input);
+    expect(reopened.list('knowledge')).toEqual([]);
+    expect(new Knowledge(reopened, f.root).get(saved.id)).toMatchObject(input);
   } finally {
     reopened.close();
   }

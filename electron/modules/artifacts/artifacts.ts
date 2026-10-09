@@ -1,3 +1,4 @@
+import { FileRecords, managedDirectory } from '../../services/storage/local-files';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync, lstatSync, unlinkSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
@@ -81,11 +82,14 @@ export interface ArtifactOrigin {
 const publicItem = ({ blob, hash, ...a }: StoredArtifact): Artifact => a;
 export class Artifacts {
   readonly root: string;
+  readonly records: FileRecords<StoredArtifact>;
   constructor(
     private store: Store,
     private dataDir: string,
   ) {
-    this.root = path.join(dataDir, 'artifacts');
+    this.root = managedDirectory(dataDir, 'artifacts');
+    this.records = new FileRecords(path.join(this.root, 'records'));
+    this.records.migrate(store, 'artifact');
   }
   private file(blob: string) {
     if (!/^[a-f0-9-]{36}\.[a-z0-9]{1,8}$/.test(blob)) throw new Error('无效作品路径');
@@ -95,15 +99,15 @@ export class Artifacts {
     return file;
   }
   private stored(id: string) {
-    return this.store.get<StoredArtifact>('artifact', z.string().uuid().parse(id));
+    return this.records.get(z.string().uuid().parse(id));
   }
   read(id: string) {
     return publicItem(this.stored(id));
   }
   list(raw: ArtifactQuery = {}): ArtifactPage {
     const p = artifactQuerySchema.parse(raw);
-    const items = this.store
-      .list<StoredArtifact>('artifact')
+    const items = this.records
+      .list()
       .filter(
         (a) =>
           (!p.sessionId || a.sessionId === p.sessionId) &&
@@ -172,8 +176,8 @@ export class Artifacts {
     const hash = createHash('sha256')
       .update(bytes ?? remoteUrl!)
       .digest('hex');
-    const old = this.store
-      .list<StoredArtifact>('artifact')
+    const old = this.records
+      .list()
       .find((a) => a.runId === run.id && a.hash === hash && a.name === name);
     if (old) return publicItem(old);
     const id = randomUUID(),
@@ -198,7 +202,7 @@ export class Artifacts {
       hash,
       remoteUrl,
     };
-    this.store.put('artifact', item);
+    this.records.put(item);
     return publicItem(item);
   }
   bytes(id: string) {
@@ -237,7 +241,7 @@ export class Artifacts {
       const file = this.file(a.blob);
       if (lstatSafe(file)) unlinkSync(file);
     }
-    this.store.remove('artifact', a.id);
+    this.records.remove(a.id);
   }
   async collect(outputs: ArtifactOutput[], origin: ArtifactOrigin) {
     const items: Artifact[] = [],
@@ -295,8 +299,8 @@ export class Artifacts {
             offset: z.number().int().min(0).default(0),
           })
           .parse(raw);
-        const all = this.store
-          .list<StoredArtifact>('artifact')
+        const all = this.records
+          .list()
           .filter(
             (a) =>
               this.accessible(a.id, origin.sessionId) &&

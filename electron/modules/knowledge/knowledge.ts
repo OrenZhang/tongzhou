@@ -1,9 +1,16 @@
+import {
+  FileRecords,
+  managedDirectory,
+  atomicWrite,
+  assertLocalPath,
+} from '../../services/storage/local-files';
+import type { ContentLibrary } from '../../../src/shared/content';
 import { assertionInput, buildKnowledgeGraph } from './knowledge-graph';
 import { MEMORY_AUTOMATION_ID, type AutomationRule } from '../../../src/shared/automation';
 import { entityTypes, relationTypes } from '../../../src/shared/ontology';
 import { knowledgeLinks } from '../../../src/shared/knowledge-links';
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdirSync, writeFileSync, renameSync, existsSync, lstatSync, unlinkSync } from 'node:fs';
+import { mkdirSync, existsSync, lstatSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
 import type { Store } from '../../services/storage/store';
@@ -90,22 +97,61 @@ const terms = (query: string) =>
 export class Knowledge {
   readonly root: string;
   readonly memory: KnowledgeMemory;
+  readonly documents: FileRecords<KnowledgeDocument>;
+  readonly directoryRecords: FileRecords<KnowledgeFolder>;
+  readonly libraries: FileRecords<ContentLibrary>;
+  readonly revisions: FileRecords<KnowledgeDocument & { documentId: string }>;
   constructor(
     private store: Store,
     dataDir: string,
   ) {
-    this.root = path.join(dataDir, 'knowledge');
+    this.root = managedDirectory(dataDir, 'knowledge');
     for (const dir of ['', 'sources', 'wiki', 'memories', 'revisions', 'files']) {
       const target = path.join(this.root, dir);
       if (existsSync(target) && lstatSync(target).isSymbolicLink())
         throw new Error('知识目录不能使用符号链接');
       mkdirSync(target, { recursive: true });
     }
+    this.documents = new FileRecords(path.join(this.root, 'documents'), {
+      extension: '.md',
+      encode: ({ content, ...metadata }) =>
+        `---\n${JSON.stringify(metadata, null, 2)}\n---\n${content}`,
+      decode: (text) => {
+        const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/.exec(text);
+        if (!match) throw new Error('文档格式损坏：缺少同舟元数据');
+        return { ...JSON.parse(match[1]), content: match[2] };
+      },
+    });
+    this.directoryRecords = new FileRecords(path.join(this.root, 'directories'));
+    this.libraries = new FileRecords(path.join(this.root, 'libraries'));
+    this.revisions = new FileRecords(path.join(this.root, 'history'));
+    this.documents.migrate(store, 'knowledge');
+    this.directoryRecords.migrate(store, 'knowledgeFolder');
+    this.libraries.migrate(store, 'contentLibrary');
+    this.revisions.migrate(store, 'knowledgeRevision');
     store.db.exec(
-      "CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_search USING fts5(id UNINDEXED, title, content, tokenize='trigram');",
+      "DROP TABLE IF EXISTS knowledge_search; DELETE FROM metadata WHERE key='knowledge_index_v1'",
     );
-    if (!store.db.prepare("SELECT 1 FROM metadata WHERE key='knowledge_index_v1'").get())
-      this.reindex();
+    // Remove obsolete mirrors only after migration verified the authoritative files.
+    for (const doc of this.all()) {
+      const old = path.join(
+        this.root,
+        doc.memoryDate ? `memories/${doc.memoryDate}/index.md` : `${folder(doc.kind)}/${doc.id}.md`,
+      );
+      if (existsSync(old)) {
+        assertLocalPath(path.dirname(this.root), old);
+        unlinkSync(old);
+      }
+    }
+    for (const revision of this.revisions.list()) {
+      const old = path.join(
+        this.root,
+        'revisions',
+        `${revision.documentId}-${revision.version}.json`,
+      );
+      assertLocalPath(path.dirname(this.root), old);
+      if (existsSync(old)) unlinkSync(old);
+    }
     for (const doc of this.all().filter((item) => item.status === 'archived')) {
       this.persist(
         {
@@ -120,6 +166,7 @@ export class Knowledge {
     }
     this.memory = new KnowledgeMemory(store, this);
     this.memory.migrate();
+    this.refreshIndex();
   }
   settings(): KnowledgeSettings {
     const task = this.store
@@ -164,33 +211,31 @@ export class Knowledge {
     return settings;
   }
   all() {
-    return this.store.list<KnowledgeDocument>('knowledge');
+    return this.documents
+      .list()
+      .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
   }
   get(docId: string) {
-    return this.store.get<KnowledgeDocument>('knowledge', id.parse(docId));
+    return this.documents.get(id.parse(docId));
   }
   folders() {
-    return this.store
-      .list<KnowledgeFolder>('knowledgeFolder')
+    return this.directoryRecords
+      .list()
       .map(({ usageEnabled: _legacyFlag, ...folder }) => folder)
       .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
   }
   saveFolder(raw: KnowledgeFolderInput) {
     const input = knowledgeFolderInput.parse(raw);
-    const old = input.id ? this.store.get<KnowledgeFolder>('knowledgeFolder', input.id) : undefined;
+    const old = input.id ? this.directoryRecords.get(input.id) : undefined;
     if (old && input.version !== old.version) throw new Error('目录已更新，请刷新后重试');
     const folders = this.folders();
     const libraryId = input.libraryId ?? old?.libraryId ?? 'default';
-    if (libraryId !== 'default') this.store.get('contentLibrary', libraryId);
+    if (libraryId !== 'default') this.libraries.get(libraryId);
     if (old && libraryId !== (old.libraryId ?? 'default')) throw new Error('目录不能跨内容库移动');
     if (!old && folders.length >= 500) throw new Error('目录数量已达 500，请整理现有目录');
     const parentId = input.parentId === undefined ? old?.parentId : input.parentId || undefined;
-    if (parentId) this.store.get('knowledgeFolder', parentId);
-    if (
-      parentId &&
-      (this.store.get<KnowledgeFolder>('knowledgeFolder', parentId).libraryId ?? 'default') !==
-        libraryId
-    )
+    if (parentId) this.directoryRecords.get(parentId);
+    if (parentId && (this.directoryRecords.get(parentId).libraryId ?? 'default') !== libraryId)
       throw new Error('上级目录不属于当前内容库');
     if (old && parentId && knowledgeFolderBranch(folders, old.id).has(parentId))
       throw new Error('不能把目录移到自身或子目录中');
@@ -220,8 +265,8 @@ export class Knowledge {
         current = next.find((f) => f.id === current!.parentId);
       }
     }
-    this.store.put('knowledgeFolder', folder);
-    this.writeIndex();
+    this.directoryRecords.put(folder);
+    this.refreshIndex();
     return folder;
   }
   moveWiki(docId: string, folderId: string | null, version: number) {
@@ -229,11 +274,10 @@ export class Knowledge {
     if (doc.kind === 'memory') throw new Error('每日记忆按日期管理');
     if (doc.version !== z.number().int().positive().parse(version))
       throw new Error('知识页已更新，请刷新后移动');
-    if (folderId) this.store.get('knowledgeFolder', id.parse(folderId));
+    if (folderId) this.directoryRecords.get(id.parse(folderId));
     if (
       folderId &&
-      (this.store.get<KnowledgeFolder>('knowledgeFolder', folderId).libraryId ?? 'default') !==
-        (doc.libraryId ?? 'default')
+      (this.directoryRecords.get(folderId).libraryId ?? 'default') !== (doc.libraryId ?? 'default')
     )
       throw new Error('目录不属于当前内容库');
     if (doc.folderId === (folderId || undefined)) return doc;
@@ -243,7 +287,7 @@ export class Knowledge {
     );
   }
   deleteFolder(folderId: string, version: number) {
-    const folder = this.store.get<KnowledgeFolder>('knowledgeFolder', id.parse(folderId));
+    const folder = this.directoryRecords.get(id.parse(folderId));
     if (folder.version !== z.number().int().positive().parse(version))
       throw new Error('目录已更新，请刷新后删除');
     const branch = knowledgeFolderBranch(this.folders(), folder.id);
@@ -252,54 +296,25 @@ export class Knowledge {
       (d) => d.kind !== 'memory' && d.folderId && branch.has(d.folderId),
     ))
       this.moveWiki(doc.id, null, doc.version);
-    for (const folderId of branch) this.store.remove('knowledgeFolder', folderId);
-    this.writeIndex();
+    for (const folderId of branch) this.directoryRecords.remove(folderId);
+    this.refreshIndex();
   }
   private write(relative: string, value: string | Buffer) {
-    const target = path.join(this.root, relative);
-    // Never follow a replaced vault directory or document symlink.
-    for (let dir = target; dir.startsWith(this.root); dir = path.dirname(dir)) {
-      if (existsSync(dir) && lstatSync(dir).isSymbolicLink())
-        throw new Error('知识目录不能使用符号链接');
-      if (dir === this.root) break;
-    }
-    const temporary = target + '.' + randomUUID() + '.tmp';
-    writeFileSync(temporary, value, { flag: 'wx' });
-    renameSync(temporary, target);
+    atomicWrite(path.dirname(this.root), path.join(this.root, relative), value);
   }
   persist(doc: KnowledgeDocument, old?: KnowledgeDocument) {
-    if (old) {
-      this.store.put('knowledgeRevision', {
-        ...old,
-        id: `${old.id}:${old.version}`,
-        documentId: old.id,
-      });
-      this.write(`revisions/${old.id}-${old.version}.json`, JSON.stringify(old, null, 2));
-    }
-    const text = `---\n${JSON.stringify({ id: doc.id, title: doc.title, kind: doc.kind, version: doc.version, status: doc.status, projectId: doc.projectId, libraryId: doc.libraryId, contentType: doc.contentType, derivation: doc.derivation, folderId: doc.folderId, sources: doc.sources, assertions: doc.assertions }, null, 2)}\n---\n\n${doc.content}\n`;
-    if (doc.memoryDate) {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(doc.memoryDate)) throw new Error('无效的记忆日期');
-      const directory = path.join(this.root, 'memories', doc.memoryDate);
-      if (existsSync(directory) && lstatSync(directory).isSymbolicLink())
-        throw new Error('知识目录不能使用符号链接');
-      mkdirSync(directory, { recursive: true });
-      this.write(`memories/${doc.memoryDate}/index.md`, text);
-    } else this.write(`${folder(doc.kind)}/${doc.id}.md`, text);
-    this.store.db.exec('BEGIN');
-    try {
-      this.store.put('knowledge', doc);
-      this.store.db.prepare('DELETE FROM knowledge_search WHERE id=?').run(doc.id);
-      if (doc.status !== 'archived')
-        this.store.db
-          .prepare('INSERT INTO knowledge_search(id,title,content) VALUES(?,?,?)')
-          .run(doc.id, doc.title, doc.content);
-      this.store.db.exec('COMMIT');
-    } catch (error) {
-      this.store.db.exec('ROLLBACK');
-      throw error;
-    }
-    this.writeIndex();
+    if (old) this.revisions.put({ ...old, id: `${old.id}:${old.version}`, documentId: old.id });
+    // The document rename is the single save commit. Navigation is derived, never a save gate.
+    this.documents.put(doc);
+    this.refreshIndex();
     return doc;
+  }
+  private refreshIndex() {
+    try {
+      this.writeIndex();
+    } catch {
+      console.warn('智库导航索引更新失败；文档已保存，可重新生成索引');
+    }
   }
   private writeIndex() {
     const docs = this.all().filter((d) => d.status !== 'archived');
@@ -308,7 +323,7 @@ export class Knowledge {
     const lines = [
       '# 同舟智库',
       '',
-      '此目录由同舟管理。请在客户端编辑以保留索引和修订历史。Markdown 可复制到其他知识工具。',
+      '文档保存在 documents 中，正文和元数据以文件为准。此导航可重新生成。',
       '',
     ];
     for (const kind of ['source', 'wiki', 'memory'] as const) {
@@ -318,7 +333,7 @@ export class Knowledge {
       );
       for (const doc of docs.filter((d) => d.kind === kind))
         lines.push(
-          `- [${doc.title.replace(/[\[\]\r\n]/g, ' ')}](${doc.memoryDate ? `memories/${doc.memoryDate}/index.md` : `${folder(kind)}/${doc.id}.md`}) · ${doc.status} · v${doc.version}${doc.kind === 'wiki' ? ' · ' + (knowledgeFolderPath(folders, doc.folderId) || '未分类') : ''}`,
+          `- [${doc.title.replace(/[\[\]\r\n]/g, ' ')}](documents/${doc.id}.md) · ${doc.status} · v${doc.version}${doc.kind === 'wiki' ? ' · ' + (knowledgeFolderPath(folders, doc.folderId) || '未分类') : ''}`,
         );
       lines.push('');
     }
@@ -332,17 +347,14 @@ export class Knowledge {
     const p = knowledgeInput.parse(raw);
     const old = p.id ? this.get(p.id) : undefined;
     const libraryId = p.libraryId ?? old?.libraryId ?? 'default';
-    if (libraryId !== 'default') this.store.get('contentLibrary', libraryId);
+    if (libraryId !== 'default') this.libraries.get(libraryId);
     if (old && (old.libraryId ?? 'default') !== libraryId)
       throw new Error('文档不能直接跨内容库移动，请另存副本');
     const folderId = p.folderId === undefined ? old?.folderId : p.folderId || undefined;
     if (folderId) {
       if (p.kind === 'memory') throw new Error('每日记忆按日期管理');
-      this.store.get('knowledgeFolder', folderId);
-      if (
-        (this.store.get<KnowledgeFolder>('knowledgeFolder', folderId).libraryId ?? 'default') !==
-        libraryId
-      )
+      this.directoryRecords.get(folderId);
+      if ((this.directoryRecords.get(folderId).libraryId ?? 'default') !== libraryId)
         throw new Error('目录不属于当前内容库');
     }
     if (old?.memoryDate) throw new Error('每日记忆由后台 Agent 按条目整理，可核对收录或直接删除');
@@ -462,8 +474,8 @@ export class Knowledge {
       missingSourceIds: document.sources
         .filter((source) => !source.messageId && !this.all().some((d) => d.id === source.id))
         .map((source) => source.id),
-      revisions: this.store
-        .list<any>('knowledgeRevision')
+      revisions: this.revisions
+        .list()
         .filter((r) => r.documentId === docId)
         .map((r) => ({ id: r.id, version: r.version, updatedAt: r.updatedAt }))
         .sort((a, b) => b.version - a.version),
@@ -487,10 +499,7 @@ export class Knowledge {
   restore(docId: string, version: number, currentVersion: number) {
     const current = this.get(docId);
     if (current.version !== currentVersion) throw new Error('资料已更新，请刷新后恢复');
-    const revision = this.store.get<any>(
-      'knowledgeRevision',
-      `${docId}:${z.number().int().positive().parse(version)}`,
-    );
+    const revision = this.revisions.get(`${docId}:${z.number().int().positive().parse(version)}`);
     return this.persist(
       {
         ...revision,
@@ -513,18 +522,16 @@ export class Knowledge {
     const doc = this.get(docId);
     if (doc.version !== z.number().int().positive().parse(currentVersion))
       throw new Error('资料已更新，请重新打开后删除');
-    const revisions = this.store.list<KnowledgeDocument & { documentId: string }>(
-      'knowledgeRevision',
-    );
+    const revisions = this.revisions.list();
     const ownRevisions = revisions.filter((r) => r.documentId === doc.id);
     const otherDocuments = [
       ...this.all().filter((d) => d.id !== doc.id),
       ...revisions.filter((r) => r.documentId !== doc.id),
     ];
     const files = [
-      doc.memoryDate ? `memories/${doc.memoryDate}/index.md` : `${folder(doc.kind)}/${doc.id}.md`,
+      `documents/${doc.id}.md`,
       ...ownRevisions.map(
-        (r) => `revisions/${doc.id}-${z.number().int().positive().parse(r.version)}.json`,
+        (r) => `history/${doc.id}~${z.number().int().positive().parse(r.version)}.json`,
       ),
       ...[...new Set([doc, ...ownRevisions].map((d) => d.blob).filter((b): b is string => !!b))]
         .filter((blob) => !otherDocuments.some((d) => d.blob === blob))
@@ -553,9 +560,6 @@ export class Knowledge {
     }
     this.store.db.exec('BEGIN');
     try {
-      this.store.remove('knowledge', doc.id);
-      for (const revision of ownRevisions) this.store.remove('knowledgeRevision', revision.id);
-      this.store.db.prepare('DELETE FROM knowledge_search WHERE id=?').run(doc.id);
       for (const binding of this.store.list<{ id: string; documentIds: string[] }>(
         'knowledgeBinding',
       )) {
@@ -577,7 +581,7 @@ export class Knowledge {
       this.store.db.exec('ROLLBACK');
       throw error;
     }
-    this.writeIndex();
+    this.refreshIndex();
   }
   pins(sessionId: string): string[] {
     // Only an explicit organize task may read its selected sources across scopes.
@@ -687,15 +691,6 @@ export class Knowledge {
       sessionId = this.store.get<Session>('session', sessionId).knowledgeScopeSession ?? sessionId;
     const q = z.string().max(500).parse(query).trim();
     const tokens = terms(q);
-    let candidates: string[] | undefined;
-    if (tokens.length && tokens.every((t) => t.length >= 3))
-      candidates = (
-        this.store.db
-          .prepare(
-            'SELECT id FROM knowledge_search WHERE knowledge_search MATCH ? ORDER BY rank LIMIT 500',
-          )
-          .all(tokens.map((t) => `"${t.replaceAll('"', '""')}"`).join(' OR ')) as { id: string }[]
-      ).map((r) => r.id);
     return this.all()
       .map((d) => this.projectMemory(d, sessionId, projectId))
       .filter((d): d is KnowledgeDocument => !!d)
@@ -703,8 +698,7 @@ export class Knowledge {
         (d) =>
           d.status !== 'archived' &&
           (!sessionId || this.accessible(d, sessionId)) &&
-          (d.memoryEntries || projectId === undefined || (d.projectId ?? '') === projectId) &&
-          (!candidates || candidates.includes(d.id)),
+          (d.memoryEntries || projectId === undefined || (d.projectId ?? '') === projectId),
       )
       .map((d) => ({
         d,
@@ -784,21 +778,6 @@ export class Knowledge {
     };
   }
   reindex() {
-    this.store.db.exec('BEGIN');
-    try {
-      this.store.db.exec('DELETE FROM knowledge_search');
-      for (const d of this.all().filter((d) => d.status !== 'archived'))
-        this.store.db
-          .prepare('INSERT INTO knowledge_search(id,title,content) VALUES(?,?,?)')
-          .run(d.id, d.title, d.content);
-      this.store.db
-        .prepare("INSERT OR REPLACE INTO metadata VALUES('knowledge_index_v1','1')")
-        .run();
-      this.store.db.exec('COMMIT');
-    } catch (e) {
-      this.store.db.exec('ROLLBACK');
-      throw e;
-    }
     this.writeIndex();
     return { indexed: this.all().length };
   }
@@ -1057,7 +1036,7 @@ export class Knowledge {
         async (args) => {
           const session = this.store.get<Session>('session', sessionId);
           const parsed = knowledgeInput.parse({ ...args, kind: 'wiki', status: 'draft' });
-          if (parsed.folderId) this.store.get('knowledgeFolder', parsed.folderId);
+          if (parsed.folderId) this.directoryRecords.get(parsed.folderId);
           const sourceIds = [...parsed.sourceIds];
           for (const source of sourceIds)
             if (!this.accessible(this.get(source), sessionId)) throw new Error('来源不在当前范围');

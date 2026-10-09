@@ -449,7 +449,7 @@ export class KnowledgeMemory {
       );
     }
     if (old && combined.length === old.memoryEntries?.length)
-      this.store.put('knowledge', {
+      this.knowledge.persist({
         ...old,
         memoryCandidateIds: [...new Set([...(old.memoryCandidateIds ?? []), ...job.candidateIds])],
       });

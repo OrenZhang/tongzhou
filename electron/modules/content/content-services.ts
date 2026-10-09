@@ -1,16 +1,15 @@
+import type { DocumentHost } from '../content/document-host';
 import type { DomainServices } from '../domain-services';
 import type { TaskService } from '../../core/task-contracts';
 import type { ChangePublisher } from '../../core/task-contracts';
 import type { Automations } from '../automation/automations';
 import { z } from 'zod';
-import { dialog } from 'electron';
-import { readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Store } from '../../services/storage/store';
 import type { Session } from '../../../src/shared/types';
 import { workspaceOperation, type ClientOperation } from '../../core/tools/client-commands';
 import { librarySchema, libraryIdSchema, contentWriteSchema, contentRunSchema } from './content';
-import { absolutePathSchema, writeLocalFile } from '../../services/storage/file-transfer';
+import { absolutePathSchema } from '../../services/storage/file-transfer';
 import { builtinAgent } from '../../../src/shared/builtin-agents';
 
 export function registerContentServices(
@@ -18,7 +17,7 @@ export function registerContentServices(
   store: Store,
   services: Pick<DomainServices, 'content' | 'knowledge'> &
     Pick<TaskService, 'start'> &
-    ChangePublisher & { automations: Automations },
+    ChangePublisher & { files: DocumentHost; automations: Automations },
 ) {
   const c = services.content,
     k = services.knowledge;
@@ -157,19 +156,15 @@ export function registerContentServices(
         throw new Error('目录不属于当前内容库');
       const chosen = filePaths
         ? { filePaths }
-        : await dialog.showOpenDialog({
-            title: '导入内容',
-            properties: ['openFile', 'multiSelections'],
-          });
+        : { filePaths: await services.files.chooseFiles('导入内容') };
       const imported = [],
         errors: string[] = [];
       for (const file of chosen.filePaths)
         try {
-          if ((await stat(file)).size > 25 * 1024 * 1024) throw new Error('超过 25 MB');
           imported.push(
             k.importFile(
               path.basename(file),
-              await readFile(file),
+              await services.files.readImport(file),
               undefined,
               id,
               folderId ?? undefined,
@@ -197,15 +192,12 @@ export function registerContentServices(
     async (id, targetPath, expectedSha256) => {
       const doc = c.document(id);
       if (targetPath)
-        return writeLocalFile(targetPath, Buffer.from(doc.content, 'utf8'), expectedSha256);
-      const result = await dialog.showSaveDialog({
-        title: '导出正文',
-        defaultPath: doc.title.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').slice(0, 100) + '.md',
-        filters: [{ name: 'Markdown', extensions: ['md'] }],
-      });
-      if (result.canceled || !result.filePath) return null;
-      await writeFile(result.filePath, doc.content, 'utf8');
-      return result.filePath;
+        return services.files.writeTo(targetPath, Buffer.from(doc.content, 'utf8'), expectedSha256);
+      return services.files.saveCopy(
+        Buffer.from(doc.content, 'utf8'),
+        '导出正文',
+        doc.title.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').slice(0, 100) + '.md',
+      );
     },
   );
 }

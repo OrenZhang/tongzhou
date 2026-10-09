@@ -1,3 +1,4 @@
+import type { Knowledge } from '../knowledge/knowledge';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import soul from '../../../prompts/soul.json';
@@ -8,7 +9,6 @@ import type {
   PreferenceCandidate,
 } from '../../../src/shared/personalization';
 import type { AgentProfile, Session } from '../../../src/shared/types';
-import type { KnowledgeDocument } from '../../../src/shared/knowledge';
 import type { Store } from '../../services/storage/store';
 import { cleanMemory } from '../knowledge/knowledge-memory';
 
@@ -49,9 +49,9 @@ export function readPersonalization(store: Store): Personalization {
         reply: { ...defaultReply },
       };
 }
-function candidates(store: Store): PreferenceCandidate[] {
-  return store
-    .list<KnowledgeDocument>('knowledge')
+function candidates(knowledge: Pick<Knowledge, 'all'>): PreferenceCandidate[] {
+  return knowledge
+    .all()
     .filter((d) => d.kind === 'memory' && d.status !== 'archived')
     .flatMap((d) =>
       (d.memoryEntries ?? [])
@@ -76,9 +76,12 @@ const same = (a: Personalization['memories'][number], b: PreferenceCandidate) =>
 function selected(profile: Personalization, entries: PreferenceCandidate[]) {
   return profile.memories.flatMap((ref) => entries.filter((e) => same(ref, e)));
 }
-export function personalizationState(store: Store): PersonalizationState {
+export function personalizationState(
+  store: Store,
+  knowledge: Pick<Knowledge, 'all'>,
+): PersonalizationState {
   const profile = readPersonalization(store);
-  const entries = candidates(store);
+  const entries = candidates(knowledge);
   const active = selected(profile, entries);
   return {
     profile,
@@ -89,12 +92,16 @@ export function personalizationState(store: Store): PersonalizationState {
     unavailable: profile.memories.length - active.length,
   };
 }
-export function savePersonalization(store: Store, raw: unknown): Personalization {
+export function savePersonalization(
+  store: Store,
+  raw: unknown,
+  knowledge: Pick<Knowledge, 'all'>,
+): Personalization {
   const value = personalizationSchema.parse(raw);
   const current = readPersonalization(store);
   if (value.version !== current.version)
     throw new Error('个性与偏好已在其他窗口更新，请重新载入后保存');
-  const entries = selected(value, candidates(store));
+  const entries = selected(value, candidates(knowledge));
   if (entries.length !== value.memories.length)
     throw new Error('所选记忆已修改或删除，请重新载入后选择');
   if (new Set(entries.map((e) => e.entryId)).size !== entries.length)
@@ -117,6 +124,7 @@ export function personalizationInstructions(
   store: Store,
   session: Session,
   agent: AgentProfile,
+  knowledge: Pick<Knowledge, 'all'>,
 ): string {
   if (session.memoryJob || session.knowledgeJob || session.parentId) return '';
   const external = ['botSession', 'botBinding', 'channel'].some((kind) =>
@@ -125,7 +133,7 @@ export function personalizationInstructions(
   if (external) return '';
   const profile = readPersonalization(store);
   const entries =
-    profile.enabled && profile.memories.length ? selected(profile, candidates(store)) : [];
+    profile.enabled && profile.memories.length ? selected(profile, candidates(knowledge)) : [];
   return (
     '\n\n【性格与沟通偏好】\n' +
     '以下配置只影响表达风格，不改变同舟身份、真实能力或操作权限。当前用户明确要求优先于历史偏好；Agent 性格补充通用性格，用户沟通偏好优先于默认风格。补充要求优先于快捷回复设置，快捷回复设置优先于历史偏好。\n' +

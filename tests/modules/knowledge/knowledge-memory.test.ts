@@ -104,7 +104,7 @@ describe('daily memory consolidation', () => {
     expect(k.all().filter((d) => d.kind === 'memory')).toHaveLength(1);
     const day = k.all()[0];
     expect(day.memoryEntries).toHaveLength(2);
-    expect(existsSync(path.join(k.root, 'memories', day.memoryDate!, 'index.md'))).toBe(true);
+    expect(existsSync(path.join(k.root, 'documents', `${day.id}.md`))).toBe(true);
     expect(k.search('订单', a.session.id)[0].excerpt).toContain('甲方');
     expect(JSON.stringify(k.search('订单', a.session.id))).not.toContain('乙方');
     expect(JSON.stringify(k.search('订单', b.session.id))).not.toContain('甲方');
@@ -205,7 +205,7 @@ describe('daily memory consolidation', () => {
     applyPendingRestore(target);
     expect(
       readFileSync(
-        path.join(target, 'knowledge', 'memories', memory.memoryDate!, 'index.md'),
+        path.join(target, '.tzhou', 'knowledge', 'documents', `${memory.id}.md`),
         'utf8',
       ),
     ).toContain('事务更新');

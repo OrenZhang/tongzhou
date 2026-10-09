@@ -63,12 +63,12 @@ describe('generated artifacts', () => {
       one = await f.artifacts.save({ name: 'first.md', text: 'one' }, f.origin),
       two = await f.artifacts.save({ name: 'second.md', text: 'two' }, f.origin);
     const range = artifactDateRange('2026-10-07');
-    f.store.put('artifact', {
-      ...f.store.get<any>('artifact', one.id),
+    f.artifacts.records.put({
+      ...f.artifacts.records.get(one.id),
       createdAt: range.createdAfter!,
     });
-    f.store.put('artifact', {
-      ...f.store.get<any>('artifact', two.id),
+    f.artifacts.records.put({
+      ...f.artifacts.records.get(two.id),
       createdAt: range.createdBefore!,
     });
     expect(artifactDay(range.createdAfter!)).toBe('2026-10-07');
