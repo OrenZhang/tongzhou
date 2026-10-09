@@ -31,6 +31,7 @@ jobs:
     timeout-minutes: 40
     env:
       TONGZHOU_DISABLE_UPDATES: '1'
+      TONGZHOU_GITHUB_CLIENT_ID: ${{ vars.TONGZHOU_GITHUB_CLIENT_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

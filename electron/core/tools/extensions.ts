@@ -189,6 +189,7 @@ export class PluginConnection {
   ) {}
   async connect(signal: AbortSignal) {
     signal.throwIfAborted();
+    await this.oauth?.prepare(signal);
     const credentials: Record<string, string> =
       !this.oauth && this.secret ? JSON.parse(this.secret) : {};
     this.secretValues = Object.values(credentials).flatMap((value) => [
@@ -233,6 +234,8 @@ export class PluginConnection {
   }
   async tools(signal: AbortSignal) {
     signal.throwIfAborted();
+    await this.oauth?.prepare(signal);
+    if (this.oauth) this.secretValues.push(...this.oauth.sensitiveValues());
     if (this.gitlabApi) return gitlabApiTools;
     const tools: any[] = [];
     let cursor: string | undefined;
@@ -258,6 +261,8 @@ export class PluginConnection {
   }
   async call(name: string, args: Record<string, unknown>, signal: AbortSignal, generated = false) {
     try {
+      await this.oauth?.prepare(signal);
+      if (this.oauth) this.secretValues.push(...this.oauth.sensitiveValues());
       if (this.gitlabApi) return await this.gitlabApi.call(name, args, signal);
       const result = normalizeOutput(
         await this.client.callTool({ name, arguments: args }, undefined, {

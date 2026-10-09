@@ -21,6 +21,9 @@ await build({
 });
 await build({
   entryPoints: ['electron/main.ts'],
+  define: {
+    __TONGZHOU_GITHUB_CLIENT_ID__: JSON.stringify(process.env.TONGZHOU_GITHUB_CLIENT_ID || ''),
+  },
   outfile: 'dist-electron/main.cjs',
   bundle: true,
   platform: 'node',

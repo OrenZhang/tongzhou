@@ -18,6 +18,7 @@ const cleanups: (() => any)[] = [];
 afterEach(async () => {
   for (const close of cleanups.splice(0).reverse()) await close();
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
   setServiceTransport();
 });
 it('uses the injected desktop transport for OAuth with cookies omitted and redirects blocked', async () => {
@@ -62,19 +63,20 @@ it('negotiates confidential dynamic clients and encrypts pre-registered applicat
   });
   expect(JSON.stringify(s.list('plugin'))).not.toContain('fixture-app-secret');
 });
-it('reports GitHub registration requirements before opening a browser or binding a callback port', async () => {
+it('reports an unavailable built-in GitHub app without asking the user for client credentials', async () => {
+  vi.stubEnv('TONGZHOU_GITHUB_CLIENT_ID', '');
   const s = store();
   s.put('plugin', { ...plugin, url: 'https://api.githubcopilot.com/mcp/' });
   const open = vi.fn(),
     request = vi.fn();
   const service = new McpAuth(s, () => {}, open, request);
   cleanups.push(() => service.dispose());
-  await expect(service.login(plugin.id)).rejects.toThrow('Client ID 和 Client Secret');
+  await expect(service.login(plugin.id)).rejects.toThrow('尚未配置同舟的 GitHub 登录应用');
   expect(open).not.toHaveBeenCalled();
   expect(request).not.toHaveBeenCalled();
   expect(s.get<PluginConfig>('plugin', plugin.id)).toMatchObject({
     oauthStatus: 'error',
-    oauthError: expect.stringContaining('不支持自动注册'),
+    oauthError: expect.stringContaining('使用 Token 配置'),
   });
 });
 it('authorizes a self-managed GitLab MCP with mcp scope, discovery, public DCR and PKCE', async () => {
@@ -223,6 +225,17 @@ it('replaces stale waiting status after restart with a retryable error', () => {
     oauthStatus: 'error',
     oauthError: expect.stringContaining('已中断'),
   });
+});
+it('can clear auth for a newly created plugin before its configuration is saved', () => {
+  const s = store();
+  const service = new McpAuth(
+    s,
+    () => {},
+    async () => {},
+  );
+  cleanups.push(() => service.dispose());
+  expect(() => service.logout('new-plugin')).not.toThrow();
+  expect(s.list('plugin')).toEqual([]);
 });
 function store() {
   const s = new Store(':memory:', {

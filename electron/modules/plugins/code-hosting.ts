@@ -35,12 +35,15 @@ export async function verifyGithubPluginToken(secret: string, signal: AbortSigna
     throw new Error('GitHub 账号身份校验失败');
   }
   if (
+    !identity ||
+    typeof identity !== 'object' ||
     !Number.isSafeInteger(identity.id) ||
     identity.id <= 0 ||
     typeof identity.login !== 'string' ||
     !/^[\w-]{1,100}$/.test(identity.login)
   )
     throw new Error('GitHub 账号身份校验失败');
+  return { id: identity.id as number, login: identity.login as string };
 }
 
 export function pluginCredentialVersion(store: Store, config: PluginConfig) {

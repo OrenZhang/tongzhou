@@ -93,8 +93,15 @@ export function registerPluginServices(
     'savePlugin',
     operation('插件', 'change', '保存或启停 MCP 插件配置，凭据在界面输入', [pluginSchema]),
     (raw) => {
-      const { secret, clearSecret, oauthClientSecret, clearOAuthClientSecret, ...config } =
-        pluginSchema.parse(raw);
+      const input = pluginSchema.parse(raw);
+      if (codeHost(input) === 'github') {
+        input.oauthClientId = undefined;
+        input.oauthIssuer =
+          input.authMode === 'oauth' ? 'https://github.com/login/oauth' : undefined;
+        input.oauthClientSecret = '';
+        input.clearOAuthClientSecret = store.hasSecret('plugin_oauth_client_' + input.id);
+      }
+      const { secret, clearSecret, oauthClientSecret, clearOAuthClientSecret, ...config } = input;
       if (secret || clearSecret || config.authMode === 'oauth') config.connectorId = undefined;
       if (config.connectorId) pluginSecret(store, config);
       const previous = store.list<PluginConfig>('plugin').find((p) => p.id === config.id);
@@ -155,6 +162,10 @@ export function registerPluginServices(
         oauthError:
           !identityChanged && !clearSecret && !clientSecretChanged
             ? previous?.oauthError
+            : undefined,
+        oauthAccount:
+          config.authMode === 'oauth' && !identityChanged && !clearSecret && !clientSecretChanged
+            ? previous?.oauthAccount
             : undefined,
         ...(same ? { catalog: previous.catalog, checkedAt: previous.checkedAt } : {}),
       });

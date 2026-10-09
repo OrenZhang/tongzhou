@@ -28,8 +28,38 @@ await build({
 let validIdentity = false,
   validMcp = false,
   validGitlab = true;
+let deviceTokensReady = false;
 const requests = [];
 const server = createServer(async (req, res) => {
+  if (req.url?.startsWith('/login/')) {
+    let raw = '';
+    for await (const chunk of req) raw += chunk;
+    const params = new URLSearchParams(raw);
+    assert.equal(params.get('client_id'), 'tongzhou-fixture-client');
+    assert.equal(params.has('client_secret'), false);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(
+      JSON.stringify(
+        req.url === '/login/device/code'
+          ? {
+              device_code: 'fixture-device-secret',
+              user_code: 'ABCD-EFGH',
+              verification_uri: 'https://github.com/login/device',
+              expires_in: 900,
+              interval: 5,
+            }
+          : deviceTokensReady
+            ? {
+                access_token: 'fixture-local-github-token',
+                token_type: 'Bearer',
+                refresh_token: 'fixture-refresh-secret',
+                expires_in: 28800,
+              }
+            : { error: 'authorization_pending' },
+      ),
+    );
+    return;
+  }
   if (req.url === '/api/v4/user') {
     assert.equal(req.headers.authorization, 'Bearer fixture-local-gitlab-token');
     requests.push(req.url);
@@ -96,6 +126,7 @@ const server = createServer(async (req, res) => {
 });
 await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 const env = { ...process.env, TONGZHOU_USER_DATA: profile, TONGZHOU_DISABLE_UPDATES: '1' };
+env.TONGZHOU_GITHUB_CLIENT_ID = 'tongzhou-fixture-client';
 delete env.ELECTRON_RUN_AS_NODE;
 delete env.TONGZHOU_DEV_URL;
 let app = await electron.launch({ args: ['.'], env });
@@ -109,7 +140,11 @@ try {
     window.blur();
   });
   await app.evaluate(
-    ({ ipcMain, safeStorage, session }, config) => {
+    ({ ipcMain, safeStorage, session, shell }, config) => {
+      shell.openExternal = async (url) => {
+        if (url !== 'https://github.com/login/device')
+          throw new Error('Unexpected browser destination');
+      };
       const require = process.getBuiltinModule('module').createRequire(config.bundle);
       const {
         Store,
@@ -128,6 +163,7 @@ try {
         if (
           ![
             'api.github.com',
+            'github.com',
             'api.githubcopilot.com',
             'gitlab.com',
             'gitlab.fixture.example',
@@ -239,7 +275,21 @@ try {
     2,
   );
   await githubDialog.getByLabel('认证方式', { exact: true }).selectOption('oauth');
-  await githubDialog.getByText('GitHub OAuth2 应用配置', { exact: true }).waitFor();
+  assert.equal(await githubDialog.getByText('GitHub OAuth2 应用配置', { exact: true }).count(), 0);
+  assert.equal(await githubDialog.locator('input[type="password"]').count(), 0);
+  await githubDialog.getByRole('button', { name: '使用 GitHub 登录', exact: true }).waitFor();
+  await githubDialog.getByRole('button', { name: '使用 GitHub 登录', exact: true }).click();
+  await githubDialog.getByText('ABCD-EFGH', { exact: true }).waitFor();
+  assert.ok(!(await githubDialog.innerText()).includes('fixture-device-secret'));
+  deviceTokensReady = true;
+  await githubDialog.getByText('✓ 已授权', { exact: true }).waitFor();
+  await githubDialog.getByText('GitHub · local-fixture-user', { exact: true }).waitFor();
+  await githubDialog.getByRole('button', { name: '保存并检查', exact: true }).click();
+  await githubDialog.getByText('✓ 插件连接检查通过', { exact: true }).waitFor();
+  await githubDialog.getByText('GitHub · local-fixture-user', { exact: true }).waitFor();
+  const oauthSnapshot = await page.evaluate(() => window.tongzhou.snapshot());
+  assert.ok(!JSON.stringify(oauthSnapshot).includes('fixture-refresh-secret'));
+  await githubDialog.getByRole('button', { name: '退出授权', exact: true }).click();
   assert.equal(await githubDialog.getByLabel('访问令牌（留空保留）', { exact: true }).count(), 0);
   await githubDialog.getByLabel('认证方式', { exact: true }).selectOption('headers');
   await githubDialog.getByLabel('Token 来源', { exact: true }).selectOption(plugin.connectorId);

@@ -36,6 +36,7 @@ sessions[1].title = '项目任务';
 for (const session of sessions) s.put('session', session);
 s.close();
 const env = { ...process.env, TONGZHOU_USER_DATA: path.join(root, 'profile') };
+env.TONGZHOU_GITHUB_CLIENT_ID = '';
 delete env.ELECTRON_RUN_AS_NODE;
 delete env.TONGZHOU_DEV_URL;
 const executablePath = process.env.TONGZHOU_SMOKE_EXECUTABLE;
@@ -448,10 +449,10 @@ try {
     .getByRole('button', { name: '管理连接', exact: true })
     .click();
   await dialog.getByLabel('认证方式', { exact: true }).selectOption('oauth');
-  await dialog.getByRole('button', { name: '浏览器授权', exact: true }).click();
+  await dialog.getByRole('button', { name: '使用 GitHub 登录', exact: true }).click();
   await dialog
     .getByRole('alert')
-    .filter({ hasText: /GitHub OAuth2 需要/ })
+    .filter({ hasText: /尚未配置同舟的 GitHub 登录应用/ })
     .waitFor();
   assert.ok(!(await dialog.innerText()).includes('Error invoking remote method'));
   await capture('github-oauth-requirements');

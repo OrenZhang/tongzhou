@@ -13,6 +13,14 @@ import type { PluginConfig } from '../../../src/shared/types';
 import type { Store } from '../../services/storage/store';
 import { serviceFetch } from '../../services/network/service-network';
 import { codeHost } from '../../../src/shared/code-hosting';
+import { verifyGithubPluginToken } from './code-hosting';
+import {
+  beginGithubDeviceLogin,
+  githubClientId,
+  refreshGithubDeviceToken,
+  waitForGithubDeviceToken,
+  type GithubDeviceTokens,
+} from './github-device-auth';
 
 export function pluginOAuthScope(config: PluginConfig) {
   return codeHost(config) === 'gitlab'
@@ -29,7 +37,14 @@ interface Saved {
   discovery?: OAuthDiscoveryState;
   verifier?: string;
   revision: string;
+  githubDevice?: {
+    clientId: string;
+    accountId: number;
+    expiresAt?: number;
+    refreshExpiresAt?: number;
+  };
 }
+const githubRefreshes = new WeakMap<Store, Map<string, Promise<void>>>();
 export function pluginAuthIdentity(p: PluginConfig) {
   return JSON.stringify([
     p.transport,
@@ -123,6 +138,15 @@ export class PluginOAuthProvider implements OAuthClientProvider {
   }
   clientInformation() {
     const v = this.read();
+    if (v.githubDevice) {
+      if (v.githubDevice.clientId !== githubClientId())
+        throw new Error('GitHub 登录应用已更新，请重新登录。');
+      return {
+        client_id: v.githubDevice.clientId,
+        issuer: 'https://github.com/login/oauth',
+        token_endpoint_auth_method: 'none' as const,
+      };
+    }
     return (
       v.client ??
       (this.config.oauthClientId
@@ -142,6 +166,77 @@ export class PluginOAuthProvider implements OAuthClientProvider {
   }
   tokens() {
     return this.read().tokens;
+  }
+  saveGithubDeviceTokens(tokens: GithubDeviceTokens, clientId: string, accountId: number) {
+    const now = Date.now();
+    this.write({
+      url: this.config.url,
+      revision: randomUUID(),
+      tokens: { ...tokens, issuer: 'https://github.com/login/oauth' },
+      githubDevice: {
+        clientId,
+        accountId,
+        expiresAt: tokens.expires_in ? now + tokens.expires_in * 1000 : undefined,
+        refreshExpiresAt: tokens.refresh_token_expires_in
+          ? now + tokens.refresh_token_expires_in * 1000
+          : undefined,
+      },
+    });
+  }
+  async prepare(signal: AbortSignal) {
+    const saved = this.read(),
+      meta = saved.githubDevice;
+    if (!meta) return;
+    if (meta.clientId !== githubClientId() || !saved.tokens?.access_token)
+      throw new Error('GitHub 登录已失效，请重新登录。');
+    if (!meta.expiresAt || meta.expiresAt > Date.now() + 60000) return;
+    let tasks = githubRefreshes.get(this.store);
+    if (!tasks) githubRefreshes.set(this.store, (tasks = new Map()));
+    let task = tasks.get(this.config.id);
+    if (!task) {
+      task = (async () => {
+        if (
+          !saved.tokens?.refresh_token ||
+          (meta.refreshExpiresAt && meta.refreshExpiresAt <= Date.now())
+        )
+          throw new Error('GitHub 授权已过期，请重新登录。');
+        const tokens = await refreshGithubDeviceToken(
+          meta.clientId,
+          saved.tokens.refresh_token,
+          signal,
+        );
+        const identity = await verifyGithubPluginToken(
+          JSON.stringify({ Authorization: 'Bearer ' + tokens.access_token }),
+          signal,
+        );
+        if (identity.id !== meta.accountId) throw new Error('GitHub 授权账号不匹配，请重新登录。');
+        signal.throwIfAborted();
+        this.saveGithubDeviceTokens(
+          { ...tokens, refresh_token: tokens.refresh_token ?? saved.tokens.refresh_token },
+          meta.clientId,
+          meta.accountId,
+        );
+      })();
+      tasks.set(this.config.id, task);
+    }
+    try {
+      await task;
+      this.check();
+    } catch (error) {
+      if (!signal.aborted && (error as Error).name !== 'AbortError') {
+        this.check();
+        this.store.put('plugin', {
+          ...this.store.get<PluginConfig>('plugin', this.config.id),
+          oauthStatus: 'error',
+          oauthError: (error as Error).message,
+          catalog: undefined,
+          checkedAt: undefined,
+        });
+      }
+      throw error;
+    } finally {
+      if (tasks.get(this.config.id) === task) tasks.delete(this.config.id);
+    }
   }
   saveTokens(tokens: OAuthTokens) {
     const v = this.read();
@@ -233,6 +328,14 @@ export class McpAuth {
     this.cancel(id);
     this.store.put('mcpAuthEpoch', { id, value: randomUUID() });
     this.store.saveSecret('plugin_oauth_' + id, undefined, true);
+    const p = this.store.list<PluginConfig>('plugin').find((p) => p.id === id);
+    if (p)
+      this.store.put('plugin', {
+        ...p,
+        oauthAccount: undefined,
+        catalog: undefined,
+        checkedAt: undefined,
+      });
     this.status(id, 'none');
   }
   async login(id: string) {
@@ -240,15 +343,7 @@ export class McpAuth {
     const config = this.store.get<PluginConfig>('plugin', id);
     if (config.transport !== 'http' || config.authMode !== 'oauth')
       throw new Error('请先将此插件设置为 OAuth 认证');
-    if (
-      new URL(config.url).hostname === 'api.githubcopilot.com' &&
-      (!config.oauthClientId || !this.store.hasSecret('plugin_oauth_client_' + id))
-    ) {
-      const message =
-        'GitHub OAuth2 需要已注册 OAuth App 或 GitHub App 的 Client ID 和 Client Secret；不支持自动注册应用。请在插件中配置应用，或选择 Token 配置。';
-      this.status(id, 'error', message);
-      throw new Error(message);
-    }
+    if (codeHost(config) === 'github') return this.loginGithub(config);
     const controller = new AbortController(),
       nonce = randomBytes(32).toString('base64url');
     let consumed = false,
@@ -395,5 +490,88 @@ export class McpAuth {
   }
   dispose() {
     this.pending?.cancel();
+  }
+  private async loginGithub(config: PluginConfig) {
+    const id = config.id,
+      clientId = githubClientId();
+    if (!clientId) {
+      const message =
+        '此版本尚未配置同舟的 GitHub 登录应用，请更新至支持登录的版本，或使用 Token 配置。';
+      this.status(id, 'error', message);
+      throw new Error(message);
+    }
+    this.logout(id);
+    const controller = new AbortController();
+    const provider = new PluginOAuthProvider(
+      this.store,
+      config,
+      undefined,
+      undefined,
+      controller.signal,
+    );
+    const close = () => {
+      controller.abort();
+      if (this.pending === pending) this.pending = undefined;
+    };
+    const pending = { id, cancel: close };
+    this.pending = pending;
+    this.status(id, 'starting');
+    try {
+      const grant = await beginGithubDeviceLogin(clientId, controller.signal);
+      this.status(id, 'waiting');
+      void (async () => {
+        const deadline = AbortSignal.timeout(Math.max(1, grant.expiresAt - Date.now()));
+        const signal = AbortSignal.any([controller.signal, deadline]);
+        const tokens = await waitForGithubDeviceToken(clientId, grant, signal);
+        const secret = JSON.stringify({ Authorization: 'Bearer ' + tokens.access_token });
+        const identity = await verifyGithubPluginToken(secret, signal);
+        const { PluginConnection } = await import('../../core/tools/extensions');
+        const connection = new PluginConnection(
+          { ...config, authMode: 'headers', connectorId: undefined },
+          secret,
+        );
+        try {
+          await connection.connect(signal);
+          await connection.tools(signal);
+        } finally {
+          await connection.close();
+        }
+        signal.throwIfAborted();
+        provider.saveGithubDeviceTokens(tokens, clientId, identity.id);
+        this.store.put('plugin', {
+          ...this.store.get<PluginConfig>('plugin', id),
+          oauthAccount: identity.login,
+        });
+        this.status(id, 'authorized');
+      })()
+        .catch((error) => {
+          if (!controller.signal.aborted)
+            this.status(
+              id,
+              'error',
+              (error as Error).name === 'TimeoutError'
+                ? 'GitHub 验证码已过期，请重新登录。'
+                : (error as Error).message,
+            );
+        })
+        .finally(close);
+      let browserOpened = false;
+      try {
+        await this.open(grant.verification_uri);
+        browserOpened = true;
+      } catch {
+        /* Manual link remains available. */
+      }
+      return {
+        url: grant.verification_uri,
+        code: grant.user_code,
+        expiresAt: grant.expiresAt,
+        browserOpened,
+      };
+    } catch (error) {
+      if (!controller.signal.aborted) this.status(id, 'error', (error as Error).message);
+      close();
+      throw error;
+    }
   }
 }

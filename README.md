@@ -53,7 +53,7 @@ npm run dev
 
 GitHub 和 GitLab 的认证统一在 **插件 → 内置插件** 管理，选择 **Token 配置** 或 **OAuth2 授权**。连接中心只管理独立浏览器登录、渠道通知、机器人和网络，不再提供 GitHub/GitLab 账号配置入口；已有账号数据保留，可在插件的 Token 来源中复用。
 
-- **GitHub**：Token 和 OAuth2 均使用官方远程 MCP。OAuth2 需要注册 GitHub OAuth App 或 GitHub App，填写 Client ID/Client Secret 并在官方浏览器页面授权；不使用内置共享应用密钥。可点击 **检测本地账号** 识别 Git 凭据或 GitHub CLI 当前登录，再点击 **使用并启用**。同舟重新验证身份及 MCP 连接后加密保存，检测结果仅展示账号和来源；手动 Token 的 **保存并检查** 同样验证账号和工具连接。
+- **GitHub**：Token 和 OAuth2 均使用官方远程 MCP。OAuth2 点击 **使用 GitHub 登录**，在 GitHub 官方页面输入界面显示的验证码并授权；普通用户无需配置 Client ID/Client Secret。应用身份由同舟维护者在构建时配置，支持授权保存、令牌刷新和退出；维护者配置见 [GitHub 登录](docs/GITHUB_LOGIN.md)。可点击 **检测本地账号** 识别 Git 凭据或 GitHub CLI 当前登录，再点击 **使用并启用**。同舟重新验证身份及 MCP 连接后加密保存，检测结果仅展示账号和来源；手动 Token 的 **保存并检查** 同样验证账号和工具连接。
 - **GitLab**：填写 GitLab.com 或自建实例 HTTPS 根地址。Token 模式使用官方 REST API，无需开启 MCP；**保存并检查** 验证身份与项目 API，读取通常需要 `read_api`，写操作需要 `api`，并受项目权限限制。会话通过 `gitlab_api_read` / `gitlab_api_write` 调用实例上的项目、仓库、Issue、Merge Request 和 CI/CD API，写操作遵循会话权限。OAuth2 模式使用官方 MCP 授权，要求实例支持并开启 MCP，可自动注册或使用预注册 OAuth 应用。插件卡片与 Token 配置弹窗均支持本地 Git / glab 检测，**使用并配置** 保存 Token 账号；切换地址清除旧检测结果，不将普通 Token 当成 MCP OAuth 授权。
 
 认证依据：[GitHub 官方 MCP 接入](https://github.com/github/github-mcp-server/blob/main/docs/host-integration.md) · [GitLab REST API 认证](https://docs.gitlab.com/api/rest/authentication/) · [GitLab 官方 MCP](https://docs.gitlab.com/user/model_context_protocol/mcp_server/)。仅保存凭据会显示待检查，通过连接检查后才显示已验证。

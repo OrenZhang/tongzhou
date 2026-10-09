@@ -72,6 +72,7 @@ export interface PluginConfig {
   oauthIssuer?: string;
   oauthStatus?: 'none' | 'starting' | 'waiting' | 'authorized' | 'error' | 'cancelled';
   oauthError?: string;
+  oauthAccount?: string;
   hasOAuthClientSecret?: boolean;
   id: string;
   name: string;
@@ -491,7 +492,9 @@ export interface TongzhouAPI {
   syncRepository(projectId: string, action: 'pull' | 'push'): Promise<string>;
   cloneRepository(connectorId: string, url: string, directory: string): Promise<Project>;
   chooseCloneDirectory(): Promise<string | null>;
-  loginPlugin(id: string): Promise<{ url?: string; browserOpened?: boolean }>;
+  loginPlugin(
+    id: string,
+  ): Promise<{ url?: string; browserOpened?: boolean; code?: string; expiresAt?: number }>;
   logoutPlugin(id: string): Promise<void>;
   cancelPluginLogin(id: string): Promise<void>;
   useGithubConnector(pluginId: string, connectorId: string): Promise<void>;

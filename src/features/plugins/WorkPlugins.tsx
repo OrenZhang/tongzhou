@@ -113,12 +113,12 @@ export function OAuthFields({
           </select>
         </label>
       )}
-      {edit.authMode === 'oauth' && (
-        <details open={github || undefined}>
-          <summary>{github ? 'GitHub OAuth2 应用配置' : '高级：使用已注册的 OAuth 应用'}</summary>
+      {edit.authMode === 'oauth' && !github && (
+        <details>
+          <summary>高级：使用已注册的 OAuth 应用</summary>
           <div className="oauth-app-fields">
             <label>
-              {github ? 'OAuth App Client ID（必填）' : '预注册 Client ID（可选）'}
+              预注册 Client ID（可选）
               <input
                 value={edit.oauthClientId ?? ''}
                 onChange={(e) =>
@@ -160,16 +160,9 @@ export function OAuthFields({
               />
             </label>
             <p>
-              {github
-                ? 'GitHub 要求客户端注册 OAuth App 或 GitHub App。填写 Client ID 和 Client Secret，授权范围由 GitHub 账号与组织策略决定。应用回调地址：'
-                : '服务允许动态注册时可留空；需要预注册时使用回调地址：'}
+              服务允许动态注册时可留空；需要预注册时使用回调地址：
               http://127.0.0.1:17438/mcp/callback。具体可用权限由服务账号决定。
             </p>
-            {github && (
-              <MarkdownLink href="https://github.com/settings/developers">
-                管理 GitHub OAuth 应用
-              </MarkdownLink>
-            )}
           </div>
         </details>
       )}
@@ -200,6 +193,9 @@ export function PluginAuthStatus({ plugin }: { plugin?: PluginConfig }) {
           }[plugin?.oauthStatus ?? 'none']
         }
       </span>
+      {plugin?.oauthStatus === 'authorized' && plugin.oauthAccount && (
+        <small>GitHub · {plugin.oauthAccount}</small>
+      )}
       {plugin?.oauthError && (
         <p role="alert" className="info-strip">
           {plugin.oauthError}
@@ -286,6 +282,7 @@ export function WorkPlugins({
       c.baseUrl.replace(/\/$/, '') === tokenSite,
   );
   const [loginUrl, setLoginUrl] = useState('');
+  const [loginCode, setLoginCode] = useState('');
   const act = async (fn: () => Promise<unknown>, success = '已保存') => {
     setBusy(true);
     setNotice('');
@@ -305,14 +302,15 @@ export function WorkPlugins({
     edit &&
     current.url === edit.url &&
     current.authMode === edit.authMode &&
-    current.oauthClientId === edit.oauthClientId &&
-    current.oauthIssuer === edit.oauthIssuer
+    (codeHost(edit) === 'github' ||
+      (current.oauthClientId === edit.oauthClientId && current.oauthIssuer === edit.oauthIssuer))
       ? current
       : undefined;
   const configureLocalGitlab = (plugin: PluginConfig) => {
     setSelectedConnections((old) => ({ ...old, gitlab: plugin.id }));
     setEditingService('gitlab');
     setLoginUrl('');
+    setLoginCode('');
     setToken('');
     setSource(plugin.connectorId ?? '');
     setNotice('本地账号已保存。可点击「保存并检查」验证 Token 工具连接，再启用插件。');
@@ -435,6 +433,7 @@ export function WorkPlugins({
                     onClick={() => {
                       setNotice('');
                       setLoginUrl('');
+                      setLoginCode('');
                       setEditingService(p.id);
                       setEdit(
                         installed
@@ -515,6 +514,7 @@ export function WorkPlugins({
                       setSource('');
                       setToken('');
                       setLoginUrl('');
+                      setLoginCode('');
                       setNotice('');
                       setEdit({
                         ...edit,
@@ -549,6 +549,7 @@ export function WorkPlugins({
                           setSource('');
                           setToken('');
                           setLoginUrl('');
+                          setLoginCode('');
                           setNotice('');
                           setEdit({
                             ...edit,
@@ -605,6 +606,7 @@ export function WorkPlugins({
                       });
                       setToken('');
                       setLoginUrl('');
+                      setLoginCode('');
                       setNotice('');
                     }}
                   >
@@ -631,6 +633,7 @@ export function WorkPlugins({
                     setToken('');
                     setSource('');
                     setLoginUrl('');
+                    setLoginCode('');
                     setNotice('');
                     setEdit({
                       ...edit,
@@ -711,6 +714,7 @@ export function WorkPlugins({
                       await save();
                       const result = await api.loginPlugin(edit.id);
                       setLoginUrl(result.url ?? '');
+                      setLoginCode(result.code ?? '');
                       return result.url
                         ? result.browserOpened
                           ? '已打开浏览器，请完成授权。'
@@ -719,8 +723,13 @@ export function WorkPlugins({
                     }, '授权状态已更新，请在下方查看。')
                   }
                 >
-                  浏览器授权
+                  {codeHost(edit) === 'github' ? '使用 GitHub 登录' : '浏览器授权'}
                 </button>
+                {loginCode && authCurrent?.oauthStatus === 'waiting' && (
+                  <p className="info-strip">
+                    在 GitHub 授权页面输入验证码：<strong>{loginCode}</strong>
+                  </p>
+                )}
                 {loginUrl && authCurrent?.oauthStatus === 'waiting' && (
                   <MarkdownLink href={loginUrl}>打开授权页面</MarkdownLink>
                 )}
@@ -799,6 +808,7 @@ export function WorkPlugins({
                     if (!p) return;
                     setNotice('');
                     setLoginUrl('');
+                    setLoginCode('');
                     setToken('');
                     setSource('');
                     setEdit({

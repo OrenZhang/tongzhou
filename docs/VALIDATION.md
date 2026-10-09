@@ -1,5 +1,11 @@
 # 验证记录
 
+## 0.1.0 本地：GitHub 浏览器登录（2026-10-09，未发布）
+
+- GitHub OAuth2 改为同舟内置应用的官方 Device Flow；用户界面只提供 GitHub 登录、验证码、账号状态与退出，不再要求填写 Client ID、Client Secret 或 Issuer。公开 Client ID 由构建环境和 Release 仓库变量配置；缺少配置时提示登录不可用，Token 和本地账号发现仍可使用。
+- 授权后重新校验 GitHub 身份与官方 MCP 工具连接，再加密保存令牌；刷新令牌重新校验相同账号，取消/超时/失败不保存未验证凭据，退出使旧授权作用域失效。配置保存保留已授权账号信息。
+- 类型检查、构建及 6 个相关测试文件共 47 项通过。独立 Electron 测试实际主进程 Device Flow、验证码展示、身份与 MCP 校验、保存检查、退出、本地检测及窄布局通过；工作台回归通过，包括 GitLab 新建 OAuth 配置。测试使用隔离账号与本机协议服务，真实 GitHub 应用注册和账号授权尚待完成。
+
 ## 0.1.0 本地：代码托管插件统一认证（2026-10-09，未发布）
 
 - 最新 main 同步至 db8be9f 后，GitHub/GitLab 插件统一为 Token 配置和 OAuth2 授权。GitHub 本地检测保留：验证身份与官方 MCP 工具连接后才保存并启用；手动 Token 检查同样验证 `/user` 和 MCP。GitHub OAuth2 使用注册的官方 OAuth/GitHub App，不内置共享应用密钥。

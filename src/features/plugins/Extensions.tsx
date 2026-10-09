@@ -14,6 +14,7 @@ import { CoreCapabilities } from './CoreCapabilities';
 import { builtinPlugins } from '../../shared/builtin-plugins';
 import { builtinSkills, isBuiltinSkill } from '../../shared/builtin-skills';
 import type { PluginInput, Snapshot, TongzhouAPI } from '../../shared/types';
+import { codeHost } from '../../shared/code-hosting';
 
 export function Extensions({
   api,
@@ -31,6 +32,7 @@ export function Extensions({
   const [kind, setKind] = useState('all');
   const [query, setQuery] = useState('');
   const [loginUrl, setLoginUrl] = useState('');
+  const [loginCode, setLoginCode] = useState('');
   const [edit, setEdit] = useState<PluginInput | null>(null);
   const [busy, setBusy] = useState(false);
   const [pendingToggle, setPendingToggle] = useState<{ id: string; enabled: boolean } | null>(null);
@@ -177,6 +179,7 @@ export function Extensions({
                 onManage={(plugin) => {
                   setNotice('');
                   setLoginUrl('');
+                  setLoginCode('');
                   setEdit({ ...plugin, secret: '' });
                 }}
               />
@@ -221,6 +224,7 @@ export function Extensions({
                       onClick={() => {
                         setNotice('');
                         setLoginUrl('');
+                        setLoginCode('');
                         setEdit({ ...p, secret: '' });
                       }}
                     >
@@ -445,6 +449,7 @@ export function Extensions({
                       });
                       const result = await api.loginPlugin(edit.id);
                       setLoginUrl(result.url ?? '');
+                      setLoginCode(result.code ?? '');
                       setNotice(
                         result.url
                           ? result.browserOpened
@@ -455,8 +460,14 @@ export function Extensions({
                     })
                   }
                 >
-                  保存并浏览器授权
+                  {codeHost(edit) === 'github' ? '使用 GitHub 登录' : '保存并浏览器授权'}
                 </button>
+                {loginCode &&
+                  data.plugins?.find((p) => p.id === edit.id)?.oauthStatus === 'waiting' && (
+                    <p className="info-strip">
+                      在 GitHub 授权页面输入验证码：<strong>{loginCode}</strong>
+                    </p>
+                  )}
                 {loginUrl && (
                   <a href={loginUrl} target="_blank" rel="noreferrer">
                     打开授权页面
@@ -470,6 +481,7 @@ export function Extensions({
                       perform(async () => {
                         await api.cancelPluginLogin(edit.id);
                         setLoginUrl('');
+                        setLoginCode('');
                       })
                     }
                   >

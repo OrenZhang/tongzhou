@@ -165,6 +165,8 @@ export class GitlabApiConnection {
       throw new Error('GitLab 账号身份校验失败');
     }
     if (
+      !identity ||
+      typeof identity !== 'object' ||
       !Number.isSafeInteger(identity.id) ||
       identity.id <= 0 ||
       typeof identity.username !== 'string' ||
