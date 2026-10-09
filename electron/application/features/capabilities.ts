@@ -7,11 +7,10 @@ import '../context';
 
 export const capabilitiesPlugin: Plugin.Object<void> = {
   name: 'tongzhou-capabilities',
-  inject: ['tzIpc', 'tzStore', 'tzRuntime'],
+  inject: ['tzIpc', 'tzStore', 'tzEvents'],
   apply(ctx) {
     const register = ctx.tzIpc.scoped(ctx);
     const store = ctx.tzStore;
-    const runtime = ctx.tzRuntime;
 
     register(
       'setCapability',
@@ -24,8 +23,8 @@ export const capabilitiesPlugin: Plugin.Object<void> = {
           z.enum(['computer', 'management']).parse(raw),
           z.boolean().parse(enabled),
         );
-        runtime.invalidateNative();
-        runtime.changed();
+        ctx.tzEvents.invalidateNative();
+        ctx.tzEvents.changed();
       },
     );
     register(
@@ -42,8 +41,8 @@ export const capabilitiesPlugin: Plugin.Object<void> = {
             ...store.get<PluginConfig>('plugin', definition.id),
             enabled: true,
           });
-        runtime.invalidateNative();
-        runtime.changed();
+        ctx.tzEvents.invalidateNative();
+        ctx.tzEvents.changed();
       },
     );
   },

@@ -53,4 +53,6 @@ test:management 用独立数据库和本地合成模型，检查目录与全部�
 
 功能插件位于 `electron/application/features/`，声明 `inject` 后从上下文取得服务，使用 `ctx.tzIpc.scoped(ctx)` 获取注册函数。现有 `operation`、`manual` 和 `workspaceOperation` 定义继续复用。此注册函数将 IPC 和能力目录绑定到当前 Cordis 上下文；释放插件会同时移除两处入口，重新挂载不会累积注册。
 
-资源由服务插件创建并在自身上下文中登记清理。应用退出时停止接收新接口调用，等待任务及已有调用完成，再撤销接口、释放服务。模块内不要另建全局 Runtime 或直接绕过注册桥调用 `ipcMain.handle`。
+资源由服务插件创建并在自身上下文中登记清理。应用退出时停止接收新接口调用，等待任务及已有调用完成，再撤销接口、释放服务。模块内通过独立任务与领域接口取得能力，不另建全局调度器 或直接绕过注册桥调用 `ipcMain.handle`。
+
+业务注册的依赖使用 `TaskService`、`ChangePublisher` 与领域服务的有限接口。Cordis 功能插件显式声明自己读取的 Context 服务，任务入口为 `tzTasks`；状态广播和账号失效使用 `tzEvents`，不通过完整调度器获取其他业务模块。

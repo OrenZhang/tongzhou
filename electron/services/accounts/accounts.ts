@@ -3,17 +3,26 @@ import { CodexAuth } from './codex-auth';
 import { NativeAccount } from './native-engine';
 import { engineHome } from './account-paths';
 import type { Store } from '../storage/store';
-import type { Runtime } from '../../core/runtime/runtime';
+import type { TaskService, ChangePublisher } from '../../core/task-contracts';
+import { CodexClient } from '../../core/codex/codex';
+import type { ProviderNetwork } from '../../../src/shared/provider-network';
 import type { AppEvent, NativeEngine, Provider } from '../../../src/shared/types';
 import { redact } from '../storage/validation';
 
+export interface AccountDependencies extends Pick<TaskService, 'snapshot'>, ChangePublisher {
+  invalidateNative(protocol?: string): void;
+  resolveNetwork?(network?: ProviderNetwork): Promise<ProviderNetwork | undefined>;
+  resetExecution(providerId: string): void;
+}
+
 export class Accounts {
+  private clients = new Map<string, CodexClient>();
   private natives = new Map<string, NativeAccount>();
   private codices = new Map<string, CodexAuth>();
   private lastEvent = new Map<string, string>();
   constructor(
     private store: Store,
-    private runtime: Runtime,
+    private services: AccountDependencies,
     private dataDir: string,
     private emit: (e: AppEvent) => void,
     private open: (url: string, providerId: string) => Promise<void>,
@@ -38,13 +47,13 @@ export class Accounts {
     const records = this.store.list<any>('authEvent');
     for (const item of records.slice(0, Math.max(0, records.length - 500)))
       this.store.remove('authEvent', item.id);
-    this.runtime.changed();
+    this.services.changed();
   }
   idle(id: string) {
-    if (this.runtime.snapshot().runs.some((r) => r.providerId === id && r.status === 'running'))
+    if (this.services.snapshot().runs.some((r) => r.providerId === id && r.status === 'running'))
       throw new Error('请先停止此账号的任务，再修改授权');
     const protocol = this.store.get<Provider>('provider', id).protocol;
-    if (protocol !== 'codex') this.runtime.invalidateNative(protocol);
+    if (protocol !== 'codex') this.services.invalidateNative(protocol);
   }
   native(engine: NativeEngine, id = `${engine}-account`) {
     this.verify(id, engine);
@@ -65,7 +74,7 @@ export class Accounts {
             models: catalog.models,
             modelLabels: catalog.modelLabels,
           });
-          this.runtime.changed();
+          this.services.changed();
         },
       );
       this.natives.set(id, account);
@@ -76,7 +85,7 @@ export class Accounts {
     this.verify(id, 'codex');
     let account = this.codices.get(id);
     if (!account) {
-      const client = this.runtime.authClientFor(id);
+      const client = this.client(id);
       account = new CodexAuth(
         client,
         (url) => this.open(url, id),
@@ -93,21 +102,44 @@ export class Accounts {
               .map((m: any) => m.model ?? m.id)
               .filter((m: unknown) => typeof m === 'string'),
           });
-          this.runtime.changed();
+          this.services.changed();
         },
       );
       this.codices.set(id, account);
     }
     return account;
   }
-  dispose() {
+  client(id = 'openai-codex') {
+    this.verify(id, 'codex');
+    let client = this.clients.get(id);
+    if (!client) {
+      client = new CodexClient(
+        engineHome(this.dataDir, 'codex', id),
+        this.store.get<Provider>('provider', id).network,
+        (network) =>
+          this.services.resolveNetwork
+            ? this.services.resolveNetwork(network)
+            : Promise.resolve(network),
+      );
+      const current = client;
+      client.on('request', (r) => current.reject(r.id, 'Login client does not execute tools'));
+      client.on('notification', this.services.changed);
+      this.clients.set(id, client);
+    }
+    return client;
+  }
+  async dispose() {
     for (const a of this.natives.values()) a.dispose();
     for (const a of this.codices.values()) a.dispose();
+    await Promise.all([...this.clients.values()].map((client) => client.stop()));
+    this.clients.clear();
   }
   resetCodex(id: string) {
     this.codices.get(id)?.dispose();
     this.codices.delete(id);
-    this.runtime.resetCodexAccount(id);
+    this.clients.get(id)?.stop();
+    this.clients.delete(id);
+    this.services.resetExecution(id);
   }
   forget(id: string) {
     this.natives.get(id)?.dispose();
@@ -115,6 +147,8 @@ export class Accounts {
     this.codices.get(id)?.dispose();
     this.codices.delete(id);
     this.lastEvent.delete(id);
-    this.runtime.invalidateNative();
+    this.clients.get(id)?.stop();
+    this.clients.delete(id);
+    this.services.invalidateNative();
   }
 }

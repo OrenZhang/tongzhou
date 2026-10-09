@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { Store } from '../../electron/services/storage/store';
-import { Runtime } from '../../electron/core/runtime/runtime';
+import { createTaskFixture } from '../support/task-system';
 import { Attachments } from '../../electron/modules/artifacts/attachments';
 import type { Message, Run, RunEvent } from '../../src/shared/types';
 
@@ -113,16 +113,17 @@ async function fixture() {
   const store = new Store(':memory:', { encrypt: (v) => v, decrypt: (v) => v });
   store.saveProvider({ ...store.providers().find((p) => p.id === 'openai-codex')!, enabled: true });
   cleanup.push(() => store.close());
-  const runtime = new Runtime(store, root, () => {});
+  const system = await createTaskFixture(store, root);
+  const runtime = system.tasks;
   cleanup.push(async () => {
-    runtime.stop();
-    await runtime.waitForIdle();
+    await system.dispose();
   });
   const s = store.createSession();
   return {
     root,
     store,
     runtime,
+    system,
     input: {
       sessionId: s.id,
       providerId: 'openai-codex',
@@ -316,7 +317,7 @@ describe('live execution permissions', () => {
       config: { permission: 'full-access' },
     });
     expect(
-      await f.runtime.approvalQueue.ask(
+      await f.system.approvals.ask(
         f.input.sessionId,
         'next tool',
         '{}',
@@ -358,7 +359,7 @@ describe('live execution permissions', () => {
     const asking = fake.calls.filter((c) => c.method === 'thread/start').at(-1).params;
     expect(asking).toMatchObject({ sandbox: 'workspace-write', approvalPolicy: 'untrusted' });
     expect(asking.dynamicTools.some((t: any) => t.name === 'write_file')).toBe(true);
-    const decision = f.runtime.approvalQueue.ask(
+    const decision = f.system.approvals.ask(
       f.input.sessionId,
       'requires approval',
       '{}',
@@ -366,7 +367,7 @@ describe('live execution permissions', () => {
     );
     const approval = f.runtime.snapshot().approvals[0];
     expect(approval).toBeDefined();
-    f.runtime.approvalQueue.approve(approval.id, false);
+    f.system.approvals.approve(approval.id, false);
     expect(await decision).toBe(false);
     complete();
     await f.runtime.waitForIdle();
@@ -478,10 +479,10 @@ describe('locked Codex resume and steer contracts', () => {
     const network = { mode: 'proxy' as const, proxyUrl: 'http://127.0.0.1:7890' };
     f.store.saveProvider({ ...base, network });
     f.store.saveProvider({ ...base, id: 'other-account', network: { mode: 'direct' } });
-    const other = f.runtime.authClientFor('other-account');
-    f.runtime.resetCodexAccount(base.id);
-    expect((f.runtime.authClientFor(base.id) as any).network).toEqual(network);
-    expect(f.runtime.authClientFor('other-account')).toBe(other);
+    const other = f.system.accounts.client('other-account');
+    f.system.accounts.resetCodex(base.id);
+    expect((f.system.accounts.client(base.id) as any).network).toEqual(network);
+    expect(f.system.accounts.client('other-account')).toBe(other);
     f.runtime.start(f.input);
     await f.runtime.waitForIdle();
     expect(fake.instances.at(-1).network).toEqual(network);
@@ -543,11 +544,11 @@ describe('locked Codex resume and steer contracts', () => {
   it('resumes persisted history after account reset and resolves the network before every turn', async () => {
     const f = await fixture();
     const resolve = vi.fn(async (network) => network);
-    f.runtime.resolveNetwork = resolve;
+    f.system.network.resolve = resolve;
     f.runtime.start(f.input);
     await f.runtime.waitForIdle();
     const old = fake.instances.at(-1);
-    f.runtime.resetCodexAccount(f.input.providerId);
+    f.system.accounts.resetCodex(f.input.providerId);
     expect(old.stopped).toBe(true);
     f.runtime.start({ ...f.input, prompt: 'second' });
     await f.runtime.waitForIdle();
@@ -558,7 +559,7 @@ describe('locked Codex resume and steer contracts', () => {
     );
     const latest = fake.instances.at(-1);
     f.store.put('session', { ...f.store.get<any>('session', f.input.sessionId), archived: true });
-    await f.runtime.sessions.deleteSession(f.input.sessionId);
+    await f.system.sessions.deleteSession(f.input.sessionId);
     expect(latest.stopped).toBe(true);
   });
   it('passes actual images into Codex turns and model handoffs', async () => {

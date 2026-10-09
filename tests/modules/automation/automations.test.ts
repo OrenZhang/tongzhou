@@ -17,7 +17,6 @@ import {
   nextSchedule,
   scheduleSchema,
 } from '../../../electron/modules/automation/automations';
-import type { Runtime } from '../../../electron/core/runtime/runtime';
 import {
   MEMORY_AUTOMATION_ID,
   type AutomationJob,
@@ -73,9 +72,9 @@ function fixture(autoCollect = true) {
       });
       return id;
     }),
-  } as unknown as Runtime;
+  };
   const a = new Automations(store, runtime, () => now);
-  Object.assign(runtime, { automations: a });
+  const services = { ...runtime, automations: a };
   const flow = a.saveFlow({
     name: '摘要',
     prompt: '提取要点',
@@ -112,7 +111,7 @@ function fixture(autoCollect = true) {
   return {
     root,
     store,
-    runtime,
+    runtime: services,
     a,
     flow,
     doc,

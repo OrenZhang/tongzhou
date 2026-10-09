@@ -1,10 +1,10 @@
-import { createRuntimeDomainServices } from '../core/runtime/domain-services';
+import { createDomainServices } from '../modules/domain-services';
+import { createTaskSystem } from './task-system';
 import { app, safeStorage, session, shell } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import type { Provider } from '../../src/shared/types';
-import { Runtime } from '../core/runtime/runtime';
 import { ensureBuiltinPlugins } from '../modules/plugins/builtin-plugins';
 import { McpAuth } from '../modules/plugins/mcp-auth';
 import { ensureBuiltinSkills } from '../modules/plugins/skills';
@@ -81,7 +81,7 @@ export function applicationServices(kernel: ApplicationKernel): Plugin.Object<vo
       name: 'tongzhou-domain-services',
       inject: ['tzStore', 'tzDesktop'],
       apply(ctx) {
-        const domains = createRuntimeDomainServices(ctx.tzStore, ctx.tzDesktop.dataDir);
+        const domains = createDomainServices(ctx.tzStore, ctx.tzDesktop.dataDir);
         ctx.provide('tzKnowledge', domains.knowledge);
         ctx.provide('tzContent', domains.content);
         ctx.provide('tzArtifacts', domains.artifacts);
@@ -91,54 +91,10 @@ export function applicationServices(kernel: ApplicationKernel): Plugin.Object<vo
       },
     },
     {
-      name: 'tongzhou-execution-service',
-      inject: [
-        'tzDesktop',
-        'tzStore',
-        'tzCommands',
-        'tzKnowledge',
-        'tzContent',
-        'tzArtifacts',
-        'tzAttachments',
-        'tzMemories',
-        'tzCheckpoints',
-      ],
-      apply(ctx) {
-        const store = ctx.tzStore;
-        const clientCommands = ctx.tzCommands;
-        const { dataDir, emit, computer } = ctx.tzDesktop;
-        const runtime = new Runtime(store, dataDir, emit, computer, clientCommands, {
-          knowledge: ctx.tzKnowledge,
-          content: ctx.tzContent,
-          artifacts: ctx.tzArtifacts,
-          attachments: ctx.tzAttachments,
-          memories: ctx.tzMemories,
-          checkpoints: ctx.tzCheckpoints,
-        });
-        kernel.own(ctx, async () => {
-          runtime.stop();
-          await runtime.waitForIdle();
-        });
-        ctx.provide('tzRuntime', runtime);
-        ctx.provide('tzExecution', {
-          start: (...args) => runtime.start(...args),
-          snapshot: () => runtime.snapshot(),
-          changed: () => runtime.changed(),
-          processMemory: (...args) => runtime.processMemory(...args),
-          invalidateNative: (...args) => runtime.invalidateNative(...args),
-        });
-        ctx.provide('tzAutomations', runtime.automations);
-        ctx.provide('tzSessions', runtime.sessions);
-        ctx.provide('tzApprovals', runtime.approvalQueue);
-        ctx.provide('tzTerminals', runtime.terminals);
-      },
-    },
-    {
       name: 'tongzhou-updates-service',
-      inject: ['tzDesktop', 'tzStore', 'tzRuntime'],
+      inject: ['tzDesktop', 'tzStore'],
       apply(ctx) {
         const store = ctx.tzStore;
-        const runtime = ctx.tzRuntime;
         const { bundleDir, emit } = ctx.tzDesktop;
         const require = createRequire(path.join(bundleDir, '../package.json'));
         const updates = new Updates(
@@ -148,7 +104,9 @@ export function applicationServices(kernel: ApplicationKernel): Plugin.Object<vo
           process.platform === 'win32' ||
             require(path.join(app.getAppPath(), 'package.json')).tongzhouMacAutoUpdate === true,
           () =>
-            runtime.snapshot().runs.some((r) => r.status === 'running') ||
+            store
+              .list<import('../../src/shared/types').Run>('run')
+              .some((r) => r.status === 'running') ||
             store.list<any>('terminal').some((t) => t.status === 'running') ||
             store
               .list<any>('pendingInput')
@@ -163,24 +121,24 @@ export function applicationServices(kernel: ApplicationKernel): Plugin.Object<vo
     },
     {
       name: 'tongzhou-network-service',
-      inject: ['tzDesktop', 'tzStore', 'tzRuntime'],
+      inject: ['tzDesktop', 'tzStore', 'tzEvents'],
       apply(ctx) {
         const store = ctx.tzStore;
-        const runtime = ctx.tzRuntime;
+        const events = ctx.tzEvents;
         const { dataDir } = ctx.tzDesktop;
         const networks = new NetworkProfiles(
           store,
           dataDir,
-          () => runtime.changed(),
+          events.changed,
           (id, exceptRunId) => {
             const ids = store
               .providers()
               .filter((p) => p.network?.mode === 'managed' && p.network.profileId === id)
               .map((p) => p.id);
             if (
-              runtime
-                .snapshot()
-                .runs.some(
+              store
+                .list<import('../../src/shared/types').Run>('run')
+                .some(
                   (r) =>
                     ids.includes(r.providerId) && r.status === 'running' && r.id !== exceptRunId,
                 )
@@ -191,8 +149,7 @@ export function applicationServices(kernel: ApplicationKernel): Plugin.Object<vo
             for (const p of store
               .providers()
               .filter((p) => p.network?.mode === 'managed' && p.network.profileId === id)) {
-              ctx.get('tzAccountBrowser', false)?.close(p.id);
-              ctx.get('tzAccounts', false)?.resetCodex(p.id);
+              events.emit('accountReset', p.id);
             }
           },
           undefined,
@@ -200,16 +157,18 @@ export function applicationServices(kernel: ApplicationKernel): Plugin.Object<vo
             for (const p of store
               .providers()
               .filter((p) => p.network?.mode === 'managed' && p.network.profileId === id))
-              runtime.invalidateCodexSessions(p.id);
+              events.emit('engineInvalidated', { providerId: p.id });
           },
         );
         kernel.own(ctx, async () => {
           await networks.dispose();
         });
         ctx.provide('tzNetworks', networks);
-        runtime.resolveNetwork = (network, runId) => networks.resolve(network, runId);
+
         const modelTransports = new Map<string, Promise<typeof fetch>>();
-        runtime.modelTransport = (network) => {
+        const transport: NonNullable<
+          import('../core/task-contracts').ExecutionNetwork['transport']
+        > = (network) => {
           const key = JSON.stringify(network ?? { mode: 'inherit' });
           let pending = modelTransports.get(key);
           if (!pending) {
@@ -233,20 +192,20 @@ export function applicationServices(kernel: ApplicationKernel): Plugin.Object<vo
           }
           return pending;
         };
-        kernel.own(ctx, () => {
-          runtime.resolveNetwork = undefined;
-          runtime.modelTransport = undefined;
-          modelTransports.clear();
+        ctx.provide('tzModelNetwork', {
+          resolve: (network, runId) => networks.resolve(network, runId),
+          transport,
         });
+        kernel.own(ctx, () => modelTransports.clear());
       },
     },
     {
       name: 'tongzhou-connectors-service',
-      inject: ['tzStore', 'tzRuntime'],
+      inject: ['tzStore', 'tzEvents'],
       apply(ctx) {
         const store = ctx.tzStore;
-        const runtime = ctx.tzRuntime;
-        const connectors = new Connectors(store, () => runtime.changed());
+        const events = ctx.tzEvents;
+        const connectors = new Connectors(store, events.changed);
         kernel.own(ctx, async () => {
           connectors.dispose();
         });
@@ -255,18 +214,57 @@ export function applicationServices(kernel: ApplicationKernel): Plugin.Object<vo
     },
     {
       name: 'tongzhou-project-tools-service',
-      inject: ['tzDesktop', 'tzStore', 'tzRuntime'],
+      inject: ['tzDesktop', 'tzStore', 'tzEvents'],
       apply(ctx) {
         const store = ctx.tzStore;
-        const runtime = ctx.tzRuntime;
+        const events = ctx.tzEvents;
         const { dataDir } = ctx.tzDesktop;
-        const worktrees = new Worktrees(store, dataDir, () => runtime.changed());
-        const repositories = new GitRepositories(store, dataDir, () => runtime.changed());
-        runtime.projectUnavailable = (id) => worktrees.isRemoving(id);
+        const worktrees = new Worktrees(store, dataDir, events.changed);
+        const repositories = new GitRepositories(store, dataDir, events.changed);
         ctx.provide('tzProjectTools', { worktrees, repositories, activity: { count: 0 } });
-        kernel.own(ctx, () => {
-          runtime.projectUnavailable = undefined;
-        });
+      },
+    },
+    {
+      name: 'tongzhou-task-services',
+      inject: [
+        'tzDesktop',
+        'tzStore',
+        'tzCommands',
+        'tzEvents',
+        'tzModelNetwork',
+        'tzProjectTools',
+        'tzKnowledge',
+        'tzContent',
+        'tzArtifacts',
+        'tzAttachments',
+        'tzMemories',
+        'tzCheckpoints',
+      ],
+      async apply(ctx) {
+        const { dataDir, computer } = ctx.tzDesktop;
+        const system = await createTaskSystem(
+          ctx.tzStore,
+          dataDir,
+          ctx.tzEvents,
+          {
+            knowledge: ctx.tzKnowledge,
+            content: ctx.tzContent,
+            artifacts: ctx.tzArtifacts,
+            attachments: ctx.tzAttachments,
+            memories: ctx.tzMemories,
+            checkpoints: ctx.tzCheckpoints,
+          },
+          ctx.tzModelNetwork,
+          computer,
+          ctx.tzCommands,
+          (id) => ctx.tzProjectTools.worktrees.isRemoving(id),
+        );
+        kernel.own(ctx, system.dispose);
+        ctx.provide('tzTasks', system.tasks);
+        ctx.provide('tzAutomations', system.automations);
+        ctx.provide('tzSessions', system.sessions);
+        ctx.provide('tzApprovals', system.approvals);
+        ctx.provide('tzTerminals', system.terminals);
       },
     },
     {
@@ -284,15 +282,11 @@ export function applicationServices(kernel: ApplicationKernel): Plugin.Object<vo
     },
     {
       name: 'tongzhou-mcp-auth-service',
-      inject: ['tzStore', 'tzRuntime'],
+      inject: ['tzStore', 'tzEvents'],
       apply(ctx) {
         const store = ctx.tzStore;
-        const runtime = ctx.tzRuntime;
-        const mcpAuth = new McpAuth(
-          store,
-          () => runtime.changed(),
-          (url) => shell.openExternal(url),
-        );
+        const events = ctx.tzEvents;
+        const mcpAuth = new McpAuth(store, events.changed, (url) => shell.openExternal(url));
         kernel.own(ctx, async () => {
           mcpAuth.dispose();
         });
@@ -301,11 +295,15 @@ export function applicationServices(kernel: ApplicationKernel): Plugin.Object<vo
     },
     {
       name: 'tongzhou-feishu-service',
-      inject: ['tzStore', 'tzRuntime'],
+      inject: ['tzStore', 'tzEvents', 'tzTasks'],
       apply(ctx) {
         const store = ctx.tzStore;
-        const runtime = ctx.tzRuntime;
-        const feishu = new Feishu(store, runtime);
+        const events = ctx.tzEvents;
+        const tasks = ctx.tzTasks;
+        const feishu = new Feishu(store, {
+          enqueue: tasks.enqueue.bind(tasks),
+          changed: events.changed,
+        });
         kernel.own(ctx, async () => {
           feishu.dispose();
         });
@@ -314,11 +312,17 @@ export function applicationServices(kernel: ApplicationKernel): Plugin.Object<vo
     },
     {
       name: 'tongzhou-bots-service',
-      inject: ['tzStore', 'tzRuntime'],
+      inject: ['tzStore', 'tzEvents', 'tzTasks'],
       apply(ctx) {
         const store = ctx.tzStore;
-        const runtime = ctx.tzRuntime;
-        const bots = new Bots(store, runtime);
+        const events = ctx.tzEvents;
+        const tasks = ctx.tzTasks;
+        const bots = new Bots(store, {
+          enqueue: tasks.enqueue.bind(tasks),
+          cancel: tasks.cancel.bind(tasks),
+          snapshot: tasks.snapshot.bind(tasks),
+          changed: events.changed,
+        });
         kernel.own(ctx, async () => {
           bots.dispose();
         });
@@ -329,13 +333,13 @@ export function applicationServices(kernel: ApplicationKernel): Plugin.Object<vo
     },
     {
       name: 'tongzhou-channels-service',
-      inject: ['tzStore', 'tzRuntime', 'tzFeishu'],
+      inject: ['tzStore', 'tzEvents', 'tzFeishu'],
       apply(ctx) {
         const store = ctx.tzStore;
-        const runtime = ctx.tzRuntime;
+        const events = ctx.tzEvents;
         const feishu = ctx.tzFeishu;
         const channels = new Channels(store, () => {
-          runtime.changed();
+          events.changed();
           feishu.sync();
         });
         kernel.own(ctx, async () => {
@@ -343,17 +347,22 @@ export function applicationServices(kernel: ApplicationKernel): Plugin.Object<vo
         });
         ctx.provide('tzChannels', channels);
         feishu.sync();
-        runtime.onLifecycle = (run, event, id) => {
+        const notify = (
+          run: import('../../src/shared/types').Run,
+          event: import('../core/application-events').Lifecycle,
+          id?: string,
+        ) => {
           void channels.notify(run, event, id).catch(() => {});
         };
-        kernel.own(ctx, () => {
-          runtime.onLifecycle = undefined;
+        ctx.effect(() => {
+          events.on('lifecycle', notify);
+          return () => events.off('lifecycle', notify);
         });
       },
     },
     {
       name: 'tongzhou-account-browser-service',
-      inject: ['tzDesktop', 'tzStore', 'tzNetworks'],
+      inject: ['tzDesktop', 'tzStore', 'tzNetworks', 'tzEvents'],
       apply(ctx) {
         const store = ctx.tzStore;
         const networks = ctx.tzNetworks;
@@ -363,14 +372,19 @@ export function applicationServices(kernel: ApplicationKernel): Plugin.Object<vo
           accountBrowser.dispose();
         });
         ctx.provide('tzAccountBrowser', accountBrowser);
+        const close = (id: string) => accountBrowser.close(id);
+        ctx.effect(() => {
+          ctx.tzEvents.on('accountReset', close);
+          return () => ctx.tzEvents.off('accountReset', close);
+        });
       },
     },
     {
       name: 'tongzhou-accounts-service',
-      inject: ['tzDesktop', 'tzStore', 'tzRuntime', 'tzAccountBrowser'],
+      inject: ['tzDesktop', 'tzStore', 'tzEvents', 'tzTasks', 'tzAccountBrowser', 'tzModelNetwork'],
       apply(ctx) {
         const store = ctx.tzStore;
-        const runtime = ctx.tzRuntime;
+        const events = ctx.tzEvents;
         const accountBrowser = ctx.tzAccountBrowser;
         const { dataDir, emit } = ctx.tzDesktop;
         for (const engine of ['kimi', 'minimax'] as const) {
@@ -388,11 +402,29 @@ export function applicationServices(kernel: ApplicationKernel): Plugin.Object<vo
               contextChars: 0,
             });
         }
-        const accounts = new Accounts(store, runtime, dataDir, emit, (url, id) =>
-          accountBrowser.open(url, id),
+        const tasks = ctx.tzTasks;
+        const accounts = new Accounts(
+          store,
+          {
+            snapshot: tasks.snapshot.bind(tasks),
+            changed: events.changed,
+            invalidateNative: events.invalidateNative,
+            resolveNetwork: (network) => ctx.tzModelNetwork.resolve(network),
+            resetExecution: (providerId) => {
+              events.emit('engineInvalidated', { providerId });
+            },
+          },
+          dataDir,
+          emit,
+          (url, id) => accountBrowser.open(url, id),
         );
+        const reset = (id: string) => accounts.resetCodex(id);
+        ctx.effect(() => {
+          events.on('accountReset', reset);
+          return () => events.off('accountReset', reset);
+        });
         kernel.own(ctx, async () => {
-          accounts.dispose();
+          await accounts.dispose();
         });
         ctx.provide('tzAccounts', accounts);
       },

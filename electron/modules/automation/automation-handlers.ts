@@ -1,5 +1,5 @@
+import type { DomainServices } from '../domain-services';
 import type { Store } from '../../services/storage/store';
-import type { Runtime } from '../../core/runtime/runtime';
 import type { Session } from '../../../src/shared/types';
 import type {
   AutomationJob,
@@ -80,7 +80,7 @@ export function assertAutomationConnection(
 }
 export function builtinAutomationHandlers(
   store: Store,
-  runtime: Pick<Runtime, 'content' | 'knowledge'>,
+  runtime: Pick<DomainServices, 'content' | 'knowledge'>,
 ) {
   const { content, knowledge } = runtime;
   return new AutomationHandlers()

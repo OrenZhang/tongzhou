@@ -1,6 +1,6 @@
 import type { CodexClient } from './codex';
 
-/** Keeps idle engine threads alive; active turns are owned by Runtime. */
+/** Keeps idle engine threads alive; active turns are owned by the execution adapter. */
 export class CodexSessions {
   private entries = new Map<
     string,

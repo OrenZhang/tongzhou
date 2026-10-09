@@ -1,6 +1,13 @@
 import type { BrowserWindow } from 'electron';
 import type { AppEvent, ProviderInput } from '../../src/shared/types';
-import type { Runtime } from '../core/runtime/runtime';
+import type { TaskService } from '../core/task-contracts';
+import type { DomainServices } from '../modules/domain-services';
+import type { Automations } from '../modules/automation/automations';
+import type { SessionLifecycle } from '../modules/sessions/session-lifecycle';
+import type { ApprovalQueue } from '../core/runtime/approval-queue';
+import type { Terminals } from '../services/desktop/terminals';
+import type { ApplicationEvents } from '../core/application-events';
+import type { ExecutionNetwork } from '../core/task-contracts';
 import type { ClientCommands } from '../core/tools/client-commands';
 import type { Store } from '../services/storage/store';
 import type { Updates } from '../services/desktop/updates';
@@ -38,21 +45,19 @@ declare module 'cordis' {
     tzCommands: ClientCommands;
     tzIpc: ClientIpc;
     tzStore: Store;
-    tzRuntime: Runtime;
-    tzExecution: Pick<
-      Runtime,
-      'start' | 'snapshot' | 'changed' | 'processMemory' | 'invalidateNative'
-    >;
-    tzKnowledge: Runtime['knowledge'];
-    tzContent: Runtime['content'];
-    tzArtifacts: Runtime['artifacts'];
-    tzAttachments: Runtime['attachments'];
-    tzAutomations: Runtime['automations'];
-    tzSessions: Runtime['sessions'];
-    tzApprovals: Runtime['approvalQueue'];
-    tzTerminals: Runtime['terminals'];
-    tzMemories: Runtime['memories'];
-    tzCheckpoints: Runtime['checkpoints'];
+    tzTasks: TaskService;
+    tzEvents: ApplicationEvents;
+    tzModelNetwork: ExecutionNetwork;
+    tzKnowledge: DomainServices['knowledge'];
+    tzContent: DomainServices['content'];
+    tzArtifacts: DomainServices['artifacts'];
+    tzAttachments: DomainServices['attachments'];
+    tzAutomations: Automations;
+    tzSessions: SessionLifecycle;
+    tzApprovals: ApprovalQueue;
+    tzTerminals: Terminals;
+    tzMemories: DomainServices['memories'];
+    tzCheckpoints: DomainServices['checkpoints'];
     tzUpdates: Updates;
     tzNetworks: NetworkProfiles;
     tzAccounts: Accounts;

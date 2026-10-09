@@ -62,7 +62,7 @@ GitHub 和 GitLab 的认证统一在 **插件 → 内置插件** 管理，选择
 
 ## 开发架构
 
-客户端使用 Electron + React + TypeScript，主进程通过 Cordis 组合内置服务和功能插件，统一依赖注入、接口注册与生命周期。任务执行由 Codex 核心与同舟模型适配层协作，本地资料使用 SQLite 保存。新增功能按领域注册，资源随模块释放；详细边界见 [架构设计](docs/ARCHITECTURE.md) 和 [代码目录](docs/CODE_STRUCTURE.md)。
+客户端使用 Electron + React + TypeScript。Cordis 在应用入口组合内置服务，管理依赖、接口与资源生命周期；业务模块与渠道通过独立任务接口提交工作。任务调度、消息记录、账号认证和 Codex 执行适配分别维护自己的状态，执行适配器管理引擎进程与线程缓存，本地资料使用 SQLite 保存。界面按功能管理状态，App 组合页面与导航。当前边界见 [架构设计](docs/ARCHITECTURE.md) 和 [代码目录](docs/CODE_STRUCTURE.md)，后续仓储与宿主解耦计划见 [架构演进](docs/ARCHITECTURE_TARGET.md)。
 
 ## 了解更多
 

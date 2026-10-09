@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import type { Store } from '../storage/store';
-import type { Runtime } from '../../core/runtime/runtime';
+import type { TaskService, ChangePublisher } from '../../core/task-contracts';
 import type { Accounts } from './accounts';
 import type { AccountBrowser } from './account-browser';
 import type { NetworkProfiles } from '../network/network-profiles';
@@ -16,7 +16,7 @@ import { complete, listModels } from '../../core/models/providers';
 export function registerProviderServices(
   register: ClientRegistrar,
   store: Store,
-  runtime: Runtime,
+  services: Pick<TaskService, 'snapshot'> & ChangePublisher,
   accounts: Accounts,
   accountBrowser: AccountBrowser,
   networks: NetworkProfiles,
@@ -33,13 +33,13 @@ export function registerProviderServices(
       const before = store.providers().find((p) => p.id === input.id);
       if (
         input.enabled === false &&
-        runtime.snapshot().runs.some((r) => r.providerId === input.id && r.status === 'running')
+        services.snapshot().runs.some((r) => r.providerId === input.id && r.status === 'running')
       )
         throw new Error('此连接正在执行任务，请结束或停止任务后再停用。');
       const networkChanged = networkKey(before?.network) !== networkKey(input.network);
       if (
         networkChanged &&
-        runtime.snapshot().runs.some((r) => r.providerId === input.id && r.status === 'running')
+        services.snapshot().runs.some((r) => r.providerId === input.id && r.status === 'running')
       )
         throw new Error('此 ChatGPT 连接正在执行任务，请结束或停止任务后再修改代理。');
       const pending = pendingImports.get(input.id);
@@ -49,7 +49,7 @@ export function registerProviderServices(
         accounts.resetCodex(input.id);
       }
       pendingImports.delete(input.id);
-      runtime.changed();
+      services.changed();
       return result;
     },
   );
@@ -60,12 +60,12 @@ export function registerProviderServices(
     }),
     (raw) => {
       const id = idSchema.parse(raw);
-      if (runtime.snapshot().runs.some((r) => r.providerId === id && r.status === 'running'))
+      if (services.snapshot().runs.some((r) => r.providerId === id && r.status === 'running'))
         throw new Error('此连接正在执行任务');
       store.deleteProvider(id);
       accounts.forget(id);
       accountBrowser.close(id);
-      runtime.changed();
+      services.changed();
     },
   );
   register(
@@ -80,12 +80,12 @@ export function registerProviderServices(
       if (nativeEngine(p.protocol)) {
         const catalog = await accounts.native(p.protocol, p.id).catalog();
         store.put('provider', { ...p, models: catalog.models, modelLabels: catalog.modelLabels });
-        runtime.changed();
+        services.changed();
         return '账号已通过官方引擎验证，模型列表已同步；实际调用权限以账号套餐为准。';
       }
       if (p.protocol === 'codex') {
-        await runtime.authClientFor(p.id).start();
-        const a = await runtime.authClientFor(p.id).request('account/read', {});
+        await accounts.client(p.id).start();
+        const a = await accounts.client(p.id).request('account/read', {});
         if (!a.account) throw new Error('尚未登录 ChatGPT');
         return 'Codex 已连接，账号已登录。模型访问权限以实际执行为准。';
       }
@@ -147,14 +147,14 @@ export function registerProviderServices(
       if (p.protocol === 'codex') {
         await check('账号网络', () => accountBrowser.test(p.id));
         await check('账号认证', async () => {
-          const c = runtime.authClientFor(p.id);
+          const c = accounts.client(p.id);
           await c.start();
           const r = await c.request('account/read', { refreshToken: false });
           if (!r.account) throw new Error('尚未授权');
           return '官方引擎确认已登录';
         });
         await check('模型目录', async () => {
-          const c = runtime.authClientFor(p.id);
+          const c = accounts.client(p.id);
           await c.start();
           const r = await c.request('model/list', { includeHidden: false });
           if (model && !r.data.some((m: any) => (m.model ?? m.id) === model))
@@ -260,14 +260,12 @@ export function registerProviderServices(
       if (nativeEngine(p.protocol)) {
         const catalog = await accounts.native(p.protocol, p.id).catalog();
         store.put('provider', { ...p, models: catalog.models, modelLabels: catalog.modelLabels });
-        runtime.changed();
+        services.changed();
         return catalog.models;
       }
       if (p.protocol === 'codex') {
-        await runtime.authClientFor(p.id).start();
-        const result = await runtime
-          .authClientFor(p.id)
-          .request('model/list', { includeHidden: false });
+        await accounts.client(p.id).start();
+        const result = await accounts.client(p.id).request('model/list', { includeHidden: false });
         models = result.data.map((m: any) => m.model ?? m.id);
       } else {
         models = await listModels(p, store.secret(p.id));
@@ -277,7 +275,7 @@ export function registerProviderServices(
         throw new Error('连接已变更，请重新获取模型');
       models = [...new Set(models.filter((m) => typeof m === 'string' && m.trim()))];
       store.put('provider', { ...current, models: [...new Set([...current.models, ...models])] });
-      runtime.changed();
+      services.changed();
       return models;
     },
   );

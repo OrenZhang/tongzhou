@@ -6,6 +6,7 @@ import path from 'node:path';
 const suites = [
   'smoke',
   'session-entry',
+  'state-boundaries',
   'project-context',
   'project-deletion',
   'workbench',

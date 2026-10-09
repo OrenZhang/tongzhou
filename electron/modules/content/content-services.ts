@@ -1,9 +1,12 @@
+import type { DomainServices } from '../domain-services';
+import type { TaskService } from '../../core/task-contracts';
+import type { ChangePublisher } from '../../core/task-contracts';
+import type { Automations } from '../automation/automations';
 import { z } from 'zod';
 import { dialog } from 'electron';
 import { readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Store } from '../../services/storage/store';
-import type { Runtime } from '../../core/runtime/runtime';
 import type { Session } from '../../../src/shared/types';
 import { workspaceOperation, type ClientOperation } from '../../core/tools/client-commands';
 import { librarySchema, libraryIdSchema, contentWriteSchema, contentRunSchema } from './content';
@@ -13,10 +16,12 @@ import { builtinAgent } from '../../../src/shared/builtin-agents';
 export function registerContentServices(
   register: (name: string, definition: ClientOperation, handler: (...args: any[]) => any) => void,
   store: Store,
-  runtime: Pick<Runtime, 'content' | 'knowledge' | 'changed' | 'start' | 'automations'>,
+  services: Pick<DomainServices, 'content' | 'knowledge'> &
+    Pick<TaskService, 'start'> &
+    ChangePublisher & { automations: Automations },
 ) {
-  const c = runtime.content,
-    k = runtime.knowledge;
+  const c = services.content,
+    k = services.knowledge;
   const define = (
     name: string,
     description: string,
@@ -36,7 +41,7 @@ export function registerContentServices(
               confirmation: 'none',
               chat: ([input], sessionId) => {
                 const result = c.write(input, sessionId, true);
-                runtime.changed();
+                services.changed();
                 return c.receipt(result.id);
               },
             }
@@ -64,7 +69,7 @@ export function registerContentServices(
   );
   define('contentLibrarySave', '创建或重命名内容库', [librarySchema], (input) => {
     const result = c.saveLibrary(input);
-    runtime.changed();
+    services.changed();
     return result;
   });
   define(
@@ -73,7 +78,7 @@ export function registerContentServices(
     [libraryIdSchema, z.number().int().positive()],
     (id, version) => {
       c.deleteLibrary(libraryIdSchema.parse(id), z.number().int().positive().parse(version));
-      runtime.changed();
+      services.changed();
     },
   );
   define(
@@ -82,7 +87,7 @@ export function registerContentServices(
     [contentWriteSchema],
     (input) => {
       const result = c.write(input);
-      runtime.changed();
+      services.changed();
       return result;
     },
   );
@@ -126,7 +131,7 @@ export function registerContentServices(
       title: doc.title,
       selection: p.selection,
     });
-    const runId = runtime.start({
+    const runId = services.start({
       sessionId,
       providerId: p.providerId,
       model: p.model,
@@ -173,8 +178,8 @@ export function registerContentServices(
         } catch (e) {
           errors.push(path.basename(file) + ': ' + String(e));
         }
-      runtime.changed();
-      for (const doc of imported) runtime.automations.event('import', doc.id);
+      services.changed();
+      for (const doc of imported) services.automations.event('import', doc.id);
       return { imported, errors };
     },
   );

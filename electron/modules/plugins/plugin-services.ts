@@ -1,6 +1,7 @@
+import type { ChangePublisher } from '../../core/task-contracts';
+import type { ApplicationEvents } from '../../core/application-events';
 import { dialog, type BrowserWindow } from 'electron';
 import type { Store } from '../../services/storage/store';
-import type { Runtime } from '../../core/runtime/runtime';
 import {
   operation,
   manual,
@@ -29,7 +30,7 @@ import {
 export function registerPluginServices(
   register: ClientRegistrar,
   store: Store,
-  runtime: Pick<Runtime, 'changed' | 'invalidateNative'>,
+  services: ChangePublisher & { invalidateNative: ApplicationEvents['invalidateNative'] },
   mcpAuth: McpAuth,
   connectors: Connectors,
   getWindow: () => BrowserWindow | undefined,
@@ -58,8 +59,8 @@ export function registerPluginServices(
     ),
     async (raw) => {
       const plugin = await localGitlab.use(idSchema.parse(raw));
-      runtime.invalidateNative();
-      runtime.changed();
+      services.invalidateNative();
+      services.changed();
       return plugin;
     },
   );
@@ -84,8 +85,8 @@ export function registerPluginServices(
     ),
     async (raw) => {
       const id = await localGithub.enable(idSchema.parse(raw));
-      runtime.invalidateNative();
-      runtime.changed();
+      services.invalidateNative();
+      services.changed();
       return id;
     },
   );
@@ -169,8 +170,8 @@ export function registerPluginServices(
             : undefined,
         ...(same ? { catalog: previous.catalog, checkedAt: previous.checkedAt } : {}),
       });
-      runtime.invalidateNative();
-      runtime.changed();
+      services.invalidateNative();
+      services.changed();
     },
   );
   register(
@@ -186,8 +187,8 @@ export function registerPluginServices(
       store.saveSecret('plugin_oauth_client_' + id, undefined, true);
       for (const a of store.list<AgentProfile>('agent'))
         store.put('agent', { ...a, pluginIds: a.pluginIds?.filter((p) => p !== id) });
-      runtime.invalidateNative();
-      runtime.changed();
+      services.invalidateNative();
+      services.changed();
     },
   );
   register(
@@ -211,7 +212,7 @@ export function registerPluginServices(
         )
           throw new Error('插件配置已变更，请重新检查');
         store.put('plugin', { ...p, catalog, checkedAt: Date.now() });
-        runtime.changed();
+        services.changed();
         return catalog;
       } catch (error) {
         const current = store.get<PluginConfig>('plugin', p.id);
@@ -220,7 +221,7 @@ export function registerPluginServices(
           pluginCredentialVersion(store, p) === credentials
         ) {
           store.put('plugin', { ...p, catalog: undefined, checkedAt: undefined });
-          runtime.changed();
+          services.changed();
         }
         throw error;
       } finally {
@@ -247,7 +248,7 @@ export function registerPluginServices(
     operation('插件', 'change', '退出插件账号授权', [idSchema.describe('pluginId')]),
     (raw) => {
       mcpAuth.logout(idSchema.parse(raw));
-      runtime.invalidateNative();
+      services.invalidateNative();
     },
   );
   register(
@@ -273,8 +274,8 @@ export function registerPluginServices(
       // Resolve the current account token at execution time, including future refreshes/logout.
       store.saveSecret('plugin_' + p.id, undefined, true);
       store.put('plugin', { ...p, connectorId: c.id, catalog: undefined, checkedAt: undefined });
-      runtime.invalidateNative();
-      runtime.changed();
+      services.invalidateNative();
+      services.changed();
     },
   );
   register(
@@ -292,7 +293,7 @@ export function registerPluginServices(
       if (chosen.canceled) return null;
       const skill = await importSkillDirectory(chosen.filePaths[0]);
       store.put('skill', skill);
-      runtime.changed();
+      services.changed();
       return skill;
     },
   );
@@ -306,8 +307,8 @@ export function registerPluginServices(
     ),
     (raw) => {
       const skill = createPersonalSkill(store, raw);
-      runtime.invalidateNative();
-      runtime.changed();
+      services.invalidateNative();
+      services.changed();
       return skill;
     },
   );
@@ -321,8 +322,8 @@ export function registerPluginServices(
     ),
     (raw) => {
       saveExistingSkill(store, raw);
-      runtime.invalidateNative();
-      runtime.changed();
+      services.invalidateNative();
+      services.changed();
     },
   );
   register(
@@ -336,8 +337,8 @@ export function registerPluginServices(
       store.remove('skill', id);
       for (const a of store.list<AgentProfile>('agent'))
         store.put('agent', { ...a, skillIds: a.skillIds?.filter((s) => s !== id) });
-      runtime.invalidateNative();
-      runtime.changed();
+      services.invalidateNative();
+      services.changed();
     },
   );
 }

@@ -1,3 +1,7 @@
+import type { DomainServices } from '../domain-services';
+import type { TaskService } from '../../core/task-contracts';
+import type { ChangePublisher } from '../../core/task-contracts';
+import type { Automations } from '../automation/automations';
 import { z } from 'zod';
 import {
   personalizationSchema,
@@ -16,16 +20,17 @@ import {
 } from '../../core/tools/client-commands';
 import { absolutePathSchema } from '../../services/storage/file-transfer';
 import { knowledgeInput, knowledgeFolderInput } from './knowledge';
-import type { Runtime } from '../../core/runtime/runtime';
 import type { Store } from '../../services/storage/store';
 import type { Session } from '../../../src/shared/types';
 
 export function registerKnowledgeServices(
   register: (name: string, definition: ClientOperation, handler: (...args: any[]) => any) => void,
   store: Store,
-  runtime: Pick<Runtime, 'knowledge' | 'changed' | 'processMemory' | 'start' | 'automations'>,
+  services: Pick<DomainServices, 'knowledge'> &
+    Pick<TaskService, 'start'> &
+    ChangePublisher & { automations: Automations; processMemory: Automations['processMemory'] },
 ) {
-  const k = runtime.knowledge;
+  const k = services.knowledge;
   const rawRegister = register;
   register = (name, definition, handler) => {
     // These are the user's workspace management operations. Background jobs keep
@@ -46,7 +51,7 @@ export function registerKnowledgeServices(
               chat: ([raw]: any[]) => {
                 const input = knowledgeInput.parse(raw);
                 const result = k.save({ ...input, status: input.status ?? 'draft' }, 'agent');
-                runtime.changed();
+                services.changed();
                 return result;
               },
             }
@@ -71,7 +76,7 @@ export function registerKnowledgeServices(
     ),
     (value) => {
       const result = savePersonalization(store, value);
-      runtime.changed();
+      services.changed();
       return result;
     },
   );
@@ -86,7 +91,7 @@ export function registerKnowledgeServices(
     ]),
     (doc, version, entry, content) => {
       const result = k.editMemory(doc, version, entry, content);
-      runtime.changed();
+      services.changed();
       return result;
     },
   );
@@ -100,7 +105,7 @@ export function registerKnowledgeServices(
     ),
     (input) => {
       const folder = k.saveFolder(input);
-      runtime.changed();
+      services.changed();
       return folder;
     },
   );
@@ -114,7 +119,7 @@ export function registerKnowledgeServices(
     ),
     (folder, version) => {
       k.deleteFolder(folder, version);
-      runtime.changed();
+      services.changed();
     },
   );
   register(
@@ -127,7 +132,7 @@ export function registerKnowledgeServices(
     ),
     (doc, folder, version) => {
       const value = k.moveWiki(doc, folder, version);
-      runtime.changed();
+      services.changed();
       return value;
     },
   );
@@ -139,7 +144,7 @@ export function registerKnowledgeServices(
     ]),
     (doc, version) => {
       const value = k.review(doc, version);
-      runtime.changed();
+      services.changed();
       return value;
     },
   );
@@ -151,7 +156,7 @@ export function registerKnowledgeServices(
       '将记忆整理加入统一自动化队列，空闲时运行，可重试失败候选；模型跟随记忆整理 Agent 配置',
       [z.boolean().optional()],
     ),
-    (retry) => runtime.processMemory(retry ?? true),
+    (retry) => services.processMemory(retry ?? true),
   );
   register(
     'knowledgeAudit',
@@ -172,7 +177,7 @@ export function registerKnowledgeServices(
         model: from.model,
       });
       try {
-        runtime.start({
+        services.start({
           sessionId: created.id,
           providerId: from.providerId,
           model: from.model,
@@ -184,7 +189,7 @@ export function registerKnowledgeServices(
         store.put('session', { ...store.get<Session>('session', created.id), archived: true });
         throw error;
       }
-      runtime.changed();
+      services.changed();
       return created.id;
     },
   );
@@ -206,7 +211,7 @@ export function registerKnowledgeServices(
         100,
       ))
         k.capture(run);
-      runtime.changed();
+      services.changed();
       return { collected: k.memory.candidates().length - before };
     },
   );
@@ -248,7 +253,7 @@ export function registerKnowledgeServices(
     (raw) => {
       const input = knowledgeInput.parse(raw);
       const value = k.save(input);
-      runtime.changed();
+      services.changed();
       return value;
     },
   );
@@ -262,7 +267,7 @@ export function registerKnowledgeServices(
     ),
     (doc, version) => {
       k.delete(doc, version);
-      runtime.changed();
+      services.changed();
     },
   );
   register(
@@ -274,7 +279,7 @@ export function registerKnowledgeServices(
     ]),
     (doc, version, current) => {
       const value = k.restore(doc, version, current);
-      runtime.changed();
+      services.changed();
       return value;
     },
   );
@@ -287,9 +292,9 @@ export function registerKnowledgeServices(
       [z.object({ autoCollect: z.boolean() })],
     ),
     (value) => {
-      const rule = runtime.automations.state().rules.find((r) => r.kind === 'memory')!;
-      runtime.automations.save({ ...rule, enabled: value.autoCollect });
-      runtime.changed();
+      const rule = services.automations.state().rules.find((r) => r.kind === 'memory')!;
+      services.automations.save({ ...rule, enabled: value.autoCollect });
+      services.changed();
     },
   );
   register(
@@ -327,7 +332,7 @@ export function registerKnowledgeServices(
           );
         }
       }
-      runtime.changed();
+      services.changed();
       return { imported, errors };
     },
   );
@@ -361,7 +366,7 @@ export function registerKnowledgeServices(
       });
       k.bind(session.id, ids);
       try {
-        runtime.start({
+        services.start({
           sessionId: session.id,
           ...connection,
           agentId: KNOWLEDGE_ORGANIZER_ID,
@@ -371,7 +376,7 @@ export function registerKnowledgeServices(
         store.put('session', { ...store.get<Session>('session', session.id), archived: true });
         throw error;
       }
-      runtime.changed();
+      services.changed();
       return session.id;
     },
   );

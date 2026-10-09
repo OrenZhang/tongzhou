@@ -8,11 +8,10 @@ import '../context';
 
 export const channelsPlugin: Plugin.Object<void> = {
   name: 'tongzhou-channels',
-  inject: ['tzIpc', 'tzStore', 'tzRuntime', 'tzBots', 'tzChannels', 'tzFeishu'],
+  inject: ['tzIpc', 'tzStore', 'tzBots', 'tzChannels', 'tzFeishu', 'tzEvents'],
   apply(ctx) {
     const register = ctx.tzIpc.scoped(ctx);
     const store = ctx.tzStore;
-    const runtime = ctx.tzRuntime;
     const bots = ctx.tzBots;
     const channels = ctx.tzChannels;
     const feishu = ctx.tzFeishu;
@@ -123,7 +122,7 @@ export const channelsPlugin: Plugin.Object<void> = {
       }),
       (id) => {
         store.remove('notificationRule', idSchema.parse(id));
-        runtime.changed();
+        ctx.tzEvents.changed();
       },
     );
   },

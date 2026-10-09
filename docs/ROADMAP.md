@@ -61,7 +61,7 @@
 
 ### 已确认原因与待核验项
 
-- `electron/core/runtime/runtime.ts` 的 `nativeRun` 当前在只读 Agent，或无项目且未启用公共工具时，主动选择 `plan` 并发送 `session/set_mode`。这把工具权限限制与引擎规划模式耦合，影响 Kimi / MiniMax 的回复行为。
+- `electron/core/runtime/task-scheduler.ts` 的 `nativeRun` 当前在只读 Agent，或无项目且未启用公共工具时，主动选择 `plan` 并发送 `session/set_mode`。这把工具权限限制与引擎规划模式耦合，影响 Kimi / MiniMax 的回复行为。
 - 同一流程又在普通聊天提示词中要求「不启动规划或澄清工作流」，与实际设置的引擎模式冲突。仅补提示词或隐藏工具条没有移除底层触发点。
 - `tests/services/accounts/native-engine.test.ts` 目前还断言普通聊天使用 `plan`，修复时需要同步调整这一旧预期。
 - 截图中额外结束语的具体来源尚未确认；需结合原生事件、被拒绝的澄清工具调用及历史注入复现，不能仅凭截图断定为某个工具导致。
@@ -345,7 +345,7 @@ Agent 页面不自动生成「协作助手」「代码审查」「架构规划�
 
 ### 当前缺口
 
-`src/app/App.tsx` 在运行中阻止发送，`electron/core/runtime/runtime.ts` 的 `start()` 也拒绝同会话并发运行。应增加专门的补充消息处理，而非只放开按钮后启动第二个竞争执行的任务。
+`src/app/App.tsx` 在运行中阻止发送，`electron/core/runtime/task-scheduler.ts` 的 `start()` 也拒绝同会话并发运行。应增加专门的补充消息处理，而非只放开按钮后启动第二个竞争执行的任务。
 
 ### 补充方式
 

@@ -1,20 +1,21 @@
+import type { DomainServices } from '../domain-services';
+import type { ChangePublisher } from '../../core/task-contracts';
+import type { Automations } from '../automation/automations';
+import type { Store } from '../../services/storage/store';
 import { dialog, shell } from 'electron';
 import { writeFile } from 'node:fs/promises';
 import { z } from 'zod';
 import { workspaceOperation, type ClientOperation } from '../../core/tools/client-commands';
-import type { Runtime } from '../../core/runtime/runtime';
 import { artifactQuerySchema } from './artifacts';
 import { absolutePathSchema, writeLocalFile } from '../../services/storage/file-transfer';
 import { libraryIdSchema } from '../content/content';
 
 export function registerArtifactServices(
   register: (name: string, operation: ClientOperation, handler: (...args: any[]) => any) => void,
-  runtime: Pick<
-    Runtime,
-    'artifacts' | 'store' | 'content' | 'knowledge' | 'automations' | 'changed'
-  >,
+  services: Pick<DomainServices, 'artifacts' | 'content' | 'knowledge'> &
+    ChangePublisher & { automations: Automations; store: Store },
 ) {
-  const a = runtime.artifacts,
+  const a = services.artifacts,
     id = z.string().uuid();
   const define = (
     name: string,
@@ -25,7 +26,7 @@ export function registerArtifactServices(
     register(
       name,
       workspaceOperation(
-        runtime.store,
+        services.store,
         '作品',
         ['artifactList', 'artifactRead', 'artifactPreview'].includes(name) ? 'query' : 'change',
         description,
@@ -76,17 +77,17 @@ export function registerArtifactServices(
   );
   define('artifactDelete', '删除保存的作品副本，不修改原始项目文件', [id], (v) => {
     a.delete(v);
-    runtime.changed();
+    services.changed();
   });
   define(
     'artifactToKnowledge',
     '按用户指定的位置直接把作品保存到内容库，无需再次点击入库；返回文档 ID 可用 knowledgeRead 核验',
     [id, libraryIdSchema, id.nullable().optional(), z.string().trim().min(1).max(100).optional()],
     (v, libraryId, folderId, newFolderName) => {
-      runtime.content.library(libraryId);
+      services.content.library(libraryId);
       if (
         folderId &&
-        !runtime.knowledge
+        !services.knowledge
           .folders()
           .some((f) => f.id === folderId && (f.libraryId ?? 'default') === libraryId)
       )
@@ -94,9 +95,9 @@ export function registerArtifactServices(
       const item = a.read(v),
         bytes = a.bytes(v);
       const targetFolder = newFolderName
-        ? runtime.knowledge.saveFolder({ name: newFolderName, libraryId, parentId: folderId }).id
+        ? services.knowledge.saveFolder({ name: newFolderName, libraryId, parentId: folderId }).id
         : folderId;
-      const doc = runtime.knowledge.importFile(
+      const doc = services.knowledge.importFile(
         item.name,
         bytes,
         item.projectId,
@@ -105,9 +106,9 @@ export function registerArtifactServices(
         true,
       );
       if (!doc.sessionId)
-        runtime.knowledge.persist({ ...doc, sessionId: item.sessionId, runId: item.runId }, doc);
-      runtime.automations.event('import', doc.id);
-      runtime.changed();
+        services.knowledge.persist({ ...doc, sessionId: item.sessionId, runId: item.runId }, doc);
+      services.automations.event('import', doc.id);
+      services.changed();
       return doc.id;
     },
   );

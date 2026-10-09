@@ -1,16 +1,16 @@
+import type { DomainServices } from '../domain-services';
 import { MEMORY_AUTOMATION_ID } from '../../../src/shared/automation';
 import { MEMORY_ORGANIZER_ID } from '../../../src/shared/builtin-agents';
 import type { Run } from '../../../src/shared/types';
 import type { AutomationHandler } from './automation-handlers';
 import type { MemoryJob } from '../knowledge/knowledge-memory';
-import type { Runtime } from '../../core/runtime/runtime';
 import type { Store } from '../../services/storage/store';
 import { agentConnection, agentProfile } from '../agents/agents';
 
 /** Memory owns evidence and commits; the shared scheduler owns triggers and run lifecycle. */
 export function memoryAutomationHandler(
   store: Store,
-  runtime: Pick<Runtime, 'knowledge'>,
+  runtime: Pick<DomainServices, 'knowledge'>,
 ): AutomationHandler {
   const memory = runtime.knowledge.memory;
   const jobMemory = (context?: Record<string, string>) =>

@@ -1,13 +1,13 @@
-import { createRuntimeDomainServices, type RuntimeDomainServices } from './domain-services';
-import { CodexExecution } from './codex-execution';
-import { SessionLifecycle } from '../../modules/sessions/session-lifecycle';
-import { ApprovalQueue } from './approval-queue';
+import { RunLedger } from './run-ledger';
+import type { DomainServices } from '../../modules/domain-services';
+import type { ExecutionAdapter, ExecutionCallbacks, TaskService } from '../task-contracts';
+import type { ApplicationEvents } from '../application-events';
+import type { SessionLifecycle } from '../../modules/sessions/session-lifecycle';
+import type { ApprovalQueue } from './approval-queue';
 import { runtimeSnapshot } from './snapshot';
 import artifactPrompts from '../../../prompts/artifacts.json';
-import { Automations } from '../../modules/automation/automations';
-import { MEMORY_AUTOMATION_ID } from '../../../src/shared/automation';
-import { Knowledge } from '../../modules/knowledge/knowledge';
-import { ContentWorkspace } from '../../modules/content/content';
+import type { Knowledge } from '../../modules/knowledge/knowledge';
+import type { ContentWorkspace } from '../../modules/content/content';
 import {
   builtinReplyModel,
   identityInstructions,
@@ -17,11 +17,11 @@ import { personalizationInstructions } from '../../modules/agents/personalizatio
 import { modelErrorMessage } from './errors';
 import { conversationTurns, editableTurnPrompt } from '../../../src/shared/turns';
 import { randomUUID } from 'node:crypto';
-import { Attachments } from '../../modules/artifacts/attachments';
-import { Artifacts } from '../../modules/artifacts/artifacts';
-import { TaskMemories } from '../../modules/sessions/task-memory';
-import { Terminals } from '../../services/desktop/terminals';
-import { ChangeCheckpoints } from '../../modules/projects/run-changes';
+import type { Attachments } from '../../modules/artifacts/attachments';
+import type { Artifacts } from '../../modules/artifacts/artifacts';
+import type { TaskMemories } from '../../modules/sessions/task-memory';
+import type { Terminals } from '../../services/desktop/terminals';
+import type { ChangeCheckpoints } from '../../modules/projects/run-changes';
 import type {
   AgentProfile,
   PermissionMode,
@@ -40,9 +40,8 @@ import { resolveAgent } from './context';
 import { KNOWLEDGE_ORGANIZER_ID, MEMORY_ORGANIZER_ID } from '../../../src/shared/builtin-agents';
 import { effectivePermission } from '../../../src/shared/permissions';
 import { historyChars } from './history';
-import { engineHome } from '../../services/accounts/account-paths';
 import type { ClientCommands } from '../tools/client-commands';
-import { Store } from '../../services/storage/store';
+import type { Store } from '../../services/storage/store';
 import { ToolScope, skillInstructions, type ComputerAdapter } from '../tools/extensions';
 import {
   executeTool,
@@ -53,136 +52,35 @@ import {
   projectShell,
 } from '../tools/workspace';
 import { nativeEngine } from '../../services/accounts/native-engine';
-import { CodexClient } from '../codex/codex';
-import { CodexSessions } from '../codex/codex-sessions';
 import { redact } from '../../services/storage/validation';
-import path from 'node:path';
 import { z } from 'zod';
 
-export class Runtime {
-  modelTransport?: (network: Provider['network']) => Promise<typeof fetch>;
-  resolveNetwork?: (
-    network?: import('../../../src/shared/provider-network').ProviderNetwork,
-    runId?: string,
-  ) => Promise<import('../../../src/shared/provider-network').ProviderNetwork | undefined>;
-  projectUnavailable?: (id: string) => boolean;
-  onLifecycle?: (
-    run: Run,
-    event: 'completed' | 'failed' | 'interrupted' | 'approval',
-    eventId?: string,
-  ) => void;
-  readonly knowledge: Knowledge;
-  readonly content: ContentWorkspace;
-  readonly automations: Automations;
-  readonly memories: TaskMemories;
-  readonly terminals: Terminals;
-  readonly checkpoints: ChangeCheckpoints;
+export interface TaskResources extends DomainServices {
+  events: ApplicationEvents;
+  sessions: SessionLifecycle;
+  approvals: ApprovalQueue;
+  terminals: Terminals;
+  createExecution(callbacks: ExecutionCallbacks): ExecutionAdapter;
+  projectUnavailable?(id: string): boolean;
+}
+
+export class TaskScheduler implements TaskService {
+  private readonly knowledge: Knowledge;
+  private readonly content: ContentWorkspace;
+  private readonly memories: TaskMemories;
+  private readonly terminals: Terminals;
+  private readonly checkpoints: ChangeCheckpoints;
   private stopping = false;
-  private codexExecution: CodexExecution;
-  readonly sessions: SessionLifecycle;
-  readonly approvalQueue: ApprovalQueue;
-  private steering = new Map<
-    string,
-    (text: string, messageId: string, attachmentIds?: string[]) => Promise<void>
-  >();
-  readonly attachments: Attachments;
-  readonly artifacts: Artifacts;
-  private eventSequences = new Map<string, number>();
-  private reasoning = new Map<string, RunEvent>();
-  private toolOutput = new Map<string, RunEvent>();
-  private progressSaved = new Map<string, number>();
-  private nextSequence(runId: string) {
-    const seq = (this.eventSequences.get(runId) ?? 0) + 1;
-    this.eventSequences.set(runId, seq);
-    return seq;
-  }
-  private flushProgress(runId: string) {
-    for (const cache of [this.reasoning, this.toolOutput]) {
-      const event = cache.get(runId);
-      if (event) {
-        this.store.put('runEvent', event);
-        this.emit({ type: 'run-event', event });
-        cache.delete(runId);
-      }
-    }
-    this.progressSaved.delete(runId);
-    this.progressSaved.delete(runId + ':tool');
-  }
-  private appendText(message: Message, text: string) {
-    if (!text) return;
-    const start = message.content.length;
-    message.content += text;
-    if (!message.runId) return;
-    message.segments ??= [];
-    const last = message.segments.at(-1);
-    if (last && last.seq === this.eventSequences.get(message.runId))
-      last.end = message.content.length;
-    else
-      message.segments.push({
-        seq: this.nextSequence(message.runId),
-        start,
-        end: message.content.length,
-        time: Date.now(),
-      });
-  }
-  private finishText(message: Message, text: string) {
-    if (text.startsWith(message.content))
-      this.appendText(message, text.slice(message.content.length));
-    else {
-      message.content = '';
-      message.segments = [];
-      this.appendText(message, text);
-    }
-  }
+  private execution: ExecutionAdapter;
+  private readonly sessions: SessionLifecycle;
+  private readonly approvalQueue: ApprovalQueue;
+  private readonly attachments: Attachments;
+  private readonly artifacts: Artifacts;
+  private ledger: RunLedger;
   events(sessionId: string, before?: string) {
     return this.store
       .sessionObjects<RunEvent>('runEvent', sessionId, 300, before)
       .sort((a, b) => a.time - b.time || a.seq - b.seq);
-  }
-  private progress(run: Run, type: RunEvent['type'], text: string) {
-    if (!text || this.stopping) return;
-    if (type === 'phase') {
-      if (run.phase === text) return;
-      this.flushProgress(run.id);
-      run.phase = text;
-      this.store.put('run', run);
-    }
-    let event =
-      type === 'reasoning'
-        ? this.reasoning.get(run.id)
-        : type === 'tool'
-          ? this.toolOutput.get(run.id)
-          : undefined;
-    if (event) {
-      if (event.text.length >= 64000) return;
-      event = {
-        ...event,
-        text: (event.text + (type === 'tool' ? '\n' : '') + text).slice(0, 64000),
-      };
-    } else {
-      const seq = this.nextSequence(run.id);
-      event = {
-        id: randomUUID(),
-        sessionId: run.sessionId,
-        runId: run.id,
-        seq,
-        time: Date.now(),
-        type,
-        text: text.slice(0, 64000),
-      };
-    }
-    if (type === 'reasoning') {
-      this.reasoning.set(run.id, event);
-      if (Date.now() - (this.progressSaved.get(run.id) ?? 0) < 80) return;
-      this.progressSaved.set(run.id, Date.now());
-    }
-    if (type === 'tool') {
-      this.toolOutput.set(run.id, event);
-      if (Date.now() - (this.progressSaved.get(run.id + ':tool') ?? 0) < 80) return;
-      this.progressSaved.set(run.id + ':tool', Date.now());
-    }
-    this.store.put('runEvent', event);
-    this.emit({ type: 'run-event', event });
   }
   async enqueue(input: RunInput, mode: PendingInput['mode']) {
     if (this.stopping) throw new Error('应用正在退出');
@@ -210,11 +108,10 @@ export class Runtime {
     };
     this.store.put('pendingInput', pending);
     this.changed();
-    const steer = this.steering.get(input.sessionId);
-    if (mode === 'supplement' && steer) {
+    if (mode === 'supplement' && this.execution.hasSteering(input.sessionId)) {
       this.store.put('pendingInput', { ...pending, status: 'dispatching' });
       try {
-        await steer(input.prompt, pending.id, input.attachmentIds);
+        await this.execution.steer(input.sessionId, input.prompt, pending.id, input.attachmentIds);
         if (
           this.sessions.isDeleting(input.sessionId) ||
           !this.store.list<Session>('session').some((s) => s.id === input.sessionId)
@@ -223,7 +120,7 @@ export class Runtime {
         const run = this.store
           .list<Run>('run')
           .find((r) => r.sessionId === input.sessionId && r.status === 'running');
-        this.add(input.sessionId, 'user', input.prompt, {
+        this.ledger.add(input.sessionId, 'user', input.prompt, {
           runId: run?.id,
           attachments: this.attachments.resolve(input.attachmentIds),
         });
@@ -297,155 +194,40 @@ export class Runtime {
       updatePermission?: (permission: PermissionMode) => void;
     }
   >();
-  private clients = new Map<string, CodexClient>();
-  private codexChats = new CodexSessions();
-  invalidateNative(engine?: string) {
-    if (!engine) this.codexChats.clear();
-    else
-      for (const provider of this.store.list<Provider>('provider'))
-        if (provider.protocol === engine) this.codexChats.clear(provider.id);
-  }
-  authClient: CodexClient;
-  private accountClients = new Map<string, CodexClient>();
-  authClientFor(providerId = 'openai-codex') {
-    if (providerId === 'openai-codex') return this.authClient;
-    let client = this.accountClients.get(providerId);
-    if (!client) {
-      client = new CodexClient(
-        engineHome(this.dataDir, 'codex', providerId),
-        this.store.get<Provider>('provider', providerId).network,
-        (network) =>
-          this.resolveNetwork ? this.resolveNetwork(network) : Promise.resolve(network),
-      );
-      client.on('request', (r) => client!.reject(r.id, 'Login client does not execute tools'));
-      this.accountClients.set(providerId, client);
-    }
-    return client;
-  }
-  resetCodexAccount(providerId: string) {
-    this.codexChats.clear(providerId);
-    if (providerId === 'openai-codex') {
-      this.authClient.stop();
-      this.authClient = new CodexClient(
-        path.join(this.dataDir, 'codex'),
-        this.store.get<Provider>('provider', providerId).network,
-        (network) =>
-          this.resolveNetwork ? this.resolveNetwork(network) : Promise.resolve(network),
-      );
-      this.authClient.on('request', (r) =>
-        this.authClient.reject(r.id, 'Login client does not execute tools'),
-      );
-      this.authClient.on('notification', () => this.changed());
-    } else {
-      this.accountClients.get(providerId)?.stop();
-      this.accountClients.delete(providerId);
-    }
-  }
-  invalidateCodexSessions(providerId: string) {
-    this.codexChats.clear(providerId);
-  }
   constructor(
     readonly store: Store,
     readonly dataDir: string,
-    private emit: (event: AppEvent) => void,
-    private computer?: ComputerAdapter,
-    private commands?: ClientCommands,
-    domainServices?: RuntimeDomainServices,
+    emit: (event: AppEvent) => void,
+    private computer: ComputerAdapter | undefined,
+    private commands: ClientCommands | undefined,
+    private readonly resources: TaskResources,
   ) {
-    this.sessions = new SessionLifecycle(store, dataDir, {
-      isActive: (id) => this.active.has(id),
-      removeEngineSession: (id) => this.codexChats.remove(id),
-      stopTerminalSession: (id) => this.terminals.stopSession(id),
-      changed: () => this.changed(),
-    });
-    this.approvalQueue = new ApprovalQueue(
-      store,
-      emit,
-      () => this.changed(),
-      (run, id) => this.onLifecycle?.(run, 'approval', id),
-    );
-    const domains = domainServices ?? createRuntimeDomainServices(store, dataDir);
+    this.sessions = resources.sessions;
+    this.approvalQueue = resources.approvals;
+    const domains = resources;
     this.attachments = domains.attachments;
     this.artifacts = domains.artifacts;
     this.memories = domains.memories;
     this.knowledge = domains.knowledge;
     this.content = domains.content;
     this.checkpoints = domains.checkpoints;
-    this.terminals = new Terminals(store, () => this.changed(), this.dataDir);
-    this.authClient = new CodexClient(
-      path.join(dataDir, 'codex'),
-      store.providers().find((p) => p.id === 'openai-codex')?.network,
-      (network) => (this.resolveNetwork ? this.resolveNetwork(network) : Promise.resolve(network)),
-    );
-    this.authClient.on('request', (r) =>
-      this.authClient.reject(r.id, 'Login client does not execute tools'),
-    );
-    this.authClient.on('notification', () => this.changed());
-    const runtime = this;
-    this.codexExecution = new CodexExecution({
-      store,
-      dataDir,
-      codexChats: this.codexChats,
-      clients: this.clients,
-      attachments: this.attachments,
-      sessions: this.sessions,
-      steering: this.steering,
-      get resolveNetwork() {
-        return runtime.resolveNetwork;
-      },
-      get modelTransport() {
-        return runtime.modelTransport;
-      },
+    this.terminals = resources.terminals;
+    this.ledger = new RunLedger(store, emit, () => this.stopping);
+    this.execution = resources.createExecution({
       isStopping: () => this.stopping,
       ask: (...args) => this.approvalQueue.ask(...args),
-      progress: (...args) => this.progress(...args),
-      add: (...args) => this.add(...args),
-      appendText: (...args) => this.appendText(...args),
-      message: (...args) => this.message(...args),
-      finishText: (...args) => this.finishText(...args),
+      progress: (...args) => this.ledger.progress(...args),
+      add: (...args) => this.ledger.add(...args),
+      appendText: (...args) => this.ledger.appendText(...args),
+      message: (...args) => this.ledger.message(...args),
+      finishText: (...args) => this.ledger.finishText(...args),
     });
-    this.automations = new Automations(store, this);
-    this.automations.start();
-  }
-  processMemory(retry = false) {
-    if (this.stopping) return { started: false };
-    const result = this.automations.run(
-      MEMORY_AUTOMATION_ID,
-      `${retry ? 'manual' : 'requested'}:${randomUUID()}`,
-    );
-    return { started: result.queued > 0 };
   }
   changed() {
-    this.emit({ type: 'changed' });
+    this.resources.events.changed();
   }
   snapshot(): Snapshot {
     return runtimeSnapshot(this.store, this.approvalQueue.snapshot());
-  }
-  private message(message: Message) {
-    if (message.runId && message.role !== 'assistant' && message.sequence === undefined) {
-      this.flushProgress(message.runId);
-      message.sequence = this.nextSequence(message.runId);
-    }
-    this.store.message(message);
-    this.emit({ type: 'message', message });
-  }
-  private add(
-    sessionId: string,
-    role: Message['role'],
-    content: string,
-    extra: Partial<Message> = {},
-  ): Message {
-    const m: Message = {
-      id: randomUUID(),
-      sessionId,
-      role,
-      content,
-      createdAt: Date.now(),
-      status: 'complete',
-      ...extra,
-    };
-    this.message(m);
-    return m;
   }
   setSessionPermission(id: string, permission: PermissionMode | null) {
     this.store.setSessionPermission(id, permission);
@@ -555,7 +337,7 @@ export class Runtime {
       session.projectId && !session.knowledgeJob
         ? this.store.get<Project>('project', session.projectId)
         : null;
-    if (project && (project.removed || this.projectUnavailable?.(project.id)))
+    if (project && (project.removed || this.resources.projectUnavailable?.(project.id)))
       throw new Error('工作树已移除或正在移除，会话历史仍然保留；请在可用项目中创建会话');
     const secret =
       provider.protocol === 'codex' || nativeEngine(provider.protocol)
@@ -591,7 +373,7 @@ export class Runtime {
       },
     };
     this.store.put('run', run);
-    this.progress(run, 'phase', '准备上下文');
+    this.ledger.progress(run, 'phase', '准备上下文');
     this.store.put('session', {
       ...session,
       providerId: provider.id,
@@ -609,22 +391,20 @@ export class Runtime {
         content: input.prompt,
         attachments,
         runId: run.id,
-        sequence: this.nextSequence(run.id),
         createdAt: Date.now(),
         status: 'complete',
       };
-      const removed = this.store.replaceUnansweredMessage(message, replaced.runId!);
-      this.emit({ type: 'messages-removed', sessionId: session.id, ids: removed });
-      this.emit({ type: 'message', message });
+      this.ledger.replaceUnanswered(message, replaced.runId!);
     }
     if (session.model && (session.model !== input.model || session.providerId !== provider.id))
-      this.add(
+      this.ledger.add(
         session.id,
         'system',
         `已切换至 ${provider.name} / ${input.model}。可移植历史将交接给新模型。`,
         replaced ? { runId: run.id } : {},
       );
-    if (!replaced) this.add(session.id, 'user', input.prompt, { runId: run.id, attachments });
+    if (!replaced)
+      this.ledger.add(session.id, 'user', input.prompt, { runId: run.id, attachments });
     const controller = new AbortController();
     let executionController = new AbortController();
     let desiredPermission = agent.permission;
@@ -636,7 +416,7 @@ export class Runtime {
       if (next === desiredPermission) return;
       desiredPermission = next;
       executionController.abort('permission-change');
-      this.progress(run, 'phase', '切换执行权限');
+      this.ledger.progress(run, 'phase', '切换执行权限');
       this.changed();
     };
     // Defer to a microtask so the active slot exists before completion/finally can run.
@@ -644,7 +424,7 @@ export class Runtime {
       try {
         if (localReply) {
           controller.signal.throwIfAborted();
-          this.add(session.id, 'assistant', localReply, {
+          this.ledger.add(session.id, 'assistant', localReply, {
             runId: run.id,
             agent: '同舟',
             model: builtinReplyModel,
@@ -655,7 +435,7 @@ export class Runtime {
         if (project) {
           await this.checkpoints
             .begin(run.id, session.id, project)
-            .catch((e) => this.progress(run, 'tool', '文本检查点未建立：' + String(e)));
+            .catch((e) => this.ledger.progress(run, 'tool', '文本检查点未建立：' + String(e)));
           const baseline = await commandResult(
             'git',
             ['status', '--short'],
@@ -667,7 +447,7 @@ export class Runtime {
             run.workspace = { before: baseline.stdout.slice(0, 12000) };
             this.store.put('run', run);
             if (baseline.stdout.trim())
-              this.progress(
+              this.ledger.progress(
                 run,
                 'tool',
                 '任务开始前已有的工作区改动（请保留）：\n' + baseline.stdout.slice(0, 12000),
@@ -725,7 +505,7 @@ export class Runtime {
                   result.text += '\n作品保存提示：' + saved.errors.join('；');
                 this.changed();
               }
-              this.add(input.sessionId, 'tool', JSON.stringify(args) + '\n' + result.text, {
+              this.ledger.add(input.sessionId, 'tool', JSON.stringify(args) + '\n' + result.text, {
                 runId: run.id,
                 toolName: name,
                 images: result.images,
@@ -736,7 +516,7 @@ export class Runtime {
             },
           );
           try {
-            this.progress(run, 'phase', '准备工具');
+            this.ledger.progress(run, 'phase', '准备工具');
             if (!session.knowledgeJob)
               await scope.prepare(this.store, agent, this.computer, project ?? undefined);
             else if (session.contentContext) scope.prepareSkills(this.store);
@@ -892,18 +672,18 @@ export class Runtime {
                       controller.signal,
                       (title, detail) =>
                         this.approvalQueue.ask(session.id, title, detail, controller.signal),
-                      (text) => this.progress(run, 'tool', text),
+                      (text) => this.ledger.progress(run, 'tool', text),
                     ),
                   }),
                   false,
                 );
-            this.progress(run, 'phase', '连接模型');
-            await this.codexRun(input, project, agent, run, controller.signal, scope);
+            this.ledger.progress(run, 'phase', '连接模型');
+            await this.execution.run(input, project, agent, run, controller.signal, scope);
             break;
           } catch (error) {
             if (taskController.signal.aborted || controller.signal.reason !== 'permission-change')
               throw error;
-            this.progress(
+            this.ledger.progress(
               run,
               'notice',
               '权限已切换，保留已完成记录并继续当前任务。被中断的操作先核对现状，避免重复执行。',
@@ -916,7 +696,7 @@ export class Runtime {
             if (controller.signal.reason === 'permission-change')
               for (const message of this.store.messages(session.id))
                 if (message.runId === run.id && message.status === 'streaming')
-                  this.message({ ...message, status: 'interrupted' });
+                  this.ledger.message({ ...message, status: 'interrupted' });
           }
         }
         if (controller.signal.aborted) throw new Error('已停止');
@@ -926,8 +706,11 @@ export class Runtime {
         run.error = redact(modelErrorMessage(e), [secret]);
         for (const m of this.store.messages(session.id))
           if (m.runId === run.id && m.status === 'streaming')
-            this.message({ ...m, status: run.status === 'interrupted' ? 'interrupted' : 'error' });
-        this.add(
+            this.ledger.message({
+              ...m,
+              status: run.status === 'interrupted' ? 'interrupted' : 'error',
+            });
+        this.ledger.add(
           session.id,
           'system',
           run.status === 'interrupted'
@@ -955,11 +738,11 @@ export class Runtime {
                 toolName: '交付文件',
               })
               .catch((e) => {
-                this.progress(run, 'tool', '作品收集失败：' + String(e));
+                this.ledger.progress(run, 'tool', '作品收集失败：' + String(e));
                 return { items: [] };
               });
             if (saved.items.length)
-              this.message({
+              this.ledger.message({
                 ...message,
                 artifactIds: [
                   ...new Set([...(message.artifactIds ?? []), ...saved.items.map((a) => a.id)]),
@@ -970,7 +753,7 @@ export class Runtime {
         if (project && !localReply)
           await this.checkpoints
             .finish(run.id)
-            .catch((e) => this.progress(run, 'tool', '检查点收尾失败：' + String(e)));
+            .catch((e) => this.ledger.progress(run, 'tool', '检查点收尾失败：' + String(e)));
         if (project && run.workspace) {
           const after = await commandResult(
             'git',
@@ -981,18 +764,9 @@ export class Runtime {
           ).catch(() => null);
           if (after?.exitCode === 0) run.workspace.after = after.stdout.slice(0, 12000);
         }
-        const pendingReasoning = this.reasoning.get(run.id);
-        const pendingOutput = this.toolOutput.get(run.id);
-        if (pendingOutput) {
-          this.store.put('runEvent', pendingOutput);
-          this.emit({ type: 'run-event', event: pendingOutput });
-        }
-        if (pendingReasoning) {
-          this.store.put('runEvent', pendingReasoning);
-          this.emit({ type: 'run-event', event: pendingReasoning });
-        }
+        this.ledger.flushProgress(run.id);
         run.endedAt = Date.now();
-        this.progress(
+        this.ledger.progress(
           run,
           'phase',
           run.status === 'completed'
@@ -1010,15 +784,12 @@ export class Runtime {
             );
           else if (!localReply) this.knowledge.capture(run);
         } catch (error) {
-          this.progress(run, 'notice', '知识收集未完成：' + redact(String(error)));
+          this.ledger.progress(run, 'notice', '知识收集未完成：' + redact(String(error)));
         }
         this.active.delete(session.id);
-        if (run.status !== 'running' && !session.memoryJob) this.onLifecycle?.(run, run.status);
-        this.reasoning.delete(run.id);
-        this.toolOutput.delete(run.id);
-        this.progressSaved.delete(run.id + ':tool');
-        this.progressSaved.delete(run.id);
-        this.eventSequences.delete(run.id);
+        if (run.status !== 'running' && !session.memoryJob)
+          this.resources.events.emit('lifecycle', run, run.status);
+        this.ledger.complete(run.id);
         if (run.status === 'failed')
           for (const p of this.store.list<PendingInput>('pendingInput'))
             if (p.sessionId === session.id && p.status === 'queued')
@@ -1030,16 +801,6 @@ export class Runtime {
     this.active.set(session.id, { controller, promise, updatePermission });
     this.changed();
     return run.id;
-  }
-  private codexRun(
-    input: RunInput,
-    project: Project | null,
-    agent: AgentProfile,
-    run: Run,
-    signal: AbortSignal,
-    scope: ToolScope,
-  ) {
-    return this.codexExecution.run(input, project, agent, run, signal, scope);
   }
   async cancel(id: string) {
     for (const p of this.store.list<PendingInput>('pendingInput'))
@@ -1079,7 +840,7 @@ export class Runtime {
       .slice(-50000);
     const controller = new AbortController();
     const teamId = randomUUID();
-    this.add(parent.id, 'user', input.prompt, { runId: teamId, attachments });
+    this.ledger.add(parent.id, 'user', input.prompt, { runId: teamId, attachments });
     const parentRun: Run = {
       id: teamId,
       sessionId: parent.id,
@@ -1136,7 +897,7 @@ export class Runtime {
           return `### ${profiles[i].name}\n状态：${run?.status}\n${messages.filter((m) => m.role === 'assistant' && m.status === 'complete').at(-1)?.content ?? run?.error ?? '没有生成结论'}`;
         });
         if (controller.signal.aborted) throw new Error('已停止');
-        this.add(
+        this.ledger.add(
           parent.id,
           'assistant',
           `已完成协作分析，以下是各 Agent 的结果。可以继续让主助手整合并实施。\n\n${reports.join('\n\n')}`,
@@ -1150,12 +911,13 @@ export class Runtime {
       } catch (e: any) {
         parentRun.status = controller.signal.aborted ? 'interrupted' : 'failed';
         parentRun.error = e.message;
-        this.add(parent.id, 'system', e.message, { status: 'error', runId: teamId });
+        this.ledger.add(parent.id, 'system', e.message, { status: 'error', runId: teamId });
       } finally {
         parentRun.endedAt = Date.now();
         this.store.put('run', parentRun);
         this.active.delete(parent.id);
-        if (parentRun.status !== 'running') this.onLifecycle?.(parentRun, parentRun.status);
+        if (parentRun.status !== 'running')
+          this.resources.events.emit('lifecycle', parentRun, parentRun.status);
         if (parentRun.status === 'failed')
           for (const p of this.store.list<PendingInput>('pendingInput'))
             if (p.sessionId === parent.id && p.status === 'queued')
@@ -1172,18 +934,14 @@ export class Runtime {
     while (this.active.size) await Promise.all([...this.active.values()].map((a) => a.promise));
     if (this.stopping) await this.shutdown;
   }
-  private shutdown?: Promise<unknown>;
+  private shutdown?: Promise<void>;
   stop() {
-    if (this.stopping) return this.shutdown;
+    if (this.stopping) return this.shutdown ?? Promise.resolve();
     this.stopping = true;
-    this.automations.stop();
-    this.approvalQueue.dispose();
-    this.terminals.dispose();
-    const closing = [this.codexChats.clear()];
     for (const a of this.active.values()) a.controller.abort();
-    for (const c of this.clients.values()) closing.push(Promise.all([c.stop()]));
-    closing.push(Promise.all([this.authClient.stop()]));
-    for (const client of this.accountClients.values()) closing.push(Promise.all([client.stop()]));
-    return (this.shutdown = Promise.all(closing));
+    this.shutdown = this.execution.close();
+    void this.shutdown.catch(() => {});
+    this.resources.events.emit('shutdown');
+    return this.shutdown;
   }
 }

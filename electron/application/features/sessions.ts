@@ -13,17 +13,18 @@ export const sessionsPlugin: Plugin.Object<void> = {
   inject: [
     'tzIpc',
     'tzStore',
-    'tzRuntime',
-    'tzSessions',
-    'tzApprovals',
+    'tzTasks',
     'tzChannels',
     'tzFeishu',
     'tzDesktop',
+    'tzEvents',
+    'tzSessions',
+    'tzApprovals',
   ],
   apply(ctx) {
     const register = ctx.tzIpc.scoped(ctx);
     const store = ctx.tzStore;
-    const runtime = ctx.tzRuntime;
+    const tasks = ctx.tzTasks;
     const channels = ctx.tzChannels;
     const feishu = ctx.tzFeishu;
     const { getWindow } = ctx.tzDesktop;
@@ -72,7 +73,7 @@ export const sessionsPlugin: Plugin.Object<void> = {
           store.deleteSession(copy.id);
           throw e;
         }
-        runtime.changed();
+        ctx.tzEvents.changed();
         return result;
       },
     );
@@ -82,7 +83,7 @@ export const sessionsPlugin: Plugin.Object<void> = {
         idSchema.describe('sessionId'),
         z.string().optional(),
       ]),
-      (id, before) => runtime.events(idSchema.parse(id), z.string().optional().parse(before)),
+      (id, before) => tasks.events(idSchema.parse(id), z.string().optional().parse(before)),
     );
     register(
       'enqueue',
@@ -99,7 +100,7 @@ export const sessionsPlugin: Plugin.Object<void> = {
         },
       ),
       (input, mode) =>
-        runtime.enqueue(
+        tasks.enqueue(
           runSchema.parse(input),
           z.enum(['supplement', 'next', 'restart']).parse(mode),
         ),
@@ -107,12 +108,12 @@ export const sessionsPlugin: Plugin.Object<void> = {
     register(
       'cancelInput',
       operation('会话', 'change', '取消排队输入', [idSchema.describe('inputId')]),
-      (id) => runtime.cancelInput(idSchema.parse(id)),
+      (id) => tasks.cancelInput(idSchema.parse(id)),
     );
     register(
       'resumeInput',
       operation('会话', 'change', '恢复暂停的排队输入', [idSchema.describe('inputId')]),
-      (id) => runtime.resumeInput(idSchema.parse(id)),
+      (id) => tasks.resumeInput(idSchema.parse(id)),
     );
     register(
       'editInput',
@@ -120,7 +121,7 @@ export const sessionsPlugin: Plugin.Object<void> = {
         idSchema.describe('inputId'),
         z.string().min(1).max(100000),
       ]),
-      (id, prompt) => runtime.editInput(idSchema.parse(id), z.string().max(100000).parse(prompt)),
+      (id, prompt) => tasks.editInput(idSchema.parse(id), z.string().max(100000).parse(prompt)),
     );
     register(
       'resendMessage',
@@ -131,7 +132,7 @@ export const sessionsPlugin: Plugin.Object<void> = {
         '请由用户在原消息的编辑入口修改并重新发送',
         [idSchema.describe('messageId'), runSchema],
       ),
-      (id, input) => runtime.start(runSchema.parse(input), idSchema.parse(id)),
+      (id, input) => tasks.start(runSchema.parse(input), idSchema.parse(id)),
     );
     register(
       'deleteSession',
@@ -211,7 +212,7 @@ export const sessionsPlugin: Plugin.Object<void> = {
         if (id && store.get<Project>('project', idSchema.parse(id)).removed)
           throw new Error('工作树已移除，不能创建新会话');
         const s = store.createSession(idSchema.nullish().parse(id) ?? null);
-        runtime.changed();
+        ctx.tzEvents.changed();
         return s;
       },
     );
@@ -238,7 +239,7 @@ export const sessionsPlugin: Plugin.Object<void> = {
           })
           .parse(patch);
         if (
-          runtime.isActive(id) &&
+          tasks.isActive(id) &&
           (update.archived || update.providerId !== undefined || update.model !== undefined)
         )
           throw new Error(
@@ -250,7 +251,7 @@ export const sessionsPlugin: Plugin.Object<void> = {
           ...update,
           updatedAt: Date.now(),
         });
-        runtime.changed();
+        ctx.tzEvents.changed();
       },
     );
     register(
@@ -261,7 +262,7 @@ export const sessionsPlugin: Plugin.Object<void> = {
             throw new Error('请使用当前会话的输入框或菜单操作当前任务');
         },
       }),
-      (input) => runtime.start(runSchema.parse(input)),
+      (input) => tasks.start(runSchema.parse(input)),
     );
     register(
       'team',
@@ -278,7 +279,7 @@ export const sessionsPlugin: Plugin.Object<void> = {
         },
       ),
       (input, ids) =>
-        runtime.team(runSchema.parse(input), z.array(idSchema).min(1).max(3).parse(ids)),
+        tasks.team(runSchema.parse(input), z.array(idSchema).min(1).max(3).parse(ids)),
     );
     register(
       'cancel',
@@ -287,7 +288,7 @@ export const sessionsPlugin: Plugin.Object<void> = {
           if (args[0] === current) throw new Error('请使用当前会话的输入框或菜单操作当前任务');
         },
       }),
-      (id) => runtime.cancel(idSchema.parse(id)),
+      (id) => tasks.cancel(idSchema.parse(id)),
     );
     register(
       'approve',

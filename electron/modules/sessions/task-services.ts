@@ -1,8 +1,10 @@
+import type { DomainServices } from '../domain-services';
+import type { TaskService } from '../../core/task-contracts';
+import type { Terminals } from '../../services/desktop/terminals';
 import { z } from 'zod';
 import { app, dialog } from 'electron';
 import { readFile, writeFile, stat } from 'node:fs/promises';
 import type { Store } from '../../services/storage/store';
-import type { Runtime } from '../../core/runtime/runtime';
 import type { Session, Run } from '../../../src/shared/types';
 import { operation, manual, type ClientOperation } from '../../core/tools/client-commands';
 import { idSchema } from '../../services/storage/validation';
@@ -12,14 +14,15 @@ import { serviceFetch } from '../../services/network/service-network';
 export function registerTaskServices(
   register: (name: string, definition: ClientOperation, handler: (...args: any[]) => any) => void,
   store: Store,
-  runtime: Pick<Runtime, 'snapshot' | 'terminals' | 'memories' | 'checkpoints' | 'start'>,
+  services: Pick<DomainServices, 'memories' | 'checkpoints'> &
+    Pick<TaskService, 'snapshot' | 'start'> & { terminals: Terminals },
   dataDir: string,
 ) {
   const session = idSchema.describe('sessionId'),
     terminal = idSchema.describe('terminalId');
   const idle = (projectId?: string) => {
     if (
-      runtime
+      services
         .snapshot()
         .runs.some(
           (r) =>
@@ -52,11 +55,11 @@ export function registerTaskServices(
           status: m.status,
         }));
       return {
-        cwd: runtime.terminals.cwd(id),
-        memory: runtime.memories.read(id),
+        cwd: services.terminals.cwd(id),
+        memory: services.memories.read(id),
         runs: store.sessionObjects<Run>('run', id, 30).reverse(),
-        terminals: runtime.terminals.list(id).map(({ output, ...t }) => t),
-        changes: runtime.checkpoints.list(id),
+        terminals: services.terminals.list(id).map(({ output, ...t }) => t),
+        changes: services.checkpoints.list(id),
         evidence,
       };
     },
@@ -109,7 +112,7 @@ export function registerTaskServices(
       const last = store.sessionObjects<Run>('run', s.id, 1)[0];
       if (!last || !['failed', 'interrupted'].includes(last.status))
         throw new Error('此会话没有待恢复的中断任务');
-      return runtime.start({
+      return services.start({
         sessionId: s.id,
         providerId: s.providerId,
         model: s.model,
@@ -124,7 +127,7 @@ export function registerTaskServices(
     operation('任务与终端', 'change', '在项目目录或普通会话独立工作目录中创建持久交互终端', [
       session,
     ]),
-    (id) => runtime.terminals.start(idSchema.parse(id)),
+    (id) => services.terminals.start(idSchema.parse(id)),
   );
   register(
     'readTerminal',
@@ -134,7 +137,7 @@ export function registerTaskServices(
       z.number().int().min(0).optional(),
     ]),
     (id, t, offset) =>
-      runtime.terminals.read(
+      services.terminals.read(
         idSchema.parse(id),
         idSchema.parse(t),
         z.number().int().min(0).default(0).parse(offset),
@@ -148,7 +151,7 @@ export function registerTaskServices(
       z.string().max(16000),
     ]),
     (id, t, text) =>
-      runtime.terminals.write(
+      services.terminals.write(
         idSchema.parse(id),
         idSchema.parse(t),
         z.string().max(16000).parse(text),
@@ -163,7 +166,7 @@ export function registerTaskServices(
       z.number().int().min(5).max(200),
     ]),
     (id, t, cols, rows) =>
-      runtime.terminals.resize(
+      services.terminals.resize(
         idSchema.parse(id),
         idSchema.parse(t),
         z.number().int().min(20).max(500).parse(cols),
@@ -173,12 +176,12 @@ export function registerTaskServices(
   register(
     'stopTerminal',
     operation('任务与终端', 'change', '停止指定会话的持久终端', [session, terminal]),
-    (id, t) => runtime.terminals.stop(idSchema.parse(id), idSchema.parse(t)),
+    (id, t) => services.terminals.stop(idSchema.parse(id), idSchema.parse(t)),
   );
   register(
     'runPatch',
     operation('改动与交付', 'query', '查看指定轮次前后文本差异', [idSchema, z.string().max(2000)]),
-    (id, file) => runtime.checkpoints.patch(idSchema.parse(id), z.string().max(2000).parse(file)),
+    (id, file) => services.checkpoints.patch(idSchema.parse(id), z.string().max(2000).parse(file)),
   );
   register(
     'restoreRunFile',
@@ -188,7 +191,7 @@ export function registerTaskServices(
     ]),
     (id, file) => {
       checkpointIdle(idSchema.parse(id));
-      return runtime.checkpoints.restore(id, z.string().max(2000).parse(file));
+      return services.checkpoints.restore(id, z.string().max(2000).parse(file));
     },
   );
   register(
@@ -199,13 +202,13 @@ export function registerTaskServices(
     ]),
     (id, file) => {
       checkpointIdle(idSchema.parse(id));
-      return runtime.checkpoints.stage(id, z.string().max(2000).parse(file));
+      return services.checkpoints.stage(id, z.string().max(2000).parse(file));
     },
   );
   register(
     'reviewStaged',
     operation('改动与交付', 'query', '读取完整已暂存差异及指纹，提交时必须携带指纹', [idSchema]),
-    (id) => runtime.checkpoints.staged(idSchema.parse(id)),
+    (id) => services.checkpoints.staged(idSchema.parse(id)),
   );
   register(
     'commitStaged',
@@ -217,7 +220,7 @@ export function registerTaskServices(
     ),
     (id, message, expected) => {
       idle(idSchema.parse(id));
-      return runtime.checkpoints.commit(
+      return services.checkpoints.commit(
         id,
         z.string().trim().min(1).max(2000).parse(message),
         z

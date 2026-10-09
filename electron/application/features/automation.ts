@@ -7,11 +7,11 @@ export const automationPlugin: Plugin.Object<void> = {
   inject: ['tzIpc', 'tzAutomations', 'tzStore', 'tzKnowledge'],
   apply(ctx) {
     const register = ctx.tzIpc.scoped(ctx);
-    const runtime = {
+    const services = {
       automations: ctx.tzAutomations,
       store: ctx.tzStore,
       knowledge: ctx.tzKnowledge,
     };
-    registerAutomationServices(register, runtime);
+    registerAutomationServices(register, services);
   },
 };

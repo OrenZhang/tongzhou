@@ -17,7 +17,11 @@ import { WorkspaceFileContext } from '../features/workspace/WorkspaceFileContext
 import { SessionTitle } from '../features/chat/SessionTitle';
 import { useTaskContext, useWorkspaceLayout } from '../features/workspace/workspace-state';
 import { DataMaintenance } from '../features/settings/DataMaintenance';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useApplicationState } from '../hooks/useApplicationState';
+import { useAccountState } from '../features/connections/useAccountState';
+import { useSessionMessages } from '../features/chat/useSessionMessages';
+import { AgentsPage } from '../features/agents/AgentsPage';
 import {
   Clock3,
   Activity,
@@ -27,7 +31,6 @@ import {
   ArrowRight,
   ArrowUp,
   Bot,
-  Check,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -43,7 +46,6 @@ import {
   Plus,
   Paperclip,
   Puzzle,
-  RefreshCw,
   Search,
   Settings2,
   ShieldCheck,
@@ -51,23 +53,15 @@ import {
   Sparkles,
   Square,
   Terminal,
-  Trash2,
   Users,
   X,
-  Zap,
 } from 'lucide-react';
 import type {
-  AgentProfile,
   Attachment,
-  NativeAuthState,
-  NativeEngine,
-  CodexAuthState,
   CodexLoginMethod,
   ImportPreview,
-  Message,
   ProviderInput,
   Session,
-  Snapshot,
 } from '../shared/types';
 import { Extensions } from '../features/plugins/Extensions';
 import { version } from '../../package.json';
@@ -88,16 +82,7 @@ import { AttachmentCards, useAttachmentDraft } from '../components/files/Attachm
 import { longPaste } from '../shared/attachments';
 import { useConversationFollow } from '../hooks/useConversationFollow';
 import { SessionNotification } from '../features/chat/NotificationControls';
-import { AuthBadge, Field, Mark, Modal, Spinner, ModelPicker } from '../components/components';
-
-const empty: Snapshot = {
-  providers: [],
-  agents: [],
-  projects: [],
-  sessions: [],
-  runs: [],
-  approvals: [],
-};
+import { AuthBadge, Mark, Modal, Spinner, ModelPicker } from '../components/components';
 
 export default function App() {
   const [activityTab, setActivityTab] = useState<'runs' | 'review'>('runs');
@@ -110,12 +95,8 @@ export default function App() {
     line: number;
     key: number;
   }>();
-  const [accountStates, setAccountStates] = useState<
-    Record<string, { connected: boolean; pending: boolean; error: boolean }>
-  >({});
   const api = window.tongzhou;
-  const [data, setData] = useState<Snapshot>(empty);
-  const [loaded, setLoaded] = useState(false);
+  const { data, loaded, refresh, notice, setNotice, report, perform } = useApplicationState(api);
   const restoredSession = useRef(false);
   const [view, setView] = useState<View>('workspace');
   const [knowledgeTarget, setKnowledgeTarget] = useState<{ id: string; libraryId: string }>();
@@ -157,14 +138,26 @@ export default function App() {
     window.addEventListener('keydown', shortcuts);
     return () => window.removeEventListener('keydown', shortcuts);
   }, []);
-  const [authProviderId, setAuthProviderId] = useState<string | undefined>();
-  const authProviderRef = useRef<string | undefined>(undefined);
-  authProviderRef.current = authProviderId;
-  const [authPanel, setAuthPanel] = useState<'codex' | NativeEngine | null>(null);
+  const {
+    accountStates,
+    authProviderId,
+    setAuthProviderId,
+    authPanel,
+    setAuthPanel,
+    codex,
+    setCodex,
+    nativeAccounts,
+    setNativeAccounts,
+    nativeRegions,
+    setNativeRegions,
+    authPending,
+  } = useAccountState(api, data.providers, view, report, setNotice);
   const [sessionId, setSessionId] = useState('');
-  const sessionRef = useRef('');
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [hasEarlier, setHasEarlier] = useState(false);
+  const { messages, setMessages, hasEarlier, setHasEarlier, sessionRef } = useSessionMessages(
+    api,
+    sessionId,
+    report,
+  );
   const [providerId, setProviderId] = useState('');
   const [model, setModel] = useState('');
   const [agentId, setAgentId] = useState('');
@@ -179,24 +172,13 @@ export default function App() {
   const attachmentPicker = useRef<HTMLInputElement>(null);
   const { appearance, setAppearance } = useAppearance();
   const [query, setQuery] = useState('');
-  const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const [providerEdit, setProviderEdit] = useState<ProviderInput | null>(null);
   const [providerToggles, setProviderToggles] = useState<Record<string, boolean>>({});
-  const [agentEdit, setAgentEdit] = useState<AgentProfile | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [teamOpen, setTeamOpen] = useState(false);
   const [teamIds, setTeamIds] = useState<string[]>([]);
   const [archived, setArchived] = useState(false);
-  const [nativeAccounts, setNativeAccounts] = useState<
-    Partial<Record<NativeEngine, NativeAuthState>>
-  >({});
-  const [nativeRegions, setNativeRegions] = useState<Record<NativeEngine, 'cn' | 'global'>>({
-    kimi: 'cn',
-    minimax: 'cn',
-  });
-  const [codex, setCodex] = useState<CodexAuthState | null>(null);
-  const authPending = ['starting', 'waiting', 'checking'].includes(codex?.login?.phase ?? '');
   const startLogin = (method: CodexLoginMethod) =>
     perform(async () => setCodex(await api.codexLogin(method, authProviderId)));
   const feed = useRef<HTMLDivElement>(null);
@@ -218,7 +200,6 @@ export default function App() {
       document.removeEventListener('focusin', outside);
     };
   }, []);
-  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     const input = composerInput.current;
     if (!input) return;
@@ -296,12 +277,6 @@ export default function App() {
     setAgentId(data.agents.some((a) => a.id === selected.agentId) ? selected.agentId : '');
     setView('workspace');
   };
-  const refresh = useCallback(async () => {
-    if (api) {
-      setData(await api.snapshot());
-      setLoaded(true);
-    }
-  }, [api]);
   useEffect(() => {
     if (!loaded || restoredSession.current) return;
     restoredSession.current = true;
@@ -311,124 +286,13 @@ export default function App() {
     if (previous) activateSession(previous);
     else if (saved) localStorage.removeItem('tongzhou-last-session');
   }, [loaded, data.sessions]);
-  const report = (e: unknown) =>
-    setNotice(
-      e instanceof Error
-        ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
-        : String(e),
-    );
-  const perform = async <T,>(fn: () => Promise<T>): Promise<T | undefined> => {
-    try {
-      return await fn();
-    } catch (e) {
-      report(e);
-    }
-  };
-  useEffect(() => {
-    if (!api) return;
-    void refresh().catch(report);
-    return api.onEvent((event) => {
-      if (event.type === 'navigate') setView(event.view);
-      if (event.type === 'native-auth' && event.state.providerId)
-        setAccountStates((old) => ({
-          ...old,
-          [event.state.providerId!]: {
-            connected: event.state.authenticated,
-            pending: ['starting', 'waiting', 'checking'].includes(event.state.phase),
-            error: !!event.state.error,
-          },
-        }));
-      if (event.type === 'codex-auth' && event.state.providerId)
-        setAccountStates((old) => ({
-          ...old,
-          [event.state.providerId!]: {
-            connected: !!event.state.account,
-            pending: ['starting', 'waiting', 'checking'].includes(event.state.login?.phase ?? ''),
-            error: !!event.state.error,
-          },
-        }));
-      if (
-        event.type === 'native-auth' &&
-        (!authProviderRef.current || event.state.providerId === authProviderRef.current)
-      )
-        setNativeAccounts((previous) => ({ ...previous, [event.state.engine]: event.state }));
-      if (
-        event.type === 'codex-auth' &&
-        (!authProviderRef.current || event.state.providerId === authProviderRef.current)
-      ) {
-        setCodex(event.state);
-        if (event.state.login?.phase === 'success') setNotice('ChatGPT 授权成功，账号已连接');
-      }
-      if (event.type === 'message' && event.message.sessionId === sessionRef.current)
-        setMessages((old) => {
-          const i = old.findIndex((m) => m.id === event.message.id);
-          if (i < 0) return [...old, event.message];
-          return old.map((m, j) => (j === i ? event.message : m));
-        });
-      if (event.type === 'messages-removed' && event.sessionId === sessionRef.current)
-        setMessages((old) => old.filter((m) => !event.ids.includes(m.id)));
-      if (event.type !== 'message' && event.type !== 'run-event' && !refreshTimer.current)
-        refreshTimer.current = setTimeout(() => {
-          refreshTimer.current = null;
-          void refresh().catch(report);
-        }, 80);
-    });
-  }, [api, refresh]);
-  useEffect(() => {
-    let active = true;
-    for (const p of data.providers) {
-      if (p.enabled === false) continue;
-      const request =
-        p.protocol === 'codex'
-          ? api.codexStatus(p.id).then((s) => ({
-              connected: !!s.account,
-              pending: ['starting', 'waiting', 'checking'].includes(s.login?.phase ?? ''),
-              error: !!s.error,
-            }))
-          : p.protocol === 'kimi' || p.protocol === 'minimax'
-            ? api.nativeStatus(p.protocol, p.id).then((s) => ({
-                connected: s.authenticated,
-                pending: ['starting', 'waiting', 'checking'].includes(s.phase),
-                error: !!s.error,
-              }))
-            : null;
-      void request
-        ?.then((status) => {
-          if (active) setAccountStates((old) => ({ ...old, [p.id]: status }));
-        })
-        .catch(() => {
-          if (active)
-            setAccountStates((old) => ({
-              ...old,
-              [p.id]: { connected: false, pending: false, error: true },
-            }));
-        });
-    }
-    return () => {
-      active = false;
-    };
-  }, [api, view, data.providers.map((p) => p.id + ':' + p.protocol + ':' + p.enabled).join('|')]);
-  useEffect(() => {
-    sessionRef.current = sessionId;
-    setHasEarlier(false);
-    setMessages((old) => old.filter((m) => m.sessionId === sessionId));
-    if (sessionId)
-      void api
-        .messages(sessionId)
-        .then((result) => {
-          if (sessionRef.current === sessionId) {
-            setMessages((old) => {
-              const live = old.filter((m) => m.sessionId === sessionId);
-              const merged = new Map(result.map((m) => [m.id, m]));
-              for (const m of live) merged.set(m.id, m);
-              return [...merged.values()];
-            });
-            setHasEarlier(result.length === 100);
-          }
-        })
-        .catch(report);
-    else setMessages([]);
-  }, [sessionId, api]);
+  useEffect(
+    () =>
+      api.onEvent((event) => {
+        if (event.type === 'navigate') setView(event.view);
+      }),
+    [api],
+  );
   useEffect(() => {
     if (!sessionRef.current && !sessionId && !providerId && availableProviders.length) {
       setProviderId(availableProviders[0].id);
@@ -438,27 +302,6 @@ export default function App() {
   useEffect(() => {
     if (!model && provider?.models[0]) setModel(provider.models[0]);
   }, [model, provider?.models]);
-  useEffect(() => {
-    if (authPanel || view === 'settings' || view === 'providers') {
-      if (!authPanel || authPanel === 'codex')
-        void api
-          .codexStatus(authPanel ? authProviderId : undefined)
-          .then(setCodex)
-          .catch(report);
-      for (const engine of ['kimi', 'minimax'] as const) {
-        if (authPanel && authPanel !== engine) continue;
-        void api
-          .nativeStatus(engine, authPanel ? authProviderId : undefined)
-          .then((state) => setNativeAccounts((previous) => ({ ...previous, [engine]: state })))
-          .catch(report);
-      }
-    }
-  }, [view, api, authPanel, authProviderId]);
-  useEffect(() => {
-    if (!notice) return;
-    const t = setTimeout(() => setNotice(''), 7000);
-    return () => clearTimeout(t);
-  }, [notice]);
   const newSession = async (projectId?: string) => {
     await perform(async () => {
       const s = await api.createSession(projectId);
@@ -1707,162 +1550,21 @@ export default function App() {
             />
           )}
           {view === 'agents' && (
-            <main className="page">
-              <div className="page-heading">
-                <div className="page-title-row">
-                  <div>
-                    <h1>Agent</h1>
-                    <p>内置 Agent 处理专门任务，也可以创建自己的角色。普通聊天无需选择 Agent。</p>
-                  </div>
-                  <button
-                    className="primary"
-                    onClick={() =>
-                      setAgentEdit({
-                        id: crypto.randomUUID(),
-                        name: '',
-                        description: '',
-                        instructions: '',
-                        providerId: '',
-                        model: '',
-                        permission: 'read-only',
-                        maxSteps: 0,
-                      })
-                    }
-                  >
-                    <Plus size={16} />
-                    创建 Agent
-                  </button>
-                </div>
-              </div>
-              <div className="agent-grid">
-                {!data.agents.length && (
-                  <div className="empty-state collection-empty">
-                    <Bot size={28} />
-                    <h3>按需创建你的专属角色</h3>
-                    <p>普通聊天无需 Agent。需要固定指令、模型或职责时，再创建一个。</p>
-                  </div>
-                )}
-                {data.agents
-                  .filter((a) => a.builtin)
-                  .map((a) => (
-                    <article className="agent-card" key={a.id}>
-                      <div className="card-top">
-                        <span className="agent-avatar tone-0">
-                          <BookOpen size={25} />
-                        </span>
-                        <span className="tag">
-                          内置 · {a.builtin === 'memory-organizer' ? '记忆整理' : '知识整理'}
-                          {a.customized ? ' · 已自定义' : ''}
-                        </span>
-                      </div>
-                      <h3>{a.name}</h3>
-                      <p>{a.description}</p>
-                      <div className="agent-instructions">
-                        {a.builtin === 'memory-organizer'
-                          ? '后台收集候选 → 核对原文 → 按日分类归并 → 持续补充'
-                          : '阅读来源 → 查重与补充 → 生成草稿 → 人工核对收录'}
-                      </div>
-                      <div className="agent-detail">
-                        <span>
-                          <Layers3 size={13} />
-                          {a.model ||
-                            (a.providerId ? '使用指定连接的默认模型' : '继承来源会话模型')}
-                        </span>
-                        <span>
-                          <ShieldCheck size={13} />
-                          {a.builtin === 'memory-organizer'
-                            ? '仅处理本批记忆来源'
-                            : '仅整理知识资料'}
-                        </span>
-                      </div>
-                      <div className="card-footer">
-                        <span>
-                          {a.builtin === 'memory-organizer'
-                            ? '在定时任务中管理触发与记录'
-                            : '在智库选择资料后启动'}
-                        </span>
-                        <button
-                          onClick={() =>
-                            setView(a.builtin === 'memory-organizer' ? 'automations' : 'knowledge')
-                          }
-                        >
-                          {a.builtin === 'memory-organizer' ? '管理任务' : '前往智库'}
-                          <ArrowRight size={13} />
-                        </button>
-                        <button className="primary" onClick={() => setAgentEdit(a)}>
-                          配置
-                        </button>
-                      </div>
-                    </article>
-                  ))}
-                {data.agents
-                  .filter((a) => !a.builtin)
-                  .map((a, i) => (
-                    <article className="agent-card" key={a.id}>
-                      <div className="card-top">
-                        <span className={'agent-avatar tone-' + (i % 3)}>
-                          <Bot size={25} />
-                        </span>
-                        <span className="tag">
-                          {a.permission === 'read-only' ? '只读分析' : '审批后执行'}
-                        </span>
-                        <button
-                          className="icon-button"
-                          aria-label={'编辑 ' + a.name}
-                          onClick={() => setAgentEdit(a)}
-                        >
-                          <SlidersHorizontal size={17} />
-                        </button>
-                      </div>
-                      <h3>{a.name}</h3>
-                      <p>{a.description}</p>
-                      <div className="agent-instructions">{a.instructions}</div>
-                      <div className="agent-detail">
-                        <span>
-                          <Layers3 size={13} />
-                          {a.model || '继承会话模型'}
-                        </span>
-                        <span>
-                          <Zap size={13} />
-                          Codex 执行核心
-                        </span>
-                      </div>
-                      <div className="card-footer">
-                        <span>
-                          {data.providers.find((p) => p.id === a.providerId)?.name ??
-                            '继承会话连接'}
-                        </span>
-                        <button
-                          aria-label={`使用 ${a.name}`}
-                          disabled={!!running}
-                          onClick={() => {
-                            setAgentId(a.id);
-                            if (a.providerId) setProviderId(a.providerId);
-                            if (a.model) setModel(a.model);
-                            setView('workspace');
-                          }}
-                        >
-                          用于当前会话
-                        </button>
-                        <button onClick={() => setAgentEdit(a)}>
-                          配置
-                          <ArrowRight size={13} />
-                        </button>
-                      </div>
-                    </article>
-                  ))}
-              </div>
-              <div className="section-note">
-                <Users size={20} />
-                <div>
-                  <strong>从同一个问题，获得不同视角</strong>
-                  <p>
-                    在会话输入任务后点击协作按钮，同时运行最多 3 个
-                    Agent。第一版的并行协作使用只读权限，结果回到主会话，由主助手继续实施。
-                  </p>
-                </div>
-              </div>
-            </main>
+            <AgentsPage
+              api={api}
+              data={data}
+              providerId={providerId}
+              running={!!running}
+              refresh={refresh}
+              perform={perform}
+              onNavigate={setView}
+              onUseAgent={(agent) => {
+                setAgentId(agent.id);
+                if (agent.providerId) setProviderId(agent.providerId);
+                if (agent.model) setModel(agent.model);
+                setView('workspace');
+              }}
+            />
           )}
           {view === 'activity' && (
             <main className="page">
@@ -2317,157 +2019,6 @@ export default function App() {
             fetchModels={fetchModels}
             saveProvider={saveProvider}
           />
-        )}
-        {agentEdit && (
-          <Modal
-            title="配置 Agent"
-            subtitle={
-              agentEdit.builtin
-                ? '调整内置 Agent 的整理方式与模型；执行范围固定，保存后用于下一次任务。'
-                : '角色配置可以独立选择模型，也可以继承当前会话。'
-            }
-            onClose={() => setAgentEdit(null)}
-          >
-            <div className="modal-content">
-              <div className="form-grid">
-                <Field label="名称">
-                  <input
-                    value={agentEdit.name}
-                    onChange={(e) => setAgentEdit({ ...agentEdit, name: e.target.value })}
-                  />
-                </Field>
-                <Field label="执行权限">
-                  {agentEdit.builtin ? (
-                    <input
-                      readOnly
-                      value={
-                        agentEdit.builtin === 'memory-organizer'
-                          ? '本批记忆来源与记忆提交（固定）'
-                          : '知识资料读取与草稿整理（固定）'
-                      }
-                    />
-                  ) : (
-                    <select
-                      value={agentEdit.permission}
-                      onChange={(e) =>
-                        setAgentEdit({
-                          ...agentEdit,
-                          permission: e.target.value as 'ask' | 'read-only',
-                        })
-                      }
-                    >
-                      <option value="read-only">只读分析</option>
-                      <option value="ask">修改与命令需审批</option>
-                    </select>
-                  )}
-                </Field>
-              </div>
-              <Field label="职责描述">
-                <input
-                  value={agentEdit.description}
-                  onChange={(e) => setAgentEdit({ ...agentEdit, description: e.target.value })}
-                />
-              </Field>
-              <Field label="角色指令">
-                <textarea
-                  rows={5}
-                  value={agentEdit.instructions}
-                  onChange={(e) => setAgentEdit({ ...agentEdit, instructions: e.target.value })}
-                />
-              </Field>
-              {!agentEdit.builtin && (
-                <Field
-                  label="性格与表达风格"
-                  hint="留空继承同舟的通用性格。只影响表达方式，身份仍为同舟。"
-                >
-                  <textarea
-                    rows={3}
-                    maxLength={2000}
-                    value={agentEdit.soul ?? ''}
-                    placeholder="例如：像耐心的技术导师，先给结论，再用小例子解释。"
-                    onChange={(e) => setAgentEdit({ ...agentEdit, soul: e.target.value })}
-                  />
-                </Field>
-              )}
-              <div className="form-grid">
-                <Field
-                  label="模型连接"
-                  hint={
-                    agentEdit.builtin
-                      ? '默认继承来源会话。指定其他连接但未选模型时，使用该连接的第一个模型。'
-                      : undefined
-                  }
-                >
-                  <select
-                    value={agentEdit.providerId}
-                    onChange={(e) =>
-                      setAgentEdit({ ...agentEdit, providerId: e.target.value, model: '' })
-                    }
-                  >
-                    <option value="">继承会话连接</option>
-                    {data.providers.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="模型">
-                  <ModelPicker
-                    key={agentEdit.providerId || providerId}
-                    label="Agent 模型"
-                    inherit
-                    modelLabels={
-                      data.providers.find((p) => p.id === (agentEdit.providerId || providerId))
-                        ?.modelLabels
-                    }
-                    value={agentEdit.model}
-                    models={
-                      data.providers.find((p) => p.id === (agentEdit.providerId || providerId))
-                        ?.models ?? []
-                    }
-                    load={
-                      agentEdit.providerId || providerId
-                        ? () => api.models(agentEdit.providerId || providerId)
-                        : undefined
-                    }
-                    onChange={(model) => setAgentEdit({ ...agentEdit, model })}
-                  />
-                </Field>
-              </div>
-            </div>
-            <div className="modal-footer">
-              {data.agents.some((a) => a.id === agentEdit.id) && (
-                <button
-                  className={agentEdit.builtin ? 'text-button' : 'text-button danger'}
-                  onClick={() =>
-                    perform(async () => {
-                      await api.deleteAgent(agentEdit.id);
-                      setAgentEdit(null);
-                      await refresh();
-                    })
-                  }
-                >
-                  {agentEdit.builtin ? <RefreshCw size={14} /> : <Trash2 size={14} />}
-                  {agentEdit.builtin ? '恢复默认' : '删除'}
-                </button>
-              )}
-              <span className="spacer" />
-              <button
-                className="primary"
-                onClick={() =>
-                  perform(async () => {
-                    await api.saveAgent(agentEdit);
-                    setAgentEdit(null);
-                    await refresh();
-                  })
-                }
-              >
-                保存 Agent
-                <Check size={15} />
-              </button>
-            </div>
-          </Modal>
         )}
         {deleteProjectId && (
           <Modal

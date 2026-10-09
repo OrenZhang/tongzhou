@@ -1,7 +1,9 @@
+import type { TaskService, ChangePublisher } from '../../core/task-contracts';
+import type { DomainServices } from '../domain-services';
+import { MEMORY_AUTOMATION_ID } from '../../../src/shared/automation';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { Store } from '../../services/storage/store';
-import type { Runtime } from '../../core/runtime/runtime';
 import type { Run, Session } from '../../../src/shared/types';
 import type {
   AutomationRule,
@@ -112,7 +114,9 @@ export class Automations {
   private lastIdleCheck = -Infinity;
   constructor(
     private store: Store,
-    private runtime: Runtime,
+    private runtime: Pick<TaskService, 'start' | 'cancel'> &
+      ChangePublisher &
+      Pick<DomainServices, 'content' | 'knowledge'>,
     private now = () => Date.now(),
     readonly handlers: AutomationHandlers = builtinAutomationHandlers(store, runtime),
   ) {
@@ -145,6 +149,14 @@ export class Automations {
   stop() {
     this.stopped = true;
     clearInterval(this.timer);
+  }
+  processMemory(retry = false) {
+    if (this.stopped) return { started: false };
+    return {
+      started:
+        this.run(MEMORY_AUTOMATION_ID, `${retry ? 'manual' : 'requested'}:${randomUUID()}`).queued >
+        0,
+    };
   }
   private jobs() {
     return (

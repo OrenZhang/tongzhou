@@ -10,14 +10,16 @@ flowchart LR
   Chat[会话内客户端管理工具] --> Commands
   Channel[飞书授权入站] --> Queue[持久化输入队列]
   Commands --> Store[(SQLite 与加密凭据)]
-  Commands --> Runtime[会话调度器]
-  Queue --> Runtime
-  Runtime --> Codex[唯一执行核心 Codex App Server]
+  Commands --> Tasks[任务调度接口]
+  Queue --> Tasks
+  Tasks --> Adapter[执行适配接口]
+  Adapter --> Codex[Codex App Server]
+  Automation[自动化服务] --> Tasks
   Codex --> Gateway[同舟模型协议适配层]
   Gateway --> API[API 与订阅模型推理]
   Codex --> ChatGPT[ChatGPT 模型连接]
   Codex --> Tools[动态工具 / 同舟业务能力]
-  Runtime --> Events[运行事件]
+  Tasks --> Events[运行事件]
   Events --> UI
   Events --> Notify[通知规则与发送记录]
 ```
@@ -34,7 +36,7 @@ Electron 主进程持有数据库、网络、文件及引擎进程。React 仅�
 | ------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | `main.ts` / `preload.ts`                                            | IPC 来源校验、业务装配、系统入口                                      |
 | `store.ts`                                                          | SQLite WAL、schema 2 迁移与一致备份、对象与消息顺序、重启恢复         |
-| `runtime.ts` / `context.ts`                                         | 可空 Agent、每会话单 Run、队列、取消、事件、引擎分段、只读团队        |
+| `task-scheduler.ts` / `context.ts`                                  | 可空 Agent、每会话单 Run、队列、取消、事件、引擎分段、只读团队        |
 | `providers.ts`                                                      | 四类模型推理协议、SSE、公开思考、完成标记和用量                       |
 | `codex.ts` / `codex-auth.ts`                                        | 锁定版本 App Server、官方登录与验证、超时及取消                       |
 | `native-engine.ts` / `native-model.ts`                              | 官方登录、续期与模型目录；订阅凭据到推理协议的适配，不执行会话任务    |
@@ -44,7 +46,7 @@ Electron 主进程持有数据库、网络、文件及引擎进程。React 仅�
 | `browser-profiles.ts`                                               | 持久化浏览器分区、登录态清理、外部页面隔离                            |
 | `channels.ts` / `feishu.ts`                                         | Webhook、飞书扫码 / 应用消息 / WS、规则、幂等和入站绑定               |
 | `extensions.ts` / `builtin-mcp.ts`                                  | 全局 MCP / Skills、目录缓存、延迟连接、内置网页与时间                 |
-| `codex-execution.ts`                                                | Codex 动态工具目录、调用调度与当前任务作用域                          |
+| `core/codex/execution.ts`                                           | Codex 动态工具目录、调用调度与当前任务作用域                          |
 | `client-commands.ts`                                                | GUI 与会话共用的客户端查询、受审批的配置变更                          |
 | `workspace.ts` / `project-init.ts`                                  | 搜索、读取、哈希修改、命令、路径检查、项目说明初始化                  |
 | `computer.ts` / `computer-diagnostic.ts`                            | 各平台电脑操作、截图坐标和窗口绑定、本机功能自检                      |
@@ -58,14 +60,25 @@ Electron 主进程持有数据库、网络、文件及引擎进程。React 仅�
 
 - `application/services.ts` 声明基础服务插件，通过 `inject` 获取依赖、`ctx.provide()` 发布服务。存储、领域服务、任务执行、网络、认证、浏览器与渠道按依赖顺序挂载；挂载时缺少依赖直接报错。
 - `application/features/` 分功能注册项目、会话、知识、内容、模型账号、插件、权限及桌面操作。新增功能在 `application/features.ts` 中组合，主入口无需增加业务处理器。
-- `application/context.ts` 定义服务类型。知识库、内容库、作品和任务服务通过独立依赖注入；模块注册函数接受所需的有限接口，执行操作通过 `tzExecution` 调用。
+- `application/context.ts` 定义服务类型。知识库、内容库、作品和任务服务通过独立依赖注入；模块注册函数接受所需的有限接口，任务操作通过 `tzTasks: TaskService` 调用，领域类型从各自模块定义；`tzEvents` 发布有类型的运行生命周期与账号失效事件。
 - `application/client-ipc.ts` 将 IPC 和 Agent 能力目录作为同一 Cordis effect 注册。上下文释放时同时撤销两者；注册失败回滚目录，避免残留或重复入口。主窗口与主 frame 来源验证、参数验证、审批和凭据脱敏仍在原有边界执行。
 
 退出先关闭新调用入口，停止并等待运行任务与进行中的业务调用，再按挂载顺序的逆序逐个等待插件释放，最后关闭数据库。启动失败也会释放已挂载资源。资源清理失败被汇总报告，其余服务继续清理；数据库不会提前于运行任务关闭。
 
-执行调度保留在 `core/runtime/runtime.ts`。Codex / 订阅模型执行适配位于 `codex-execution.ts`；审批队列位于 `approval-queue.ts`；状态汇总位于 `snapshot.ts`；会话删除和项目清理位于 `modules/sessions/session-lifecycle.ts`。`domain-services.ts` 构建共享持久化服务，桌面启动时由 Cordis 注入，独立执行测试可以直接构建 Runtime。
+### 任务与资源所有权
 
-界面的模型配置和登录面板位于 `src/features/connections/ProviderConnectionDialog.tsx` 与 `AccountLoginPanel.tsx`，模型预设独立维护；App 负责跨页面协调。Cordis 当前只装配同舟内置可信模块；用户配置的 MCP 服务继续通过既有传输、认证与权限路径运行。此阶段没有提供任意 npm 插件加载器或插件市场。
+- `core/task-contracts.ts` 定义任务入口、执行适配、执行回调和网络接口。业务模块和渠道依赖所需的接口片段，不导入具体调度器或 Codex 执行实现。
+- `core/runtime/task-scheduler.ts` 接收固定依赖，负责输入队列、并发、权限、取消和任务状态；`run-ledger.ts` 负责消息顺序、流式正文分段与进度落盘，`snapshot.ts` 负责状态投影。
+- `application/task-system.ts` 创建会话生命周期、审批、终端、调度器和自动化；启动失败回滚，退出关闭生产者、等待任务和引擎释放、撤销事件订阅。任务调度不再构造业务服务，也不接收启动后的网络、项目或通知回写挂钩。
+- `core/codex/execution.ts` 实现执行接口，独立持有活动客户端、steer 处理器和空闲线程缓存。取消通过 AbortSignal 传递；线程恢复、历史导入和协议转换留在适配器。
+- `services/accounts/accounts.ts` 自行持有登录客户端。认证客户端不执行工具，与任务客户端分别释放；网络配置重置通过账号失效事件传递。网络实现先于任务装配，清理时晚于消费者释放。
+- `modules/domain-services.ts` 创建共享知识、内容、附件、作品与变更持久化服务。业务操作使用这些服务的有限接口；通用 Store 与 Electron 对话框尚未全部迁移到仓储和宿主接口，后续范围见 [架构演进](ARCHITECTURE_TARGET.md)。
+
+### 界面状态
+
+`useApplicationState` 管理快照、提示和变更订阅，旧快照请求不能覆盖新结果；`useSessionMessages` 管理会话历史与流式消息合并，切换会话撤销旧请求结果；`useAccountState` 管理授权事件、账号状态和授权面板，查询结果不能覆盖更新的认证事件。`AgentsPage` 自行管理角色编辑状态。模型配置和登录面板继续位于 `src/features/connections/`。App 保留导航、工作台及尚未拆出的管理页面组合，未将所有会话控制逻辑拆完。
+
+Cordis 当前只装配同舟内置可信模块；用户配置的 MCP 服务继续通过既有传输、认证与权限路径运行，没有任意 npm 插件加载器或插件市场。
 
 本次不修改数据库 schema、用户数据位置、会话 ID 或外部协议。账号 OAuth 的实际登录、模型计费和渠道权限仍由各服务实现决定。
 

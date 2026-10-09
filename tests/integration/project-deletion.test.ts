@@ -3,7 +3,7 @@ import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { Store } from '../../electron/services/storage/store';
-import { Runtime } from '../../electron/core/runtime/runtime';
+import { createTaskFixture } from '../support/task-system';
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
@@ -12,29 +12,29 @@ afterEach(async () => {
 async function fixture() {
   const root = await mkdtemp(path.join(os.tmpdir(), 'tongzhou-project-delete-'));
   const store = new Store(':memory:', { encrypt: (s) => s, decrypt: (s) => s });
-  const runtime = new Runtime(store, root, () => {});
+  const system = await createTaskFixture(store, root);
+  const runtime = system.tasks;
   cleanups.push(async () => {
-    runtime.stop();
-    await runtime.waitForIdle();
+    await system.dispose();
     store.close();
     await rm(root, { recursive: true, force: true });
   });
   store.put('project', { id: 'p', name: '项目', path: root, createdAt: 1 });
   const session = store.createSession('p');
-  return { root, store, runtime, session };
+  return { root, store, runtime, system, session };
 }
 describe('project deletion', () => {
   it('requires the confirmed complete session set and rejects a stale confirmation', async () => {
-    const { store, runtime } = await fixture();
-    expect(() => runtime.sessions.deleteProject('p')).toThrow('重新打开');
-    const confirmed = runtime.sessions.projectDeletionPreview('p');
+    const { store, system } = await fixture();
+    expect(() => system.sessions.deleteProject('p')).toThrow('重新打开');
+    const confirmed = system.sessions.projectDeletionPreview('p');
     const archived = store.createSession('p');
     store.put('session', { ...archived, archived: true });
-    expect(() => runtime.sessions.deleteProject('p', confirmed)).toThrow('2 个会话');
-    expect(runtime.sessions.projectDeletionPreview('p')).toHaveLength(2);
+    expect(() => system.sessions.deleteProject('p', confirmed)).toThrow('2 个会话');
+    expect(system.sessions.projectDeletionPreview('p')).toHaveLength(2);
   });
   it('deletes the complete project family and records while preserving files and unrelated sessions', async () => {
-    const { root, store, runtime, session } = await fixture();
+    const { root, store, system, session } = await fixture();
     const file = path.join(root, 'keep.txt');
     await writeFile(file, 'user file');
     store.put('project', {
@@ -64,7 +64,7 @@ describe('project deletion', () => {
     }
     store.put('channel', { id: 'channel', sessionId: session.id, inbound: true });
     expect(
-      runtime.sessions.deleteProject('p', runtime.sessions.projectDeletionPreview('p')).sort(),
+      system.sessions.deleteProject('p', system.sessions.projectDeletionPreview('p')).sort(),
     ).toEqual([session.id, branch.id, child.id].sort());
     expect(store.list('project')).toEqual([]);
     expect(store.list('worktree')).toEqual([]);
@@ -75,36 +75,36 @@ describe('project deletion', () => {
     expect(await readFile(file, 'utf8')).toBe('user file');
   });
   it('blocks active runs, terminals and queued work without deleting records', async () => {
-    const { store, runtime, session } = await fixture();
+    const { store, system, session } = await fixture();
     store.put('run', { id: 'r', sessionId: session.id, status: 'running' });
-    expect(() => runtime.sessions.deleteProject('p')).toThrow('运行中的任务');
+    expect(() => system.sessions.deleteProject('p')).toThrow('运行中的任务');
     store.remove('run', 'r');
     store.put('terminal', { id: 't', sessionId: session.id, status: 'running' });
-    expect(() => runtime.sessions.deleteProject('p')).toThrow('运行中的终端');
+    expect(() => system.sessions.deleteProject('p')).toThrow('运行中的终端');
     store.remove('terminal', 't');
     store.put('pendingInput', { id: 'q', sessionId: session.id, status: 'queued' });
-    expect(() => runtime.sessions.deleteProject('p')).toThrow('排队');
+    expect(() => system.sessions.deleteProject('p')).toThrow('排队');
     expect(store.get('session', session.id)).toBeTruthy();
     expect(store.get('project', 'p')).toBeTruthy();
   });
   it('can delete an empty project whose original directory no longer exists', async () => {
-    const { store, runtime } = await fixture();
+    const { store, system } = await fixture();
     store.put('project', {
       id: 'empty',
       name: '失效目录',
       path: 'nonexistent-folder',
       createdAt: 1,
     });
-    expect(runtime.sessions.deleteProject('empty')).toEqual([]);
+    expect(system.sessions.deleteProject('empty')).toEqual([]);
     expect(store.list('project').map((p) => p.id)).toEqual(['p']);
   });
   it('rolls back session deletion if removing the project fails', async () => {
-    const { store, runtime, session } = await fixture();
+    const { store, system, session } = await fixture();
     store.db.exec(
       "CREATE TRIGGER fail_project BEFORE DELETE ON objects WHEN OLD.kind='project' BEGIN SELECT RAISE(ABORT, 'fixture failure'); END",
     );
     expect(() =>
-      runtime.sessions.deleteProject('p', runtime.sessions.projectDeletionPreview('p')),
+      system.sessions.deleteProject('p', system.sessions.projectDeletionPreview('p')),
     ).toThrow('fixture failure');
     expect(store.get('session', session.id)).toBeTruthy();
     expect(store.get('project', 'p')).toBeTruthy();

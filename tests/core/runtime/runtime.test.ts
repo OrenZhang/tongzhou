@@ -11,7 +11,7 @@ import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { Store } from '../../../electron/services/storage/store';
-import { Runtime } from '../../../electron/core/runtime/runtime';
+import { createTaskFixture } from '../../support/task-system';
 import {
   greetingReply,
   introductionReply,
@@ -71,14 +71,15 @@ async function fixture(handler: (body: any) => any[] | Promise<any[]>, computer?
   store.put('project', { id: 'project', name: 'test', path: root, createdAt: Date.now() });
   const session = store.createSession('project');
   const events: AppEvent[] = [];
-  const runtime = new Runtime(store, root, (e) => events.push(e), computer);
+  const system = await createTaskFixture(store, root, (e) => events.push(e), computer);
+  const runtime = system.tasks;
   cleanups.push(async () => {
-    runtime.stop();
-    await runtime.waitForIdle();
+    await system.dispose();
   });
   return {
     store,
     runtime,
+    system,
     root,
     events,
     requests,
@@ -105,12 +106,10 @@ describe('conversation input and lifecycle changes', () => {
       config: { permission: 'full-access' },
     });
     const signal = new AbortController().signal;
-    expect(await f.runtime.approvalQueue.ask(f.input.sessionId, '普通操作', '{}', signal)).toBe(
-      true,
-    );
-    const deletion = f.runtime.approvalQueue.ask(f.input.sessionId, '删除文档', '{}', signal, true);
+    expect(await f.system.approvals.ask(f.input.sessionId, '普通操作', '{}', signal)).toBe(true);
+    const deletion = f.system.approvals.ask(f.input.sessionId, '删除文档', '{}', signal, true);
     expect(f.runtime.snapshot().approvals).toHaveLength(1);
-    f.runtime.approvalQueue.approve(f.runtime.snapshot().approvals[0].id, false);
+    f.system.approvals.approve(f.runtime.snapshot().approvals[0].id, false);
     expect(await deletion).toBe(false);
     f.store.remove('run', 'deletion-confirmation');
   });
@@ -146,8 +145,12 @@ describe('conversation input and lifecycle changes', () => {
             },
           ],
     );
-    const doc = f.runtime.content.write({ libraryId: 'default', title: '文章', content: '原文' });
-    authorizeKnowledgeFixtures(f.runtime.knowledge, doc);
+    const doc = f.system.domains.content.write({
+      libraryId: 'default',
+      title: '文章',
+      content: '原文',
+    });
+    authorizeKnowledgeFixtures(f.system.domains.knowledge, doc);
     docId = doc.id;
     const session = f.store.get<any>('session', f.input.sessionId);
     f.store.put('session', {
@@ -157,13 +160,13 @@ describe('conversation input and lifecycle changes', () => {
     });
     f.runtime.start({ ...f.input, agentId: '', prompt: '请改写并保存这篇文章' });
     await f.runtime.waitForIdle();
-    expect(f.runtime.knowledge.get(doc.id).content).toBe('改写后的正文');
+    expect(f.system.domains.knowledge.get(doc.id).content).toBe('改写后的正文');
     expect(f.store.list<any>('run')[0].status).toBe('completed');
     const tools = f.requests[0].tools.map((t: any) => t.function.name);
     expect(tools).toContain('content_patch');
     expect(tools).not.toContain('run_command');
     expect(tools).not.toContain('knowledge_write');
-    expect(f.runtime.knowledge.memory.candidates()).toHaveLength(0);
+    expect(f.system.domains.knowledge.memory.candidates()).toHaveLength(0);
   });
   it('exposes the built-in organizer and confines it to knowledge jobs', async () => {
     const f = await fixture(() => [text('已查看资料')]);
@@ -219,15 +222,15 @@ describe('conversation input and lifecycle changes', () => {
         },
       ];
     });
-    const doc = f.runtime.knowledge.save({
+    const doc = f.system.domains.knowledge.save({
       title: '库存规则',
       kind: 'source',
       content: 'UNIQUE_KNOWLEDGE_EVIDENCE：库存扣减必须使用事务。',
     });
-    authorizeKnowledgeFixtures(f.runtime.knowledge, doc);
+    authorizeKnowledgeFixtures(f.system.domains.knowledge, doc);
     docId = doc.id;
-    f.runtime.automations.save({
-      ...f.runtime.automations.state().rules.find((r) => r.kind === 'memory')!,
+    f.system.automations.save({
+      ...f.system.automations.state().rules.find((r) => r.kind === 'memory')!,
       enabled: false,
     });
     f.store.put('knowledgeBinding', {
@@ -256,7 +259,7 @@ describe('conversation input and lifecycle changes', () => {
     expect(f.store.list<Run>('run')[0].knowledgeReferences).toEqual([
       expect.objectContaining({ id: doc.id, mode: 'tool', excerpt: doc.content }),
     ]);
-    expect(f.runtime.knowledge.settings()).toEqual({ autoCollect: false });
+    expect(f.system.domains.knowledge.settings()).toEqual({ autoCollect: false });
   });
   it('consolidates queued memories through a restricted background agent without creating sidebar chats', async () => {
     const f = await fixture((body) => {
@@ -308,20 +311,20 @@ describe('conversation input and lifecycle changes', () => {
     const session = f.store.createSession();
     f.runtime.start({ ...f.input, sessionId: session.id, prompt: '库存必须使用事务扣减' });
     await f.runtime.waitForIdle();
-    expect(f.runtime.knowledge.all()).toHaveLength(0);
-    expect(f.runtime.knowledge.memory.queueState().pending).toBe(1);
+    expect(f.system.domains.knowledge.all()).toHaveLength(0);
+    expect(f.system.domains.knowledge.memory.queueState().pending).toBe(1);
     const before = f.runtime.snapshot().sessions.length;
-    expect(f.runtime.processMemory(true).started).toBe(true);
-    f.runtime.automations.tick();
+    expect(f.system.automations.processMemory(true).started).toBe(true);
+    f.system.automations.tick();
     await f.runtime.waitForIdle();
-    expect(f.runtime.knowledge.all()[0].memoryEntries).toHaveLength(1);
-    expect(f.runtime.knowledge.memory.queueState()).toMatchObject({
+    expect(f.system.domains.knowledge.all()[0].memoryEntries).toHaveLength(1);
+    expect(f.system.domains.knowledge.memory.queueState()).toMatchObject({
       pending: 0,
       running: 0,
       failed: 0,
     });
     expect(f.runtime.snapshot().sessions).toHaveLength(before);
-    expect(f.runtime.knowledge.memory.candidates()).toHaveLength(1);
+    expect(f.system.domains.knowledge.memory.candidates()).toHaveLength(1);
   });
   it('rejects disabled providers before starting a run, retaining secrets and history', async () => {
     const f = await fixture(() => [text('unexpected')]);
@@ -823,7 +826,7 @@ describe('conversation input and lifecycle changes', () => {
     const s = f.store.get<any>('session', f.input.sessionId);
     const last = f.store.messages(s.id).at(-1)!;
     f.store.put('session', { ...s, archived: true });
-    await f.runtime.sessions.deleteSession(s.id);
+    await f.system.sessions.deleteSession(s.id);
     expect(f.store.messages(s.id)).toHaveLength(0);
     expect(f.runtime.events(s.id)).toHaveLength(0);
     expect(() => f.store.message(last)).toThrow();
@@ -894,7 +897,7 @@ describe('agent execution lifecycle', () => {
     f.store.setCapability('computer', true);
     f.runtime.start({ ...f.input, sessionId: session.id });
     await expect.poll(() => f.runtime.snapshot().approvals.length).toBe(1);
-    f.runtime.approvalQueue.approve(f.runtime.snapshot().approvals[0].id, true);
+    f.system.approvals.approve(f.runtime.snapshot().approvals[0].id, true);
     await f.runtime.waitForIdle();
     expect(executed).toBe(1);
     expect(JSON.stringify(f.requests[1])).toContain(
@@ -1095,7 +1098,7 @@ describe('agent execution lifecycle', () => {
     f.runtime.start(f.input);
     await expect.poll(() => f.runtime.snapshot().approvals.length).toBe(1);
     await expect(readFile(path.join(f.root, 'result.txt'))).rejects.toThrow();
-    f.runtime.approvalQueue.approve(f.runtime.snapshot().approvals[0].id, true);
+    f.system.approvals.approve(f.runtime.snapshot().approvals[0].id, true);
     await f.runtime.waitForIdle();
     expect(await readFile(path.join(f.root, 'result.txt'), 'utf8')).toBe('hello from model');
     expect(f.store.list<Run>('run')[0]).toMatchObject({

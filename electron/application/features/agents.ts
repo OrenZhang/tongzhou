@@ -4,11 +4,11 @@ import '../context';
 
 export const agentsPlugin: Plugin.Object<void> = {
   name: 'tongzhou-agents',
-  inject: ['tzIpc', 'tzStore', 'tzExecution'],
+  inject: ['tzIpc', 'tzStore', 'tzEvents'],
   apply(ctx) {
     const register = ctx.tzIpc.scoped(ctx);
     const store = ctx.tzStore;
-    const runtime = { changed: ctx.tzExecution.changed };
-    registerAgentServices(register, store, runtime);
+    const services = { changed: ctx.tzEvents.changed };
+    registerAgentServices(register, store, services);
   },
 };

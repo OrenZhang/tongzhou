@@ -1,7 +1,8 @@
+import type { ExecutionAdapter, ExecutionCallbacks } from '../task-contracts';
 import { SessionLifecycle } from '../../modules/sessions/session-lifecycle';
-import { executionContext, executionTranscript } from './execution-evidence';
-import { codexThinking, thinkingRequest } from './thinking';
-import { IdleTimeout } from './idle-timeout';
+import { executionContext, executionTranscript } from '../runtime/execution-evidence';
+import { codexThinking, thinkingRequest } from '../runtime/thinking';
+import { IdleTimeout } from '../runtime/idle-timeout';
 import { Attachments } from '../../modules/artifacts/attachments';
 import { sessionWorkspace } from '../../modules/sessions/session-workspace';
 import type {
@@ -12,22 +13,21 @@ import type {
   Run,
   RunInput,
   Session,
-  RunEvent,
 } from '../../../src/shared/types';
 import { engineHome } from '../../services/accounts/account-paths';
 import { Store } from '../../services/storage/store';
 import { ToolScope } from '../tools/extensions';
 import { nativeEngine } from '../../services/accounts/native-engine';
-import { CodexClient } from '../codex/codex';
+import { CodexClient } from './codex';
 import { modelGateway } from '../models/model-gateway';
 import { nativeModelConnection } from '../models/native-model';
-import { CodexSessions } from '../codex/codex-sessions';
+import { CodexSessions } from './codex-sessions';
 import { networkKey } from '../../../src/shared/provider-network';
 import path from 'node:path';
 import { mkdir } from 'node:fs/promises';
 import type { ProviderNetwork } from '../../../src/shared/provider-network';
 
-export interface CodexExecutionPorts {
+export interface CodexExecutionPorts extends ExecutionCallbacks {
   store: Store;
   dataDir: string;
   resolveNetwork?: (
@@ -35,31 +35,38 @@ export interface CodexExecutionPorts {
     runId?: string,
   ) => Promise<ProviderNetwork | undefined>;
   modelTransport?: (network: Provider['network']) => Promise<typeof fetch>;
-  codexChats: CodexSessions;
-  clients: Map<string, CodexClient>;
   attachments: Attachments;
   sessions: Pick<SessionLifecycle, 'isDeleting'>;
-  steering: Map<
-    string,
-    (text: string, messageId: string, attachmentIds?: string[]) => Promise<void>
-  >;
-  isStopping(): boolean;
-  ask(
-    sessionId: string,
-    title: string,
-    detail: string,
-    signal: AbortSignal,
-    force?: boolean,
-  ): Promise<boolean>;
-  progress(run: Run, type: RunEvent['type'], text: string): void;
-  add(sessionId: string, role: Message['role'], content: string, extra?: Partial<Message>): Message;
-  appendText(message: Message, text: string): void;
-  message(message: Message): void;
-  finishText(message: Message, text: string): void;
 }
 
 /** Executes a Codex/native-engine turn through explicit persistence, model and event ports. */
-export class CodexExecution {
+export class CodexExecution implements ExecutionAdapter {
+  private clients = new Map<string, CodexClient>();
+  private codexChats = new CodexSessions();
+  private steering = new Map<
+    string,
+    (text: string, messageId: string, attachmentIds?: string[]) => Promise<void>
+  >();
+  hasSteering(id: string) {
+    return this.steering.has(id);
+  }
+  steer(id: string, text: string, messageId: string, attachments?: string[]) {
+    const handler = this.steering.get(id);
+    if (!handler) return Promise.reject(new Error('当前轮次尚未受理'));
+    return handler(text, messageId, attachments);
+  }
+  async removeSession(id: string) {
+    await this.codexChats.remove(id);
+  }
+  async invalidate(id?: string) {
+    await this.codexChats.clear(id);
+  }
+  async close() {
+    await Promise.all([
+      this.codexChats.clear(),
+      ...[...this.clients.values()].map((c) => c.stop()),
+    ]);
+  }
   constructor(private ports: CodexExecutionPorts) {}
   async run(
     input: RunInput,
@@ -117,7 +124,7 @@ export class CodexExecution {
       'features.apply_patch_freeform': nativeFiles && agent.permission !== 'read-only',
     };
     const key = JSON.stringify([fingerprint, networkKey(network)]);
-    const warm = await this.ports.codexChats.take(input.sessionId, key, prior?.threadId);
+    const warm = await this.codexChats.take(input.sessionId, key, prior?.threadId);
     const customModel = provider.protocol !== 'codex';
     const transport =
       !warm && customModel
@@ -177,7 +184,7 @@ export class CodexExecution {
       );
 
     let keepAlive = false;
-    this.ports.clients.set(input.sessionId, client);
+    this.clients.set(input.sessionId, client);
     let threadId = '';
     let turnId = '';
     const accumulatedUsage = { inputTokens: run.inputTokens, outputTokens: run.outputTokens };
@@ -409,7 +416,7 @@ export class CodexExecution {
         config: coreConfig,
       });
       threadId = started.thread.id;
-      this.ports.steering.set(input.sessionId, async (text, messageId, attachmentIds) => {
+      this.steering.set(input.sessionId, async (text, messageId, attachmentIds) => {
         if (!turnId) throw new Error('当前轮次尚未受理');
         await client.request('turn/steer', {
           threadId,
@@ -483,15 +490,14 @@ export class CodexExecution {
         !this.ports.store.get<Session>('session', input.sessionId).memoryJob;
     } finally {
       timeout.dispose();
-      this.ports.steering.delete(input.sessionId);
+      this.steering.delete(input.sessionId);
       signal.removeEventListener('abort', abort);
       client.removeListener('failure', onFailure);
       client.removeListener('request', onRequest);
       client.removeListener('notification', onNotification);
-      if (keepAlive)
-        this.ports.codexChats.put(input.sessionId, key, input.providerId, threadId, client);
+      if (keepAlive) this.codexChats.put(input.sessionId, key, input.providerId, threadId, client);
       else await client.stop();
-      this.ports.clients.delete(input.sessionId);
+      this.clients.delete(input.sessionId);
     }
   }
 }

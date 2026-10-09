@@ -11,7 +11,6 @@ import { ToolScope } from '../../electron/core/tools/extensions';
 import { ClientCommands, operation } from '../../electron/core/tools/client-commands';
 import { z } from 'zod';
 import { Feishu } from '../../electron/services/channels/feishu';
-import { Runtime } from '../../electron/core/runtime/runtime';
 const cleanups: (() => unknown | Promise<unknown>)[] = [];
 afterEach(async () => {
   vi.restoreAllMocks();
@@ -141,7 +140,7 @@ describe('connection and channel services', () => {
       allowedSenders: ['user1'],
     });
     const enqueue = vi.fn(async () => {});
-    const service = new Feishu(s, { enqueue } as unknown as Runtime);
+    const service = new Feishu(s, { enqueue, changed: () => {} });
     cleanups.push(() => service.dispose());
     const event = {
       sender: { sender_type: 'user', sender_id: { open_id: 'user1' } },

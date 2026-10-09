@@ -130,14 +130,14 @@ else {
     .whenReady()
     .then(async () => {
       await setup();
-      const runtime = application!.runtime;
+      const tasks = application!.tasks;
       const updates = application!.kernel.get<Updates>('tzUpdates');
       await createWindow();
       if (!process.env.TONGZHOU_DISABLE_UPDATES) updates.start();
       computer.emergencyShortcut = globalShortcut.register('CommandOrControl+Alt+Escape', () => {
-        runtime.terminals.stopAll();
-        for (const r of runtime.snapshot().runs)
-          if (r.status === 'running') void runtime.cancel(r.sessionId);
+        application!.kernel.context.tzTerminals.stopAll();
+        for (const r of tasks.snapshot().runs)
+          if (r.status === 'running') void tasks.cancel(r.sessionId);
       });
     })
     .catch((error) => {

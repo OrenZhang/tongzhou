@@ -4,17 +4,17 @@ import '../context';
 
 export const knowledgePlugin: Plugin.Object<void> = {
   name: 'tongzhou-knowledge',
-  inject: ['tzIpc', 'tzStore', 'tzKnowledge', 'tzExecution', 'tzAutomations'],
+  inject: ['tzIpc', 'tzStore', 'tzKnowledge', 'tzEvents', 'tzAutomations', 'tzTasks'],
   apply(ctx) {
     const register = ctx.tzIpc.scoped(ctx);
     const store = ctx.tzStore;
-    const runtime = {
+    const services = {
       knowledge: ctx.tzKnowledge,
-      changed: ctx.tzExecution.changed,
-      processMemory: ctx.tzExecution.processMemory,
-      start: ctx.tzExecution.start,
+      changed: ctx.tzEvents.changed,
+      processMemory: ctx.tzAutomations.processMemory.bind(ctx.tzAutomations),
+      start: ctx.tzTasks.start.bind(ctx.tzTasks),
       automations: ctx.tzAutomations,
     };
-    registerKnowledgeServices(register, store, runtime);
+    registerKnowledgeServices(register, store, services);
   },
 };

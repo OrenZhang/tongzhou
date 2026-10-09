@@ -10,11 +10,10 @@ import '../context';
 
 export const networkPlugin: Plugin.Object<void> = {
   name: 'tongzhou-network',
-  inject: ['tzIpc', 'tzStore', 'tzRuntime', 'tzNetworks'],
+  inject: ['tzIpc', 'tzStore', 'tzNetworks', 'tzEvents'],
   apply(ctx) {
     const register = ctx.tzIpc.scoped(ctx);
     const store = ctx.tzStore;
-    const runtime = ctx.tzRuntime;
     const networks = ctx.tzNetworks;
     register(
       'checkNetworkNodes',
@@ -72,7 +71,7 @@ export const networkPlugin: Plugin.Object<void> = {
           if (chosen.canceled) return '已取消';
           await networks.core.installFile(chosen.filePaths[0]);
         } else await networks.core.install();
-        runtime.changed();
+        ctx.tzEvents.changed();
         return '网络内核已安装';
       },
     );

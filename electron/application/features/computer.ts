@@ -6,11 +6,11 @@ import '../context';
 
 export const computerPlugin: Plugin.Object<void> = {
   name: 'tongzhou-computer',
-  inject: ['tzIpc', 'tzStore', 'tzRuntime', 'tzDesktop'],
+  inject: ['tzIpc', 'tzStore', 'tzTasks', 'tzDesktop', 'tzTerminals'],
   apply(ctx) {
     const register = ctx.tzIpc.scoped(ctx);
     const store = ctx.tzStore;
-    const runtime = ctx.tzRuntime;
+    const services = ctx.tzTasks;
     const { computer, computerPermissions, computerPermissionPanel } = ctx.tzDesktop;
     const computerStatus = () => ({
       ...computer.status(),
@@ -59,7 +59,7 @@ export const computerPlugin: Plugin.Object<void> = {
       ),
       async () => {
         if (diagnosing) throw new Error('自检正在进行');
-        if (runtime.snapshot().runs.some((r) => r.status === 'running'))
+        if (services.snapshot().runs.some((r) => r.status === 'running'))
           throw new Error('有任务正在运行，请等待结束或停止任务后再检测电脑控制。');
         diagnosing = true;
         try {
@@ -81,9 +81,9 @@ export const computerPlugin: Plugin.Object<void> = {
         [],
       ),
       async () => {
-        runtime.terminals.stopAll();
-        for (const r of runtime.snapshot().runs)
-          if (r.status === 'running') await runtime.cancel(r.sessionId);
+        ctx.tzTerminals.stopAll();
+        for (const r of services.snapshot().runs)
+          if (r.status === 'running') await services.cancel(r.sessionId);
       },
     );
   },

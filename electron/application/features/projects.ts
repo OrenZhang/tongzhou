@@ -23,17 +23,16 @@ export const projectsPlugin: Plugin.Object<void> = {
   inject: [
     'tzIpc',
     'tzStore',
-    'tzRuntime',
-    'tzSessions',
     'tzChannels',
     'tzFeishu',
     'tzDesktop',
     'tzProjectTools',
+    'tzSessions',
+    'tzEvents',
   ],
   apply(ctx) {
     const register = ctx.tzIpc.scoped(ctx);
     const store = ctx.tzStore;
-    const runtime = ctx.tzRuntime;
     const channels = ctx.tzChannels;
     const feishu = ctx.tzFeishu;
     const { getWindow } = ctx.tzDesktop;
@@ -177,7 +176,7 @@ export const projectsPlugin: Plugin.Object<void> = {
           path: selected,
           createdAt: Date.now(),
         });
-        runtime.changed();
+        ctx.tzEvents.changed();
         return project;
       },
     );

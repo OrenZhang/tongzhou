@@ -17,20 +17,20 @@
 
 ## 2. 已确认的代码现状与缺口
 
-| 代码位置                                                                              | 本轮静态核对结果                                                             | 影响与措施                                               |
-| ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------- |
-| `electron/services/storage/store.ts`                                                                   | Schema 固定为 1，只有版本拒绝逻辑；空 Agent 集合会重新插入三个角色           | 增加可回滚迁移；区分首次初始化和用户主动清空             |
-| `src/shared/types.ts`、`electron/services/storage/validation.ts`、`src/app/App.tsx`、`electron/core/runtime/runtime.ts` | RunInput / Session 依赖 agentId，前端和运行入口依赖 builder                  | 改为可空 Agent；角色上下文与基础执行配置分离             |
-| `electron/core/runtime/runtime.ts::nativeRun`                                                      | 无项目 / 只读会设置 plan；正文到达后才创建助手消息                           | 先验证权限替代，再去掉自动规划；发送受理后即显示运行占位 |
-| `electron/core/runtime/runtime.ts`                                                                 | 同会话互斥；原生项目会话每轮重建，Codex 每轮 thread/start                    | 加补充队列和版本化引擎段；逐适配器实现安全复用           |
-| `electron/core/models/providers.ts`                                                               | 有协议流式解析及历史转换；历史按字符预算保留最近完整轮次                     | 增加规范事件和预算观测，逐步完善带来源的上下文摘要       |
-| `electron/core/tools/extensions.ts`、`src/features/plugins/Extensions.tsx`                                        | 启用之外还需 Agent 工具选择；prepare 先连接并发现工具                        | 全局能力注册、延迟加载和权限过滤，取消重复配置           |
-| `electron/main.ts`                                                                    | IPC 中承载业务逻辑；部分修改用全局 requireIdle 阻止                          | 抽业务服务和资源级变更策略，避免聊天管理自身时死锁       |
-| `electron/services/desktop/computer.ts`                                                                | Windows 权限状态静态返回，按钮诊断反馈不充分                                 | 支持性、系统授权、启用和实测分开；明确自检与结果         |
-| `electron/core/tools/workspace.ts`                                                               | 通用工具为 list/read/write/command；整文件写入，命令等待结束并默认两分钟超时 | 补搜索、局部读取、补丁和命令进度；保留路径及写入冲突检查 |
-| 原生认证与 Runtime                                                                    | Kimi / MiniMax home 按引擎共享，Codex 使用统一 codex home                    | 多账号必须隔离运行目录、凭据与进程，不能只增加账号下拉框 |
-| `TongzhouAPI`、会话菜单                                                               | 有归档 / 恢复，无会话删除和运行中补充接口                                    | 服务端事务删除、输入队列及 UI 状态一起实现               |
-| 测试与验证文档                                                                        | 历史记录 74 项自动化通过，部分真实 Kimi 测试；其他真实模型和 Mac 尚有缺口    | 记录为历史基线，本轮实施后重新验证；不得宣称同等编码能力 |
+| 代码位置                                                                                                                       | 本轮静态核对结果                                                             | 影响与措施                                               |
+| ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `electron/services/storage/store.ts`                                                                                           | Schema 固定为 1，只有版本拒绝逻辑；空 Agent 集合会重新插入三个角色           | 增加可回滚迁移；区分首次初始化和用户主动清空             |
+| `src/shared/types.ts`、`electron/services/storage/validation.ts`、`src/app/App.tsx`、`electron/core/runtime/task-scheduler.ts` | RunInput / Session 依赖 agentId，前端和运行入口依赖 builder                  | 改为可空 Agent；角色上下文与基础执行配置分离             |
+| `electron/core/runtime/task-scheduler.ts::nativeRun`                                                                           | 无项目 / 只读会设置 plan；正文到达后才创建助手消息                           | 先验证权限替代，再去掉自动规划；发送受理后即显示运行占位 |
+| `electron/core/runtime/task-scheduler.ts`                                                                                      | 同会话互斥；原生项目会话每轮重建，Codex 每轮 thread/start                    | 加补充队列和版本化引擎段；逐适配器实现安全复用           |
+| `electron/core/models/providers.ts`                                                                                            | 有协议流式解析及历史转换；历史按字符预算保留最近完整轮次                     | 增加规范事件和预算观测，逐步完善带来源的上下文摘要       |
+| `electron/core/tools/extensions.ts`、`src/features/plugins/Extensions.tsx`                                                     | 启用之外还需 Agent 工具选择；prepare 先连接并发现工具                        | 全局能力注册、延迟加载和权限过滤，取消重复配置           |
+| `electron/main.ts`                                                                                                             | IPC 中承载业务逻辑；部分修改用全局 requireIdle 阻止                          | 抽业务服务和资源级变更策略，避免聊天管理自身时死锁       |
+| `electron/services/desktop/computer.ts`                                                                                        | Windows 权限状态静态返回，按钮诊断反馈不充分                                 | 支持性、系统授权、启用和实测分开；明确自检与结果         |
+| `electron/core/tools/workspace.ts`                                                                                             | 通用工具为 list/read/write/command；整文件写入，命令等待结束并默认两分钟超时 | 补搜索、局部读取、补丁和命令进度；保留路径及写入冲突检查 |
+| 原生认证与 Runtime                                                                                                             | Kimi / MiniMax home 按引擎共享，Codex 使用统一 codex home                    | 多账号必须隔离运行目录、凭据与进程，不能只增加账号下拉框 |
+| `TongzhouAPI`、会话菜单                                                                                                        | 有归档 / 恢复，无会话删除和运行中补充接口                                    | 服务端事务删除、输入队列及 UI 状态一起实现               |
+| 测试与验证文档                                                                                                                 | 历史记录 74 项自动化通过，部分真实 Kimi 测试；其他真实模型和 Mac 尚有缺口    | 记录为历史基线，本轮实施后重新验证；不得宣称同等编码能力 |
 
 尚未确认：当前用户感觉慢的主要耗时来源、异常结束语的准确来源、各 CLI 固定版本的无规划权限控制及 steer 能力、各渠道扫码流程对同舟的开放条件。先用小范围验证消除不确定性。
 

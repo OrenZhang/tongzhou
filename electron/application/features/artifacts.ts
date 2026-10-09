@@ -11,18 +11,18 @@ export const artifactsPlugin: Plugin.Object<void> = {
     'tzContent',
     'tzKnowledge',
     'tzAutomations',
-    'tzExecution',
+    'tzEvents',
   ],
   apply(ctx) {
     const register = ctx.tzIpc.scoped(ctx);
-    const runtime = {
+    const services = {
       artifacts: ctx.tzArtifacts,
       store: ctx.tzStore,
       content: ctx.tzContent,
       knowledge: ctx.tzKnowledge,
       automations: ctx.tzAutomations,
-      changed: ctx.tzExecution.changed,
+      changed: ctx.tzEvents.changed,
     };
-    registerArtifactServices(register, runtime);
+    registerArtifactServices(register, services);
   },
 };

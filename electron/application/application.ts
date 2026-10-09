@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron';
 import { ClientCommands } from '../core/tools/client-commands';
-import type { Runtime } from '../core/runtime/runtime';
+import type { TaskService } from '../core/task-contracts';
+import { ApplicationEvents } from '../core/application-events';
 import { ApplicationKernel } from './kernel';
 import { ClientIpc } from './client-ipc';
 import type { DesktopEnvironment } from './context';
@@ -19,6 +20,11 @@ export class DesktopApplication {
         apply: (ctx) => {
           const commands = new ClientCommands();
           ctx.provide('tzDesktop', this.desktop);
+          const events = new ApplicationEvents(this.desktop.emit);
+          ctx.provide('tzEvents', events);
+          this.kernel.own(ctx, () => {
+            events.removeAllListeners();
+          });
           ctx.provide('tzCommands', commands);
           ctx.provide(
             'tzIpc',
@@ -44,17 +50,17 @@ export class DesktopApplication {
     }
   }
 
-  get runtime() {
-    return this.kernel.get<Runtime>('tzRuntime');
+  get tasks() {
+    return this.kernel.get<TaskService>('tzTasks');
   }
 
   stop() {
     return this.kernel.stop(async () => {
-      const runtime = this.kernel.context.get('tzRuntime', false);
-      if (runtime) {
-        runtime.stop();
+      const tasks = this.kernel.context.get('tzTasks', false);
+      if (tasks) {
+        tasks.stop();
         await Promise.all([
-          runtime.waitForIdle(),
+          tasks.waitForIdle(),
           this.kernel.context.get('tzIpc', false)?.waitForIdle(),
         ]);
       }

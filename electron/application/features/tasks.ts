@@ -7,7 +7,7 @@ export const tasksPlugin: Plugin.Object<void> = {
   inject: [
     'tzIpc',
     'tzStore',
-    'tzExecution',
+    'tzTasks',
     'tzTerminals',
     'tzMemories',
     'tzCheckpoints',
@@ -16,14 +16,14 @@ export const tasksPlugin: Plugin.Object<void> = {
   apply(ctx) {
     const register = ctx.tzIpc.scoped(ctx);
     const store = ctx.tzStore;
-    const runtime = {
-      snapshot: ctx.tzExecution.snapshot,
+    const services = {
+      snapshot: ctx.tzTasks.snapshot.bind(ctx.tzTasks),
       terminals: ctx.tzTerminals,
       memories: ctx.tzMemories,
       checkpoints: ctx.tzCheckpoints,
-      start: ctx.tzExecution.start,
+      start: ctx.tzTasks.start.bind(ctx.tzTasks),
     };
     const { dataDir } = ctx.tzDesktop;
-    registerTaskServices(register, store, runtime, dataDir);
+    registerTaskServices(register, store, services, dataDir);
   },
 };

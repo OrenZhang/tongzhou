@@ -8,11 +8,11 @@ import '../context';
 
 export const desktopPlugin: Plugin.Object<void> = {
   name: 'tongzhou-desktop',
-  inject: ['tzIpc', 'tzStore', 'tzRuntime', 'tzCommands', 'tzDesktop'],
+  inject: ['tzIpc', 'tzStore', 'tzTasks', 'tzCommands', 'tzDesktop'],
   apply(ctx) {
     const register = ctx.tzIpc.scoped(ctx);
     const store = ctx.tzStore;
-    const runtime = ctx.tzRuntime;
+    const services = ctx.tzTasks;
     const clientCommands = ctx.tzCommands;
     const { emit } = ctx.tzDesktop;
     register(
@@ -23,7 +23,7 @@ export const desktopPlugin: Plugin.Object<void> = {
         '查询所有模块的真实配置、ID、会话、机器人、渠道、运行和认证记录',
         [],
       ),
-      () => runtime.snapshot(),
+      () => services.snapshot(),
     );
     const permissionSchema = z.enum(['read-only', 'ask', 'full-access']);
     register(
@@ -40,7 +40,10 @@ export const desktopPlugin: Plugin.Object<void> = {
         const applyToAll = z.boolean().parse(all ?? false);
         // The renderer snapshot can lag a just-saved selection. Applying the current
         // default must not restore the previous value while clearing overrides.
-        runtime.setDefaultPermission(applyToAll ? store.defaultPermission() : selected, applyToAll);
+        services.setDefaultPermission(
+          applyToAll ? store.defaultPermission() : selected,
+          applyToAll,
+        );
       },
     );
     register(
@@ -53,7 +56,7 @@ export const desktopPlugin: Plugin.Object<void> = {
         [idSchema, z.enum(['read-only', 'ask', 'full-access']).nullable()],
       ),
       (id, mode) => {
-        runtime.setSessionPermission(idSchema.parse(id), permissionSchema.nullable().parse(mode));
+        services.setSessionPermission(idSchema.parse(id), permissionSchema.nullable().parse(mode));
       },
     );
     register(

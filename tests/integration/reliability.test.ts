@@ -4,7 +4,7 @@ import { mkdtemp, writeFile, readFile, rm, mkdir, access } from 'node:fs/promise
 import path from 'node:path';
 import os from 'node:os';
 import { Store } from '../../electron/services/storage/store';
-import { Runtime } from '../../electron/core/runtime/runtime';
+import { createTaskFixture } from '../support/task-system';
 import { portableHistory } from '../../electron/core/models/providers';
 import { executeTool, fileHash } from '../../electron/core/tools/workspace';
 import { Connectors } from '../../electron/services/accounts/connectors';
@@ -193,8 +193,8 @@ describe('long conversations and concurrent changes', () => {
   it('removes internal child data and disables inbound bindings while preserving project files', async () => {
     const s = store(),
       root = await directory(),
-      runtime = new Runtime(s, root, () => {});
-    cleanups.push(() => runtime.stop());
+      system = await createTaskFixture(s, root);
+    cleanups.push(() => system.dispose());
     const parent = s.createSession(),
       child = s.createSession(null, parent.id),
       grandchild = s.createSession(null, child.id);
@@ -205,7 +205,7 @@ describe('long conversations and concurrent changes', () => {
     }
     await writeFile(path.join(root, 'user-project.txt'), 'preserve');
     s.put('channel', { id: 'bound', sessionId: grandchild.id, inbound: true, enabled: true });
-    await expect(runtime.sessions.deleteSession(parent.id)).rejects.toThrow('请先归档');
+    await expect(system.sessions.deleteSession(parent.id)).rejects.toThrow('请先归档');
     expect(s.get<any>('channel', 'bound').inbound).toBe(true);
     expect(await readFile(path.join(root, 'chat-workspaces', grandchild.id, 'temp'), 'utf8')).toBe(
       'owned',
@@ -213,7 +213,7 @@ describe('long conversations and concurrent changes', () => {
     expect(s.list('session')).toHaveLength(4);
     s.put('session', { ...parent, archived: true });
     s.put('run', { id: 'running-child', sessionId: grandchild.id, status: 'running' });
-    await expect(runtime.sessions.deleteSession(parent.id)).rejects.toThrow('请先停止');
+    await expect(system.sessions.deleteSession(parent.id)).rejects.toThrow('请先停止');
     expect(s.get<any>('run', 'running-child').status).toBe('running');
     expect(s.get<any>('channel', 'bound').inbound).toBe(true);
     expect(await readFile(path.join(root, 'chat-workspaces', grandchild.id, 'temp'), 'utf8')).toBe(
@@ -221,7 +221,7 @@ describe('long conversations and concurrent changes', () => {
     );
     expect(s.list('session')).toHaveLength(4);
     s.put('run', { id: 'running-child', sessionId: grandchild.id, status: 'completed' });
-    await runtime.sessions.deleteSession(parent.id);
+    await system.sessions.deleteSession(parent.id);
     expect(s.list<any>('session').map((v) => v.id)).toEqual([branch.id]);
     expect(s.get<any>('channel', 'bound').inbound).toBe(false);
     await expect(access(path.join(root, 'chat-workspaces', grandchild.id))).rejects.toThrow();

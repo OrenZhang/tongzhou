@@ -1,5 +1,7 @@
+import type { DomainServices } from '../domain-services';
+import type { Automations } from '../automation/automations';
+import type { Store } from '../../services/storage/store';
 import { z } from 'zod';
-import type { Runtime } from '../../core/runtime/runtime';
 import {
   workspaceOperation,
   operation,
@@ -12,32 +14,32 @@ import type { MemoryJob } from '../knowledge/knowledge-memory';
 import { projectFamilyId } from '../../../src/shared/projects';
 export function registerAutomationServices(
   register: (name: string, definition: ClientOperation, handler: (...args: any[]) => any) => void,
-  runtime: Pick<Runtime, 'automations' | 'store' | 'knowledge'>,
+  services: Pick<DomainServices, 'knowledge'> & { automations: Automations; store: Store },
 ) {
-  const a = runtime.automations,
+  const a = services.automations,
     id = z.string().uuid();
   const interactive = (sessionId: string) => {
-    const s = runtime.store.get<Session>('session', sessionId);
+    const s = services.store.get<Session>('session', sessionId);
     if (s.automationJob || s.memoryJob || s.parentId || s.knowledgeJob || s.contentContext)
       throw new Error('请在普通会话中管理自动化，后台任务不能递归创建或触发其他任务');
     return s;
   };
   const accessibleRule = (rule: AutomationRule, sessionId: string) => {
-    const s = runtime.store.get<Session>('session', sessionId);
+    const s = services.store.get<Session>('session', sessionId);
     if (
       rule.projectId &&
-      projectFamilyId(runtime.store.list('project'), rule.projectId) !==
-        projectFamilyId(runtime.store.list('project'), s.projectId)
+      projectFamilyId(services.store.list('project'), rule.projectId) !==
+        projectFamilyId(services.store.list('project'), s.projectId)
     )
       return false;
     if (rule.kind === 'content') {
       if (rule.documentId)
-        return runtime.knowledge.accessible(runtime.knowledge.get(rule.documentId), sessionId);
+        return services.knowledge.accessible(services.knowledge.get(rule.documentId), sessionId);
       const ids = a.handlers.get(rule.kind).inputIds(rule);
       return (
         ids.length > 0 &&
         ids.every(
-          (id) => !!id && runtime.knowledge.accessible(runtime.knowledge.get(id), sessionId),
+          (id) => !!id && services.knowledge.accessible(services.knowledge.get(id), sessionId),
         )
       );
     }
@@ -51,21 +53,21 @@ export function registerAutomationServices(
     if (!accessibleRule(job.rule, sessionId)) return false;
     if (
       job.source &&
-      !runtime.knowledge.accessible(runtime.knowledge.get(job.source.id), sessionId)
+      !services.knowledge.accessible(services.knowledge.get(job.source.id), sessionId)
     )
       return false;
     if (
       job.outputId &&
-      !runtime.knowledge.accessible(runtime.knowledge.get(job.outputId), sessionId)
+      !services.knowledge.accessible(services.knowledge.get(job.outputId), sessionId)
     )
       return false;
     if (job.context?.memoryJobId) {
-      const m = runtime.store.get<MemoryJob>('knowledgeMemoryJob', job.context.memoryJobId);
-      const s = runtime.store.get<Session>('session', sessionId);
+      const m = services.store.get<MemoryJob>('knowledgeMemoryJob', job.context.memoryJobId);
+      const s = services.store.get<Session>('session', sessionId);
       return (
         m.scope === `session:${sessionId}` ||
         (!!s.projectId &&
-          m.scope === `project:${projectFamilyId(runtime.store.list('project'), s.projectId)}`)
+          m.scope === `project:${projectFamilyId(services.store.list('project'), s.projectId)}`)
       );
     }
     return true;
@@ -80,7 +82,7 @@ export function registerAutomationServices(
       name,
       ['automationState', 'automationJobRead', 'automationReview'].includes(name)
         ? workspaceOperation(
-            runtime.store,
+            services.store,
             '自动化与定时',
             name === 'automationReview' ? 'change' : 'query',
             description,
@@ -95,20 +97,23 @@ export function registerAutomationServices(
               if (name === 'automationSave') {
                 const next = values[0] as AutomationRule;
                 if (next.id)
-                  assertRule(runtime.store.get<AutomationRule>('automation', next.id), sessionId);
+                  assertRule(services.store.get<AutomationRule>('automation', next.id), sessionId);
                 assertRule(next, sessionId);
               } else if (['automationRun', 'automationDelete'].includes(name)) {
                 assertRule(
-                  runtime.store.get<AutomationRule>('automation', String(values[0])),
+                  services.store.get<AutomationRule>('automation', String(values[0])),
                   sessionId,
                 );
               } else if (['automationRetry', 'automationCancel'].includes(name)) {
-                const job = runtime.store.get<AutomationJob>('automationJob', String(values[0]));
+                const job = services.store.get<AutomationJob>('automationJob', String(values[0]));
                 if (!accessibleJob(job, sessionId)) throw new Error('执行记录不在当前会话可用范围');
-                assertRule(runtime.store.get<AutomationRule>('automation', job.rule.id), sessionId);
+                assertRule(
+                  services.store.get<AutomationRule>('automation', job.rule.id),
+                  sessionId,
+                );
               } else if (
                 name === 'contentReady' &&
-                !runtime.knowledge.accessible(runtime.knowledge.get(String(values[0])), sessionId)
+                !services.knowledge.accessible(services.knowledge.get(String(values[0])), sessionId)
               ) {
                 throw new Error('文档已归档或不在当前范围');
               }
@@ -145,7 +150,7 @@ export function registerAutomationServices(
             return false;
           }
         }),
-        jobs: runtime.store
+        jobs: services.store
           .list<AutomationJob>('automationJob')
           .filter((j) => {
             try {
@@ -178,7 +183,7 @@ export function registerAutomationServices(
           scopeGuard(args, sessionId);
           if (
             !accessibleJob(
-              runtime.store.get<AutomationJob>('automationJob', String(args[1])),
+              services.store.get<AutomationJob>('automationJob', String(args[1])),
               sessionId,
             )
           )
@@ -203,7 +208,7 @@ export function registerAutomationServices(
     '标记当前版本就绪并触发内容自动化',
     [id, z.number().int().positive()],
     (v, version) => {
-      const doc = runtime.knowledge.assertUsable(id.parse(v));
+      const doc = services.knowledge.assertUsable(id.parse(v));
       if (doc.version !== version) throw new Error('文档已更新，请保存后重新标记');
       a.event('ready', doc.id);
     },

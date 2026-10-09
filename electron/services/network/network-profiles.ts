@@ -346,7 +346,7 @@ export class NetworkProfiles {
         );
       await this.serial(id, async () => {
         const p = this.store.get<Saved>('networkProfile', id);
-        // Runtime already owns a running turn during this preflight: never switch
+        // The task scheduler already owns a running turn during this preflight: never switch
         // an existing shared core under another account. The routing guard handles this below.
         if (p.selected !== recommended) {
           try {

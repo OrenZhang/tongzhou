@@ -7,16 +7,17 @@ export const providersPlugin: Plugin.Object<void> = {
   inject: [
     'tzIpc',
     'tzStore',
-    'tzRuntime',
+    'tzTasks',
     'tzNetworks',
     'tzAccounts',
     'tzAccountBrowser',
     'tzDesktop',
+    'tzEvents',
   ],
   apply(ctx) {
     const register = ctx.tzIpc.scoped(ctx);
     const store = ctx.tzStore;
-    const runtime = ctx.tzRuntime;
+    const services = ctx.tzTasks;
     const networks = ctx.tzNetworks;
     const accounts = ctx.tzAccounts;
     const accountBrowser = ctx.tzAccountBrowser;
@@ -24,7 +25,7 @@ export const providersPlugin: Plugin.Object<void> = {
     registerProviderServices(
       register,
       store,
-      runtime,
+      { snapshot: services.snapshot.bind(services), changed: ctx.tzEvents.changed },
       accounts,
       accountBrowser,
       networks,

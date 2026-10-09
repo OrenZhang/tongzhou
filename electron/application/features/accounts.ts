@@ -8,11 +8,10 @@ import '../context';
 
 export const accountsPlugin: Plugin.Object<void> = {
   name: 'tongzhou-accounts',
-  inject: ['tzIpc', 'tzStore', 'tzRuntime', 'tzAccounts', 'tzAccountBrowser'],
+  inject: ['tzIpc', 'tzStore', 'tzAccounts', 'tzAccountBrowser', 'tzEvents'],
   apply(ctx) {
     const register = ctx.tzIpc.scoped(ctx);
     const store = ctx.tzStore;
-    const runtime = ctx.tzRuntime;
     const accounts = ctx.tzAccounts;
     const accountBrowser = ctx.tzAccountBrowser;
     const accountFor = (raw: unknown, id?: unknown) =>
@@ -84,7 +83,7 @@ export const accountsPlugin: Plugin.Object<void> = {
       async (raw, id) => {
         accounts.idle(idSchema.parse(id ?? raw + '-account'));
         await accountFor(raw, id).logout();
-        runtime.changed();
+        ctx.tzEvents.changed();
       },
     );
     const codexFor = (id?: unknown) =>
@@ -151,7 +150,7 @@ export const accountsPlugin: Plugin.Object<void> = {
         accounts.idle(idSchema.parse(id ?? 'openai-codex'));
         await codexFor(id).logout();
         accountBrowser.close(idSchema.parse(id ?? 'openai-codex'));
-        runtime.changed();
+        ctx.tzEvents.changed();
       },
     );
   },

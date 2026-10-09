@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { idSchema } from '../storage/validation';
 import type { Store } from '../storage/store';
-import type { Runtime } from '../../core/runtime/runtime';
+import type { TaskService, ChangePublisher } from '../../core/task-contracts';
 import type { BotConfig, Channel, Session, Run } from '../../../src/shared/types';
 import { connectBot, type BotMessage } from './bot-transports';
 
@@ -27,7 +27,7 @@ export class Bots {
   private disposed = false;
   constructor(
     private store: Store,
-    private runtime: Runtime,
+    private runtime: Pick<TaskService, 'enqueue' | 'cancel' | 'snapshot'> & ChangePublisher,
     private connect: typeof connectBot = connectBot,
   ) {}
   list(): BotConfig[] {

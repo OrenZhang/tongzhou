@@ -5,7 +5,7 @@ import QRCode from 'qrcode';
 import { WSClient, EventDispatcher, Domain, LoggerLevel } from '@larksuiteoapi/node-sdk';
 import type { Channel, Session } from '../../../src/shared/types';
 import type { Store } from '../storage/store';
-import type { Runtime } from '../../core/runtime/runtime';
+import type { TaskService, ChangePublisher } from '../../core/task-contracts';
 
 export const feishuHost = (domain?: string) =>
   domain === 'lark' ? 'https://open.larksuite.com' : 'https://open.feishu.cn';
@@ -36,7 +36,7 @@ export class Feishu {
   private clients = new Map<string, { client: WSClient; signature: string }>();
   constructor(
     private store: Store,
-    private runtime: Runtime,
+    private runtime: Pick<TaskService, 'enqueue'> & ChangePublisher,
   ) {}
   cancel(id: string) {
     const existed = this.pending.has(id);
