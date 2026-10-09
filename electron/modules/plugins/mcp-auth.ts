@@ -306,9 +306,10 @@ export class McpAuth {
       if (p.oauthStatus === 'waiting' || p.oauthStatus === 'starting')
         this.status(p.id, 'error', '上次授权已中断，请重新授权。');
       else if (
-        codeHost(p) === 'github' &&
+        !!codeHost(p) &&
         p.oauthStatus === 'error' &&
-        /Client\s*ID|Client\s*Secret|自动注册/.test(p.oauthError ?? '')
+        (/Client\s*ID|Client\s*Secret/.test(p.oauthError ?? '') ||
+          (codeHost(p) === 'github' && /自动注册/.test(p.oauthError ?? '')))
       )
         this.status(p.id, 'none');
   }
@@ -361,6 +362,10 @@ export class McpAuth {
       if ((e as NodeJS.ErrnoException)?.code === 'EADDRINUSE')
         return '本机授权回调端口 17438 已被占用，请关闭其他插件授权窗口后重试。';
       if (failure) return failure;
+      if (codeHost(config) === 'gitlab')
+        return /does not support dynamic client registration/i.test(String(e))
+          ? '该 GitLab 实例未提供 OAuth 应用自动注册。请联系管理员启用，或改用 Token 配置。'
+          : 'GitLab 授权未完成。请确认实例已启用 MCP、OAuth 应用自动注册，以及当前账号允许访问；也可改用 Token 配置。';
       if (/does not support dynamic client registration/i.test(String(e)))
         return '此服务不支持自动注册 OAuth 应用，请配置自己的 Client ID、Client Secret 和授权服务地址，或使用访问令牌。';
       return '授权未完成。请检查应用的 Client ID、Client Secret、回调地址及授权范围后重试。';
@@ -398,7 +403,9 @@ export class McpAuth {
         failure =
           registration && target.hostname === 'api.figma.com' && response.status === 403
             ? 'Figma 拒绝客户端注册（HTTP 403）。远程 MCP 需要 Figma 认可的客户端；可填写已获准的 OAuth 应用信息，或改用 Figma 桌面 MCP。'
-            : `${target.hostname} ${registration ? '拒绝应用注册' : /token/.test(target.pathname) ? '未能交换授权令牌' : '授权请求失败'}（HTTP ${response.status}）。请检查应用配置和账号权限。`;
+            : codeHost(config) === 'gitlab'
+              ? `${target.hostname} ${registration ? '拒绝 OAuth 应用自动注册' : /token/.test(target.pathname) ? '未能交换授权令牌' : '授权请求失败'}（HTTP ${response.status}）。请确认实例已启用 MCP、允许应用自动注册及账号访问；也可改用 Token 配置。`
+              : `${target.hostname} ${registration ? '拒绝应用注册' : /token/.test(target.pathname) ? '未能交换授权令牌' : '授权请求失败'}（HTTP ${response.status}）。请检查应用配置和账号权限。`;
       }
       return response;
     };

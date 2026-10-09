@@ -471,7 +471,12 @@ try {
     .fill('https://gitlab.fixture.example');
   assert.equal(await dialog.getByLabel('认证方式', { exact: true }).inputValue(), 'headers');
   await dialog.getByLabel('认证方式', { exact: true }).selectOption('oauth');
-  assert.equal(await dialog.getByRole('button', { name: '浏览器授权', exact: true }).count(), 1);
+  assert.equal(
+    await dialog.getByRole('button', { name: '使用 GitLab 登录', exact: true }).count(),
+    1,
+  );
+  assert.equal(await dialog.getByText('高级：使用已注册的 OAuth 应用', { exact: true }).count(), 0);
+  assert.equal(await dialog.getByLabel('预注册 Client ID（可选）', { exact: true }).count(), 0);
   assert.equal(await dialog.getByLabel('访问令牌（留空保留）', { exact: true }).count(), 0);
   await capture('gitlab-self-managed');
   await dialog.getByRole('button', { name: '保存连接', exact: true }).click();

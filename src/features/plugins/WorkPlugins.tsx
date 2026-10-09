@@ -113,7 +113,7 @@ export function OAuthFields({
           </select>
         </label>
       )}
-      {edit.authMode === 'oauth' && !github && (
+      {edit.authMode === 'oauth' && !provider && (
         <details>
           <summary>高级：使用已注册的 OAuth 应用</summary>
           <div className="oauth-app-fields">
@@ -576,7 +576,7 @@ export function WorkPlugins({
                 )}
                 <p>
                   {edit.authMode === 'oauth'
-                    ? 'OAuth2 使用 GitLab 官方 MCP 授权，需实例支持并启用 MCP；支持自动注册或预注册 OAuth 应用。'
+                    ? '点击「使用 GitLab 登录」前往该实例授权，无需填写应用密钥。实例需启用 MCP 和 OAuth 应用自动注册；不支持时可使用 Token 配置。'
                     : 'Token 使用此实例的官方 REST API，无需实例启用 MCP。保存并检查会验证 Token 身份和 API 连接。'}
                 </p>
               </>
@@ -723,7 +723,11 @@ export function WorkPlugins({
                     }, '授权状态已更新，请在下方查看。')
                   }
                 >
-                  {codeHost(edit) === 'github' ? '使用 GitHub 登录' : '浏览器授权'}
+                  {codeHost(edit) === 'github'
+                    ? '使用 GitHub 登录'
+                    : codeHost(edit) === 'gitlab'
+                      ? '使用 GitLab 登录'
+                      : '浏览器授权'}
                 </button>
                 {loginCode && authCurrent?.oauthStatus === 'waiting' && (
                   <p className="info-strip">

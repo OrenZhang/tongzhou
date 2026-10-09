@@ -460,7 +460,11 @@ export function Extensions({
                     })
                   }
                 >
-                  {codeHost(edit) === 'github' ? '使用 GitHub 登录' : '保存并浏览器授权'}
+                  {codeHost(edit) === 'github'
+                    ? '使用 GitHub 登录'
+                    : codeHost(edit) === 'gitlab'
+                      ? '使用 GitLab 登录'
+                      : '保存并浏览器授权'}
                 </button>
                 {loginCode &&
                   data.plugins?.find((p) => p.id === edit.id)?.oauthStatus === 'waiting' && (

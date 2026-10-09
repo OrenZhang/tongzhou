@@ -151,6 +151,51 @@ it('authorizes a self-managed GitLab MCP with mcp scope, discovery, public DCR a
   expect(s.get<PluginConfig>('plugin', p.id).oauthStatus).toBe('authorized');
   expect(JSON.stringify(s.list('plugin'))).not.toContain('gitlab-oauth-fixture-secret');
 });
+it.each(['disabled', 'rejected'] as const)(
+  'explains GitLab automatic registration failure (%s) without requesting client credentials',
+  async (mode) => {
+    const s = store();
+    const origin = 'https://gitlab.fixture.example';
+    const p = { ...plugin, url: origin + '/api/v4/mcp' };
+    s.put('plugin', p);
+    const json = (body: unknown, status = 200) =>
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    setServiceTransport(async (input) => {
+      const u = new URL(String(input));
+      if (u.pathname.includes('oauth-protected-resource'))
+        return json({
+          resource: p.url,
+          authorization_servers: [origin],
+          scopes_supported: ['mcp'],
+        });
+      if (u.pathname.includes('oauth-authorization-server'))
+        return json({
+          issuer: origin,
+          authorization_endpoint: origin + '/oauth/authorize',
+          token_endpoint: origin + '/oauth/token',
+          registration_endpoint: mode === 'rejected' ? origin + '/oauth/register' : undefined,
+          response_types_supported: ['code'],
+          code_challenge_methods_supported: ['S256'],
+          token_endpoint_auth_methods_supported: ['none'],
+        });
+      if (u.pathname === '/oauth/register') return json({ error: 'fixture-private-response' }, 403);
+      return json({}, 404);
+    });
+    const open = vi.fn();
+    const service = new McpAuth(s, () => {}, open);
+    cleanups.push(() => service.dispose());
+    await expect(service.login(p.id)).rejects.toThrow('自动注册');
+    expect(open).not.toHaveBeenCalled();
+    const saved = s.get<PluginConfig>('plugin', p.id);
+    expect(saved.oauthStatus).toBe('error');
+    expect(saved.oauthError).toContain('Token 配置');
+    expect(saved.oauthError).not.toMatch(/Client ID|Client Secret|fixture-private-response/);
+    expect(new PluginOAuthProvider(s, p).tokens()).toBeUndefined();
+  },
+);
 it('reports Figma registration rejection with an actionable error without leaking a response body', async () => {
   const s = store();
   s.put('plugin', { ...plugin, url: 'https://mcp.figma.com/mcp' });
@@ -237,23 +282,26 @@ it('can clear auth for a newly created plugin before its configuration is saved'
   expect(() => service.logout('new-plugin')).not.toThrow();
   expect(s.list('plugin')).toEqual([]);
 });
-it('removes obsolete GitHub client-credential prompts after upgrading to built-in login', () => {
-  const s = store();
-  s.put('plugin', {
-    ...plugin,
-    url: 'https://api.githubcopilot.com/mcp/',
-    oauthStatus: 'error',
-    oauthError: '请配置 Client ID 和 Client Secret',
-  });
-  const service = new McpAuth(
-    s,
-    () => {},
-    async () => {},
-  );
-  cleanups.push(() => service.dispose());
-  expect(s.get<PluginConfig>('plugin', plugin.id)).toMatchObject({ oauthStatus: 'none' });
-  expect(s.get<PluginConfig>('plugin', plugin.id).oauthError).toBeUndefined();
-});
+it.each(['https://api.githubcopilot.com/mcp/', 'https://gitlab.fixture.example/api/v4/mcp'])(
+  'removes obsolete code-host client-credential prompts after upgrading (%s)',
+  (url) => {
+    const s = store();
+    s.put('plugin', {
+      ...plugin,
+      url,
+      oauthStatus: 'error',
+      oauthError: '请配置 Client ID 和 Client Secret',
+    });
+    const service = new McpAuth(
+      s,
+      () => {},
+      async () => {},
+    );
+    cleanups.push(() => service.dispose());
+    expect(s.get<PluginConfig>('plugin', plugin.id)).toMatchObject({ oauthStatus: 'none' });
+    expect(s.get<PluginConfig>('plugin', plugin.id).oauthError).toBeUndefined();
+  },
+);
 function store() {
   const s = new Store(':memory:', {
     encrypt: (v) => Buffer.from(v).toString('base64'),

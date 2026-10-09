@@ -1,5 +1,12 @@
 # 验证记录
 
+## 0.1.0 本地：GitLab 浏览器登录入口（2026-10-09，未发布）
+
+- GitLab OAuth2 界面统一为「使用 GitLab 登录」，移除用户填写 Client ID / Client Secret / Issuer 的入口。填写实例地址后使用官方 MCP 的 OAuth 应用自动注册和 PKCE，在该实例页面登录授权，本机加密保存；保留已有已注册应用的内部配置兼容。
+- 自动注册关闭、注册拒绝或授权失败时提示检查实例 MCP / 自动注册 / 账号权限，提供 Token 配置替代，不再要求填写已移除的应用密钥。升级清除旧代码托管插件的应用密钥提示。
+- 完整构建和类型检查通过；两个认证测试文件 25 项通过，覆盖 GitLab 自动注册、PKCE、回调保存、自动注册关闭和拒绝，以及升级旧提示。独立 Electron 界面测试通过，验证 GitLab 登录按钮、没有高级应用配置、Token 切换、本地账号检测、保存检查及重启持久化，同时回归 GitHub 认证。
+- 测试使用隔离协议服务，未完成用户真实 GitLab 实例的浏览器授权；实例实际能力以部署版本和管理员配置为准。依据 [GitLab 官方 MCP 文档](https://docs.gitlab.com/user/model_context_protocol/mcp_server/)。
+
 ## 0.1.0 本地：GitHub 浏览器登录（2026-10-09，未发布）
 
 - GitHub OAuth2 改为同舟内置应用的官方 Device Flow；用户界面只提供 GitHub 登录、验证码、账号状态与退出，不再要求填写 Client ID、Client Secret 或 Issuer。公开 Client ID 由构建环境和 Release 仓库变量配置；缺少配置时提示登录不可用，Token 和本地账号发现仍可使用。
