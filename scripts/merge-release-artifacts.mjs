@@ -37,6 +37,8 @@ for (const suffix of [
   'mac-arm64.dmg',
   'mac-x64.zip',
   'mac-arm64.zip',
+  'linux-x86_64.AppImage',
+  'linux-amd64.deb',
 ])
   if (![...names].some((name) => name.endsWith(suffix)))
     throw new Error('Missing platform package: ' + suffix);
