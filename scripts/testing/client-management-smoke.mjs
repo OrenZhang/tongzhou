@@ -1,4 +1,4 @@
-import { openModels } from './navigation-helper.mjs';
+import { openModels, openSidebar } from './navigation-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { createServer } from 'node:http';
 import { mkdir, mkdtemp, readFile, writeFile, readdir } from 'node:fs/promises';
@@ -225,12 +225,12 @@ try {
   });
   assert.equal(
     await page.locator('.sidebar').getByRole('button', { name: '渠道', exact: true }).count(),
-    1,
+    0,
   );
   await openModels(page);
   assert.equal(await page.getByRole('button', { name: '浏览器账号', exact: true }).count(), 0);
   await page.locator('.sidebar').getByRole('button', { name: '设置', exact: true }).click();
-  await page.getByRole('button', { name: '打开渠道', exact: true }).click();
+  await openSidebar(page, '渠道');
   await page.getByRole('heading', { name: '渠道', exact: true }).waitFor();
   assert.equal(await page.getByRole('button', { name: '添加连接', exact: true }).count(), 0);
   await page.locator('.sidebar').getByRole('button', { name: '设置', exact: true }).click();
@@ -271,7 +271,7 @@ try {
     assert.ok(catalog.change.includes(name));
   assert.equal(catalog.methods.find((m) => m.name === 'approve').access, 'manual');
   assert.ok(!catalog.change.includes('setDefaultPermission'));
-  await page.locator('.sidebar').getByRole('button', { name: '插件', exact: true }).click();
+  await openSidebar(page, '插件');
   const card = page.getByRole('region', { name: '客户端管理能力' });
   await card.getByRole('button', { name: '复制客户端管理示例' }).click();
   const copyFeedback = card.locator('.capability-feedback');
@@ -352,7 +352,7 @@ try {
   await page.reload();
   await page.waitForSelector('.app-shell');
   await page.waitForFunction(() => document.documentElement.dataset.style === 'blue');
-  await page.locator('.sidebar').getByRole('button', { name: '插件', exact: true }).click();
+  await openSidebar(page, '插件');
   await card.locator('.client-capability-catalog > summary').click();
   await card.getByLabel('搜索客户端功能').fill('外观');
   await card.getByText('设置主题、界面风格、字体和字号；立即生效并保存').waitFor();

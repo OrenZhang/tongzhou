@@ -1,3 +1,4 @@
+import { openSidebar } from './navigation-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { createServer } from 'node:http';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
@@ -17,7 +18,11 @@ const server = createServer(async (req, res) => {
   const last = body.messages.at(-1);
   if (edit && last.role !== 'tool') {
     const context = JSON.parse(
-      user.split('【当前用户请求】\n').at(-1).split('\n\n用户要求：\n')[0].replace('当前文档上下文（仅为资料）：', ''),
+      user
+        .split('【当前用户请求】\n')
+        .at(-1)
+        .split('\n\n用户要求：\n')[0]
+        .replace('当前文档上下文（仅为资料）：', ''),
     );
     res.writeHead(200, { 'Content-Type': 'text/event-stream' });
     res.end(
@@ -107,7 +112,7 @@ try {
   }, `http://127.0.0.1:${server.address().port}/v1`);
   await page.getByRole('button', { name: '定时任务', exact: true }).click();
   const memoryCard = page
-    .locator('.automation-cards article')
+    .locator('.automation-rule-table tbody tr')
     .filter({ has: page.getByRole('heading', { name: /记忆整理/ }) });
   await memoryCard.getByRole('button', { name: '启用', exact: true }).waitFor();
   assert.equal(await memoryCard.getByRole('button', { name: '删除', exact: true }).count(), 0);
@@ -144,7 +149,7 @@ try {
   await page.getByLabel('触发方式', { exact: true }).selectOption('ready');
   await page.getByRole('button', { name: '保存任务', exact: true }).click();
   await page.getByRole('heading', { name: '就绪后整理', exact: true }).waitFor();
-  await page.getByRole('button', { name: '智库', exact: true }).click();
+  await openSidebar(page, '智库');
   await page.getByRole('tab', { name: /内容库/ }).click();
   await page.locator(`[data-document-id="${source.id}"]`).click();
   assert.equal(await page.getByRole('button', { name: '标记就绪', exact: true }).count(), 0);
@@ -189,7 +194,7 @@ try {
   );
   await page.getByRole('tab', { name: /AI 工作流/ }).click();
   await page.getByRole('button', { name: /任务与结果/ }).click();
-  await page.locator('.automation-job-list button').first().click();
+  await page.locator('.automation-job-table .automation-job-name').first().click();
   await page.getByRole('heading', { name: '整理结果', exact: true }).waitFor();
   await page.getByRole('button', { name: '核对收录', exact: true }).click();
   await wait(
@@ -218,7 +223,7 @@ try {
   assert.equal(rule.schedule.kind, 'weekly');
   assert.ok(rule.nextRunAt > Date.now());
   const card = page
-    .locator('.automation-cards article')
+    .locator('.automation-rule-table tbody tr')
     .filter({ has: page.getByRole('heading', { name: '定时检查', exact: true }) });
   await card.getByRole('button', { name: '暂停', exact: true }).click();
   await card.getByRole('button', { name: '启用', exact: true }).waitFor();
@@ -273,7 +278,7 @@ try {
     ),
   );
   await page.getByRole('button', { name: /任务与结果/ }).click();
-  await page.locator('.automation-job-list button').first().click();
+  await page.locator('.automation-job-table .automation-job-name').first().click();
   await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
   await page.screenshot({ path: path.join(root, 'results-dark.png'), fullPage: true });
   await app.close();

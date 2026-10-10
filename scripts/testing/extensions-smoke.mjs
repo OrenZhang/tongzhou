@@ -1,3 +1,4 @@
+import { openSidebar } from './navigation-helper.mjs';
 import { chooseOption } from './choice-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
@@ -82,7 +83,7 @@ try {
     BrowserWindow.getAllWindows().forEach((w) => w.setIgnoreMouseEvents(true));
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [skill] });
   }, skill);
-  await page.getByRole('button', { name: '插件', exact: true }).click();
+  await openSidebar(page, '插件');
   await page.getByRole('button', { name: /^内置插件/ }).click();
   await page.getByLabel('类型', { exact: true }).selectOption('mcp');
   const builtins = (await page.evaluate(() => window.tongzhou.snapshot())).plugins;
@@ -236,7 +237,7 @@ try {
   const before = await page.evaluate(() => window.tongzhou.snapshot());
   const id = before.sessions[0].id;
   await chooseOption(page, '当前连接', 'fixture-b');
-  await page.getByRole('button', { name: '插件', exact: true }).click();
+  await openSidebar(page, '插件');
   await page.getByRole('button', { name: '返回会话', exact: true }).click();
   assert.equal(
     await page.getByLabel('当前连接', { exact: true }).getAttribute('data-value'),
@@ -261,7 +262,7 @@ try {
   assert.equal(persisted.sessions[0].model, 'model-b');
   assert.equal(persisted.plugins.length, 3);
   assert.equal(persisted.skills.length, 2);
-  await page.getByRole('button', { name: '插件', exact: true }).click();
+  await openSidebar(page, '插件');
   await page.getByRole('button', { name: /^个人插件/ }).click();
   await skillCard.getByRole('button', { name: '移除', exact: true }).click();
   await page.waitForFunction(

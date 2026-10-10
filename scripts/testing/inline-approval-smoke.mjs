@@ -1,3 +1,4 @@
+import { openSidebar } from './navigation-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { build } from 'esbuild';
 import { createRequire } from 'node:module';
@@ -153,7 +154,7 @@ try {
   await card('deny').getByRole('button', { name: '拒绝', exact: true }).click();
   await count(1);
   await assert.rejects(readFile(path.join(project, 'deny.txt')), { code: 'ENOENT' });
-  await page.getByRole('button', { name: '智库', exact: true }).click();
+  await openSidebar(page, '智库');
   await page.getByRole('button', { name: '待批准 · 1', exact: true }).click();
   await card('allow').waitFor();
   await card('allow').getByRole('button', { name: '批准本次', exact: true }).click();

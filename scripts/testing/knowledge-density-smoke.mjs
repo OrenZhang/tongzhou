@@ -1,3 +1,4 @@
+import { openSidebar } from './navigation-helper.mjs';
 import { seedKnowledge } from './knowledge-fixture.mjs';
 import { _electron as electron } from 'playwright';
 import { mkdir, mkdtemp } from 'node:fs/promises';
@@ -55,8 +56,8 @@ try {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
 
-  await page.getByRole('button', { name: '智库', exact: true }).click();
-  await page.getByRole('button', { name: '智库', exact: true }).click();
+  await openSidebar(page, '智库');
+  await openSidebar(page, '智库');
   await page.getByRole('tab', { name: /^内容库/ }).click();
   assert.equal(await page.getByRole('button', { name: '查看来源记录', exact: true }).count(), 0);
   await page.locator('.content-file-row').filter({ hasText: '待补充来源的结论' }).click();
@@ -66,7 +67,7 @@ try {
   await page.getByLabel('搜索内容库', { exact: true }).fill('不存在的标题');
   await page.waitForFunction(() => document.querySelectorAll('.content-file-row').length === 0);
   await page.getByLabel('搜索内容库', { exact: true }).fill('');
-  await page.getByRole('button', { name: '智库', exact: true }).click();
+  await openSidebar(page, '智库');
   await page.getByRole('tab', { name: /知识与记忆/ }).click();
   await page.locator('.ontology-entity').nth(1).waitFor();
   const layout = await page

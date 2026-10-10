@@ -1,3 +1,4 @@
+import { openSidebar } from './navigation-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { createServer } from 'node:http';
 import { mkdir, mkdtemp, writeFile, readFile } from 'node:fs/promises';
@@ -168,7 +169,7 @@ try {
   assert.equal(savedWiki, '正文');
   await builtin.getByRole('button', { name: '前往智库', exact: true }).click();
   await page.getByRole('heading', { name: '智库', exact: true }).waitFor();
-  await page.getByRole('button', { name: '智库', exact: true }).click();
+  await openSidebar(page, '智库');
   await page.getByRole('tab', { name: /^内容库/ }).click();
   await app.evaluate(({ dialog }, file) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [file] });
@@ -200,8 +201,8 @@ try {
     return s.id;
   }, `http://127.0.0.1:${server.address().port}/v1`);
   await page.locator(`[data-session-id="${sessionId}"]`).click();
-  await page.getByRole('button', { name: '智库', exact: true }).click();
-  await page.getByRole('button', { name: '智库', exact: true }).click();
+  await openSidebar(page, '智库');
+  await openSidebar(page, '智库');
   await page.getByRole('tab', { name: /^内容库/ }).click();
   await page.getByRole('button', { name: '导入', exact: true }).click();
   await page.getByLabel('文档内容', { exact: true }).waitFor();
@@ -250,8 +251,8 @@ try {
     organized.runs.find((r) => r.sessionId === organizeSession.id).agentName,
     '知识整理',
   );
-  await page.getByRole('button', { name: '智库', exact: true }).click();
-  await page.getByRole('button', { name: '智库', exact: true }).click();
+  await openSidebar(page, '智库');
+  await openSidebar(page, '智库');
   await page.getByRole('tab', { name: /^内容库/ }).click();
   await page.locator('.content-file-row').filter({ hasText: '库存处理 Wiki' }).click();
   await page.getByLabel('文档内容', { exact: true }).waitFor();
@@ -289,14 +290,14 @@ try {
     sessionId,
   );
   assert.ok(knowledgeRun.knowledgeReferences.some((r) => r.id === sourceId && r.mode === 'tool'));
-  await page.getByRole('button', { name: '智库', exact: true }).click();
-  await page.getByRole('button', { name: '智库', exact: true }).click();
+  await openSidebar(page, '智库');
+  await openSidebar(page, '智库');
   await page.getByRole('tab', { name: /^内容库/ }).click();
   await page.getByRole('tab', { name: /知识与记忆/ }).click();
   await page.locator('.knowledge-maintenance > summary').click();
   await page.getByRole('button', { name: '管理记忆任务', exact: true }).click();
   const memoryTaskCard = page
-    .locator('.automation-cards article')
+    .locator('.automation-rule-table tbody tr')
     .filter({ has: page.getByRole('heading', { name: /记忆整理/ }) });
   await memoryTaskCard.getByRole('button', { name: '立即运行', exact: true }).click();
   await page.waitForFunction(async () =>
@@ -308,7 +309,10 @@ try {
     ),
   );
   await page.getByRole('button', { name: /任务与结果/ }).click();
-  await page.locator('.automation-job-list button').filter({ hasText: '记忆整理' }).click();
+  await page
+    .locator('.automation-job-table .automation-job-name')
+    .filter({ hasText: '记忆整理' })
+    .click();
   await page.getByText(/已处理 1 个会话轮次，新增 1 条记忆/).waitFor();
   assert.equal(await page.getByRole('button', { name: '打开执行会话', exact: true }).count(), 0);
   await page.screenshot({ path: 'test-results/memory-automation-result.png', fullPage: true });
@@ -316,7 +320,10 @@ try {
   await page.getByText('每日记忆已整理，等待核对', { exact: true }).waitFor();
   await page.getByRole('button', { name: '定时任务', exact: true }).click();
   await page.getByRole('button', { name: /任务与结果/ }).click();
-  await page.locator('.automation-job-list button').filter({ hasText: '记忆整理' }).click();
+  await page
+    .locator('.automation-job-table .automation-job-name')
+    .filter({ hasText: '记忆整理' })
+    .click();
   await page.getByRole('button', { name: '查看记忆', exact: true }).click();
   await page.getByText('每日记忆已整理，等待核对', { exact: true }).waitFor();
   await page.getByRole('tab', { name: '知识与记忆', exact: false }).click();
@@ -361,8 +368,8 @@ try {
   await page.getByRole('button', { name: 'Agent 排查', exact: true }).click();
   await page.getByText('已排查知识来源，库存并发验证仍需补充。', { exact: true }).waitFor();
   await page.reload();
-  await page.getByRole('button', { name: '智库', exact: true }).click();
-  await page.getByRole('button', { name: '智库', exact: true }).click();
+  await openSidebar(page, '智库');
+  await openSidebar(page, '智库');
   await page.getByRole('tab', { name: /^内容库/ }).click();
   const state = await page.evaluate(() => window.tongzhou.knowledgeState());
   assert.equal(state.documents.filter((d) => d.kind === 'wiki').length, 1);
@@ -410,7 +417,7 @@ try {
     return window.tongzhou.knowledgeMove(d.id, folderId, d.version);
   }, folderBefore.id);
   await page.reload();
-  await page.getByRole('button', { name: '智库', exact: true }).click();
+  await openSidebar(page, '智库');
   await page
     .locator(`[data-folder-id="${folderBefore.id}"] [data-document-id="${wikiBefore.id}"]`)
     .waitFor();

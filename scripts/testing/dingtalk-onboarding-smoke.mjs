@@ -1,3 +1,4 @@
+import { openSidebar } from './navigation-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { DatabaseSync } from 'node:sqlite';
@@ -55,7 +56,7 @@ try {
         return new Response(JSON.stringify({ errcode: 0, ...data }));
       };
     });
-  await page.locator('.sidebar').getByRole('button', { name: '渠道', exact: true }).click();
+  await openSidebar(page, '渠道');
   const dialog = page.getByRole('dialog');
   const openQr = async () => {
     await page.getByRole('button', { name: '添加钉钉渠道', exact: true }).click();

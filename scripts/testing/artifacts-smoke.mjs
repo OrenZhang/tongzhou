@@ -1,3 +1,4 @@
+import { openSidebar } from './navigation-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { createServer } from 'node:http';
 import { mkdir, mkdtemp, readFile } from 'node:fs/promises';
@@ -168,7 +169,7 @@ try {
   await waitFor(page, () =>
     document.querySelector('.composer textarea')?.value.includes('描述图片'),
   );
-  await page.getByRole('button', { name: '智库', exact: true }).click();
+  await openSidebar(page, '智库');
   await page.getByRole('tab', { name: /^作品/ }).click();
   await page.getByRole('button', { name: '查看作品 整理结果.md', exact: true }).click();
   const content = await page.evaluate(() => window.tongzhou.contentState('default'));
@@ -188,7 +189,7 @@ try {
   await page.getByRole('button', { name: '会话作品', exact: true }).click();
   await page.getByLabel('作品来源会话', { exact: true }).waitFor();
   assert.equal(await page.getByLabel('作品来源会话', { exact: true }).inputValue(), session.id);
-  await page.getByRole('button', { name: '智库', exact: true }).click();
+  await openSidebar(page, '智库');
   await page.getByRole('tab', { name: /^作品/ }).click();
   assert.equal(await page.getByRole('tab', { name: '资料整理', exact: true }).count(), 0);
   assert.equal(
@@ -249,7 +250,7 @@ try {
   await app.close();
   page = await launch();
   assert.equal((await page.evaluate(() => window.tongzhou.artifactList())).total, 2);
-  await page.getByRole('button', { name: '智库', exact: true }).click();
+  await openSidebar(page, '智库');
   await page.getByRole('tab', { name: /^作品/ }).click();
   await page.getByRole('button', { name: '查看作品 测试图片.png', exact: true }).click();
   await page.getByRole('button', { name: '删除作品', exact: true }).click();

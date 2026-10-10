@@ -1,3 +1,4 @@
+import { SidebarNavGroup } from '../components/SidebarNavGroup';
 import { ServiceIcon, providerService } from '../components/ServiceIcon';
 import { useNavigation } from './useNavigation';
 import { protocolLabels } from '../features/connections/provider-presets';
@@ -29,6 +30,7 @@ import {
   BookOpen,
   Image as ImageIcon,
   ArrowDownToLine,
+  ArrowLeft,
   ArrowRight,
   ArrowUp,
   Bot,
@@ -36,6 +38,7 @@ import {
   ChevronDown,
   ChevronRight,
   Code2,
+  Cpu,
   Folder,
   FolderOpen,
   GitBranch,
@@ -404,6 +407,7 @@ export default function App() {
         { id: 'knowledge', label: '智库', icon: BookOpen },
         { id: 'connections', label: '渠道', icon: Network },
         { id: 'extensions', label: '插件', icon: Puzzle },
+        { id: 'providers', label: '模型', icon: Cpu },
       ],
     },
     {
@@ -493,34 +497,19 @@ export default function App() {
           <div className="sidebar-bottom">
             <nav aria-label="管理与工具">
               {navGroups.map((group) => (
-                <div
-                  className="sidebar-nav-group"
-                  role="group"
-                  aria-label={group.label}
+                <SidebarNavGroup
                   key={group.label}
-                >
-                  <div className="sidebar-nav-label" aria-hidden="true">
-                    {group.label}
-                  </div>
-                  {group.items.map((n) => (
-                    <button
-                      key={n.id}
-                      aria-label={n.label}
-                      aria-current={view === n.id ? 'page' : undefined}
-                      className={view === n.id ? 'active' : ''}
-                      onClick={() => {
-                        if (n.id === 'knowledge') {
-                          setKnowledgeSection('workspace');
-                          setArtifactSession(undefined);
-                        }
-                        setView(n.id);
-                      }}
-                    >
-                      <n.icon size={16} />
-                      <span className="sidebar-nav-text">{n.label}</span>
-                    </button>
-                  ))}
-                </div>
+                  label={group.label}
+                  items={group.items}
+                  view={view}
+                  onNavigate={(nextView) => {
+                    if (nextView === 'knowledge') {
+                      setKnowledgeSection('workspace');
+                      setArtifactSession(undefined);
+                    }
+                    setView(nextView);
+                  }}
+                />
               ))}
             </nav>
             <div className="local-status">
@@ -530,10 +519,8 @@ export default function App() {
             <div className="sidebar-settings-row">
               <button
                 onClick={() => setView('settings')}
-                aria-current={
-                  ['settings', 'providers', 'network'].includes(view) ? 'page' : undefined
-                }
-                className={['settings', 'providers', 'network'].includes(view) ? 'active' : ''}
+                aria-current={['settings', 'network'].includes(view) ? 'page' : undefined}
+                className={['settings', 'network'].includes(view) ? 'active' : ''}
               >
                 <Settings2 size={16} />
                 <span className="sidebar-nav-text">设置</span>
@@ -544,7 +531,7 @@ export default function App() {
         </aside>
         <div className="main-shell">
           <header className="topbar">
-            <div className="breadcrumb">
+            <nav className="breadcrumb" aria-label="面包屑导航">
               <button
                 className="icon-button"
                 aria-label={sidebarOpen ? '收起导航' : '展开导航'}
@@ -554,15 +541,19 @@ export default function App() {
               >
                 <LayoutPanelLeft size={17} />
               </button>
-              <span>同舟</span>
-              <ChevronRight size={13} />
-              {['providers', 'network'].includes(view) && (
+              <button className="breadcrumb-link" onClick={() => setView('workspace')}>
+                同舟
+              </button>
+              <ChevronRight size={13} aria-hidden="true" />
+              {view === 'network' && (
                 <>
-                  <span>设置</span>
-                  <ChevronRight size={13} />
+                  <button className="breadcrumb-link" onClick={() => setView('settings')}>
+                    设置
+                  </button>
+                  <ChevronRight size={13} aria-hidden="true" />
                 </>
               )}
-              <strong>
+              <strong aria-current="page">
                 {view === 'workspace'
                   ? (project?.name ?? (session ? '会话' : '新会话'))
                   : {
@@ -577,7 +568,7 @@ export default function App() {
                       automations: '定时任务',
                     }[view]}
               </strong>
-            </div>
+            </nav>
             <div className="topbar-right">
               {data.approvals.some((a) => view !== 'workspace' || a.sessionId !== sessionId) && (
                 <button
@@ -1308,9 +1299,6 @@ export default function App() {
           {view === 'providers' && (
             <main className="page">
               <div className="page-heading">
-                <button className="text-button" onClick={() => setView('settings')}>
-                  返回设置
-                </button>
                 <div className="page-title-row">
                   <div>
                     <h1>模型</h1>
@@ -1470,11 +1458,12 @@ export default function App() {
           {view === 'connections' && <ConnectionsPage api={api} data={data} refresh={refresh} />}
           {view === 'network' && (
             <main className="page settings-page">
-              <div className="page-heading">
-                <button className="text-button" onClick={() => setView('settings')}>
+              <div className="page-heading page-title-row">
+                <h1>网络配置</h1>
+                <button className="settings-back-button" onClick={() => setView('settings')}>
+                  <ArrowLeft size={15} />
                   返回设置
                 </button>
-                <h1>网络配置</h1>
               </div>
               <NetworkProfilesPanel api={api} />
             </main>
@@ -1761,18 +1750,6 @@ export default function App() {
                   管理网络配置 <ArrowRight size={14} />
                 </button>
               </section>
-              <section className="settings-card settings-link">
-                <div className="settings-card-title">
-                  <Network size={22} />
-                  <div>
-                    <h3>模型</h3>
-                    <p>管理模型服务、订阅账号和 API 连接。</p>
-                  </div>
-                </div>
-                <button className="secondary" onClick={() => setView('providers')}>
-                  打开模型 <ArrowRight size={14} />
-                </button>
-              </section>
               <Appearance value={appearance} onChange={setAppearance} />
               <UpdateControl api={api} settings />
               <DataMaintenance api={api} />
@@ -1790,18 +1767,7 @@ export default function App() {
                   onError={report}
                 />
               </section>
-              <section className="settings-card settings-link">
-                <div className="settings-card-title">
-                  <Network size={22} />
-                  <div>
-                    <h3>渠道</h3>
-                    <p>管理微信、飞书等平台的机器人与消息通知。</p>
-                  </div>
-                </div>
-                <button className="secondary" onClick={() => setView('connections')}>
-                  打开渠道 <ArrowRight size={14} />
-                </button>
-              </section>
+
               <section className="settings-card">
                 <div className="settings-card-title">
                   <ShieldCheck size={23} />
@@ -1874,24 +1840,16 @@ export default function App() {
               ...nav.map((n) => ({
                 id: n.id,
                 title: n.label,
-                detail: '功能页面',
+                detail:
+                  n.id === 'providers'
+                    ? '资源与工具 · 模型服务、订阅账号和 API 连接'
+                    : n.id === 'connections'
+                      ? '资源与工具 · 机器人和消息通知'
+                      : '功能页面',
                 icon: n.icon,
                 run: () => setView(n.id),
               })),
-              {
-                id: 'providers',
-                title: '模型',
-                detail: '设置 · 模型服务、订阅账号和 API 连接',
-                icon: Network,
-                run: () => setView('providers'),
-              },
-              {
-                id: 'connections',
-                title: '渠道',
-                detail: '资源与工具 · 机器人和消息通知',
-                icon: Network,
-                run: () => setView('connections'),
-              },
+
               {
                 id: 'settings',
                 title: '设置',

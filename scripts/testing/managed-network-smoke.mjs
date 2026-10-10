@@ -1,4 +1,4 @@
-import { openModels } from './navigation-helper.mjs';
+import { openModels, openSidebar } from './navigation-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { createServer } from 'node:http';
 import { mkdir, mkdtemp, writeFile, readFile, readdir, access } from 'node:fs/promises';
@@ -71,7 +71,7 @@ try {
     await page.evaluate(() => window.tongzhou.installNetworkCore(true));
   } else await page.evaluate(() => window.tongzhou.installNetworkCore(false));
   await page.getByRole('button', { name: /设置/ }).click();
-  await page.getByRole('button', { name: /打开渠道/ }).click();
+  await openSidebar(page, '渠道');
   await page.locator('.sidebar').getByRole('button', { name: '设置', exact: true }).click();
   await page.getByRole('button', { name: '管理网络配置', exact: true }).click();
   await page.getByRole('button', { name: '添加配置', exact: true }).click();

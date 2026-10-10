@@ -1,3 +1,4 @@
+import { openSidebar } from './navigation-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { build } from 'esbuild';
 import { createRequire } from 'node:module';
@@ -55,12 +56,7 @@ try {
     window.setFocusable(false);
     window.blur();
   });
-  const nav = async (label) => {
-    if (label === '渠道') {
-      await page.locator('.sidebar').getByRole('button', { name: '设置', exact: true }).click();
-      await page.getByRole('button', { name: '打开渠道', exact: true }).click();
-    } else await page.locator('.sidebar').getByRole('button', { name: label, exact: true }).click();
-  };
+  const nav = async (label) => openSidebar(page, label);
   const capture = async (name) => {
     const file = `test-results/workbench-${name}.png`;
     await page.screenshot({ path: file });
@@ -337,7 +333,7 @@ try {
   await page.getByRole('button', { name: /^内置插件/ }).click();
   await page.getByLabel('类型', { exact: true }).selectOption('app');
   await page.getByLabel('搜索插件', { exact: true }).fill('机器人');
-  await page.getByRole('button', { name: '打开渠道', exact: true }).click();
+  await openSidebar(page, '渠道');
   await page.getByRole('heading', { name: '渠道', exact: true }).waitFor();
   await page.getByRole('heading', { name: '企微测试机器人', exact: true }).waitFor();
   assert.equal(await page.locator('.connection-tabs').count(), 0);

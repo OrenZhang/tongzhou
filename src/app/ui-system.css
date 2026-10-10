@@ -74,6 +74,40 @@ textarea:focus {
   font-size: 12px;
   border-radius: 6px;
 }
+.breadcrumb .breadcrumb-link,
+.settings-back-button {
+  color: light-dark(#315b9d, #9fc2ff);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.breadcrumb .breadcrumb-link {
+  padding: 4px 6px;
+  min-height: 28px;
+}
+.breadcrumb .breadcrumb-link:hover {
+  background: light-dark(#edf3fc, #253449);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.settings-back-button {
+  flex-shrink: 0;
+  min-height: 32px;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid light-dark(#cad9ef, #486181);
+  background: light-dark(#f2f6fc, #253449);
+}
+.settings-back-button:hover {
+  background: light-dark(#e5eefb, #30435e);
+  border-color: light-dark(#9db8dd, #7597c4);
+}
+.breadcrumb .breadcrumb-link:focus-visible,
+.settings-back-button:focus-visible {
+  outline: 2px solid light-dark(#315b9d, #9fc2ff);
+  outline-offset: 2px;
+}
 .icon-button {
   border-radius: var(--control-radius);
 }
@@ -211,10 +245,6 @@ textarea:focus {
   box-shadow: none;
 }
 .knowledge-item {
-  border-radius: 8px;
-}
-.automation-job-list button {
-  padding: 14px 12px;
   border-radius: 8px;
 }
 

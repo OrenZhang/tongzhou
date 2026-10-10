@@ -1,4 +1,4 @@
-import { openModels } from './navigation-helper.mjs';
+import { openModels, openSidebar } from './navigation-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { mkdir, mkdtemp } from 'node:fs/promises';
 import path from 'node:path';
@@ -80,7 +80,7 @@ try {
   }
   await page.getByRole('button', { name: '设置', exact: true }).click();
   assert.equal(await page.locator('.auth-badge.connected').count(), 0);
-  await page.getByRole('button', { name: '打开渠道', exact: true }).click();
+  await openSidebar(page, '渠道');
   assert.equal(await page.locator('.auth-badge.connected').count(), 0);
   await page.getByRole('heading', { name: '渠道', exact: true }).waitFor();
   await openModels(page);

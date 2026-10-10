@@ -1,3 +1,4 @@
+import { openSidebar } from './navigation-helper.mjs';
 import { createServer } from 'node:http';
 import { _electron as electron } from 'playwright';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
@@ -172,7 +173,7 @@ try {
     });
   let session;
   if (!live) session = await page.evaluate(() => window.tongzhou.createSession());
-  await page.locator('.sidebar').getByRole('button', { name: '渠道', exact: true }).click();
+  await openSidebar(page, '渠道');
   await app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()[0].setContentSize(1440, 940),
   );
