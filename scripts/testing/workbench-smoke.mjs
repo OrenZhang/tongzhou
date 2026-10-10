@@ -244,7 +244,18 @@ try {
   checks.push(
     'SMTP recipient chips, encrypted credential snapshot, condition and end-of-turn rule persistence; no message sent',
   );
-  await page.getByRole('button', { name: '机器人', exact: true }).click();
+  assert.equal(
+    await page
+      .locator('.connection-tabs')
+      .getByRole('button', { name: '机器人', exact: true })
+      .count(),
+    0,
+  );
+  await nav('机器人');
+  await page.getByRole('heading', { name: '机器人', exact: true }).waitFor();
+  const botMethods = (await page.evaluate(() => window.tongzhou.clientMethods())).methods;
+  assert.equal(botMethods.find((m) => m.name === 'onboardBot').view, 'bots');
+  assert.ok(botMethods.some((m) => m.name === 'cancelBotLogin'));
   assert.equal(await page.getByRole('button', { name: '飞书扫码接入', exact: true }).count(), 0);
   await page.getByRole('button', { name: '飞书机器人', exact: true }).click();
   await dialog.getByRole('button', { name: /扫码接入/ }).waitFor();
@@ -256,8 +267,9 @@ try {
   await app.evaluate(({ ipcMain }) => {
     globalThis.feishuSmoke = { calls: 0, cancelled: '' };
     ipcMain.removeHandler('tongzhou:onboardBot');
-    ipcMain.handle('tongzhou:onboardBot', (_event, id) => {
+    ipcMain.handle('tongzhou:onboardBot', (_event, id, _name, kind) => {
       globalThis.feishuSmoke.calls++;
+      globalThis.feishuSmoke.kind = kind;
       if (globalThis.feishuSmoke.calls === 1) throw new Error('合成网络异常，请重试');
       return {
         id,
@@ -266,8 +278,8 @@ try {
         expiresAt: Date.now() + 60000,
       };
     });
-    ipcMain.removeHandler('tongzhou:cancelChannelLogin');
-    ipcMain.handle('tongzhou:cancelChannelLogin', (_event, id) => {
+    ipcMain.removeHandler('tongzhou:cancelBotLogin');
+    ipcMain.handle('tongzhou:cancelBotLogin', (_event, id) => {
       globalThis.feishuSmoke.cancelled = id;
     });
   });
@@ -282,21 +294,39 @@ try {
     'Feishu QR and manual setup are inside Add Feishu Bot; inline error/retry and QR cancellation work without contacting Feishu',
   );
   await page.getByRole('button', { name: '企业微信机器人', exact: true }).click();
+  await dialog.getByRole('button', { name: /扫码接入/ }).click();
+  await dialog.getByAltText('企业微信机器人授权二维码').waitFor();
+  assert.equal(await app.evaluate(() => globalThis.feishuSmoke.kind), 'wecom');
+  await capture('wecom-qr');
+  await dialog.getByRole('button', { name: '重新获取二维码', exact: true }).click();
+  await dialog.getByAltText('企业微信机器人授权二维码').waitFor();
+  await dialog.getByRole('button', { name: '手动配置', exact: true }).click();
+  checks.push(
+    'WeCom QR uses its own platform, supports refreshing and falls back to manual configuration',
+  );
   await dialog.getByLabel('名称', { exact: true }).fill('企微测试机器人');
   await dialog.getByLabel('Bot ID', { exact: true }).fill('fixture-bot');
   await dialog.getByLabel('应用密钥（留空保留）', { exact: true }).fill('fixture-bot-secret');
-  await dialog.getByLabel('允许用户 ID', { exact: true }).fill('fixture-user');
-  await page.keyboard.press('Enter');
+  await dialog.getByLabel('允许用户 ID', { exact: true }).fill('');
   await capture('bot-editor');
   await dialog.getByRole('button', { name: '保存机器人', exact: true }).click();
   await dialog.waitFor({ state: 'hidden' });
   const bot = await page.evaluate(async () => (await window.tongzhou.snapshot()).bots[0]);
-  assert.equal(bot.enabled, false);
-  assert.equal(bot.allowExecute, false);
+  assert.equal('enabled' in bot, false);
+  assert.equal('allowExecute' in bot, false);
   assert.ok(!JSON.stringify(bot).includes('fixture-bot-secret'));
-  checks.push(
-    'bot credentials and read-only disabled defaults remain separate from notification targets',
-  );
+  checks.push('bot credentials stay separate from shared settings and notification targets');
+  await nav('插件');
+  await page.getByRole('button', { name: /^内置插件/ }).click();
+  await page.getByLabel('类型', { exact: true }).selectOption('app');
+  await page.getByLabel('搜索插件', { exact: true }).fill('机器人');
+  await page.getByRole('button', { name: '打开机器人', exact: true }).click();
+  await page.getByRole('heading', { name: '机器人', exact: true }).waitFor();
+  await page.getByText('企微测试机器人', { exact: true }).waitFor();
+  assert.equal(await page.locator('.connection-tabs').count(), 0);
+  await capture('bots-standalone');
+  checks.push('standalone bots navigation, built-in application entry and persisted configuration');
+  await nav('连接中心');
   await page.getByRole('button', { name: '服务与浏览器', exact: true }).click();
   assert.equal(await page.getByRole('button', { name: '添加 GitHub', exact: true }).count(), 0);
   assert.equal(await page.getByRole('button', { name: '添加 GitLab', exact: true }).count(), 0);
@@ -325,7 +355,7 @@ try {
   await nav('插件');
   await page.getByRole('button', { name: /^内置插件/ }).click();
   assert.equal(await page.getByRole('button', { name: /^工作插件|^内置与自定义/ }).count(), 0);
-  assert.equal(await page.locator('.plugin-library .provider-card').count(), 8);
+  assert.equal(await page.locator('.plugin-library .provider-card').count(), 9);
   await capture('builtin-plugin-library-all');
   assert.equal(await page.getByRole('button', { name: '添加插件', exact: true }).count(), 0);
   await page.getByLabel('类型', { exact: true }).selectOption('mcp');
@@ -337,7 +367,7 @@ try {
   await page.getByRole('heading', { name: '技能创建', exact: true }).waitFor();
   assert.equal(await page.getByRole('button', { name: '移除', exact: true }).count(), 0);
   await page.getByLabel('类型', { exact: true }).selectOption('app');
-  assert.equal(await page.locator('.plugin-library .provider-card').count(), 5);
+  assert.equal(await page.locator('.plugin-library .provider-card').count(), 6);
   await capture('builtin-plugin-library');
   await page.getByLabel('搜索插件', { exact: true }).fill('Figma');
   assert.equal(await page.locator('.work-plugins .provider-card').count(), 1);

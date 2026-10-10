@@ -1,3 +1,5 @@
+import { botNotificationTargets } from '../../services/bots/notifications';
+import { idSchema } from '../../services/storage/validation';
 import type { TaskService, ChangePublisher } from '../../core/task-contracts';
 import type { DomainServices } from '../domain-services';
 import { MEMORY_AUTOMATION_ID } from '../../../src/shared/automation';
@@ -64,6 +66,11 @@ export const automationSchema = z.object({
   agentId: z.string().max(120).optional(),
   projectId: z.string().uuid().optional(),
   permission: z.enum(['read-only', 'ask']).default('read-only'),
+  notificationTargetId: idSchema
+    .optional()
+    .describe(
+      '可选：完成后自动发送最终回答。目标 ID 从 notificationTargets 查询；仅用户明确要求发送时配置，任务无需再次调用 sendChannel',
+    ),
   schedule: scheduleSchema.optional(),
   missed: z.enum(['once', 'skip']).default('once'),
 });
@@ -224,6 +231,16 @@ export class Automations {
     if (handler.capability && !handler.capability.triggers.includes(r.trigger))
       throw new Error('该任务不支持此触发方式');
     handler.validate(r);
+    if (r.notificationTargetId) {
+      if (r.kind !== 'task') throw new Error('完成结果通知仅用于通用任务');
+      const target = [
+        ...botNotificationTargets(this.store),
+        ...this.store
+          .list<import('../../../src/shared/types').Channel>('channel')
+          .map((c) => ({ id: c.id, available: c.enabled })),
+      ].find((t) => t.id === r.notificationTargetId);
+      if (!target?.available) throw new Error('通知目标不可用，请检查机器人授权和微信回复上下文');
+    }
     if (r.trigger === 'schedule' && !r.schedule) throw new Error('请设置执行时间');
   }
   save(raw: unknown) {

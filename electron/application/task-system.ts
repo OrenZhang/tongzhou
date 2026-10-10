@@ -106,6 +106,7 @@ export async function createTaskSystem(
         events.changed,
         computer,
         commands,
+        (input) => tasks!.start(input),
       ),
       projectUnavailable,
       createExecution: (callbacks) =>

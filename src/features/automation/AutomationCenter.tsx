@@ -517,6 +517,30 @@ export function AutomationCenter({
               </>
             ) : rule.kind === 'task' ? (
               <>
+                <Field label="完成后发送到">
+                  <select
+                    aria-label="完成后发送到"
+                    value={rule.notificationTargetId ?? ''}
+                    onChange={(e) =>
+                      setRule({ ...rule, notificationTargetId: e.target.value || undefined })
+                    }
+                  >
+                    <option value="">不发送</option>
+                    {[
+                      ...(data.notificationTargets ?? []),
+                      ...(data.channels ?? []).map((c) => ({
+                        id: c.id,
+                        name: c.name,
+                        available: c.enabled,
+                      })),
+                    ].map((t) => (
+                      <option key={t.id} value={t.id} disabled={!t.available}>
+                        {t.name}
+                        {!t.available ? '（不可用）' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
                 <Field label="任务指令">
                   <textarea
                     required

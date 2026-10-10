@@ -4,6 +4,10 @@ import type { ClientCatalog, ClientMethod } from '../../../src/shared/client-cat
 import type { Store } from '../../services/storage/store';
 import type { Session } from '../../../src/shared/types';
 
+export interface ClientToolPolicy {
+  unavailable(method: string): string | undefined;
+  invoke(method: string, args: unknown[], invoke: () => unknown): Promise<unknown>;
+}
 export type ClientOperation = {
   module: string;
   description: string;
@@ -137,7 +141,13 @@ export class ClientCommands {
     };
   }
 
-  attach(scope: ToolScope, readOnly: boolean, enabled: () => boolean, sessionId: string) {
+  attach(
+    scope: ToolScope,
+    readOnly: boolean,
+    enabled: () => boolean,
+    sessionId: string,
+    policy?: ClientToolPolicy,
+  ) {
     scope.add(
       {
         name: 'client_catalog',
@@ -174,6 +184,7 @@ export class ClientCommands {
             readOnly,
             methods: catalog.methods.map(({ arguments: args, ...m }) => {
               const reason =
+                policy?.unavailable(m.name) ??
                 this.handlers.get(m.name)!.operation.unavailable?.(sessionId) ??
                 (m.access === 'change' && readOnly ? '当前会话为只读模式' : m.reason);
               return {
@@ -256,7 +267,8 @@ export class ClientCommands {
                   : '请使用 client_' + entry.operation.access) +
                 '。参数可通过 client_catalog 的 method 查询',
             );
-          const unavailable = entry.operation.unavailable?.(sessionId);
+          const unavailable =
+            policy?.unavailable(call.method) ?? entry.operation.unavailable?.(sessionId);
           if (unavailable) throw new Error(unavailable);
           if (containsCredential(args))
             throw new Error('请通过安全配置界面设置凭据，聊天工具不接收凭据');
@@ -267,9 +279,11 @@ export class ClientCommands {
                 parsed.error.issues.map((i) => i.path.join('.') + ': ' + i.message).join('; '),
             );
           entry.operation.guard?.(parsed.data, sessionId);
-          const value = await (entry.operation.chat
-            ? entry.operation.chat(parsed.data, sessionId)
-            : entry.handler(...parsed.data));
+          const invoke = () =>
+            entry.operation.chat
+              ? entry.operation.chat(parsed.data, sessionId)
+              : entry.handler(...parsed.data);
+          const value = await (policy ? policy.invoke(call.method, parsed.data, invoke) : invoke());
           return {
             text: JSON.stringify(value ?? { success: true }, function (key, child) {
               // Status discovery must never relay device codes, login URLs or credential fields.

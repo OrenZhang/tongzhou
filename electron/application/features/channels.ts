@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { manual, operation } from '../../core/tools/client-commands';
-import { botSchema } from '../../services/channels/bots';
 import { channelSchema, notificationRuleSchema } from '../../services/channels/channels';
 import { idSchema } from '../../services/storage/validation';
 import type { Plugin } from 'cordis';
@@ -8,47 +7,20 @@ import '../context';
 
 export const channelsPlugin: Plugin.Object<void> = {
   name: 'tongzhou-channels',
-  inject: ['tzIpc', 'tzStore', 'tzBots', 'tzChannels', 'tzFeishu', 'tzEvents'],
+  inject: ['tzIpc', 'tzStore', 'tzChannels', 'tzFeishu', 'tzEvents'],
   apply(ctx) {
     const register = ctx.tzIpc.scoped(ctx);
     const store = ctx.tzStore;
-    const bots = ctx.tzBots;
     const channels = ctx.tzChannels;
     const feishu = ctx.tzFeishu;
     register(
-      'saveBot',
-      operation('会话机器人', 'change', '新增或修改机器人配置，凭据在界面保存', [botSchema]),
-      (b) => bots.save(b),
-    );
-    register(
-      'deleteBot',
-      operation('会话机器人', 'change', '删除机器人连接', [idSchema.describe('botId')], {
-        confirmation: 'always',
-      }),
-      (raw) => {
-        const id = idSchema.parse(raw);
-        feishu.cancel(id);
-        bots.remove(id);
-      },
-    );
-    register(
-      'restartBot',
-      operation('会话机器人', 'change', '重新连接已有机器人', [idSchema.describe('botId')]),
-      (id) => bots.restart(idSchema.parse(id)),
-    );
-    register(
-      'onboardBot',
-      manual('会话机器人', '飞书机器人扫码接入', 'connections', '需要用户扫码完成账号授权', [
-        idSchema.describe('newBotId'),
-        z.string().min(1).describe('name'),
-      ]),
-      (raw, rawName) => {
-        const id = idSchema.parse(raw);
-        if (bots.list().some((b) => b.id === id)) throw new Error('此机器人已存在');
-        return feishu.onboard(id, z.string().min(1).max(100).parse(rawName), (c, secret) =>
-          bots.authorize(c, secret),
-        );
-      },
+      'notificationTargets',
+      operation(
+        '渠道通知',
+        'query',
+        '列出可用于即时消息、会话结束提醒和定时任务的通知目标，包括机器人连接；多个接收人时需向用户确认目标',
+      ),
+      () => channels.notificationTargets(),
     );
     register(
       'onboardFeishu',
@@ -65,7 +37,7 @@ export const channelsPlugin: Plugin.Object<void> = {
     );
     register(
       'cancelChannelLogin',
-      operation('渠道通知', 'change', '取消渠道或机器人待完成的扫码授权', [idSchema]),
+      operation('渠道通知', 'change', '取消渠道待完成的扫码授权', [idSchema]),
       (id) => feishu.cancel(idSchema.parse(id)),
     );
     register(
@@ -96,11 +68,16 @@ export const channelsPlugin: Plugin.Object<void> = {
     );
     register(
       'sendChannel',
-      operation('渠道通知', 'change', '向用户指定的渠道发送准确内容，必须有明确发送要求', [
-        idSchema.describe('channelId'),
-        z.string().min(1).max(4000).describe('text'),
-        idSchema.optional().describe('sessionId'),
-      ]),
+      operation(
+        '渠道通知',
+        'change',
+        '向 notificationTargets 返回的目标发送准确内容（含微信和飞书机器人）；必须有用户明确发送要求，定时任务也复用此方法',
+        [
+          idSchema.describe('channelId'),
+          z.string().min(1).max(4000).describe('text'),
+          idSchema.optional().describe('sessionId'),
+        ],
+      ),
       (id, text, sessionId) =>
         channels.send(
           idSchema.parse(id),
@@ -110,9 +87,12 @@ export const channelsPlugin: Plugin.Object<void> = {
     );
     register(
       'saveNotificationRule',
-      operation('渠道通知', 'change', '保存轮次通知触发规则；须按用户要求设置通知目标和条件', [
-        notificationRuleSchema,
-      ]),
+      operation(
+        '渠道通知',
+        'change',
+        '保存会话结束通知；channelId 从 notificationTargets 查询。仅本轮使用当前 targetRunId、sessionId、once=true；须按用户要求设置接收人和条件',
+        [notificationRuleSchema],
+      ),
       (r) => channels.saveRule(r),
     );
     register(

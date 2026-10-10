@@ -1,3 +1,4 @@
+import { botSettings } from '../../services/bots/settings';
 import type { ExecutionAdapter, ExecutionCallbacks } from '../task-contracts';
 import { SessionLifecycle } from '../../modules/sessions/session-lifecycle';
 import { executionContext, executionTranscript } from '../runtime/execution-evidence';
@@ -82,7 +83,10 @@ export class CodexExecution implements ExecutionAdapter {
       : provider.network;
     if (signal.aborted) throw new Error('已停止');
     const session = this.ports.store.get<Session>('session', input.sessionId);
-    const nativeFiles = !session.knowledgeJob && !session.memoryJob;
+    const nativeFiles =
+      !session.knowledgeJob &&
+      !session.memoryJob &&
+      (!input.botContext || botSettings(this.ports.store).mode === 'workbench');
     const cwd = sessionWorkspace(this.ports.store, this.ports.dataDir, input.sessionId);
     if (!project) await mkdir(cwd, { recursive: true });
     const fingerprint = JSON.stringify([

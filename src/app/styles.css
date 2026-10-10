@@ -3618,17 +3618,8 @@ kbd {
 .session-checklist .checkbox-line {
   margin: 6px 0;
 }
-.bots-panel > .row,
 .work-plugins > .text-button {
   margin: 14px 0;
-}
-.bots-panel .settings-card {
-  margin-top: 18px;
-}
-.bots-panel details p {
-  padding-top: 10px;
-  line-height: 1.7;
-  color: var(--muted);
 }
 .work-plugins {
   margin-bottom: 30px;

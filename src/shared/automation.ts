@@ -42,6 +42,7 @@ export interface AutomationRule {
   agentId?: string;
   projectId?: string;
   permission: 'read-only' | 'ask';
+  notificationTargetId?: string;
   schedule?: TaskSchedule;
   missed: 'once' | 'skip';
   nextRunAt?: number;

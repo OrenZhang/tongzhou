@@ -1,3 +1,4 @@
+import { botsPlugin } from './features/bots';
 import { updatesPlugin } from './features/updates';
 import { networkPlugin } from './features/network';
 import { attachmentsPlugin } from './features/attachments';
@@ -26,6 +27,7 @@ export const applicationFeatures = [
   projectsPlugin,
   appearancePlugin,
   channelsPlugin,
+  botsPlugin,
   connectionsPlugin,
   accountsPlugin,
   sessionsPlugin,

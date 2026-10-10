@@ -1,3 +1,4 @@
+import { BotsPage } from '../features/bots/BotsPage';
 import { useNavigation } from './useNavigation';
 import { protocolLabels } from '../features/connections/provider-presets';
 import { AccountLoginPanel } from '../features/connections/AccountLoginPanel';
@@ -404,6 +405,7 @@ export default function App() {
       items: [
         { id: 'agents', label: 'Agent', icon: Users },
         { id: 'knowledge', label: '智库', icon: BookOpen },
+        { id: 'bots', label: '机器人', icon: Bot },
         { id: 'extensions', label: '插件', icon: Puzzle },
       ],
     },
@@ -569,6 +571,7 @@ export default function App() {
                   : {
                       providers: '模型',
                       connections: '连接中心',
+                      bots: '机器人',
                       agents: 'Agent',
                       activity: '运行记录',
                       settings: '设置',
@@ -1487,6 +1490,7 @@ export default function App() {
               />
             </main>
           )}
+          {view === 'bots' && <BotsPage api={api} data={data} refresh={refresh} />}
           {view === 'extensions' && <Extensions api={api} data={data} refresh={refresh} />}
           {view === 'automations' && (
             <main className="page">
@@ -1791,7 +1795,7 @@ export default function App() {
                   <Network size={22} />
                   <div>
                     <h3>连接中心</h3>
-                    <p>管理服务认证、浏览器登录态、通知渠道和会话机器人。</p>
+                    <p>管理服务认证、浏览器登录态、通知渠道和网络配置。</p>
                   </div>
                 </div>
                 <button className="secondary" onClick={() => setView('connections')}>
@@ -1884,7 +1888,7 @@ export default function App() {
               {
                 id: 'connections',
                 title: '连接中心',
-                detail: '设置 · 服务、浏览器、通知和机器人',
+                detail: '设置 · 服务、浏览器、通知和网络',
                 icon: Network,
                 run: () => setView('connections'),
               },

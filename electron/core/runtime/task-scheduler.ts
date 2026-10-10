@@ -1,3 +1,4 @@
+import { assertBotSession, botPermission } from '../../services/bots/access';
 import { RunLedger } from './run-ledger';
 import type { DomainServices } from '../../modules/domain-services';
 import type {
@@ -258,6 +259,10 @@ export class TaskScheduler implements TaskService {
         throw new Error('请先处理当前会话的排队消息');
       input = { ...input, attachmentIds: replaced.attachments?.map((a) => a.id) };
     }
+    const origin = this.store.get<Session>('session', input.sessionId).botConversation;
+    if (!input.botContext && origin)
+      input = { ...input, botContext: { ...origin, conversationId: input.sessionId } };
+    if (input.botContext) assertBotSession(this.store, input.botContext, input.sessionId);
     const contentContext = this.store.get<Session>('session', input.sessionId).contentContext;
     if (contentContext) this.knowledge.assertUsable(contentContext.documentId);
     const attachments = this.attachments.resolve(input.attachmentIds);
@@ -277,6 +282,8 @@ export class TaskScheduler implements TaskService {
     const agent = resolveAgent(this.store, session.memoryJob ? MEMORY_ORGANIZER_ID : input.agentId);
     const readOnlyAgent = agent.permission === 'read-only';
     agent.permission = effectivePermission(session, this.store.defaultPermission(), agent);
+    if (input.botContext)
+      agent.permission = botPermission(this.store, input.botContext, agent.permission);
     // The user's explicit selection wins; Agent defaults are applied when selecting the Agent.
     input = { ...input };
     if (!session.knowledgeJob || session.contentContext)
@@ -338,6 +345,7 @@ export class TaskScheduler implements TaskService {
     )
       throw new Error('请先配置此连接的 API 密钥。');
     const run: Run = {
+      botContext: input.botContext,
       ...(replaced ? { retryOf: replaced.runId } : {}),
       id: randomUUID(),
       sessionId: session.id,
@@ -398,7 +406,11 @@ export class TaskScheduler implements TaskService {
       readOnlyAgent || !!session.memoryJob || !!(session.automationJob && session.contentContext);
     const updatePermission = (permission: PermissionMode) => {
       if (run.status !== 'running' || controller.signal.aborted) return;
-      const next = lockedReadOnly ? 'read-only' : permission;
+      const next = lockedReadOnly
+        ? 'read-only'
+        : input.botContext
+          ? botPermission(this.store, input.botContext, permission)
+          : permission;
       if (next === desiredPermission) return;
       desiredPermission = next;
       executionController.abort('permission-change');

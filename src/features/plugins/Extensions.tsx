@@ -1,5 +1,6 @@
+import { builtinApps } from '../../shared/builtin-apps';
 import { useState } from 'react';
-import { Plus, Plug, Search, Trash2, BookOpen } from 'lucide-react';
+import { Plus, Plug, Search, Trash2, BookOpen, Bot } from 'lucide-react';
 import { Field, Modal, Spinner } from '../../components/components';
 import { MultiValueInput } from '../../components/controls/MultiValueInput';
 import {
@@ -58,6 +59,7 @@ export function Extensions({
         )
       : [];
   const showApps = tab === 'builtin' && (kind === 'all' || kind === 'app');
+  const localApps = showApps ? builtinApps.filter((p) => matchesQuery(p.name + p.description)) : [];
   const matchingApps = showApps
     ? workPluginCatalog.filter((p) => matchesQuery(p.name + p.category + p.description))
     : [];
@@ -114,6 +116,7 @@ export function Extensions({
                 ? 3
                 : value === 'builtin'
                   ? workPluginCatalog.length +
+                    builtinApps.length +
                     otherPlugins.filter((p) => builtinIds.has(p.id)).length +
                     (data.skills ?? []).filter((s) => isBuiltinSkill(s.id)).length
                   : otherPlugins.filter((p) => !builtinIds.has(p.id)).length +
@@ -168,6 +171,22 @@ export function Extensions({
             </div>
           </div>
           <div className="provider-grid plugin-library-grid">
+            {localApps.map((app) => (
+              <article className="provider-card" key={app.id}>
+                <div className="card-top">
+                  <Bot />
+                  <span className="tag">应用</span>
+                </div>
+                <h3>{app.name}</h3>
+                <p>{app.description}</p>
+                <button
+                  className="text-button"
+                  onClick={() => void perform(() => api.openModule(app.view))}
+                >
+                  打开{app.name}
+                </button>
+              </article>
+            ))}
             {showApps && (
               <WorkPlugins
                 api={api}
@@ -283,21 +302,24 @@ export function Extensions({
               </article>
             ))}
           </div>
-          {!visiblePlugins.length && !visibleSkills.length && !matchingApps.length && (
-            <div className="empty-state compact">
-              <Plug size={26} />
-              <h3>{query.trim() ? '没有匹配的插件' : '暂无此类型的插件'}</h3>
-              <p>
-                {query.trim()
-                  ? '试试其他关键词，或切换类型。'
-                  : tab === 'builtin'
-                    ? '可以切换类型查看其他内置插件。'
-                    : kind === 'app'
-                      ? '暂无个人应用插件，可在“内置插件”中配置现有应用。'
-                      : '点击“添加插件”，连接 MCP 服务或导入技能。'}
-              </p>
-            </div>
-          )}
+          {!visiblePlugins.length &&
+            !visibleSkills.length &&
+            !matchingApps.length &&
+            !localApps.length && (
+              <div className="empty-state compact">
+                <Plug size={26} />
+                <h3>{query.trim() ? '没有匹配的插件' : '暂无此类型的插件'}</h3>
+                <p>
+                  {query.trim()
+                    ? '试试其他关键词，或切换类型。'
+                    : tab === 'builtin'
+                      ? '可以切换类型查看其他内置插件。'
+                      : kind === 'app'
+                        ? '暂无个人应用插件，可在“内置插件”中配置现有应用。'
+                        : '点击“添加插件”，连接 MCP 服务或导入技能。'}
+                </p>
+              </div>
+            )}
           {notice && (
             <p role="status" className="extension-notice">
               {notice}

@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { Modal } from '../../components/components';
 import { EmailFields, RuleConditions, defaultSmtp } from '../chat/NotificationControls';
-import { BotsPanel } from './BotsPanel';
 import { NetworkProfilesPanel } from './NetworkProfilesPanel';
 import { errorMessage } from '../../lib/feedback';
-import { Globe2, Radio, History, Bot, Network } from 'lucide-react';
+import { Globe2, Radio, History, Network } from 'lucide-react';
 import type {
   Channel,
   Connector,
@@ -24,9 +23,7 @@ export function ConnectionsPanel({
   refresh: () => Promise<void>;
   initialTab?: 'accounts' | 'network';
 }) {
-  const [tab, setTab] = useState<'accounts' | 'channels' | 'bots' | 'records' | 'network'>(
-    initialTab,
-  );
+  const [tab, setTab] = useState<'accounts' | 'channels' | 'records' | 'network'>(initialTab);
   const [connector, setConnector] = useState<(Connector & { secret?: string }) | null>(null);
   const [channel, setChannel] = useState<
     (Channel & { webhook?: string; signingSecret?: string; password?: string }) | null
@@ -60,7 +57,7 @@ export function ConnectionsPanel({
   return (
     <section className="connections-extra">
       <nav className="section-tabs connection-tabs" aria-label="连接分类">
-        {(['accounts', 'channels', 'bots', 'network', 'records'] as const).map((name, i) => (
+        {(['accounts', 'channels', 'network', 'records'] as const).map((name, i) => (
           <button
             className={tab === name ? 'active' : ''}
             aria-pressed={tab === name}
@@ -68,10 +65,10 @@ export function ConnectionsPanel({
             onClick={() => setTab(name)}
           >
             {(() => {
-              const Icon = [Globe2, Radio, Bot, Network, History][i];
+              const Icon = [Globe2, Radio, Network, History][i];
               return <Icon size={15} />;
             })()}
-            {['服务与浏览器', '渠道通知', '机器人', '网络配置', '认证与发送记录'][i]}
+            {['服务与浏览器', '渠道通知', '网络配置', '认证与发送记录'][i]}
           </button>
         ))}
       </nav>
@@ -80,7 +77,6 @@ export function ConnectionsPanel({
           {notice}
         </p>
       )}
-      {tab === 'bots' && <BotsPanel data={data} api={api} refresh={refresh} />}
       {tab === 'network' && <NetworkProfilesPanel api={api} />}
       {tab === 'accounts' && (
         <>
@@ -332,7 +328,7 @@ export function ConnectionsPanel({
                 }}
               >
                 <h3>配置 {channel.name}</h3>
-                <p>通知目标只负责发送消息。远程查看和管理会话请使用“机器人”模块。</p>
+                <p>通知目标只负责发送消息。远程查看和管理会话请前往“资源与工具 → 机器人”。</p>
                 <label>
                   名称
                   <input
@@ -391,7 +387,7 @@ export function ConnectionsPanel({
                         onChange={(e) => setChannel({ ...channel, receiveId: e.target.value })}
                       />
                     </label>
-                    <p>机器人入站操作已移至独立的“机器人”页面。</p>
+                    <p>远程会话操作请前往“资源与工具 → 机器人”。</p>
                   </>
                 )}
                 <div className="row">
@@ -534,7 +530,9 @@ export function ConnectionsPanel({
             <div className="connection-record notification-rule" key={r.id}>
               <div className="rule-detail">
                 <strong>
-                  {data.channels?.find((c) => c.id === r.channelId)?.name ?? '已删除渠道'}
+                  {data.channels?.find((c) => c.id === r.channelId)?.name ??
+                    data.notificationTargets?.find((t) => t.id === r.channelId)?.name ??
+                    '已删除通知目标'}
                 </strong>
                 <p>
                   {r.sessionId
@@ -600,7 +598,10 @@ export function ConnectionsPanel({
           {(data.deliveries ?? []).map((d) => (
             <div className="connection-record" key={d.id}>
               {new Date(d.time).toLocaleString()} ·{' '}
-              {data.channels?.find((c) => c.id === d.channelId)?.name ?? '已删除渠道'} ·{' '}
+              {data.channels?.find((c) => c.id === d.channelId)?.name ??
+                data.notificationTargets?.find((t) => t.id === d.channelId)?.name ??
+                '已删除通知目标'}{' '}
+              ·{' '}
               {
                 {
                   sent: '✓ 已发送',

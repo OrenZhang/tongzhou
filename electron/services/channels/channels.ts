@@ -1,10 +1,18 @@
 import { createHmac, randomUUID } from 'node:crypto';
+import { automationNotification } from './automation-notifications';
 import { z } from 'zod';
 import { Store } from '../storage/store';
 import { idSchema } from '../storage/validation';
 import { feishuHost, feishuToken } from './feishu';
 import nodemailer from 'nodemailer';
-import type { Channel, Delivery, NotificationRule, Run, Session } from '../../../src/shared/types';
+import type {
+  Channel,
+  Delivery,
+  NotificationRule,
+  NotificationTarget,
+  Run,
+  Session,
+} from '../../../src/shared/types';
 
 export const channelSchema = z.object({
   id: idSchema,
@@ -91,6 +99,19 @@ export function webhookUrl(kind: Channel['kind'], value: string) {
   return u;
 }
 export class Channels {
+  private targets?: {
+    list(): NotificationTarget[];
+    send(id: string, text: string, signal: AbortSignal): Promise<void>;
+  };
+  attachTargets(targets: NonNullable<Channels['targets']>) {
+    this.targets = targets;
+  }
+  notificationTargets(): NotificationTarget[] {
+    return [
+      ...this.list().map((c) => ({ id: c.id, name: c.name, kind: c.kind, available: c.enabled })),
+      ...(this.targets?.list() ?? []),
+    ];
+  }
   private disposed = false;
   private controllers = new Map<string, AbortController>();
   constructor(
@@ -175,7 +196,9 @@ export class Channels {
   }
   saveRule(raw: unknown) {
     const r = notificationRuleSchema.parse(raw);
-    this.store.get('channel', r.channelId);
+    const target = this.notificationTargets().find((t) => t.id === r.channelId);
+    if (!target) throw new Error('通知目标不存在');
+    if (r.enabled && !target.available) throw new Error(target.reason ?? '通知目标不可用');
     if (r.sessionId) this.store.get('session', r.sessionId);
     if (r.projectId) this.store.get('project', r.projectId);
     if (r.targetRunId && r.enabled) {
@@ -191,6 +214,11 @@ export class Channels {
   async notify(run: Run, event: NotificationRule['events'][number], eventId = run.id) {
     const session = this.store.list<Session>('session').find((s) => s.id === run.sessionId);
     if (!session) return;
+    const output =
+      event === 'completed' ? automationNotification(this.store, session, run) : undefined;
+    if (output) {
+      await this.sendNotification(output.target, output.text, session.id, output.key);
+    }
     for (const rule of this.store.list<NotificationRule>('notificationRule')) {
       if (
         !rule.enabled ||
@@ -219,17 +247,45 @@ export class Channels {
             time: new Date().toLocaleString('zh-CN'),
           })[k as 'title'] ?? '',
       );
-      try {
-        await this.send(
-          rule.channelId,
-          text,
-          session.id,
-          `${rule.id}:${eventId}:${event}`,
-          rule.id,
-        );
-      } catch {
-        /* result is persisted; no unattended retries */
-      }
+      await this.sendNotification(
+        rule.channelId,
+        text,
+        session.id,
+        `${rule.id}:${eventId}:${event}`,
+        rule.id,
+      );
+    }
+  }
+  private async sendNotification(
+    id: string,
+    text: string,
+    sessionId: string,
+    key: string,
+    ruleId?: string,
+  ) {
+    if (this.store.list<Delivery>('delivery').some((d) => d.channelId === id && d.key === key))
+      return;
+    try {
+      await this.send(id, text, sessionId, key, ruleId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      this.store.put('delivery', {
+        id: randomUUID(),
+        channelId: id,
+        sessionId,
+        key,
+        ruleId,
+        time: Date.now(),
+        status: 'failed',
+        error: /^(请先从微信|通知目标|机器人通知目标|渠道已停用)/.test(message)
+          ? message
+          : '通知未发送，请检查目标连接与授权',
+      });
+      const rule = ruleId
+        ? this.store.list<NotificationRule>('notificationRule').find((r) => r.id === ruleId)
+        : undefined;
+      if (rule?.once) this.store.put('notificationRule', { ...rule, enabled: false });
+      this.changed();
     }
   }
   async send(
@@ -241,14 +297,16 @@ export class Channels {
   ) {
     z.string().min(1).max(4000).parse(text);
     if (sessionId) this.store.get('session', sessionId);
-    const c = this.store.get<Channel>('channel', id);
-    if (!c.enabled) throw new Error('渠道已停用');
+    const external = this.targets?.list().find((t) => t.id === id);
+    if (external && !external.available) throw new Error(external.reason ?? '通知目标不可用');
+    const c = external ? undefined : this.store.get<Channel>('channel', id);
+    if (c && !c.enabled) throw new Error('渠道已停用');
     const prior = this.store
       .list<Delivery>('delivery')
       .find((d) => d.channelId === id && d.key === key);
     if (prior) return prior;
     let url =
-      c.kind === 'email'
+      !c || c.kind === 'email'
         ? undefined
         : c.mode === 'app'
           ? new URL(
@@ -278,6 +336,14 @@ export class Channels {
     this.changed();
     let dispatched = false;
     try {
+      if (external) {
+        controller.signal.throwIfAborted();
+        dispatched = true;
+        await this.targets!.send(id, text, controller.signal);
+        d.status = 'sent';
+        return d;
+      }
+      if (!c) throw new Error('通知目标不存在');
       if (c.kind === 'email') {
         const mail = this.emailTransport(c);
         const abort = () => mail.close();

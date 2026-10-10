@@ -5,6 +5,7 @@ export type View =
   | 'activity'
   | 'settings'
   | 'connections'
+  | 'bots'
   | 'extensions'
   | 'knowledge'
   | 'automations';

@@ -1,4 +1,5 @@
 import { appFetch } from '../network/request-identity';
+import { connectWeixin, type BotCursorStore } from '../bots/weixin/transport';
 import {
   WSClient as FeishuClient,
   EventDispatcher,
@@ -15,13 +16,18 @@ export interface BotMessage {
   chat: string;
   group: boolean;
   text: string;
+  reply?: (text: string) => Promise<void>;
+  replyContext?: string;
+  typing?: (active: boolean) => Promise<void>;
 }
 export function connectBot(
   b: BotConfig,
   secret: string,
   receive: (m: BotMessage) => Promise<string | undefined>,
   state: (status: BotConfig['status'], error?: string) => void,
+  cursorStore?: BotCursorStore,
 ) {
+  if (b.kind === 'weixin') return connectWeixin(b, secret, receive, state, cursorStore);
   const controller = new AbortController();
   const signal = () => AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]);
   const failed = () => {
@@ -47,27 +53,40 @@ export function connectBot(
               return;
             try {
               const m = event.message;
+              const send = async (text: string) => {
+                controller.signal.throwIfAborted();
+                const token = await feishuToken(b.appId, secret, b.domain, signal());
+                for (const content of text.match(/[\s\S]{1,3000}/gu) ?? []) {
+                  const r = await appFetch(
+                    feishuHost(b.domain) +
+                      `/open-apis/im/v1/messages/${encodeURIComponent(m.message_id)}/reply`,
+                    {
+                      method: 'POST',
+                      headers: {
+                        Authorization: 'Bearer ' + token,
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        msg_type: 'text',
+                        content: JSON.stringify({ text: content }),
+                      }),
+                      redirect: 'error',
+                      signal: signal(),
+                    },
+                  );
+                  if (!r.ok || ((await r.json()) as any).code !== 0)
+                    throw new Error('飞书回复失败');
+                }
+              };
               const text = await receive({
                 id: m.message_id,
                 sender: event.sender.sender_id?.open_id,
                 chat: m.chat_id,
                 group: m.chat_type !== 'p2p',
                 text: JSON.parse(m.content).text,
+                reply: send,
               });
-              if (!text || controller.signal.aborted) return;
-              const token = await feishuToken(b.appId, secret, b.domain, signal());
-              const r = await appFetch(
-                feishuHost(b.domain) +
-                  `/open-apis/im/v1/messages/${encodeURIComponent(m.message_id)}/reply`,
-                {
-                  method: 'POST',
-                  headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ msg_type: 'text', content: JSON.stringify({ text }) }),
-                  redirect: 'error',
-                  signal: signal(),
-                },
-              );
-              if (!r.ok || ((await r.json()) as any).code !== 0) failed();
+              if (text) await send(text);
             } catch {
               failed();
             }
@@ -102,12 +121,22 @@ export function connectBot(
       if (controller.signal.aborted || !frame.body || frame.body.aibotid !== b.appId) return;
       try {
         const m = frame.body;
+        const send = async (text: string) => {
+          controller.signal.throwIfAborted();
+          // Active replies outlive the initial callback frame / stream window.
+          for (const content of text.match(/[\s\S]{1,1000}/gu) ?? [])
+            await client.sendMessage(m.chattype === 'group' ? m.chatid! : m.from.userid, {
+              msgtype: 'markdown',
+              markdown: { content },
+            });
+        };
         const text = await receive({
           id: m.msgid,
           sender: m.from.userid,
           chat: m.chatid || m.from.userid,
           group: m.chattype === 'group',
           text: m.text.content,
+          reply: send,
         });
         if (text && !controller.signal.aborted)
           await client.replyStream(frame, generateReqId('tongzhou'), text, true);
@@ -148,32 +177,38 @@ export function connectBot(
           (m.isInAtList === false && m.conversationType === '2')
         )
           return;
+        const send = async (text: string) => {
+          controller.signal.throwIfAborted();
+          const url = new URL(m.sessionWebhook);
+          if (
+            url.protocol !== 'https:' ||
+            url.hostname !== 'oapi.dingtalk.com' ||
+            url.port ||
+            url.username ||
+            url.password ||
+            url.pathname !== '/robot/sendBySession'
+          )
+            throw new Error('Invalid reply destination');
+          for (const content of text.match(/[\s\S]{1,1000}/gu) ?? []) {
+            const r = await appFetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ msgtype: 'text', text: { content } }),
+              redirect: 'error',
+              signal: signal(),
+            });
+            if (!r.ok || ((await r.json()) as any).errcode !== 0) throw new Error('钉钉回复失败');
+          }
+        };
         const text = await receive({
           id: m.msgId || res.headers.messageId,
           sender: m.senderStaffId,
           chat: m.conversationId,
           group: m.conversationType !== '1',
           text: m.text?.content,
+          reply: send,
         });
-        if (!text || controller.signal.aborted) return;
-        const url = new URL(m.sessionWebhook);
-        if (
-          url.protocol !== 'https:' ||
-          url.hostname !== 'oapi.dingtalk.com' ||
-          url.port ||
-          url.username ||
-          url.password ||
-          url.pathname !== '/robot/sendBySession'
-        )
-          throw new Error('Invalid reply destination');
-        const r = await appFetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ msgtype: 'text', text: { content: text } }),
-          redirect: 'error',
-          signal: signal(),
-        });
-        if (!r.ok || ((await r.json()) as any).errcode !== 0) failed();
+        if (text) await send(text);
       } catch {
         failed();
       } finally {

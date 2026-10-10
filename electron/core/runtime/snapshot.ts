@@ -1,3 +1,6 @@
+import { botNotificationTargets } from '../../services/bots/notifications';
+import { publicBot } from '../../services/bots/config';
+import { botSettings } from '../../services/bots/settings';
 import type {
   Approval,
   PendingInput,
@@ -10,12 +13,14 @@ import { agentProfiles } from '../../modules/agents/agents';
 
 export function runtimeSnapshot(store: Store, approvals: Approval[]): Snapshot {
   return {
-    bots: store.list<any>('bot').map((b) => ({ ...b, hasSecret: store.hasSecret('bot_' + b.id) })),
+    botSettings: botSettings(store),
+    bots: store.list<any>('bot').map((b) => publicBot(store, b)),
     connectors: store
       .list<any>('connector')
       .map((c) => ({ ...c, hasSecret: store.hasSecret('connector_' + c.id) })),
     channels: store.list('channel'),
     channelAuth: store.list('channelAuth'),
+    notificationTargets: botNotificationTargets(store),
     notificationRules: store.list('notificationRule'),
     deliveries: store.list<any>('delivery').slice(-200).reverse(),
     authEvents: store.list('authEvent'),

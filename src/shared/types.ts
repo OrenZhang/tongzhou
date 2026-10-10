@@ -202,6 +202,7 @@ export interface Message {
   visibleTool?: boolean;
 }
 export interface Session {
+  botConversation?: BotConversationContext;
   automationJob?: string;
   contentContext?: { libraryId: string; documentId: string };
   memoryJob?: string;
@@ -220,6 +221,7 @@ export interface Session {
   archived: boolean;
 }
 export interface Run {
+  botContext?: BotExecutionContext;
   retryOf?: string;
   knowledgeReferences?: import('./knowledge').KnowledgeReference[];
   usageReported?: boolean;
@@ -253,10 +255,12 @@ export interface Approval {
 }
 export interface Snapshot {
   bots?: BotConfig[];
+  botSettings?: BotSettings;
   defaultPermission?: PermissionMode;
   channelAuth?: { id: string; phase: string; expiresAt?: number }[];
   connectors?: Connector[];
   channels?: Channel[];
+  notificationTargets?: NotificationTarget[];
   notificationRules?: NotificationRule[];
   deliveries?: Delivery[];
   authEvents?: { id: string; providerId: string; phase: string; time: number; error?: string }[];
@@ -299,6 +303,7 @@ export type AppEvent =
         | 'activity'
         | 'settings'
         | 'connections'
+        | 'bots'
         | 'extensions'
         | 'knowledge';
     }
@@ -309,6 +314,8 @@ export type AppEvent =
   | { type: 'message'; message: Message }
   | { type: 'approval'; approval: Approval };
 export interface RunInput {
+  /** Internal origin, never accepted from client tool arguments. */
+  botContext?: BotExecutionContext;
   attachmentIds?: string[];
   sessionId: string;
   prompt: string;
@@ -506,13 +513,16 @@ export interface TongzhouAPI {
   createWorktree(projectId: string, branch: string, ref: string): Promise<Project>;
   removeWorktree(projectId: string): Promise<void>;
   openProjectFolder(projectId: string): Promise<void>;
+  saveBotSettings(input: BotSettings): Promise<void>;
   saveBot(input: BotConfig & { secret?: string }): Promise<void>;
   deleteBot(id: string): Promise<void>;
   restartBot(id: string): Promise<void>;
   onboardBot(
     id: string,
     name: string,
+    kind: 'feishu' | 'wecom' | 'weixin' | 'dingtalk',
   ): Promise<{ id: string; url: string; image: string; expiresAt: number }>;
+  verifyBotLogin(id: string, code: string): Promise<void>;
   setTheme(theme: 'system' | 'light' | 'dark'): Promise<void>;
   copyText(text: string): Promise<void>;
   openExternalLink(url: string): Promise<void>;
@@ -525,6 +535,7 @@ export interface TongzhouAPI {
     name: string,
   ): Promise<{ id: string; url: string; image: string; expiresAt: number }>;
   cancelChannelLogin(id: string): Promise<void>;
+  cancelBotLogin(id: string): Promise<void>;
   saveConnector(input: Connector & { secret?: string; clearSecret?: boolean }): Promise<void>;
   deleteConnector(id: string): Promise<void>;
   testConnector(id: string): Promise<string>;
@@ -539,6 +550,7 @@ export interface TongzhouAPI {
   ): Promise<void>;
   testEmail(id: string): Promise<string>;
   deleteChannel(id: string): Promise<void>;
+  notificationTargets(): Promise<NotificationTarget[]>;
   sendChannel(id: string, text: string, sessionId?: string): Promise<Delivery>;
   saveNotificationRule(rule: NotificationRule): Promise<void>;
   deleteNotificationRule(id: string): Promise<void>;
@@ -666,20 +678,33 @@ export interface LocalGitlabAccount extends Omit<LocalGithubAccount, 'source'> {
   source: 'git' | 'glab';
   baseUrl: string;
 }
+export interface BotSettings {
+  mode: 'workbench' | 'chat';
+  defaultProjectId?: string;
+  providerId: string;
+  model: string;
+  permission: PermissionMode;
+}
+export interface BotConversationContext {
+  group: boolean;
+  botId: string;
+  sender: string;
+  chat: string;
+}
+export interface BotExecutionContext extends BotConversationContext {
+  conversationId: string;
+  rootRunId?: string;
+}
 export interface BotConfig {
   id: string;
   name: string;
-  kind: 'feishu' | 'wecom' | 'dingtalk';
+  kind: 'feishu' | 'wecom' | 'dingtalk' | 'weixin';
   appId: string;
+  apiBaseUrl?: string;
   domain?: 'feishu' | 'lark';
-  enabled: boolean;
   allowedSenders: string[];
   allowedChats: string[];
-  allSessions: boolean;
-  sessionIds: string[];
-  allowExecute: boolean;
-  defaultProjectId?: string;
-  status?: 'disabled' | 'connecting' | 'listening' | 'connected' | 'error';
+  status?: 'connecting' | 'listening' | 'connected' | 'error';
   error?: string;
   lastMessageAt?: number;
   hasSecret?: boolean;
@@ -708,6 +733,16 @@ export interface Channel {
   sessionId?: string;
   allowedSenders?: string[];
   checkedAt?: number;
+}
+export interface NotificationTarget {
+  id: string;
+  name: string;
+  kind: string;
+  available: boolean;
+  reason?: string;
+  botId?: string;
+  recipient?: string;
+  group?: boolean;
 }
 export interface NotificationRule {
   id: string;

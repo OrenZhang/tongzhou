@@ -136,11 +136,17 @@ describe('remote bots', () => {
       enabled: true,
       allowedSenders: ['alice', 'bob'],
       allowedChats: ['group'],
-      allSessions: false,
-      sessionIds: [first.id],
+      mode: 'workbench',
       allowExecute: false,
     };
     b.save(config);
+    s.put('provider', { id: 'bot-model', models: ['model'], name: 'Model' });
+    b.saveSettings({
+      providerId: 'bot-model',
+      model: 'model',
+      permission: 'read-only',
+      mode: 'workbench',
+    });
     return { s, b, runtime, config, first, second };
   }
   const message = (
@@ -156,15 +162,22 @@ describe('remote bots', () => {
     expect(await b.receive('b', message('2', '/sessions', 'alice', 'other', true))).toBeUndefined();
     const result = await b.receive('b', message('3', '/sessions'));
     expect(result).toContain(first.id.slice(0, 8));
-    expect(result).not.toContain(second.id.slice(0, 8));
-    expect(await b.receive('b', message('4', '/status ' + second.id))).toContain('请先');
+    expect(result).toContain(second.id.slice(0, 8));
+    expect(await b.receive('b', message('4', '/status ' + second.id))).toContain(
+      second.id.slice(0, 8),
+    );
     expect(await b.receive('b', message('5', '/run hello'))).toContain('仅允许查看');
     expect(runtime.enqueue).not.toHaveBeenCalled();
     expect(JSON.stringify(b.list())).not.toContain('private-bot-secret');
   });
   it('deduplicates commands and isolates each sender and conversation binding', async () => {
-    const { b, runtime, config, first, second } = setup();
-    b.save({ ...config, allowExecute: true, sessionIds: [first.id, second.id] });
+    const { b, runtime, first, second } = setup();
+    b.saveSettings({
+      providerId: 'bot-model',
+      model: 'model',
+      permission: 'ask',
+      mode: 'workbench',
+    });
     await b.receive('b', message('u1', '/use ' + first.id));
     await b.receive('b', message('u2', '/use ' + second.id, 'bob'));
     await Promise.all([
@@ -179,7 +192,7 @@ describe('remote bots', () => {
       await b.receive('b', message('run3', '/run should not run', 'alice', 'group', true)),
     ).toContain('请先');
     expect(runtime.enqueue).toHaveBeenCalledTimes(2);
-    b.save({ ...config, enabled: false });
+    b.remove('b');
     expect(await b.receive('b', message('disabled', '/sessions'))).toBeUndefined();
   });
   it('invalidates saved credentials when bot identity changes', () => {

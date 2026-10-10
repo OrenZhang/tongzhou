@@ -318,6 +318,8 @@ export function applicationServices(kernel: ApplicationKernel): Plugin.Object<vo
         const events = ctx.tzEvents;
         const tasks = ctx.tzTasks;
         const bots = new Bots(store, {
+          start: tasks.start.bind(tasks),
+          isActive: tasks.isActive.bind(tasks),
           enqueue: tasks.enqueue.bind(tasks),
           cancel: tasks.cancel.bind(tasks),
           snapshot: tasks.snapshot.bind(tasks),
@@ -327,13 +329,23 @@ export function applicationServices(kernel: ApplicationKernel): Plugin.Object<vo
           bots.dispose();
         });
         ctx.provide('tzBots', bots);
+        const notify = (
+          run: import('../../src/shared/types').Run,
+          event: import('../core/application-events').Lifecycle,
+        ) => {
+          void bots.notify(run, event).catch(() => {});
+        };
+        ctx.effect(() => {
+          events.on('lifecycle', notify);
+          return () => events.off('lifecycle', notify);
+        });
         bots.migrateLegacy();
         bots.sync();
       },
     },
     {
       name: 'tongzhou-channels-service',
-      inject: ['tzStore', 'tzEvents', 'tzFeishu'],
+      inject: ['tzStore', 'tzEvents', 'tzFeishu', 'tzBots'],
       apply(ctx) {
         const store = ctx.tzStore;
         const events = ctx.tzEvents;
@@ -345,6 +357,7 @@ export function applicationServices(kernel: ApplicationKernel): Plugin.Object<vo
         kernel.own(ctx, async () => {
           channels.dispose();
         });
+        channels.attachTargets(ctx.tzBots.notifications);
         ctx.provide('tzChannels', channels);
         feishu.sync();
         const notify = (

@@ -380,6 +380,9 @@ try {
       await page.getByRole('button', { name: label, exact: true }).click();
       await capture(`${width}-${name}`);
     }
+    await nav('机器人');
+    await page.getByRole('heading', { name: '机器人', exact: true }).waitFor();
+    await capture(`${width}-bots`);
     await nav('Agent');
     await capture(`${width}-agents`);
     await nav('插件');

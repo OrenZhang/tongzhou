@@ -1,3 +1,7 @@
+import { botSettings } from '../services/bots/settings';
+import { botClientPolicy } from '../services/bots/client-policy';
+import botPrompts from '../../prompts/bots.json';
+import type { RunInput } from '../../src/shared/types';
 import { z } from 'zod';
 import type { Store } from '../services/storage/store';
 import type { DomainServices } from '../modules/domain-services';
@@ -19,8 +23,20 @@ export function taskToolPreparation(
   changed: () => void,
   computer?: ComputerAdapter,
   commands?: ClientCommands,
+  startBotTask?: (input: RunInput) => string,
 ): TaskToolPreparation {
   return async ({ scope, session, agent, project, run, signal, ask, progress }) => {
+    const context = run.botContext;
+    const policy =
+      context && startBotTask ? botClientPolicy(store, context, run.id, startBotTask) : undefined;
+    if (context) {
+      if (botSettings(store).mode === 'chat') {
+        agent.instructions +=
+          '\n当前为机器人仅聊天模式。直接回答用户问题，保持当前聊天上下文。没有工作台、文件、配置或其他会话的访问工具，不得声称已查询或执行这些操作。';
+        return;
+      }
+      agent.instructions += '\n' + botPrompts.instructions.join('\n');
+    }
     if (isUserSession(session)) agent.instructions += recallInstructions();
     if (!session.knowledgeJob) await scope.prepare(store, agent, computer, project ?? undefined);
     else if (session.contentContext) scope.prepareSkills(store);
@@ -124,6 +140,7 @@ export function taskToolPreparation(
         agent.permission === 'read-only',
         () => store.capabilities().management,
         session.id,
+        policy,
       );
     if (project)
       for (const spec of agent.permission === 'read-only' ? readOnlyToolSpecs : toolSpecs)
