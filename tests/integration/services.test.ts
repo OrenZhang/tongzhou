@@ -11,7 +11,6 @@ import { executeTool, fileHash, commandResult } from '../../electron/core/tools/
 import { ToolScope } from '../../electron/core/tools/extensions';
 import { ClientCommands, operation } from '../../electron/core/tools/client-commands';
 import { z } from 'zod';
-import { Feishu } from '../../electron/services/channels/feishu';
 const cleanups: (() => unknown | Promise<unknown>)[] = [];
 afterEach(async () => {
   vi.restoreAllMocks();
@@ -148,50 +147,6 @@ describe('connection and channel services', () => {
     fetch.mockResolvedValue(new Response('{}', { status: 401 }));
     await expect(c.test('g2')).rejects.toThrow('401');
     expect(c.list().find((x) => x.id === 'g1')?.account).toBe('fixture-user');
-  });
-  it('accepts only bound human Feishu senders and deduplicates remote messages', async () => {
-    const s = store(),
-      session = s.createSession();
-    s.put('session', { ...session, model: 'model' });
-    s.put('channel', {
-      id: 'f',
-      name: 'f',
-      kind: 'feishu',
-      mode: 'app',
-      enabled: true,
-      inbound: true,
-      sessionId: session.id,
-      receiveIdType: 'open_id',
-      allowedSenders: ['user1'],
-    });
-    const enqueue = vi.fn(async () => {});
-    const service = new Feishu(s, { enqueue, changed: () => {} });
-    cleanups.push(() => service.dispose());
-    const event = {
-      sender: { sender_type: 'user', sender_id: { open_id: 'user1' } },
-      message: {
-        message_id: 'msg1',
-        message_type: 'text',
-        chat_type: 'p2p',
-        content: JSON.stringify({ text: 'Continue' }),
-      },
-    };
-    await service.receive('f', {
-      ...event,
-      sender: { sender_type: 'app', sender_id: { open_id: 'user1' } },
-    });
-    await service.receive('f', {
-      ...event,
-      sender: { sender_type: 'user', sender_id: { open_id: 'outsider' } },
-    });
-    expect(enqueue).not.toHaveBeenCalled();
-    await service.receive('f', event);
-    await service.receive('f', event);
-    expect(enqueue).toHaveBeenCalledTimes(1);
-    expect(enqueue.mock.calls[0]).toMatchObject([
-      { sessionId: session.id, prompt: expect.stringContaining('Continue') },
-      'supplement',
-    ]);
   });
 });
 describe('project initialization and controlled edits', () => {

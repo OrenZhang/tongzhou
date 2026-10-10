@@ -68,7 +68,7 @@ export class Bots {
     this.sync();
     this.runtime.changed();
   }
-  authorize(c: Channel, secret: string) {
+  authorize(c: Channel, secret: string, allowedSenders: string[]) {
     this.save({
       id: c.id,
       name: c.name,
@@ -76,34 +76,9 @@ export class Bots {
       appId: c.appId,
       domain: c.domain,
       secret,
-      allowedSenders: c.allowedSenders ?? [],
+      allowedSenders,
       allowedChats: [],
     });
-  }
-  migrateLegacy() {
-    for (const c of this.store.list<Channel>('channel')) {
-      if (
-        c.kind !== 'feishu' ||
-        !c.inbound ||
-        !c.appId ||
-        !c.sessionId ||
-        !c.allowedSenders?.length
-      )
-        continue;
-      const id = 'legacy-' + c.id;
-      if (!this.list().some((b) => b.id === id))
-        this.save({
-          id,
-          name: c.name,
-          kind: 'feishu',
-          appId: c.appId,
-          domain: c.domain,
-          secret: this.store.secret('channel_app_' + c.id),
-          allowedSenders: c.allowedSenders,
-          allowedChats: c.receiveIdType === 'chat_id' && c.receiveId ? [c.receiveId] : [],
-        });
-      this.store.put('channel', { ...c, inbound: false });
-    }
   }
   remove(id: string) {
     const bot = this.list().find((b) => b.id === id);

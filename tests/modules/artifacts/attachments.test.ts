@@ -21,7 +21,7 @@ function fixture() {
   roots.push(root);
   const store = new Store(':memory:', { encrypt: (v) => v, decrypt: (v) => v });
   stores.push(store);
-  return { files: new Attachments(store, root), store, root };
+  return { files: new Attachments(root), store, root };
 }
 it('stores full UTF-8 text as a file and sends a reference instead of expanding the prompt', () => {
   const f = fixture(),
@@ -31,7 +31,7 @@ it('stores full UTF-8 text as a file and sends a reference instead of expanding 
     mimeType: 'text/plain',
     data: Buffer.from(text).toString('base64'),
   });
-  const restored = new Attachments(f.store, f.root);
+  const restored = new Attachments(f.root);
   expect(restored.content(a.id)).toBe(text);
   const history = restored.history([
     { id: 'm', sessionId: 's', role: 'user', content: '分析附件', attachments: [a], createdAt: 1 },

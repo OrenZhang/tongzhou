@@ -9,7 +9,6 @@ import {
   MAX_ATTACHMENT_BYTES,
   MAX_TURN_ATTACHMENT_BYTES,
 } from '../../../src/shared/attachments';
-import type { Store } from '../../services/storage/store';
 
 export const attachmentUploadSchema = z.object({
   name: z.string().min(1).max(180),
@@ -23,10 +22,9 @@ export const attachmentUploadSchema = z.object({
 export class Attachments {
   readonly root: string;
   readonly records: FileRecords<Attachment>;
-  constructor(store: Store, dataDir: string) {
+  constructor(dataDir: string) {
     this.root = managedDirectory(dataDir, 'attachments');
     this.records = new FileRecords(path.join(this.root, 'records'));
-    this.records.migrate(store, 'attachment');
   }
   private file(id: string) {
     z.uuid().parse(id);

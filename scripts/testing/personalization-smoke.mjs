@@ -3,7 +3,7 @@ import { build } from 'esbuild';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
-import { mkdir, mkdtemp } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 
@@ -24,8 +24,18 @@ const store = new Store(path.join(root, 'profile/tongzhou.db'), {
 const session = store.createSession();
 const docId = randomUUID(),
   entryId = randomUUID();
-store.put('knowledgeSettings', { id: 'default', autoCollect: false });
-store.put('knowledge', {
+store.put('automation', {
+  id: 'fe89d222-6dfb-4caa-9363-9f194710303e',
+  version: 1,
+  name: '记忆整理',
+  kind: 'memory',
+  enabled: false,
+  trigger: 'idle',
+  permission: 'read-only',
+  missed: 'once',
+  createdAt: Date.now(),
+});
+const memory = {
   id: docId,
   kind: 'memory',
   title: '每日偏好来源',
@@ -51,7 +61,14 @@ store.put('knowledge', {
       occurredAt: Date.now(),
     },
   ],
-});
+};
+const directory = path.join(root, 'profile', '.tzhou', 'knowledge', 'documents');
+await mkdir(directory, { recursive: true });
+const { content, ...metadata } = memory;
+await writeFile(
+  path.join(directory, docId + '.md'),
+  '---\n' + JSON.stringify(metadata, null, 2) + '\n---\n' + content,
+);
 store.close();
 const requests = [];
 const server = createServer(async (req, res) => {

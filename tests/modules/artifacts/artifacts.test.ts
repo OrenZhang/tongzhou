@@ -108,7 +108,7 @@ describe('generated artifacts', () => {
     );
     const folder = knowledge.folders().find((d) => d.name === '用户选择的目录')!;
     expect(folder).not.toHaveProperty('usageEnabled');
-    expect(knowledge.usable(knowledge.get(first))).toBe(true);
+    expect(knowledge.get(first).status).toBe('ready');
     expect(knowledge.get(first).folderId).toBe(folder.id);
     const existing = knowledge.saveFolder({ name: '已有目录' });
     const second = handlers.get('artifactToKnowledge')!(a.id, 'default', existing.id);

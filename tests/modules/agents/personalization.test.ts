@@ -200,17 +200,15 @@ describe('personality and confirmed cross-session preferences', () => {
         personalizationInstructions(f.store, { ...f.session, ...flags }, f.agent, f.knowledge),
       ).toBe('');
     }
-    for (const kind of ['botSession', 'botBinding', 'channel']) {
+    for (const kind of ['botSession', 'botBinding']) {
       f.store.put(kind, { id: 'external', sessionId: f.session.id });
       expect(f.instructions()).toBe('');
       f.store.remove(kind, 'external');
     }
   });
-  it('does not select facts or archived entries and redacts secrets in settings', () => {
+  it('does not select facts and redacts secrets in settings', () => {
     const f = fixture();
     f.records.put({ ...f.doc, memoryEntries: [{ ...f.entry, category: 'fact' }] });
-    expect(personalizationState(f.store, f.knowledge).candidates).toEqual([]);
-    f.records.put({ ...f.doc, status: 'archived' });
     expect(personalizationState(f.store, f.knowledge).candidates).toEqual([]);
     savePersonalization(
       f.store,

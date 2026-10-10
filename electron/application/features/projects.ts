@@ -24,7 +24,6 @@ export const projectsPlugin: Plugin.Object<void> = {
     'tzIpc',
     'tzStore',
     'tzChannels',
-    'tzFeishu',
     'tzDesktop',
     'tzProjectTools',
     'tzSessions',
@@ -34,7 +33,6 @@ export const projectsPlugin: Plugin.Object<void> = {
     const register = ctx.tzIpc.scoped(ctx);
     const store = ctx.tzStore;
     const channels = ctx.tzChannels;
-    const feishu = ctx.tzFeishu;
     const { getWindow } = ctx.tzDesktop;
     const { worktrees, repositories, activity: worktreeActivity } = ctx.tzProjectTools;
     register(
@@ -203,7 +201,6 @@ export const projectsPlugin: Plugin.Object<void> = {
           z.array(idSchema).optional().parse(expectedSessionIds),
         );
         for (const sessionId of deleted) channels.abort(sessionId);
-        feishu.sync();
         return deleted;
       },
     );

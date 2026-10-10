@@ -143,7 +143,9 @@ export const botsPlugin: Plugin.Object<void> = {
               allowedChats: [],
             });
           });
-        return feishu.onboard(id, name, (c, secret) => bots.authorize(c, secret));
+        return feishu.onboard(id, name, (c, secret, allowedSenders) =>
+          bots.authorize(c, secret, allowedSenders),
+        );
       },
     );
     register(

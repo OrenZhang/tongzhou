@@ -62,7 +62,6 @@ describe('project deletion', () => {
       store.put('terminal', { id: 'terminal-' + id, sessionId: id, status: 'exited' });
       store.put('taskMemory', { id, sessionId: id });
     }
-    store.put('channel', { id: 'channel', sessionId: session.id, inbound: true });
     expect(
       system.sessions.deleteProject('p', system.sessions.projectDeletionPreview('p')).sort(),
     ).toEqual([session.id, branch.id, child.id].sort());
@@ -71,7 +70,6 @@ describe('project deletion', () => {
     expect(store.list('session').map((s) => s.id)).toEqual([other.id]);
     for (const kind of ['run', 'terminal', 'taskMemory']) expect(store.list(kind)).toEqual([]);
     expect(store.messages(session.id)).toEqual([]);
-    expect(store.get<any>('channel', 'channel').inbound).toBe(false);
     expect(await readFile(file, 'utf8')).toBe('user file');
   });
   it('blocks active runs, terminals and queued work without deleting records', async () => {

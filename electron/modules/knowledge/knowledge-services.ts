@@ -357,7 +357,7 @@ export function registerKnowledgeServices(
     (fromSession, ids) => {
       const from = store.get<Session>('session', fromSession);
       const connection = agentConnection(store, agentProfile(store, KNOWLEDGE_ORGANIZER_ID), from);
-      for (const doc of ids) k.assertUsable(doc);
+      for (const doc of ids) k.get(doc);
       const session = store.createSession(from.projectId);
       store.put('session', {
         ...session,

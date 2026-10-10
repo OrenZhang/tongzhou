@@ -2,10 +2,9 @@ import { appFetch } from '../network/request-identity';
 import { setTimeout as delay } from 'node:timers/promises';
 import { randomUUID } from 'node:crypto';
 import QRCode from 'qrcode';
-import { WSClient, EventDispatcher, Domain, LoggerLevel } from '@larksuiteoapi/node-sdk';
-import type { Channel, Session } from '../../../src/shared/types';
+import type { Channel } from '../../../src/shared/types';
 import type { Store } from '../storage/store';
-import type { TaskService, ChangePublisher } from '../../core/task-contracts';
+import type { ChangePublisher } from '../../core/task-contracts';
 
 export const feishuHost = (domain?: string) =>
   domain === 'lark' ? 'https://open.larksuite.com' : 'https://open.feishu.cn';
@@ -33,10 +32,9 @@ export async function feishuToken(
 export class Feishu {
   private disposed = false;
   private pending = new Map<string, AbortController>();
-  private clients = new Map<string, { client: WSClient; signature: string }>();
   constructor(
     private store: Store,
-    private runtime: Pick<TaskService, 'enqueue'> & ChangePublisher,
+    private runtime: ChangePublisher,
   ) {}
   cancel(id: string) {
     const existed = this.pending.has(id);
@@ -47,7 +45,11 @@ export class Feishu {
       this.runtime.changed();
     }
   }
-  async onboard(id: string, name: string, authorized?: (channel: Channel, secret: string) => void) {
+  async onboard(
+    id: string,
+    name: string,
+    authorized?: (channel: Channel, secret: string, allowedSenders: string[]) => void,
+  ) {
     this.cancel(id);
     const controller = new AbortController();
     this.pending.set(id, controller);
@@ -108,6 +110,7 @@ export class Feishu {
           if (result.client_id && result.client_secret) {
             await feishuToken(result.client_id, result.client_secret, domain, controller.signal);
             controller.signal.throwIfAborted();
+            const allowedSenders = result.user_info?.open_id ? [result.user_info.open_id] : [];
             const channel = {
               id,
               name,
@@ -118,12 +121,10 @@ export class Feishu {
               domain,
               receiveId: result.user_info?.open_id ?? '',
               receiveIdType: 'open_id',
-              allowedSenders: result.user_info?.open_id ? [result.user_info.open_id] : [],
-              inbound: false,
               status: 'authorized',
               checkedAt: Date.now(),
             } satisfies Channel;
-            if (authorized) authorized(channel, result.client_secret);
+            if (authorized) authorized(channel, result.client_secret, allowedSenders);
             else {
               this.store.saveSecret('channel_app_' + id, result.client_secret);
               this.store.put('channel', channel);
@@ -158,100 +159,8 @@ export class Feishu {
       throw e;
     }
   }
-  /** An incoming message is only accepted for an explicit binding and sender allowlist. */
-  async receive(channelId: string, event: any) {
-    const c = this.store.list<Channel>('channel').find((x) => x.id === channelId);
-    if (!c?.enabled || !c.inbound || !c.sessionId || !c.allowedSenders?.length) return;
-    const m = event.message,
-      sender = event.sender?.sender_id?.open_id;
-    if (
-      event.sender?.sender_type !== 'user' ||
-      !c.allowedSenders.includes(sender) ||
-      m?.message_type !== 'text' ||
-      !m.message_id
-    )
-      return;
-    if (c.receiveIdType === 'chat_id' && m.chat_id !== c.receiveId) return;
-    if (c.receiveIdType !== 'chat_id' && m.chat_type !== 'p2p') return;
-    const key = channelId + ':' + m.message_id;
-    if (this.store.list<any>('channelInbox').some((x) => x.id === key)) return;
-    const text = JSON.parse(m.content).text;
-    if (typeof text !== 'string' || !text.trim() || text.length > 10000) return;
-    const s = this.store.get<Session>('session', c.sessionId);
-    if (s.archived || !s.model) return;
-    // Persist before enqueue, so a reconnect cannot replay a remote command.
-    this.store.put('channelInbox', {
-      id: key,
-      sessionId: s.id,
-      channelId,
-      time: Date.now(),
-      status: 'accepted',
-    });
-    try {
-      await this.runtime.enqueue(
-        {
-          sessionId: s.id,
-          providerId: s.providerId,
-          model: s.model,
-          agentId: s.agentId,
-          prompt: `[来自飞书渠道 ${c.name} 的用户消息]\n${text}`,
-        },
-        'supplement',
-      );
-    } catch {
-      this.store.put('channelInbox', {
-        id: key,
-        sessionId: s.id,
-        channelId,
-        time: Date.now(),
-        status: 'paused',
-      });
-    }
-  }
-  sync() {
-    const configs = this.store
-      .list<Channel>('channel')
-      .filter(
-        (c) =>
-          c.kind === 'feishu' &&
-          c.mode === 'app' &&
-          c.enabled &&
-          c.inbound &&
-          c.sessionId &&
-          c.allowedSenders?.length,
-      );
-    for (const [id, entry] of this.clients)
-      if (!configs.some((c) => c.id === id && JSON.stringify(c) === entry.signature)) {
-        entry.client.close({ force: true });
-        this.clients.delete(id);
-      }
-    for (const c of configs)
-      if (!this.clients.has(c.id)) {
-        const client = new WSClient({
-          appId: c.appId!,
-          appSecret: this.store.secret('channel_app_' + c.id),
-          domain: c.domain === 'lark' ? Domain.Lark : Domain.Feishu,
-          loggerLevel: LoggerLevel.error,
-          logger: { error() {}, warn() {}, info() {}, debug() {}, trace() {} },
-        });
-        this.clients.set(c.id, { client, signature: JSON.stringify(c) });
-        void client
-          .start({
-            eventDispatcher: new EventDispatcher({}).register({
-              'im.message.receive_v1': (data) => this.receive(c.id, data).catch(() => {}),
-            }),
-          })
-          .catch(() => {
-            if (this.disposed || this.clients.get(c.id)?.client !== client) return;
-            this.store.put('channelAuth', { id: c.id, phase: 'inbound-error' });
-            this.runtime.changed();
-          });
-      }
-  }
   dispose() {
     this.disposed = true;
     for (const id of this.pending.keys()) this.cancel(id);
-    for (const { client } of this.clients.values()) client.close({ force: true });
-    this.clients.clear();
   }
 }

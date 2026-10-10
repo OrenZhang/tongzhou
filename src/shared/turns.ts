@@ -143,12 +143,12 @@ export function conversationTurns(
   const turns: ConversationTurn[] = [];
   const byRun = new Map<string, ConversationTurn>();
   const sessionRuns = new Map(runs.filter((r) => r.sessionId === sessionId).map((r) => [r.id, r]));
-  let legacy: ConversationTurn | undefined;
+  let unassigned: ConversationTurn | undefined;
   for (const message of messages) {
     if (message.sessionId !== sessionId) continue;
     let turn: ConversationTurn;
     if (message.runId) {
-      legacy = undefined;
+      unassigned = undefined;
       turn = byRun.get(message.runId) ?? {
         key: `${sessionId}:run:${message.runId}`,
         runId: message.runId,
@@ -162,11 +162,11 @@ export function conversationTurns(
       }
     } else {
       // Old/imported messages have no run ID: a user message starts a new turn.
-      if (!legacy || message.role === 'user') {
-        legacy = { key: `${sessionId}:message:${message.id}`, messages: [], events: [] };
-        turns.push(legacy);
+      if (!unassigned || message.role === 'user') {
+        unassigned = { key: `${sessionId}:message:${message.id}`, messages: [], events: [] };
+        turns.push(unassigned);
       }
-      turn = legacy;
+      turn = unassigned;
     }
     turn.messages.push(message);
   }

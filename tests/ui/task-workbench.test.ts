@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync, existsSync
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { unzipSync, zipSync } from 'fflate';
+import { FileRecords, managedDirectory } from '../../electron/services/storage/local-files';
 import { Store } from '../../electron/services/storage/store';
 import { portableHistory } from '../../electron/core/runtime/history';
 import { TaskMemories } from '../../electron/modules/sessions/task-memory';
@@ -203,10 +204,13 @@ describe('encrypted work-data backups', () => {
     const { root, store } = fixture();
     const draft = '11111111-1111-4111-8111-111111111111',
       orphan = '22222222-2222-4222-8222-222222222222';
-    mkdirSync(path.join(root, 'attachments'));
-    writeFileSync(path.join(root, 'attachments', draft), 'unsent draft');
-    writeFileSync(path.join(root, 'attachments', orphan), 'orphan');
-    store.put('attachment', { id: draft, name: 'draft.txt' });
+    const attachmentRoot = managedDirectory(root, 'attachments');
+    writeFileSync(path.join(attachmentRoot, draft), 'unsent draft');
+    writeFileSync(path.join(attachmentRoot, orphan), 'orphan');
+    new FileRecords<{ id: string; name: string }>(path.join(attachmentRoot, 'records')).put({
+      id: draft,
+      name: 'draft.txt',
+    });
     expect(new DataMaintenance(store, root).cleanUnused().files).toBe(1);
     expect(readFileSync(path.join(root, '.tzhou', 'attachments', draft), 'utf8')).toBe(
       'unsent draft',

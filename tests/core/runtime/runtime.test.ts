@@ -390,7 +390,7 @@ describe('conversation input and lifecycle changes', () => {
   });
   it('shares user attachments with read-only collaborators without losing the parent reference', async () => {
     const f = await fixture(() => [text('read attachment')]);
-    const a = new Attachments(f.store, f.root).save({
+    const a = new Attachments(f.root).save({
       name: 'team.txt',
       mimeType: 'text/plain',
       data: Buffer.from('协作资料').toString('base64'),
@@ -431,7 +431,7 @@ describe('conversation input and lifecycle changes', () => {
             },
           ],
     );
-    const files = new Attachments(f.store, f.root);
+    const files = new Attachments(f.root);
     const contents = '完整资料，不应截断。'.repeat(1000);
     const a = files.save({
       name: 'paste.txt',
@@ -810,7 +810,7 @@ describe('conversation input and lifecycle changes', () => {
   });
   it('keeps attachments on the model path even when the caption is a greeting', async () => {
     const f = await fixture(() => [text('已阅读附件')]);
-    const attachment = new Attachments(f.store, f.root).save({
+    const attachment = new Attachments(f.root).save({
       name: 'context.txt',
       mimeType: 'text/plain',
       data: Buffer.from('请核对附件').toString('base64'),

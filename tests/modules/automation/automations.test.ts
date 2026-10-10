@@ -190,12 +190,12 @@ describe('automation scheduling', () => {
   });
 });
 describe('content workflow execution', () => {
-  it('blocks archived source events and rechecks queued snapshots before model execution', () => {
+  it('blocks deleted source events and rechecks queued snapshots before model execution', () => {
     const f = fixture();
     const rule = f.rule({ trigger: 'ready' });
     f.a.event('ready', f.doc.id);
     expect(f.jobs()).toHaveLength(1);
-    f.knowledge.documents.put({ ...f.knowledge.get(f.doc.id), status: 'archived' });
+    f.knowledge.documents.remove(f.doc.id);
     f.a.tick();
     expect(f.runtime.start).not.toHaveBeenCalled();
     expect(f.jobs()[0].status).toBe('failed');
@@ -384,7 +384,7 @@ function memoryCandidate(f: ReturnType<typeof fixture>, text = '需要保留的�
   return c;
 }
 describe('built-in memory automation', () => {
-  it('migrates the old switch exactly once and protects the unique built-in task', () => {
+  it('uses one memory rule for configuration and protects the unique built-in task', () => {
     const f = fixture(false);
     const rule = f.a.state().rules.find((r) => r.id === MEMORY_AUTOMATION_ID)!;
     expect(rule).toMatchObject({ kind: 'memory', enabled: false, trigger: 'idle' });
@@ -579,7 +579,7 @@ describe('automation client capability sharing', () => {
       await scope.close();
     }
   });
-  it('does not expose disabled folder results or allow an Agent to bypass folder authorization', async () => {
+  it('does not expose deleted source results or allow an Agent to run missing sources', async () => {
     const f = fixture();
     const rule = f.rule();
     f.a.run(rule.id);
@@ -595,7 +595,7 @@ describe('automation client capability sharing', () => {
       () => {},
     );
     commands.attach(scope, false, () => true, session.id);
-    f.knowledge.documents.put({ ...f.knowledge.get(f.doc.id), status: 'archived' });
+    f.knowledge.documents.remove(f.doc.id);
     try {
       const list = JSON.parse(
         (await scope.call('client_query', { method: 'automationList', args: [session.id] })).text!,

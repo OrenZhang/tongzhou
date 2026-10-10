@@ -13,7 +13,6 @@ import {
   closeSync,
 } from 'node:fs';
 import path from 'node:path';
-import type { Store } from './store';
 
 /** Managed user files live here; project workspaces keep their user-selected paths. */
 export function localFilesRoot(dataDir: string) {
@@ -60,19 +59,12 @@ export function atomicWrite(root: string, file: string, value: string | Buffer) 
   }
 }
 
-/** Move an existing managed directory once, without overwriting either copy. */
+/** Create a managed directory under the current local file root. */
 export function managedDirectory(dataDir: string, name: string) {
   if (!/^[a-z][a-z-]*$/.test(name)) throw new Error('无效目录');
   const root = localFilesRoot(dataDir),
-    target = path.join(root, name),
-    legacy = path.join(dataDir, name);
+    target = path.join(root, name);
   assertLocalPath(root, target);
-  if (existsSync(target) && existsSync(legacy))
-    throw new Error(`本地文件迁移发现两个 ${name} 目录，已保留两份数据，请先核对目录`);
-  if (!existsSync(target) && existsSync(legacy)) {
-    assertLocalPath(path.resolve(dataDir), path.resolve(legacy));
-    renameSync(legacy, target);
-  }
   mkdirSync(target, { recursive: true });
   return target;
 }
@@ -127,22 +119,5 @@ export class FileRecords<T extends { id: string }> {
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
-  }
-  /** Restartable migration: keep SQLite rows until every file has been read back and verified. */
-  migrate(store: Store, kind: string) {
-    const rows = store.list<T>(kind);
-    for (const row of rows) {
-      if (!existsSync(this.file(row.id))) this.put(row);
-      if (JSON.stringify(this.get(row.id)) !== JSON.stringify(row)) {
-        // Codecs may reorder keys, but never discard fields.
-        const sorted = (v: T) =>
-          JSON.stringify(
-            Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b))),
-          );
-        if (sorted(this.get(row.id)) !== sorted(row))
-          throw new Error(`本地文件迁移校验失败：${kind}/${row.id}`);
-      }
-    }
-    if (rows.length) store.db.prepare('DELETE FROM objects WHERE kind=?').run(kind);
   }
 }

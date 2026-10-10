@@ -712,9 +712,6 @@ export interface Channel {
   domain?: 'feishu' | 'lark';
   receiveId?: string;
   receiveIdType?: 'chat_id' | 'open_id';
-  inbound?: boolean;
-  sessionId?: string;
-  allowedSenders?: string[];
   checkedAt?: number;
 }
 export interface NotificationTarget {

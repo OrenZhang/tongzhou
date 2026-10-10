@@ -52,7 +52,6 @@ export interface MemoryCandidate {
   day: string;
   occurredAt: number;
   updatedAt: number;
-  legacyId?: string;
   status: 'pending' | 'running' | 'done' | 'failed';
   attempts: number;
   retryAt?: number;
@@ -152,33 +151,7 @@ export class KnowledgeMemory {
     } satisfies MemoryCandidate);
     return true;
   }
-  migrate() {
-    // Preserve old IDs and evidence links as sources; only the new consolidated page is a memory.
-    for (const doc of this.knowledge
-      .all()
-      .filter((d) => d.kind === 'memory' && !d.memoryDate && d.status !== 'archived')) {
-      const session = this.store.list<Session>('session').find((s) => s.id === doc.sessionId);
-      const candidateId = doc.runId ?? `legacy:${doc.id}`;
-      this.knowledge.persist(
-        { ...doc, kind: 'source', tags: [...new Set([...doc.tags, '历史记忆待整理'])] },
-        undefined,
-      );
-      if (session && !this.candidates().some((c) => c.id === candidateId))
-        this.store.put('knowledgeCandidate', {
-          id: candidateId,
-          sessionId: session.id,
-          projectId: doc.projectId,
-          providerId: session.providerId,
-          model: session.model,
-          day: memoryDay(doc.createdAt),
-          occurredAt: doc.createdAt,
-          updatedAt: Date.now(),
-          legacyId: doc.id,
-          status: 'pending',
-          attempts: 0,
-        } satisfies MemoryCandidate);
-      this.knowledge.removeMemoryMirror(doc.id);
-    }
+  recover() {
     // A process cannot inherit a running worker. Recover its uncommitted work after restart.
     for (const job of this.store
       .list<MemoryJob>('knowledgeMemoryJob')
@@ -186,13 +159,6 @@ export class KnowledgeMemory {
       this.fail(job.id, '上次整理中断，等待重试');
   }
   evidence(candidate: MemoryCandidate): { text: string; sources: KnowledgeSource[] } {
-    if (candidate.legacyId) {
-      const doc = this.knowledge.get(candidate.legacyId);
-      return {
-        text: cleanMemory(doc.content),
-        sources: [{ id: doc.id, title: doc.title, version: doc.version }],
-      };
-    }
     const messages = this.store
       .messages(candidate.sessionId)
       .filter((m) => m.runId === candidate.id && ['user', 'assistant', 'tool'].includes(m.role));
@@ -246,7 +212,6 @@ export class KnowledgeMemory {
     if (!first) return;
     const daily = this.knowledge.all().find((d) => d.memoryDate === first.day);
     if (
-      daily?.status === 'archived' ||
       this.store.list<{ id: string }>('knowledgeMemoryDeletedDay').some((d) => d.id === first.day)
     ) {
       for (const candidate of eligible.filter((c) => c.day === first.day))
@@ -360,11 +325,8 @@ export class KnowledgeMemory {
     if (candidates.length !== job.candidateIds.length)
       throw new Error('候选资料已删除或改变，请重新整理');
     const old = this.knowledge.all().find((d) => d.memoryDate === job.day);
-    if (
-      old?.status === 'archived' ||
-      this.store.list<{ id: string }>('knowledgeMemoryDeletedDay').some((d) => d.id === job.day)
-    )
-      throw new Error('当天记忆已归档或删除');
+    if (this.store.list<{ id: string }>('knowledgeMemoryDeletedDay').some((d) => d.id === job.day))
+      throw new Error('当天记忆已删除');
     const entries: MemoryEntry[] = parsed.entries.map((entry) => {
       const sources = entry.evidence.flatMap((ev) => {
         const candidate = candidates.find((c) => c.id === ev.candidateId);
@@ -372,16 +334,14 @@ export class KnowledgeMemory {
         const evidence = this.evidence(candidate);
         if (!evidence.text.includes(ev.quote)) throw new Error('引用原文不匹配，请重新核对');
         if (entry.category === 'preference') {
-          const userEvidence =
-            !candidate.legacyId &&
-            this.store
-              .messages(candidate.sessionId)
-              .some(
-                (m) =>
-                  m.runId === candidate.id &&
-                  m.role === 'user' &&
-                  cleanMemory(m.content).includes(ev.quote),
-              );
+          const userEvidence = this.store
+            .messages(candidate.sessionId)
+            .some(
+              (m) =>
+                m.runId === candidate.id &&
+                m.role === 'user' &&
+                cleanMemory(m.content).includes(ev.quote),
+            );
           if (!userEvidence)
             throw new Error('偏好必须引用本轮用户原文，不能使用助手自述或工具资料');
         }

@@ -30,7 +30,7 @@ import { Markdown, Modal } from '../../components/components';
 import './knowledge.css';
 
 const labels = { source: '笔记与原件', wiki: '整理文档', memory: '每日记忆' };
-const statuses = { ready: '已核对', draft: '待核对', archived: '已归档' };
+const statuses = { ready: '已核对', draft: '待核对' };
 export function KnowledgeCenter({
   api,
   data,
@@ -511,21 +511,20 @@ export function KnowledgeCenter({
                   </button>
                 </div>
                 <div className="knowledge-document-actions">
-                  {doc.status !== 'archived' &&
-                    (doc.status === 'draft' ||
-                      state?.issues.some((issue) => issue.id === doc.id)) && (
-                      <button
-                        className="primary"
-                        disabled={busy || doc.indexed === false}
-                        onClick={() => {
-                          setError('');
-                          setReviewing(doc);
-                        }}
-                      >
-                        <Check size={14} />
-                        核对记忆
-                      </button>
-                    )}
+                  {(doc.status === 'draft' ||
+                    state?.issues.some((issue) => issue.id === doc.id)) && (
+                    <button
+                      className="primary"
+                      disabled={busy || doc.indexed === false}
+                      onClick={() => {
+                        setError('');
+                        setReviewing(doc);
+                      }}
+                    >
+                      <Check size={14} />
+                      核对记忆
+                    </button>
+                  )}
                   <button
                     className="text-button danger"
                     disabled={busy}

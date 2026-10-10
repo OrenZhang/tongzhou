@@ -82,9 +82,9 @@ store.message({
 const before = 'export const version = \"0.0.0\";';
 const after = 'export const version = \"0.1.0\";';
 const hash = (text) => createHash('sha256').update(text).digest('hex');
-await mkdir(path.join(root, 'profile/checkpoints'), { recursive: true });
+await mkdir(path.join(root, 'profile/.tzhou/checkpoints'), { recursive: true });
 for (const text of [before, after])
-  await writeFile(path.join(root, 'profile/checkpoints', hash(text)), text);
+  await writeFile(path.join(root, 'profile/.tzhou/checkpoints', hash(text)), text);
 store.put('runChanges', {
   id: 'layout-run',
   sessionId: session.id,

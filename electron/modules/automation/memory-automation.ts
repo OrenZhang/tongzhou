@@ -1,5 +1,5 @@
 import type { DomainServices } from '../domain-services';
-import { MEMORY_AUTOMATION_ID } from '../../../src/shared/automation';
+import { MEMORY_AUTOMATION_ID, defaultMemoryAutomation } from '../../../src/shared/automation';
 import { MEMORY_ORGANIZER_ID } from '../../../src/shared/builtin-agents';
 import type { Run } from '../../../src/shared/types';
 import type { AutomationHandler } from './automation-handlers';
@@ -27,17 +27,7 @@ export function memoryAutomationHandler(
       triggers: ['idle', 'schedule', 'manual'],
       builtinRuleId: MEMORY_AUTOMATION_ID,
     },
-    defaults: () => ({
-      id: MEMORY_AUTOMATION_ID,
-      version: 1,
-      name: '记忆整理',
-      kind: 'memory',
-      enabled: runtime.knowledge.settings().autoCollect,
-      trigger: 'idle',
-      permission: 'read-only',
-      missed: 'once',
-      createdAt: Date.now(),
-    }),
+    defaults: defaultMemoryAutomation,
     timeoutMs: 180000,
     allowBuiltinAgent: MEMORY_ORGANIZER_ID,
     allowEmptyResult: true,

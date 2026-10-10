@@ -89,7 +89,6 @@ export class Artifacts {
   ) {
     this.root = managedDirectory(dataDir, 'artifacts');
     this.records = new FileRecords(path.join(this.root, 'records'));
-    this.records.migrate(store, 'artifact');
   }
   private file(blob: string) {
     if (!/^[a-f0-9-]{36}\.[a-z0-9]{1,8}$/.test(blob)) throw new Error('无效作品路径');

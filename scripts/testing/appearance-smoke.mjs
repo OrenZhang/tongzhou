@@ -84,8 +84,10 @@ try {
   };
   assert.equal(await page.getByRole('button', { name: '项目与工作树', exact: true }).count(), 0);
   await page.evaluate(() => {
-    localStorage.removeItem('tongzhou-appearance');
-    localStorage.setItem('tongzhou-theme', 'dark');
+    localStorage.setItem(
+      'tongzhou-appearance',
+      JSON.stringify({ theme: 'dark', style: 'graphite', font: 'system', textSize: 14 }),
+    );
   });
   await page.reload();
   await page.waitForSelector('.app-shell');
@@ -200,7 +202,7 @@ try {
     JSON.stringify({ passed: true, packaged: !!executablePath, fonts, screens }, null, 2),
   );
   console.log(
-    'Appearance smoke passed: six palettes, contrast, real fonts, size, legacy migration, process restart, reset and system changes.',
+    'Appearance smoke passed: six palettes, contrast, real fonts, size, current preference persistence, process restart, reset and system changes.',
   );
   console.log(JSON.stringify(fonts));
 } catch (e) {

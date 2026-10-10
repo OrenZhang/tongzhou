@@ -13,7 +13,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { zipSync, unzipSync } from 'fflate';
-import type { Store } from './store';
+import { STORE_SCHEMA_VERSION, type Store } from './store';
 
 const signature = Buffer.from('TONGZHOU-BACKUP-1\n');
 const allowed = (name: string): boolean =>
@@ -32,11 +32,10 @@ const allowed = (name: string): boolean =>
     /^\.tzhou\/(?:knowledge\/(?:documents\/[a-f0-9-]{36}\.md|(?:directories|libraries)\/[a-zA-Z0-9_-]+\.json|history\/[a-f0-9-]{36}~[0-9]+\.json)|(?:attachments|artifacts)\/records\/[a-f0-9-]{36}\.json)$/.test(
       name,
     ) ||
-    (name.startsWith('.tzhou/') && allowed(name.slice(7))) ||
-    /^attachments\/[a-f0-9-]{36}$/.test(name) ||
-    /^artifacts\/[a-f0-9-]{36}\.[a-z0-9]{1,8}$/.test(name) ||
-    /^checkpoints\/[a-f0-9]{64}$/.test(name) ||
-    /^knowledge\/(?:index\.md|folders\.json|memories\/\d{4}-\d{2}-\d{2}\/index\.md|(?:sources|wiki|memories)\/[a-f0-9-]{36}\.md|revisions\/[a-f0-9-]{36}-[0-9]+\.json|files\/[a-f0-9-]{36}\.[a-z0-9]{1,8})$/.test(
+    /^\.tzhou\/attachments\/[a-f0-9-]{36}$/.test(name) ||
+    /^\.tzhou\/artifacts\/[a-f0-9-]{36}\.[a-z0-9]{1,8}$/.test(name) ||
+    /^\.tzhou\/checkpoints\/[a-f0-9]{64}$/.test(name) ||
+    /^\.tzhou\/knowledge\/(?:index\.md|folders\.json|files\/[a-f0-9-]{36}\.[a-z0-9]{1,8})$/.test(
       name,
     ));
 const maxBytes = 256 * 1024 * 1024;
@@ -79,7 +78,7 @@ export class DataMaintenance {
       const db = new DatabaseSync(temp);
       try {
         db.exec(
-          "PRAGMA secure_delete=ON; DELETE FROM secrets; DELETE FROM objects WHERE kind IN ('engineSegment','modelCallState','channelInbox','authEvent','channelAuth','networkLease');",
+          "PRAGMA secure_delete=ON; DELETE FROM secrets; DELETE FROM objects WHERE kind IN ('engineSegment','modelCallState','authEvent','channelAuth','networkLease');",
         );
         const configs = db
           .prepare(
@@ -88,8 +87,12 @@ export class DataMaintenance {
           .all() as { kind: string; id: string; value: string }[];
         for (const c of configs) {
           const v = JSON.parse(c.value);
-          v.enabled = false;
-          v.inbound = false;
+          if (['provider', 'plugin', 'channel', 'notificationRule', 'automation'].includes(c.kind))
+            v.enabled = false;
+          if (c.kind === 'bot') {
+            v.status = 'disconnected';
+            delete v.error;
+          }
           delete v.account;
           delete v.oauthError;
           delete v.checkedAt;
@@ -111,12 +114,12 @@ export class DataMaintenance {
       const entries: Record<string, Uint8Array> = { 'tongzhou.db': readFileSync(temp) };
       let size = entries['tongzhou.db'].length;
       if (size > maxBytes) throw new Error('数据库超过 256 MB');
-      for (const folder of ['.tzhou', 'attachments', 'checkpoints', 'knowledge', 'artifacts']) {
+      for (const folder of ['.tzhou']) {
         const root = path.join(this.dataDir, folder);
         if (!existsSync(root)) continue;
         assertLocalPath(path.resolve(this.dataDir), root);
         for (const name of readdirSync(root, {
-          recursive: folder === 'knowledge' || folder === '.tzhou',
+          recursive: true,
         }) as string[]) {
           const key = folder + '/' + name.replaceAll(path.sep, '/');
           if (!allowed(key)) continue;
@@ -165,7 +168,7 @@ export class DataMaintenance {
         const version = db
           .prepare("SELECT value FROM metadata WHERE key='schema_version'")
           .get() as { value: string };
-        if (!['1', '2'].includes(version?.value)) throw new Error('备份来自不兼容版本');
+        if (version?.value !== STORE_SCHEMA_VERSION) throw new Error('备份来自不兼容版本');
       } finally {
         db.close();
       }
@@ -209,10 +212,9 @@ export class DataMaintenance {
     // Keep every registered attachment; only unregistered orphan files are safe.
     const attachmentRoot = managedDirectory(this.dataDir, 'attachments');
     const records = new FileRecords<{ id: string }>(path.join(attachmentRoot, 'records'));
-    records.migrate(this.store, 'attachment');
     const liveAttachments = new Set<string>(records.list().map((a) => a.id));
     for (const p of this.store.list<any>('pendingInput'))
-      for (const id of p.attachmentIds ?? p.input?.attachmentIds ?? []) liveAttachments.add(id);
+      for (const id of p.input?.attachmentIds ?? []) liveAttachments.add(id);
     for (const row of this.store.db.prepare('SELECT value FROM messages').iterate() as Iterable<{
       value: string;
     }>)
@@ -228,7 +230,7 @@ export class DataMaintenance {
     ] as const) {
       const root = managedDirectory(this.dataDir, folder);
       for (const name of readdirSync(root)) {
-        if (live.has(name) || !allowed(folder + '/' + name)) continue;
+        if (live.has(name) || !allowed('.tzhou/' + folder + '/' + name)) continue;
         const file = path.join(root, name),
           s = lstatSync(file);
         if (s.isSymbolicLink() || !s.isFile()) continue;
@@ -256,16 +258,7 @@ export function applyPendingRestore(dataDir: string) {
   const backup = path.join(dataDir, state.backup);
   mkdirSync(backup, { recursive: true });
   writeFileSync(journal, JSON.stringify(state));
-  for (const name of [
-    'tongzhou.db',
-    'tongzhou.db-wal',
-    'tongzhou.db-shm',
-    'attachments',
-    'artifacts',
-    'checkpoints',
-    'knowledge',
-    '.tzhou',
-  ]) {
+  for (const name of ['tongzhou.db', 'tongzhou.db-wal', 'tongzhou.db-shm', '.tzhou']) {
     if (state.done.includes(name)) continue;
     const target = path.join(dataDir, name),
       old = path.join(backup, name),

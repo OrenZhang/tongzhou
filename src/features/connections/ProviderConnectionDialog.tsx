@@ -288,7 +288,7 @@ export function ProviderConnectionDialog({
           {providerEdit.contextChars !== 0 && (
             <Field
               label="自动整理阈值（字符）"
-              hint="兼容字符预算，按约 4 字符折算 1 Token，Codex 在窗口的 80% 处自动整理；不是模型实际容量。"
+              hint="上下文字符预算，按约 4 字符折算 1 Token，Codex 在窗口的 80% 处自动整理；不是模型实际容量。"
             >
               <input
                 type="number"

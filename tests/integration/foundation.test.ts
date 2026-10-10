@@ -1,57 +1,24 @@
 import { describe, it, expect } from 'vitest';
 import { Store } from '../../electron/services/storage/store';
 import { configureNativeTools } from '../../electron/services/accounts/native-policy';
-import { mkdtempSync, readFileSync, writeFileSync, rmSync, readdirSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import YAML from 'yaml';
 import TOML from '@iarna/toml';
 const codec = { encrypt: (s: string) => s, decrypt: (s: string) => s };
 describe('non-seeded roles and native tool boundaries', () => {
-  it('backs up a v1 database, removes only exact seeds and preserves custom roles and messages', () => {
-    const root = mkdtempSync(path.join(os.tmpdir(), 'tongzhou-upgrade-'));
+  it('uses the current schema directly and rejects unsupported formats without migrating records', () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'tongzhou-schema-'));
     try {
       const file = path.join(root, 'state.db');
-      let s = new Store(file, codec);
-      s.put('agent', {
-        id: 'builder',
-        name: '协作助手',
-        description: '分析问题、实现功能并验证结果',
-        instructions:
-          '你是同舟的编程助手。先理解项目和需求，再进行有依据的修改，验证结果。使用中文回复。不要声称执行了未执行的操作。',
-        permission: 'ask',
-        maxSteps: 16,
-        providerId: '',
-        model: '',
-      });
-      s.put('agent', {
-        id: 'reviewer',
-        name: '用户自定义审查',
-        instructions: 'Preserve me',
-        description: '',
-        permission: 'read-only',
-        maxSteps: 16,
-        providerId: '',
-        model: '',
-      });
-      const session = s.createSession();
-      s.put('session', { ...session, agentId: 'builder' });
-      s.message({
-        id: 'history',
-        sessionId: session.id,
-        role: 'user',
-        content: 'User history',
-        createdAt: 1,
-      });
-      s.db.prepare('UPDATE metadata SET value=? WHERE key=?').run('1', 'schema_version');
-      s.close();
-      s = new Store(file, codec);
-      expect(s.list<any>('agent').map((a) => a.name)).toEqual(['用户自定义审查']);
-      expect(s.get<any>('session', session.id).agentId).toBe('');
-      expect(s.messages(session.id)[0].content).toBe('User history');
-      expect(s.get<any>('legacyAgent', 'builder').name).toBe('协作助手');
-      expect(readdirSync(root).filter((f) => f.endsWith('.bak'))).toHaveLength(1);
-      s.close();
+      const store = new Store(file, codec);
+      expect(
+        store.db.prepare("SELECT value FROM metadata WHERE key='schema_version'").get(),
+      ).toEqual({ value: '2' });
+      store.db.prepare("UPDATE metadata SET value='1' WHERE key='schema_version'").run();
+      store.close();
+      expect(() => new Store(file, codec)).toThrow('格式不受支持');
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

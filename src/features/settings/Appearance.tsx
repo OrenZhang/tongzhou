@@ -9,12 +9,7 @@ import {
 const key = 'tongzhou-appearance';
 export function savedAppearance(): AppearancePreferences {
   try {
-    const legacy = localStorage.getItem('tongzhou-theme');
-    try {
-      return normalizeAppearance(JSON.parse(localStorage.getItem(key) ?? 'null'), legacy);
-    } catch {
-      return normalizeAppearance(null, legacy);
-    }
+    return normalizeAppearance(JSON.parse(localStorage.getItem(key) ?? 'null'));
   } catch {
     return { ...defaultAppearance };
   }
@@ -38,7 +33,6 @@ export function useAppearance() {
   useEffect(() => {
     try {
       localStorage.setItem(key, JSON.stringify(appearance));
-      localStorage.setItem('tongzhou-theme', appearance.theme);
     } catch {
       /* Keep this window usable if local storage is unavailable. */
     }

@@ -281,13 +281,11 @@ export function applicationServices(kernel: ApplicationKernel): Plugin.Object<vo
     },
     {
       name: 'tongzhou-feishu-service',
-      inject: ['tzStore', 'tzEvents', 'tzTasks'],
+      inject: ['tzStore', 'tzEvents'],
       apply(ctx) {
         const store = ctx.tzStore;
         const events = ctx.tzEvents;
-        const tasks = ctx.tzTasks;
         const feishu = new Feishu(store, {
-          enqueue: tasks.enqueue.bind(tasks),
           changed: events.changed,
         });
         kernel.own(ctx, async () => {
@@ -325,27 +323,23 @@ export function applicationServices(kernel: ApplicationKernel): Plugin.Object<vo
           events.on('lifecycle', notify);
           return () => events.off('lifecycle', notify);
         });
-        bots.migrateLegacy();
         bots.sync();
       },
     },
     {
       name: 'tongzhou-channels-service',
-      inject: ['tzStore', 'tzEvents', 'tzFeishu', 'tzBots'],
+      inject: ['tzStore', 'tzEvents', 'tzBots'],
       apply(ctx) {
         const store = ctx.tzStore;
         const events = ctx.tzEvents;
-        const feishu = ctx.tzFeishu;
         const channels = new Channels(store, () => {
           events.changed();
-          feishu.sync();
         });
         kernel.own(ctx, async () => {
           channels.dispose();
         });
         channels.attachTargets(ctx.tzBots.notifications);
         ctx.provide('tzChannels', channels);
-        feishu.sync();
         const notify = (
           run: import('../../src/shared/types').Run,
           event: import('../core/application-events').Lifecycle,

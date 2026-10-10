@@ -3,7 +3,6 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type {
-  AgentProfile,
   Message,
   Project,
   Provider,
@@ -17,6 +16,7 @@ export interface SecretCodec {
   encrypt(value: string): string;
   decrypt(value: string): string;
 }
+export const STORE_SCHEMA_VERSION = '2';
 export class Store {
   readonly db: DatabaseSync;
   constructor(
@@ -31,7 +31,7 @@ export class Store {
       CREATE TABLE IF NOT EXISTS secrets (id TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, value TEXT NOT NULL, seq INTEGER NOT NULL);
       CREATE INDEX IF NOT EXISTS messages_session ON messages(session_id, seq);
-      INSERT OR IGNORE INTO metadata VALUES ('schema_version','1');`);
+      INSERT OR IGNORE INTO metadata VALUES ('schema_version','${STORE_SCHEMA_VERSION}');`);
     this.db.exec(`
       CREATE INDEX IF NOT EXISTS messages_sequence ON messages(seq);
       CREATE INDEX IF NOT EXISTS objects_session ON objects(kind, json_extract(value,'$.sessionId'));
@@ -48,16 +48,13 @@ export class Store {
         DELETE FROM message_search WHERE rowid=old.rowid;
       END;
     `);
-    if (!this.db.prepare("SELECT 1 FROM metadata WHERE key='message_search_v1'").get()) {
-      this.db.exec(`BEGIN; DELETE FROM message_search;
-        INSERT INTO message_search(rowid,content) SELECT rowid,json_extract(value,'$.content') FROM messages;
-        INSERT INTO metadata VALUES('message_search_v1','1'); COMMIT;`);
-    }
     const version = this.db
       .prepare('SELECT value FROM metadata WHERE key=?')
       .get('schema_version') as { value: string };
-    if (!['1', '2'].includes(version.value))
-      throw new Error('此数据库来自更新版本，请升级同舟后打开。');
+    if (version.value !== STORE_SCHEMA_VERSION) {
+      this.db.close();
+      throw new Error('数据库格式不受支持，请使用当前版本的数据目录。');
+    }
     if (!this.list<Provider>('provider').length) {
       this.put('provider', {
         id: 'openai-codex',
@@ -81,65 +78,6 @@ export class Store {
         maxOutputTokens: 8192,
         contextChars: 0,
       });
-    }
-    if (version.value === '1') {
-      if (path !== ':memory:' && this.list('agent').length)
-        this.db.prepare('VACUUM INTO ?').run(path + '.v1-' + Date.now() + '.bak');
-      this.db.exec('BEGIN');
-      try {
-        const seeds = [
-          {
-            id: 'builder',
-            name: '协作助手',
-            description: '分析问题、实现功能并验证结果',
-            instructions:
-              '你是同舟的编程助手。先理解项目和需求，再进行有依据的修改，验证结果。使用中文回复。不要声称执行了未执行的操作。',
-            permission: 'ask',
-          },
-          {
-            id: 'reviewer',
-            name: '代码审查',
-            description: '只读检查，寻找具体问题和改进建议',
-            instructions:
-              '你是只读代码审查员。读取相关文件，关注正确性、安全性和回归风险。给出文件路径、证据和可执行的建议，不修改文件。',
-            permission: 'read-only',
-          },
-          {
-            id: 'architect',
-            name: '架构规划',
-            description: '梳理需求、模块边界与实现步骤',
-            instructions:
-              '你是架构规划师。先阅读现有代码，明确需求和约束，再给出可执行的方案、风险和验证方式。只读，不修改文件。',
-            permission: 'read-only',
-          },
-        ];
-        for (const original of this.list<AgentProfile>('agent')) {
-          const seed = seeds.find((s) => s.id === original.id);
-          if (
-            !seed ||
-            original.name !== seed.name ||
-            original.description !== seed.description ||
-            original.instructions !== seed.instructions ||
-            original.permission !== seed.permission ||
-            original.providerId ||
-            original.model ||
-            original.maxSteps !== 16 ||
-            original.pluginIds?.length ||
-            original.skillIds?.length ||
-            original.computerEnabled
-          )
-            continue;
-          this.put('legacyAgent', original);
-          this.remove('agent', original.id);
-          for (const session of this.list<Session>('session'))
-            if (session.agentId === original.id) this.put('session', { ...session, agentId: '' });
-        }
-        this.db.prepare("UPDATE metadata SET value='2' WHERE key='schema_version'").run();
-        this.db.exec('COMMIT');
-      } catch (error) {
-        this.db.exec('ROLLBACK');
-        throw error;
-      }
     }
     for (const item of this.list<any>('pendingInput'))
       if (['queued', 'dispatching'].includes(item.status))
@@ -483,13 +421,11 @@ export class Store {
           'modelCallState',
           'notificationRule',
           'delivery',
-          'channelInbox',
           'contextCheckpoint',
           'taskMemory',
           'knowledgeBinding',
           'knowledgeDismissal',
           'knowledgeCandidate',
-          'knowledgeContextPreference',
           'runChanges',
           'terminal',
         ])
@@ -497,9 +433,6 @@ export class Store {
             if (obj.sessionId === target) this.remove(kind, obj.id);
         this.remove('session', target);
       }
-      for (const channel of this.list<any>('channel'))
-        if (ids.has(channel.sessionId))
-          this.put('channel', { ...channel, inbound: false, sessionId: undefined });
       if (!inTransaction) this.db.exec('COMMIT');
     } catch (error) {
       if (!inTransaction) this.db.exec('ROLLBACK');

@@ -1,7 +1,5 @@
 export type KnowledgeKind = 'source' | 'wiki' | 'memory';
 export interface KnowledgeFolder {
-  /** Legacy storage field, ignored. Directory use no longer requires a switch. */
-  usageEnabled?: boolean;
   libraryId?: string;
   id: string;
   name: string;
@@ -40,8 +38,7 @@ export function knowledgeFolderBranch(folders: KnowledgeFolder[], id: string): S
   }
   return branch;
 }
-// archived is retained only for reading legacy data and revisions.
-export type KnowledgeStatus = 'ready' | 'draft' | 'archived';
+export type KnowledgeStatus = 'ready' | 'draft';
 export type MemoryCategory = 'preference' | 'fact' | 'decision' | 'lesson' | 'todo' | 'conflict';
 export const memoryCategories: Record<MemoryCategory, string> = {
   preference: '偏好与约束',
@@ -113,7 +110,6 @@ export interface KnowledgeDocument {
   blob?: string;
   hash?: string;
   indexed?: boolean;
-  archivedStatus?: Exclude<KnowledgeStatus, 'archived'>;
   memoryDate?: string;
   memoryEntries?: MemoryEntry[];
   memoryCandidateIds?: string[];
@@ -169,8 +165,7 @@ export interface KnowledgeRead {
   outline: { title: string; line: number; level: number }[];
 }
 
-/** Omit obsolete permission flags from tool results, including legacy stored directories. */
+/** Include the display path in directory tool results. */
 export function knowledgeFolderForTool(folder: KnowledgeFolder, folders: KnowledgeFolder[]) {
-  const { usageEnabled: _legacyFlag, ...value } = folder;
-  return { ...value, path: knowledgeFolderPath(folders, folder.id) };
+  return { ...folder, path: knowledgeFolderPath(folders, folder.id) };
 }

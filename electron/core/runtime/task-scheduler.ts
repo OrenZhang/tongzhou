@@ -264,7 +264,7 @@ export class TaskScheduler implements TaskService {
       input = { ...input, botContext: { ...origin, conversationId: input.sessionId } };
     if (input.botContext) assertBotSession(this.store, input.botContext, input.sessionId);
     const contentContext = this.store.get<Session>('session', input.sessionId).contentContext;
-    if (contentContext) this.knowledge.assertUsable(contentContext.documentId);
+    if (contentContext) this.knowledge.get(contentContext.documentId);
     const attachments = this.attachments.resolve(input.attachmentIds);
     if (this.sessions.isDeleting(input.sessionId)) throw new Error('会话正在删除');
     if (this.active.has(input.sessionId)) throw new Error('此会话正在执行，请先停止或等待完成。');

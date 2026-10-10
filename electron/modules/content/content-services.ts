@@ -97,7 +97,7 @@ export function registerContentServices(
   define('contentRun', '在当前文档侧边发起内容处理', [contentRunSchema], (raw) => {
     const p = contentRunSchema.parse(raw),
       doc = c.document(p.documentId);
-    k.assertUsable(doc.id);
+    k.get(doc.id);
     if (doc.version !== p.version) throw new Error('文档已更新，请先保存或重新载入正文');
     if (doc.indexed === false) throw new Error('原件尚未提取正文，请先导入文本版本');
     if (p.agentId && builtinAgent(p.agentId)) throw new Error('请选择通用助手或自定义 Agent');

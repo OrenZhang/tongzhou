@@ -2,10 +2,9 @@ import type { PluginConfig } from '../../../src/shared/types';
 import { builtinPlugins } from '../../../src/shared/builtin-plugins';
 import type { Store } from '../../services/storage/store';
 
-/** Repair bundled paths on upgrade and split the old combined plugin once. */
+/** Resolve bundled paths and preserve independent plugin settings. */
 export function ensureBuiltinPlugins(store: Store, command: string, entry: string) {
   const existing = store.list<PluginConfig>('plugin');
-  const legacy = existing.find((p) => p.id === 'tongzhou-web' && !p.args.includes('--web'));
   store.db.exec('BEGIN');
   try {
     for (const definition of builtinPlugins) {
@@ -18,9 +17,9 @@ export function ensureBuiltinPlugins(store: Store, command: string, entry: strin
         command,
         args: [entry, '--' + definition.mode],
         url: '',
-        enabled: previous?.enabled ?? legacy?.enabled ?? false,
+        enabled: previous?.enabled ?? false,
         readOnlyTools: [...definition.tools],
-        // A cached combined catalog must not expose time tools on the web server.
+        // Invalidate cached tools whenever the server mode changes.
         catalog: previous?.args.includes('--' + definition.mode) ? previous.catalog : undefined,
       } satisfies PluginConfig);
     }

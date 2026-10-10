@@ -306,33 +306,6 @@ describe('local knowledge lifecycle', () => {
     expect(k.read(source.id).revisions.map((r) => r.version)).toEqual([2, 1]);
     expect(k.search('接口')[0].id).toBe(source.id);
   });
-  it('recovers legacy archives once and cannot restore an archived revision into a hidden state', () => {
-    const { k, store, root } = fixture();
-    const source = k.importFile('历史原文.txt', Buffer.from('历史原文'));
-    const draft = k.save(
-      { title: '历史草稿', content: '待核对', kind: 'wiki', status: 'draft' },
-      'agent',
-    );
-    k.persist({ ...source, status: 'archived', archivedStatus: 'ready', version: 2 }, source);
-    k.persist({ ...draft, status: 'archived', version: 2 }, draft);
-    const migrated = new Knowledge(store, root);
-    expect(migrated.get(source.id)).toMatchObject({
-      status: 'ready',
-      version: 3,
-      blob: source.blob,
-    });
-    expect(migrated.get(draft.id)).toMatchObject({ status: 'draft', version: 3 });
-    expect(migrated.state().documents.map((d) => d.id)).toEqual(
-      expect.arrayContaining([source.id, draft.id]),
-    );
-    expect(migrated.search('历史原文')[0].id).toBe(source.id);
-    expect(new Knowledge(store, root).get(source.id).version).toBe(3);
-    expect(migrated.restore(source.id, 2, 3).status).toBe('ready');
-    expect(migrated.restore(draft.id, 2, 3).status).toBe('draft');
-    expect(() => migrated.save({ ...source, status: 'archived' })).toThrow();
-    migrated.delete(draft.id, migrated.get(draft.id).version);
-    expect(() => migrated.get(draft.id)).toThrow('已删除');
-  });
   it('isolates projects and ordinary-session memories, and ignores legacy conversation pins', () => {
     const { k, store } = fixture();
     store.put('project', { id: 'a', name: 'A', path: '/a' });

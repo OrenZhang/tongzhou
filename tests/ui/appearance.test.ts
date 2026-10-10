@@ -3,9 +3,11 @@ import { defaultAppearance, normalizeAppearance } from '../../src/shared/appeara
 import { projectFamilyId } from '../../src/shared/projects';
 import type { Project } from '../../src/shared/types';
 
-it('migrates an existing theme without inventing stored preferences', () => {
-  expect(normalizeAppearance(null, 'dark')).toEqual({ ...defaultAppearance, theme: 'dark' });
-  expect(normalizeAppearance({ style: 'sand', font: 'serif', textSize: 18 }, 'light')).toEqual({
+it('normalizes current preferences without inventing saved values', () => {
+  expect(normalizeAppearance(null)).toEqual(defaultAppearance);
+  expect(
+    normalizeAppearance({ theme: 'light', style: 'sand', font: 'serif', textSize: 18 }),
+  ).toEqual({
     style: 'sand',
     font: 'serif',
     textSize: 18,
@@ -14,10 +16,7 @@ it('migrates an existing theme without inventing stored preferences', () => {
 });
 it('rejects unsupported saved appearance values and keeps explicit system mode', () => {
   expect(
-    normalizeAppearance(
-      { theme: 'system', style: 'unknown', font: 'url(invalid)', textSize: 300 },
-      'dark',
-    ),
+    normalizeAppearance({ theme: 'system', style: 'unknown', font: 'url(invalid)', textSize: 300 }),
   ).toEqual(defaultAppearance);
   expect(normalizeAppearance('invalid')).toEqual(defaultAppearance);
 });

@@ -105,17 +105,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          if [ "$VERSION" = "0.1.0" ]; then
-            node scripts/replace-initial-release.mjs
-            exit 0
-          fi
           if gh release view "v$VERSION" >/dev/null 2>&1; then
             echo "Version already published. Bump package.json; releases are immutable."
             exit 1
           fi
           gh release create "v$VERSION" release-assets/* --target "$GITHUB_SHA" --title "同舟 v$VERSION" --notes-file docs/RELEASE_NOTES.md --draft
           gh release edit "v$VERSION" --draft=false --latest
-      - name: Retire the development preview after the first stable release is verified
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: node scripts/reset-initial-release.mjs

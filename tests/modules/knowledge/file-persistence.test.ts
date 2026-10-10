@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Knowledge } from '../../../electron/modules/knowledge/knowledge';
@@ -67,17 +67,13 @@ describe('filesystem is the document source of truth', () => {
     expect(restarted.get(doc.id).content).toBe('外部编辑的真实正文');
     expect(restarted.search('真实正文')[0].id).toBe(doc.id);
   });
-  it('migrates old documents, folders, revisions and original files, then restores solely from files', () => {
+  it('backs up and restores documents and revision history solely from current local files', () => {
     const f = fixture();
     const old = f.knowledge.save(input);
-    f.knowledge.documents.remove(old.id);
-    f.store.put('knowledge', old);
-    f.store.put('knowledgeRevision', { ...old, id: old.id + ':1', documentId: old.id });
+    const updated = f.knowledge.save({ ...old, content: '备份前的最新正文' });
     const k = new Knowledge(f.store, f.root);
-    expect(k.get(old.id)).toEqual(old);
+    expect(k.get(old.id)).toEqual(updated);
     expect(k.read(old.id).revisions).toHaveLength(1);
-    expect(f.store.list('knowledge')).toEqual([]);
-    expect(new Knowledge(f.store, f.root).all()).toHaveLength(1);
     const backup = new DataMaintenance(f.store, f.root).backup('test-password-123');
     const target = path.join(f.root, 'restored');
     mkdirSync(target);
@@ -89,23 +85,8 @@ describe('filesystem is the document source of truth', () => {
     });
     cleanup.push(() => restored.close());
     expect(restored.list('knowledge')).toEqual([]);
-    expect(new Knowledge(restored, target).get(old.id)).toEqual(old);
-  });
-  it('retains legacy rows on a partial migration so restarting can finish safely', () => {
-    const f = fixture();
-    const first = f.knowledge.save(input),
-      second = f.knowledge.save({ ...input, title: '第二篇' });
-    f.knowledge.documents.remove(second.id);
-    f.store.put('knowledge', first);
-    f.store.put('knowledge', second);
-    // A conflicting file must never be silently overwritten with an older DB row.
-    f.knowledge.documents.put({ ...first, content: '不同内容' });
-    expect(() => new Knowledge(f.store, f.root)).toThrow('迁移校验失败');
-    expect(f.store.list('knowledge')).toHaveLength(2);
-    f.knowledge.documents.put(first);
-    const migrated = new Knowledge(f.store, f.root);
-    expect(migrated.all()).toHaveLength(2);
-    expect(f.store.list('knowledge')).toEqual([]);
-    expect(existsSync(migrated.documents.file(second.id))).toBe(true);
+    const restoredKnowledge = new Knowledge(restored, target);
+    expect(restoredKnowledge.get(old.id)).toEqual(updated);
+    expect(restoredKnowledge.restore(old.id, 1, updated.version).content).toBe(old.content);
   });
 });

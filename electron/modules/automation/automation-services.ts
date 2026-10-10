@@ -208,7 +208,7 @@ export function registerAutomationServices(
     '标记当前版本就绪并触发内容自动化',
     [id, z.number().int().positive()],
     (v, version) => {
-      const doc = services.knowledge.assertUsable(id.parse(v));
+      const doc = services.knowledge.get(id.parse(v));
       if (doc.version !== version) throw new Error('文档已更新，请保存后重新标记');
       a.event('ready', doc.id);
     },

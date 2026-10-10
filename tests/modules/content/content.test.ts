@@ -41,16 +41,14 @@ function fixture() {
   return { root, store, knowledge, content, library, document, session, tools };
 }
 describe('generic content workspace', () => {
-  it('uses legacy disabled directories, descendants and unfiled content without a switch', async () => {
+  it('reads and updates files in directories, descendants and unfiled content', async () => {
     const f = fixture();
-    const root = f.knowledge.saveFolder({ name: '原关闭目录', libraryId: f.library.id });
+    const root = f.knowledge.saveFolder({ name: '根目录', libraryId: f.library.id });
     const child = f.knowledge.saveFolder({
       name: '子目录',
       libraryId: f.library.id,
       parentId: root.id,
     });
-    f.knowledge.directoryRecords.put({ ...root, usageEnabled: false });
-    f.knowledge.directoryRecords.put({ ...child, usageEnabled: false });
     const doc = f.content.write({
       libraryId: f.library.id,
       folderId: child.id,
@@ -58,7 +56,7 @@ describe('generic content workspace', () => {
       content: '正文',
     });
     const { scope } = f.tools();
-    expect(f.knowledge.usable(doc)).toBe(true);
+    expect(f.knowledge.get(doc.id)).toEqual(doc);
     expect((await scope.call('content_read', { id: doc.id })).isError).toBeFalsy();
     expect(
       (
@@ -77,12 +75,12 @@ describe('generic content workspace', () => {
     expect(listing.documents.some((d: any) => d.id === doc.id)).toBe(true);
     expect(listing.folders.find((d: any) => d.id === child.id)).not.toHaveProperty('usageEnabled');
     const unfiled = f.knowledge.moveWiki(doc.id, null, f.knowledge.get(doc.id).version);
-    expect(f.knowledge.usable(unfiled)).toBe(true);
+    expect(f.knowledge.get(doc.id)).toEqual(unfiled);
     expect((await scope.call('content_read', { id: doc.id })).isError).toBeFalsy();
-    expect(new Knowledge(f.store, f.root).usable(unfiled)).toBe(true);
+    expect(new Knowledge(f.store, f.root).get(doc.id)).toEqual(unfiled);
     f.knowledge.bind(f.session.id, [doc.id]);
     expect(f.knowledge.search('更新正文', f.session.id).some((d) => d.id === doc.id)).toBe(true);
-    f.knowledge.documents.put({ ...unfiled, status: 'archived' });
+    f.knowledge.documents.remove(doc.id);
     expect((await scope.call('content_read', { id: doc.id })).isError).toBe(true);
   });
   it('removes the directory permission API from client discovery', () => {

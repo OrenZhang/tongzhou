@@ -15,7 +15,6 @@ export const sessionsPlugin: Plugin.Object<void> = {
     'tzStore',
     'tzTasks',
     'tzChannels',
-    'tzFeishu',
     'tzDesktop',
     'tzEvents',
     'tzSessions',
@@ -26,7 +25,6 @@ export const sessionsPlugin: Plugin.Object<void> = {
     const store = ctx.tzStore;
     const tasks = ctx.tzTasks;
     const channels = ctx.tzChannels;
-    const feishu = ctx.tzFeishu;
     const { getWindow } = ctx.tzDesktop;
     register(
       'branchSession',
@@ -152,7 +150,6 @@ export const sessionsPlugin: Plugin.Object<void> = {
         idSchema.parse(id);
         await ctx.tzSessions.deleteSession(id);
         channels.abort(id);
-        feishu.sync();
       },
     );
     register(

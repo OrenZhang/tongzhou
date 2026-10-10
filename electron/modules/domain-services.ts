@@ -8,7 +8,7 @@ import type { Store } from '../services/storage/store';
 
 /** Persistence services shared by execution and management features. They own no task loops. */
 export function createDomainServices(store: Store, dataDir: string) {
-  const attachments = new Attachments(store, dataDir);
+  const attachments = new Attachments(dataDir);
   const artifacts = new Artifacts(store, dataDir);
   const memories = new TaskMemories(store);
   const knowledge = new Knowledge(store, dataDir);

@@ -48,9 +48,6 @@ export const channelSchema = z.object({
   domain: z.enum(['feishu', 'lark']).optional(),
   receiveId: z.string().max(150).optional(),
   receiveIdType: z.enum(['chat_id', 'open_id']).optional(),
-  inbound: z.boolean().optional(),
-  sessionId: idSchema.optional(),
-  allowedSenders: z.array(z.string().min(1).max(150)).max(50).optional(),
 });
 export const notificationRuleSchema = z.object({
   id: idSchema,
@@ -163,9 +160,6 @@ export class Channels {
       )
         throw new Error('请先扫码授权飞书应用');
       if (!c.receiveId) throw new Error('请填写通知收件人或群 ID');
-      if (c.inbound && (!c.sessionId || !c.allowedSenders?.length))
-        throw new Error('接收消息需要绑定会话和发送人白名单');
-      if (c.sessionId) this.store.get('session', c.sessionId);
       this.abort(c.id);
       this.store.put('channel', { ...c, status: old.status, checkedAt: old.checkedAt });
       this.changed();

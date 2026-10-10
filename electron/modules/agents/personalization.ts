@@ -52,7 +52,7 @@ export function readPersonalization(store: Store): Personalization {
 function candidates(knowledge: Pick<Knowledge, 'all'>): PreferenceCandidate[] {
   return knowledge
     .all()
-    .filter((d) => d.kind === 'memory' && d.status !== 'archived')
+    .filter((d) => d.kind === 'memory')
     .flatMap((d) =>
       (d.memoryEntries ?? [])
         .filter((e) => e.category === 'preference')
@@ -127,7 +127,7 @@ export function personalizationInstructions(
   knowledge: Pick<Knowledge, 'all'>,
 ): string {
   if (session.memoryJob || session.knowledgeJob || session.parentId) return '';
-  const external = ['botSession', 'botBinding', 'channel'].some((kind) =>
+  const external = ['botSession', 'botBinding'].some((kind) =>
     store.list<{ sessionId?: string }>(kind).some((item) => item.sessionId === session.id),
   );
   if (external) return '';

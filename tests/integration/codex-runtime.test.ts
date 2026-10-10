@@ -189,7 +189,7 @@ describe('editing unanswered messages', () => {
       createdAt: 0,
     });
     const { run, prompt } = unanswered(f, [{ content: '', status: 'error' }]);
-    const attachment = new Attachments(f.store, f.root).save({
+    const attachment = new Attachments(f.root).save({
       name: 'source.txt',
       mimeType: 'text/plain',
       data: Buffer.from('attachment evidence').toString('base64'),
@@ -564,7 +564,7 @@ describe('locked Codex resume and steer contracts', () => {
   });
   it('passes actual images into Codex turns and model handoffs', async () => {
     const f = await fixture();
-    const a = new Attachments(f.store, f.runtime.dataDir).save({
+    const a = new Attachments(f.runtime.dataDir).save({
       name: 'p.png',
       mimeType: 'image/png',
       data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==',
@@ -627,7 +627,7 @@ describe('locked Codex resume and steer contracts', () => {
   it('steers attachments into the active Codex turn and persists them on the supplement', async () => {
     fake.hold = true;
     const f = await fixture();
-    const a = new Attachments(f.store, f.runtime.dataDir).save({
+    const a = new Attachments(f.runtime.dataDir).save({
       name: 'notes.txt',
       mimeType: 'text/plain',
       data: Buffer.from('补充资料').toString('base64'),

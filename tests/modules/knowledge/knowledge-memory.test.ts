@@ -208,17 +208,10 @@ describe('daily memory consolidation', () => {
     expect(k.all()).toHaveLength(1);
     expect(existsSync(path.join(k.root, 'memories', old.memoryDate!, 'index.md'))).toBe(false);
   });
-  it('migrates old per-turn records without breaking source IDs, and backs up dated files', () => {
-    const { k, store, root, enqueue } = fixture();
-    const { session } = enqueue('old', '库存使用事务更新');
-    const legacy = k.save(
-      { title: '旧记忆', kind: 'memory', content: '库存使用事务更新' },
-      'automatic',
-      { sessionId: session.id, runId: 'legacy' },
-    );
+  it('preserves dated evidence and consolidated memory pages in encrypted backups', () => {
+    const { store, root, enqueue } = fixture();
+    enqueue('backup', '库存使用事务更新');
     const restarted = new Knowledge(store, root);
-    expect(restarted.get(legacy.id).kind).toBe('source');
-    expect(existsSync(path.join(k.root, 'memories', legacy.id + '.md'))).toBe(false);
     const work = restarted.memory.claim(true)!;
     restarted.memory.commit(work.job.id, {
       entries: [

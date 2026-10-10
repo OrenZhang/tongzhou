@@ -84,3 +84,18 @@ export interface AutomationState {
   rules: AutomationRule[];
   jobs: AutomationJobView[];
 }
+
+/** The single current baseline for the built-in memory rule. */
+export function defaultMemoryAutomation(): AutomationRule {
+  return {
+    id: MEMORY_AUTOMATION_ID,
+    version: 1,
+    name: '记忆整理',
+    kind: 'memory',
+    enabled: true,
+    trigger: 'idle',
+    permission: 'read-only',
+    missed: 'once',
+    createdAt: Date.now(),
+  };
+}

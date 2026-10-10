@@ -13,9 +13,9 @@ export const defaultAppearance: AppearancePreferences = {
   font: 'system',
   textSize: 14,
 };
-export function normalizeAppearance(raw: unknown, legacyTheme?: unknown): AppearancePreferences {
+export function normalizeAppearance(raw: unknown): AppearancePreferences {
   const value = raw && typeof raw === 'object' ? (raw as Partial<AppearancePreferences>) : {};
-  const theme = value.theme ?? legacyTheme;
+  const theme = value.theme;
   return {
     theme: theme === 'light' || theme === 'dark' ? theme : 'system',
     style: value.style === 'blue' || value.style === 'sand' ? value.style : 'graphite',

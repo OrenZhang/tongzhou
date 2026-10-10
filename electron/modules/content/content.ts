@@ -120,7 +120,6 @@ export class ContentWorkspace {
       .filter(
         (d) =>
           d.kind !== 'memory' &&
-          d.status !== 'archived' &&
           (d.libraryId ?? 'default') === libraryId &&
           (!sessionId || this.knowledge.accessible(d, sessionId)) &&
           `${d.title}\n${d.content}`.toLowerCase().includes(query.toLowerCase()),
@@ -139,7 +138,7 @@ export class ContentWorkspace {
   }
   document(id: string, sessionId?: string) {
     const doc = this.knowledge.get(id);
-    if (doc.kind === 'memory' || doc.status === 'archived') throw new Error('请选择可用的内容文档');
+    if (doc.kind === 'memory') throw new Error('请选择可用的内容文档');
     if (sessionId && !this.knowledge.accessible(doc, sessionId))
       throw new Error('文档不在当前内容范围');
     return doc;
@@ -290,7 +289,7 @@ export class ContentWorkspace {
         { name, description, parameters: z.toJSONSchema(schema) },
         description,
         async (args) => {
-          if (context) this.knowledge.assertUsable(context.documentId);
+          if (context) this.knowledge.get(context.documentId);
           const result = fn(schema.parse(args));
           if (writes) changed();
           return { text: JSON.stringify(result) };

@@ -1,12 +1,11 @@
-import {
-  FileRecords,
-  managedDirectory,
-  atomicWrite,
-  assertLocalPath,
-} from '../../services/storage/local-files';
+import { FileRecords, managedDirectory, atomicWrite } from '../../services/storage/local-files';
 import type { ContentLibrary } from '../../../src/shared/content';
 import { assertionInput, buildKnowledgeGraph } from './knowledge-graph';
-import { MEMORY_AUTOMATION_ID, type AutomationRule } from '../../../src/shared/automation';
+import {
+  MEMORY_AUTOMATION_ID,
+  defaultMemoryAutomation,
+  type AutomationRule,
+} from '../../../src/shared/automation';
 import { entityTypes, relationTypes } from '../../../src/shared/ontology';
 import { knowledgeLinks } from '../../../src/shared/knowledge-links';
 import { createHash, randomUUID } from 'node:crypto';
@@ -76,14 +75,6 @@ const summary = ({
   ...doc,
   excerpt: content.slice(0, 260),
 });
-const folder = (kind: KnowledgeDocument['kind']) =>
-  ({ source: 'sources', wiki: 'wiki', memory: 'memories' })[kind];
-// Legacy archives return to their previous review state, including restored revisions.
-const activeStatus = (doc: KnowledgeDocument) =>
-  doc.status === 'archived'
-    ? (doc.archivedStatus ??
-      (doc.origin === 'agent' || doc.origin === 'automatic' ? 'draft' : 'ready'))
-    : doc.status;
 const terms = (query: string) =>
   [
     ...new Set(
@@ -107,7 +98,7 @@ export class Knowledge {
     dataDir: string,
   ) {
     this.root = managedDirectory(dataDir, 'knowledge');
-    for (const dir of ['', 'sources', 'wiki', 'memories', 'revisions', 'files']) {
+    for (const dir of ['files']) {
       const target = path.join(this.root, dir);
       if (existsSync(target) && lstatSync(target).isSymbolicLink())
         throw new Error('知识目录不能使用符号链接');
@@ -126,47 +117,8 @@ export class Knowledge {
     this.directoryRecords = new FileRecords(path.join(this.root, 'directories'));
     this.libraries = new FileRecords(path.join(this.root, 'libraries'));
     this.revisions = new FileRecords(path.join(this.root, 'history'));
-    this.documents.migrate(store, 'knowledge');
-    this.directoryRecords.migrate(store, 'knowledgeFolder');
-    this.libraries.migrate(store, 'contentLibrary');
-    this.revisions.migrate(store, 'knowledgeRevision');
-    store.db.exec(
-      "DROP TABLE IF EXISTS knowledge_search; DELETE FROM metadata WHERE key='knowledge_index_v1'",
-    );
-    // Remove obsolete mirrors only after migration verified the authoritative files.
-    for (const doc of this.all()) {
-      const old = path.join(
-        this.root,
-        doc.memoryDate ? `memories/${doc.memoryDate}/index.md` : `${folder(doc.kind)}/${doc.id}.md`,
-      );
-      if (existsSync(old)) {
-        assertLocalPath(path.dirname(this.root), old);
-        unlinkSync(old);
-      }
-    }
-    for (const revision of this.revisions.list()) {
-      const old = path.join(
-        this.root,
-        'revisions',
-        `${revision.documentId}-${revision.version}.json`,
-      );
-      assertLocalPath(path.dirname(this.root), old);
-      if (existsSync(old)) unlinkSync(old);
-    }
-    for (const doc of this.all().filter((item) => item.status === 'archived')) {
-      this.persist(
-        {
-          ...doc,
-          status: activeStatus(doc),
-          archivedStatus: undefined,
-          version: doc.version + 1,
-          updatedAt: Date.now(),
-        },
-        doc,
-      );
-    }
     this.memory = new KnowledgeMemory(store, this);
-    this.memory.migrate();
+    this.memory.recover();
     this.refreshIndex();
   }
   settings(): KnowledgeSettings {
@@ -174,7 +126,7 @@ export class Knowledge {
       .list<AutomationRule>('automation')
       .find((r) => r.id === MEMORY_AUTOMATION_ID);
     if (task) return { autoCollect: task.enabled };
-    return { autoCollect: this.store.list<any>('knowledgeSettings')[0]?.autoCollect !== false };
+    return { autoCollect: true };
   }
   editMemory(docId: string, version: number, entryId: string, content: string | null) {
     const doc = this.get(docId);
@@ -208,7 +160,15 @@ export class Knowledge {
   }
   configure(value: KnowledgeSettings) {
     const settings = z.object({ autoCollect: z.boolean() }).parse(value);
-    this.store.put('knowledgeSettings', { id: 'default', ...settings });
+    const rule = this.store
+      .list<AutomationRule>('automation')
+      .find((r) => r.id === MEMORY_AUTOMATION_ID);
+    this.store.put('automation', {
+      ...defaultMemoryAutomation(),
+      ...rule,
+      enabled: settings.autoCollect,
+      version: (rule?.version ?? 0) + 1,
+    });
     return settings;
   }
   all() {
@@ -220,10 +180,7 @@ export class Knowledge {
     return this.documents.get(id.parse(docId));
   }
   folders() {
-    return this.directoryRecords
-      .list()
-      .map(({ usageEnabled: _legacyFlag, ...folder }) => folder)
-      .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
+    return this.directoryRecords.list().sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
   }
   saveFolder(raw: KnowledgeFolderInput) {
     const input = knowledgeFolderInput.parse(raw);
@@ -318,7 +275,7 @@ export class Knowledge {
     }
   }
   private writeIndex() {
-    const docs = this.all().filter((d) => d.status !== 'archived');
+    const docs = this.all();
     const folders = this.folders();
     this.write('folders.json', JSON.stringify(folders, null, 2));
     const lines = [
@@ -369,7 +326,6 @@ export class Knowledge {
       const previous = old?.sources.find((s) => s.id === sourceId && s.version);
       if (previous && !this.all().some((d) => d.id === sourceId)) return previous;
       const source = this.get(sourceId);
-      if (source.status === 'archived') throw new Error('不能引用归档资料');
       return { id: source.id, title: source.title, version: source.version };
     });
     const assertions = p.assertions ?? old?.assertions;
@@ -415,8 +371,7 @@ export class Knowledge {
         d.hash === contentHash &&
         (!deduplicateByFolder || (d.folderId ?? '') === (folderId ?? '')) &&
         d.projectId === projectId &&
-        (d.libraryId ?? 'default') === libraryId &&
-        d.status !== 'archived',
+        (d.libraryId ?? 'default') === libraryId,
     );
     if (duplicate) return duplicate;
     const text =
@@ -457,7 +412,7 @@ export class Knowledge {
   }
   read(docId: string) {
     const document = this.get(docId);
-    const docs = this.all().filter((d) => d.status !== 'archived');
+    const docs = this.all();
     const resolve = (target: string) => docs.filter((d) => d.id === target || d.title === target);
     return {
       document,
@@ -483,12 +438,11 @@ export class Knowledge {
       backlinks: this.all()
         .filter(
           (d) =>
-            d.status !== 'archived' &&
-            (d.sources.some((s) => s.id === docId) ||
-              knowledgeLinks(d.content).some((t) => {
-                const matches = resolve(t);
-                return matches.length === 1 && matches[0].id === docId;
-              })),
+            d.sources.some((s) => s.id === docId) ||
+            knowledgeLinks(d.content).some((t) => {
+              const matches = resolve(t);
+              return matches.length === 1 && matches[0].id === docId;
+            }),
         )
         .map(summary),
       outline: document.content.split('\n').flatMap((line, i) => {
@@ -505,8 +459,6 @@ export class Knowledge {
       {
         ...revision,
         id: docId,
-        status: activeStatus(revision),
-        archivedStatus: undefined,
         kind: current.kind,
         memoryDate: current.memoryDate,
         folderId:
@@ -573,10 +525,6 @@ export class Knowledge {
       if (doc.runId)
         this.store.put('knowledgeDismissal', { id: doc.runId, sessionId: doc.sessionId });
       if (doc.memoryDate) this.store.put('knowledgeMemoryDeletedDay', { id: doc.memoryDate });
-      for (const candidate of this.memory.candidates().filter((c) => c.legacyId === doc.id)) {
-        this.store.put('knowledgeCandidate', { ...candidate, status: 'done' });
-        this.store.put('knowledgeDismissal', { id: candidate.id, sessionId: candidate.sessionId });
-      }
       this.store.db.exec('COMMIT');
     } catch (error) {
       this.store.db.exec('ROLLBACK');
@@ -586,7 +534,6 @@ export class Knowledge {
   }
   pins(sessionId: string): string[] {
     // Only an explicit organize task may read its selected sources across scopes.
-    // Old conversation pins no longer affect discovery or inject any content.
     if (!this.store.get<Session>('session', sessionId).knowledgeJob) return [];
     return (
       this.store.list<any>('knowledgeBinding').find((b) => b.id === sessionId)?.documentIds ?? []
@@ -595,24 +542,15 @@ export class Knowledge {
   bind(sessionId: string, documentIds: string[]) {
     this.store.get('session', sessionId);
     const ids = z.array(id).max(20).parse(documentIds);
-    for (const docId of ids) this.assertUsable(docId);
+    for (const docId of ids) this.get(docId);
     this.store.put('knowledgeBinding', {
       id: sessionId,
       sessionId,
       documentIds: [...new Set(ids)],
     });
   }
-  usable(doc: Pick<KnowledgeDocument, 'status'>) {
-    return doc.status !== 'archived';
-  }
-  assertUsable(docId: string) {
-    const doc = this.get(docId);
-    if (!this.usable(doc)) throw new Error('文档已归档，请先恢复后使用');
-    return doc;
-  }
   accessible(doc: KnowledgeDocument, sessionId: string) {
     const session = this.store.get<Session>('session', sessionId);
-    if (!this.usable(doc)) return false;
     if (session.contentContext)
       return (
         doc.kind !== 'memory' && (doc.libraryId ?? 'default') === session.contentContext.libraryId
@@ -645,17 +583,9 @@ export class Knowledge {
       sources: [...new Map(entries.flatMap((e) => e.sources).map((s) => [s.id, s])).values()],
     };
   }
-  removeMemoryMirror(docId: string) {
-    id.parse(docId);
-    const target = path.join(this.root, 'memories', `${docId}.md`);
-    if (lstatSync(path.dirname(target)).isSymbolicLink())
-      throw new Error('知识目录不能使用符号链接');
-    if (existsSync(target)) unlinkSync(target);
-  }
   review(docId: string, version: number) {
     const doc = this.get(docId);
     if (doc.version !== version) throw new Error('资料已更新，请重新打开后核对');
-    if (doc.status === 'archived') throw new Error('请先恢复资料');
     if (doc.indexed === false) throw new Error('尚未提取正文，不能标记为已核对');
     for (const a of doc.assertions ?? []) {
       const evidence = a.sourceId ? this.get(a.sourceId).content : doc.content;
@@ -664,7 +594,7 @@ export class Knowledge {
     }
     const sources = doc.sources.map((source) => {
       if (!source.version) return source;
-      const current = this.all().find((d) => d.id === source.id && d.status !== 'archived');
+      const current = this.all().find((d) => d.id === source.id);
       if (!current) throw new Error('来源已删除或归档，请补充有效来源后再核对');
       return { ...source, version: current.version };
     });
@@ -698,7 +628,6 @@ export class Knowledge {
       .filter((d): d is KnowledgeDocument => !!d)
       .filter(
         (d) =>
-          d.status !== 'archived' &&
           (!sessionId || this.accessible(d, sessionId)) &&
           (d.memoryEntries || projectId === undefined || (d.projectId ?? '') === projectId),
       )
@@ -728,39 +657,33 @@ export class Knowledge {
     const docs = this.all();
     const folders = this.folders();
     const branch = folderId ? knowledgeFolderBranch(folders, folderId) : undefined;
-    const issues = docs
-      .filter((d) => d.status !== 'archived')
-      .flatMap((d) => {
-        const reasons = [];
-        if (d.kind === 'memory' && d.status === 'draft') reasons.push('每日记忆已整理，等待核对');
-        if (d.origin === 'agent' && d.status === 'draft') reasons.push('AI 整理待核对');
-        if (d.indexed === false) reasons.push('原文件尚未提取正文');
-        if (d.kind === 'wiki' && !d.sources.length) reasons.push('知识页尚未关联来源');
-        if (
-          d.sources.some(
-            (s) =>
-              s.sessionId &&
-              !this.store.list<Session>('session').some((session) => session.id === s.sessionId),
-          )
+    const issues = docs.flatMap((d) => {
+      const reasons = [];
+      if (d.kind === 'memory' && d.status === 'draft') reasons.push('每日记忆已整理，等待核对');
+      if (d.origin === 'agent' && d.status === 'draft') reasons.push('AI 整理待核对');
+      if (d.indexed === false) reasons.push('原文件尚未提取正文');
+      if (d.kind === 'wiki' && !d.sources.length) reasons.push('知识页尚未关联来源');
+      if (
+        d.sources.some(
+          (s) =>
+            s.sessionId &&
+            !this.store.list<Session>('session').some((session) => session.id === s.sessionId),
         )
-          reasons.push('来源会话已删除，保留的摘录需要复核');
-        if (
-          d.sources.some(
-            (s) =>
-              s.version &&
-              !docs.some(
-                (other) =>
-                  other.id === s.id && other.status !== 'archived' && other.version === s.version,
-              ),
-          )
+      )
+        reasons.push('来源会话已删除，保留的摘录需要复核');
+      if (
+        d.sources.some(
+          (s) =>
+            s.version && !docs.some((other) => other.id === s.id && other.version === s.version),
         )
-          reasons.push(
-            d.sources.some((s) => s.version && !docs.some((other) => other.id === s.id))
-              ? '来源已删除，需要复核'
-              : '来源已更新或归档，需要复核',
-          );
-        return reasons.map((reason) => ({ id: d.id, title: d.title, reason }));
-      });
+      )
+        reasons.push(
+          d.sources.some((s) => s.version && !docs.some((other) => other.id === s.id))
+            ? '来源已删除，需要复核'
+            : '来源已更新或归档，需要复核',
+        );
+      return reasons.map((reason) => ({ id: d.id, title: d.title, reason }));
+    });
     return {
       root: this.root,
       settings: this.settings(),
@@ -774,7 +697,7 @@ export class Knowledge {
         )
         .slice(0, 100),
       folders,
-      total: docs.filter((d) => d.status !== 'archived').length,
+      total: docs.length,
       issues,
       memoryQueue: this.memory.queueState(),
     };
@@ -795,10 +718,7 @@ export class Knowledge {
       if (
         d.sources.some(
           (s) =>
-            (s.version &&
-              !all.some(
-                (o) => o.id === s.id && o.version === s.version && o.status !== 'archived',
-              )) ||
+            (s.version && !all.some((o) => o.id === s.id && o.version === s.version)) ||
             (s.sessionId && !this.store.list<Session>('session').some((v) => v.id === s.sessionId)),
         )
       )
@@ -813,7 +733,6 @@ export class Knowledge {
     }
     const docs = projected.filter(
       (d) =>
-        d.status !== 'archived' &&
         (!sessionId || this.accessible(d, sessionId)) &&
         (d.memoryEntries || projectId === undefined || (d.projectId ?? '') === projectId),
     );
@@ -1065,9 +984,7 @@ export class Knowledge {
                 .join('\n\n'),
             ).slice(-60000);
             const fingerprint = hash(sessionId + content);
-            const existing = this.all().find(
-              (d) => d.hash === fingerprint && d.status !== 'archived',
-            );
+            const existing = this.all().find((d) => d.hash === fingerprint);
             const source =
               existing ??
               this.save(
