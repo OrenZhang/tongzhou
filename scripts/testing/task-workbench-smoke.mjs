@@ -146,10 +146,12 @@ if (process.env.TONGZHOU_PACKAGE_AUTO === '1' && !executablePath) {
   const candidates =
     process.platform === 'win32'
       ? ['release/win-unpacked/Tongzhou.exe']
-      : [
-          'release/mac-arm64/Tongzhou.app/Contents/MacOS/Tongzhou',
-          'release/mac/Tongzhou.app/Contents/MacOS/Tongzhou',
-        ];
+      : process.platform === 'linux'
+        ? ['release/linux-unpacked/tongzhou']
+        : [
+            'release/mac-arm64/Tongzhou.app/Contents/MacOS/Tongzhou',
+            'release/mac/Tongzhou.app/Contents/MacOS/Tongzhou',
+          ];
   for (const candidate of candidates) {
     try {
       await access(candidate);

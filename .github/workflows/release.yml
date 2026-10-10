@@ -46,12 +46,18 @@ jobs:
       - run: npm run build
       - name: Route smoke launches through Xvfb on Linux
         if: runner.os == 'Linux'
+        shell: bash
         run: echo "SMOKE_PREFIX=xvfb-run -a" >> "$GITHUB_ENV"
-      - run: $SMOKE_PREFIX npm run test:desktop
-      - run: $SMOKE_PREFIX npm run test:workspace-layout
-      - run: $SMOKE_PREFIX npm run test:knowledge
-      - run: $SMOKE_PREFIX node scripts/testing/project-deletion-smoke.mjs
-      - run: $SMOKE_PREFIX node scripts/testing/updates-smoke.mjs
+      - shell: bash
+        run: $SMOKE_PREFIX npm run test:desktop
+      - shell: bash
+        run: $SMOKE_PREFIX npm run test:workspace-layout
+      - shell: bash
+        run: $SMOKE_PREFIX npm run test:knowledge
+      - shell: bash
+        run: $SMOKE_PREFIX node scripts/testing/project-deletion-smoke.mjs
+      - shell: bash
+        run: $SMOKE_PREFIX node scripts/testing/updates-smoke.mjs
       - name: Package and optionally sign
         run: node scripts/package-release.mjs
         env:
@@ -61,10 +67,12 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      - run: $SMOKE_PREFIX npm run test:package
+      - shell: bash
+        run: $SMOKE_PREFIX npm run test:package
         env:
           TONGZHOU_PACKAGE_AUTO: '1'
-      - run: $SMOKE_PREFIX npm run test:task-workbench
+      - shell: bash
+        run: $SMOKE_PREFIX npm run test:task-workbench
         env:
           TONGZHOU_PACKAGE_AUTO: '1'
       - run: node scripts/release-checksums.mjs
