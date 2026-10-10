@@ -143,6 +143,7 @@ try {
   assert.equal(await page.locator('.artifact-strip .artifact-card').count(), 2);
   await page.screenshot({ path: path.join(root, 'chat-file-links.png'), animations: 'disabled' });
   assert.equal(await page.locator('.workspace-navigation').count(), 0);
+  await page.locator('.sidebar-bottom [data-nav-expand]').click();
   for (const name of ['Agent', '智库', '插件', '运行记录', '定时任务', '设置'])
     assert.equal(
       await page.locator('.sidebar-bottom').getByRole('button', { name, exact: true }).count(),
