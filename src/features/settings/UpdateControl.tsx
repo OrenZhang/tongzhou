@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowDownToLine, LoaderCircle, RefreshCw } from 'lucide-react';
+import { CircleArrowDown, LoaderCircle, RefreshCw } from 'lucide-react';
 import type { UpdateState } from '../../shared/updates';
 import type { TongzhouAPI } from '../../shared/types';
 import { errorMessage } from '../../lib/feedback';
@@ -52,9 +52,10 @@ export function UpdateControl({ api, settings = false }: { api: TongzhouAPI; set
           aria-label={label}
           title={error || state.message || label}
           disabled={working}
+          aria-busy={working}
           onClick={() => void install()}
         >
-          {working ? <LoaderCircle size={16} className="spin" /> : <ArrowDownToLine size={16} />}
+          {working ? <LoaderCircle size={20} className="spin" /> : <CircleArrowDown size={20} />}
         </button>
         {error && (
           <div className="update-error" role="alert">

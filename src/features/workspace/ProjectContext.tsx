@@ -19,6 +19,7 @@ import type { Project, TongzhouAPI } from '../../shared/types';
 import { diffLines, type ChangeScope } from '../../shared/project-context';
 import { highlight } from '../../components/markdown/highlight';
 import { Markdown } from '../../components/markdown/RichMarkdown';
+import { HtmlPreview } from '../../components/markdown/HtmlPreview';
 import { WorkspaceFileContext } from './WorkspaceFileContext';
 import './project-context.css';
 
@@ -239,7 +240,8 @@ export function ProjectContext({
     saved.previewMode === 'source' || line > 0 ? 'source' : 'preview',
   );
   const isMarkdown = languageFor(selected) === 'markdown';
-  const documentPreview = isMarkdown && previewMode === 'preview';
+  const isHtml = /\.html?$/i.test(selected);
+  const documentPreview = (isMarkdown || isHtml) && previewMode === 'preview';
   const [handledRequest, setHandledRequest] = useState(saved.handledRequest ?? 0);
   useEffect(() => {
     if (!fileRequest || fileRequest.key === handledRequest) return;
@@ -538,7 +540,7 @@ export function ProjectContext({
                 {line ? ` · 已选第 ${line} 行` : ''}
               </span>
               <div className="project-preview-actions">
-                {isMarkdown && (
+                {(isMarkdown || isHtml) && (
                   <div className="project-preview-modes" role="tablist" aria-label="文件显示方式">
                     {(['preview', 'source'] as const).map((mode) => (
                       <button
@@ -564,7 +566,9 @@ export function ProjectContext({
             </div>
             <Feedback error={source.error} loading={source.loading} />
             {source.value !== undefined &&
-              (documentPreview ? (
+              (documentPreview && isHtml ? (
+                <HtmlPreview key={selected} text={source.value} />
+              ) : documentPreview ? (
                 <section className="project-document" aria-label="Markdown 预览">
                   <WorkspaceFileContext.Provider
                     value={{ root: project.path, file: selected, open: openFile }}

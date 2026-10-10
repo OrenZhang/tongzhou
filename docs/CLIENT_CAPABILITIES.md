@@ -24,9 +24,9 @@ register(
 - change：修改配置或产生外部作用，使用当前会话权限和审批。参数在调用前经注册的 Zod Schema 校验；优先复用业务模块导出的 Schema。
 - manual：凭据输入、权限提升、审批等必须由本人完成的操作。使用 manual(module, description, view, reason, schemas) 声明；工具目录提供原因和真实页面入口，不能通过 change 绕过。
 
-当前路由：providers 为模型与订阅；connections 为设置下的独立连接中心；extensions 为插件；workspace、agents、activity、settings 保留各自含义。新增模块名可自由使用，不需要扩充模块枚举。
+当前路由：providers 为模型与订阅；connections 为资源与工具中的「渠道」，包含内置平台、机器人和通知连接；network 为设置中的网络配置；extensions 为插件；workspace、agents、activity、settings 保留各自含义。新增模块名可自由使用，不需要扩充模块枚举。
 
-不得将口令、令牌、Cookie 放进聊天参数。模型只取得能力与认证状态，实际凭据由业务处理器从主进程加密存储取用。设备码和认证 URL 不返回给客户端管理工具；浏览器只返回窗口和登录态是否存在，不导出 Cookie。Cookie 存在不代表登录有效。
+不得将口令、令牌、Cookie 放进聊天参数。模型只取得能力与认证状态，实际凭据由业务处理器从主进程加密存储取用。设备码和认证 URL 不返回给客户端管理工具。
 
 ## 发现和执行
 
@@ -35,7 +35,7 @@ register(
 3. client_query({method: 'listBookmarks', args: []}) 执行查询。写操作使用 client_change。
 4. clientMethods 是供界面使用的完整目录。错误的方法名或模块名会明确报错并返回真实注册能力，避免模型将空列表误判为整个客户端不可操作。
 
-原生引擎可能把不定类型数组限制为字符串数组。此时优先使用 `argsJson`，将整个位置参数数组编码成 JSON 字符串，例如 `client_change({method: 'saveConnector', argsJson: JSON.stringify([{id: 'local-test', name: '本地测试', kind: 'browser', enabled: true, baseUrl: 'http://127.0.0.1:3000'}])})`。`args` 与 `argsJson` 必须且只能提供一种；解码后继续执行相同的凭据检查、参数验证与权限检查。
+原生引擎可能把不定类型数组限制为字符串数组。此时优先使用 `argsJson`，将整个位置参数数组编码成 JSON 字符串，例如 `client_change({method: 'restartBot', argsJson: JSON.stringify(['existing-bot-id'])})`。`args` 与 `argsJson` 必须且只能提供一种；解码后继续执行相同的凭据检查、参数验证与权限检查。
 
 管理开关在调用前及批准后重新检查。注册名重复时拒绝启动该注册，避免覆盖其他模块。只读会话没有 client_change；manual 操作即使在完全开放模式也不会变成可调用操作。当前轮次不能通过管理工具递归启动、取消或删除自身，应使用会话控件。
 

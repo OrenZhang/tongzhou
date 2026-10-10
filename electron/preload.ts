@@ -58,11 +58,6 @@ const api: TongzhouAPI = {
   knowledgeOrganize: (...args) => call('knowledgeOrganize', ...args),
 
   diagnoseProvider: (...args) => call('diagnoseProvider', ...args),
-  browserDownloads: (...args) => call('browserDownloads', ...args),
-  browserSnapshot: (...args) => call('browserSnapshot', ...args),
-  browserAction: (...args) => call('browserAction', ...args),
-  browserNavigate: (...args) => call('browserNavigate', ...args),
-  browserPress: (...args) => call('browserPress', ...args),
 
   taskState: (...args) => call('taskState', ...args),
   searchMessages: (...args) => call('searchMessages', ...args),
@@ -127,8 +122,6 @@ const api: TongzhouAPI = {
   testConnector: (id) => call('testConnector', id),
   loginConnector: (id) => call('loginConnector', id),
   cancelConnectorLogin: (id) => call('cancelConnectorLogin', id),
-  openBrowserProfile: (id) => call('openBrowserProfile', id),
-  clearBrowserProfile: (id) => call('clearBrowserProfile', id),
   saveChannel: (c) => call('saveChannel', c),
   testEmail: (id) => call('testEmail', id),
   deleteChannel: (id) => call('deleteChannel', id),

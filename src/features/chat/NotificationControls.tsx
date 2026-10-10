@@ -187,12 +187,12 @@ export function SessionNotification({
           <div className="modal-content connection-form">
             <p>
               {run ? '当前轮次结束时提醒一次。' : '下一轮结束时提醒一次。'}
-              持续提醒和条件筛选可在连接中心的通知规则中配置。
+              持续提醒和条件筛选可在渠道的通知规则中配置。
             </p>
             <label>
               通知目标
               <select value={channelId} onChange={(e) => setChannelId(e.target.value)}>
-                {!channels.length && <option value="">请先在连接中心添加通知目标</option>}
+                {!channels.length && <option value="">请先在渠道中添加通知目标</option>}
                 {channels.map((c) => (
                   <option value={c.id} key={c.id}>
                     {c.name}

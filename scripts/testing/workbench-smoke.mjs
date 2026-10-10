@@ -56,9 +56,9 @@ try {
     window.blur();
   });
   const nav = async (label) => {
-    if (label === '连接中心') {
+    if (label === '渠道') {
       await page.locator('.sidebar').getByRole('button', { name: '设置', exact: true }).click();
-      await page.getByRole('button', { name: '打开连接中心', exact: true }).click();
+      await page.getByRole('button', { name: '打开渠道', exact: true }).click();
     } else await page.locator('.sidebar').getByRole('button', { name: label, exact: true }).click();
   };
   const capture = async (name) => {
@@ -206,10 +206,10 @@ try {
     'unarchived sessions have no delete entry and reject direct deletion',
     'archived deletion names the target, supports cancellation and refuses restored sessions',
   );
-  await nav('连接中心');
-  await page.getByRole('button', { name: '渠道通知', exact: true }).click();
+  await nav('渠道');
+  await page.getByRole('button', { name: '添加邮件渠道', exact: true }).click();
   assert.equal(await page.getByRole('button', { name: '飞书扫码接入', exact: true }).count(), 0);
-  await page.getByRole('button', { name: '添加 邮件', exact: true }).click();
+  await page.getByRole('button', { name: '连接邮件', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('名称', { exact: true }).fill('开发测试邮件');
   await dialog.getByLabel('SMTP 服务器', { exact: true }).fill('smtp.example.invalid');
@@ -233,6 +233,8 @@ try {
   });
   assert.deepEqual(channel.smtp.to, ['two@example.com']);
   assert.ok(!JSON.stringify(channel).includes('fixture-only-secret'));
+  await page.getByRole('button', { name: /^邮件通知/ }).click();
+  await page.getByRole('button', { name: '通知规则', exact: true }).click();
   await page.getByRole('button', { name: '添加通知规则', exact: true }).click();
   await dialog.getByLabel('轮次结束', { exact: true }).check();
   await dialog.getByLabel('只发送一次', { exact: true }).check();
@@ -247,17 +249,31 @@ try {
   assert.equal(
     await page
       .locator('.connection-tabs')
-      .getByRole('button', { name: '机器人', exact: true })
+      .getByRole('button', { name: '渠道', exact: true })
       .count(),
     0,
   );
-  await nav('机器人');
-  await page.getByRole('heading', { name: '机器人', exact: true }).waitFor();
+  await nav('渠道');
+  await page.getByRole('heading', { name: '渠道', exact: true }).waitFor();
   const botMethods = (await page.evaluate(() => window.tongzhou.clientMethods())).methods;
-  assert.equal(botMethods.find((m) => m.name === 'onboardBot').view, 'bots');
+  assert.equal(botMethods.find((m) => m.name === 'onboardBot').view, 'connections');
+  const removedBrowserMethods = [
+    'browserProfileStatus',
+    'openBrowserProfile',
+    'clearBrowserProfile',
+    'browserDownloads',
+    'browserSnapshot',
+    'browserAction',
+    'browserNavigate',
+    'browserPress',
+  ];
+  assert.ok(!botMethods.some((method) => removedBrowserMethods.includes(method.name)));
+  assert.ok(botMethods.some((method) => method.name === 'saveConnector'));
+  assert.ok(botMethods.some((method) => method.name === 'sendChannel'));
+  await page.getByRole('button', { name: '添加飞书渠道', exact: true }).click();
   assert.ok(botMethods.some((m) => m.name === 'cancelBotLogin'));
   assert.equal(await page.getByRole('button', { name: '飞书扫码接入', exact: true }).count(), 0);
-  await page.getByRole('button', { name: '飞书机器人', exact: true }).click();
+  await page.getByRole('button', { name: '连接飞书', exact: true }).click();
   await dialog.getByRole('button', { name: /扫码接入/ }).waitFor();
   await capture('feishu-methods');
   await dialog.getByRole('button', { name: /手动配置/ }).click();
@@ -283,7 +299,7 @@ try {
       globalThis.feishuSmoke.cancelled = id;
     });
   });
-  await page.getByRole('button', { name: '飞书机器人', exact: true }).click();
+  await page.getByRole('button', { name: '连接飞书', exact: true }).click();
   await dialog.getByRole('button', { name: /扫码接入/ }).click();
   await dialog.getByRole('alert').filter({ hasText: '合成网络异常' }).waitFor();
   await dialog.getByRole('button', { name: /扫码接入/ }).click();
@@ -293,7 +309,8 @@ try {
   checks.push(
     'Feishu QR and manual setup are inside Add Feishu Bot; inline error/retry and QR cancellation work without contacting Feishu',
   );
-  await page.getByRole('button', { name: '企业微信机器人', exact: true }).click();
+  await page.getByRole('button', { name: '添加企业微信渠道', exact: true }).click();
+  await page.getByRole('button', { name: '连接企业微信', exact: true }).click();
   await dialog.getByRole('button', { name: /扫码接入/ }).click();
   await dialog.getByAltText('企业微信机器人授权二维码').waitFor();
   assert.equal(await app.evaluate(() => globalThis.feishuSmoke.kind), 'wecom');
@@ -309,7 +326,7 @@ try {
   await dialog.getByLabel('应用密钥（留空保留）', { exact: true }).fill('fixture-bot-secret');
   await dialog.getByLabel('允许用户 ID', { exact: true }).fill('');
   await capture('bot-editor');
-  await dialog.getByRole('button', { name: '保存机器人', exact: true }).click();
+  await dialog.getByRole('button', { name: '保存渠道', exact: true }).click();
   await dialog.waitFor({ state: 'hidden' });
   const bot = await page.evaluate(async () => (await window.tongzhou.snapshot()).bots[0]);
   assert.equal('enabled' in bot, false);
@@ -320,21 +337,15 @@ try {
   await page.getByRole('button', { name: /^内置插件/ }).click();
   await page.getByLabel('类型', { exact: true }).selectOption('app');
   await page.getByLabel('搜索插件', { exact: true }).fill('机器人');
-  await page.getByRole('button', { name: '打开机器人', exact: true }).click();
-  await page.getByRole('heading', { name: '机器人', exact: true }).waitFor();
-  await page.getByText('企微测试机器人', { exact: true }).waitFor();
+  await page.getByRole('button', { name: '打开渠道', exact: true }).click();
+  await page.getByRole('heading', { name: '渠道', exact: true }).waitFor();
+  await page.getByRole('heading', { name: '企微测试机器人', exact: true }).waitFor();
   assert.equal(await page.locator('.connection-tabs').count(), 0);
   await capture('bots-standalone');
   checks.push('standalone bots navigation, built-in application entry and persisted configuration');
-  await nav('连接中心');
-  await page.getByRole('button', { name: '服务与浏览器', exact: true }).click();
-  assert.equal(await page.getByRole('button', { name: '添加 GitHub', exact: true }).count(), 0);
-  assert.equal(await page.getByRole('button', { name: '添加 GitLab', exact: true }).count(), 0);
-  await page.getByRole('button', { name: '添加浏览器账号', exact: true }).click();
-  await dialog.getByLabel('名称', { exact: true }).fill('浏览器测试账号');
-  await dialog.getByLabel('站点地址', { exact: true }).fill('https://example.test');
-  await dialog.getByRole('button', { name: '保存', exact: true }).click();
-  await dialog.waitFor({ state: 'hidden' });
+  await nav('渠道');
+  await page.locator('.sidebar').getByRole('button', { name: '设置', exact: true }).click();
+  assert.equal(await page.getByRole('button', { name: '管理浏览器账号', exact: true }).count(), 0);
   // Legacy account fixtures remain usable from plugin Token mode after the old UI is removed.
   await page.evaluate(() =>
     window.tongzhou.saveConnector({
@@ -613,22 +624,13 @@ try {
       await page.getByRole('button', { name: '返回会话', exact: true }).click();
       await page.locator(`[data-session-id="${sessions[0].id}"]`).click();
       await capture(`${width}-${theme}-chat`);
-      await nav('连接中心');
-      for (const label of ['服务与浏览器', '渠道通知', '机器人']) {
-        await page.getByRole('button', { name: label, exact: true }).click();
+      await nav('渠道');
+      for (const label of ['开发测试邮件', '企微测试机器人']) {
+        await nav('渠道');
+        await page.locator('.channel-list-item').filter({ hasText: label }).click();
         await capture(`${width}-${theme}-${label}`);
         if (theme === 'dark') {
-          const button =
-            label === '服务与浏览器'
-              ? page
-                  .locator('.service-connections')
-                  .getByRole('button', { name: '管理', exact: true })
-              : label === '渠道通知'
-                ? page
-                    .locator('.channel-connections')
-                    .getByRole('button', { name: '管理', exact: true })
-                : page.getByRole('button', { name: '管理机器人', exact: true });
-          await button.click();
+          await page.getByRole('button', { name: '管理授权', exact: true }).click();
           const background = await page
             .getByRole('dialog')
             .locator('.connection-form')

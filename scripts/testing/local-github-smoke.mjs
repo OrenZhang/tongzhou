@@ -438,16 +438,9 @@ try {
   assert.ok(persisted.plugins.find((p) => p.id === plugin.id).hasSecret);
   assert.ok(!JSON.stringify(persisted).includes('fixture-local-github-token'));
   await page.locator('.sidebar').getByRole('button', { name: '设置', exact: true }).click();
-  await page.getByRole('button', { name: '打开连接中心', exact: true }).click();
-  await page.getByRole('button', { name: '服务与浏览器', exact: true }).click();
-  assert.equal(await page.getByRole('button', { name: '添加 GitHub', exact: true }).count(), 0);
-  assert.equal(await page.getByRole('button', { name: '添加 GitLab', exact: true }).count(), 0);
-  assert.equal(await page.locator('.service-connections .provider-card').count(), 0);
-  await page.getByRole('button', { name: '添加浏览器账号', exact: true }).click();
-  await page
-    .getByRole('dialog')
-    .getByRole('heading', { name: '配置浏览器账号', exact: true })
-    .waitFor();
+  await page.getByRole('button', { name: '打开渠道', exact: true }).click();
+  await page.locator('.sidebar').getByRole('button', { name: '设置', exact: true }).click();
+  assert.equal(await page.getByRole('button', { name: '管理浏览器账号', exact: true }).count(), 0);
   assert.ok(
     (await page.evaluate(() => window.tongzhou.snapshot())).connectors.some(
       (c) => c.kind === 'github',

@@ -10,7 +10,7 @@ import { serviceFetch } from '../network/service-network';
 export const connectorSchema = z.object({
   id: idSchema,
   name: z.string().trim().min(1).max(100),
-  kind: z.enum(['github', 'gitlab', 'browser']),
+  kind: z.enum(['github', 'gitlab']),
   enabled: z.boolean(),
   baseUrl: z.string().url().max(2000),
   clientId: z.string().max(200).optional(),
@@ -23,17 +23,6 @@ export function serviceUrl(value: string) {
     throw new Error('连接地址必须是无凭据的 HTTPS 地址');
   return url;
 }
-export function browserUrl(value: string) {
-  const url = new URL(value);
-  if (
-    url.protocol === 'http:' &&
-    ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) &&
-    !url.username &&
-    !url.password
-  )
-    return url;
-  return serviceUrl(value);
-}
 export class Connectors {
   private pending = new Map<string, AbortController>();
   constructor(
@@ -43,13 +32,13 @@ export class Connectors {
   list(): Connector[] {
     return this.store
       .list<Connector>('connector')
+      .filter((c) => c.kind === 'github' || c.kind === 'gitlab')
       .map((c) => ({ ...c, hasSecret: this.store.hasSecret('connector_' + c.id) }));
   }
   save(raw: unknown) {
     const { secret, clearSecret, ...config } = connectorSchema.parse(raw);
-    const url = config.kind === 'browser' ? browserUrl(config.baseUrl) : serviceUrl(config.baseUrl);
-    if (config.kind !== 'browser' && (url.pathname !== '/' || url.search || url.hash))
-      throw new Error('服务地址只填写站点根地址');
+    const url = serviceUrl(config.baseUrl);
+    if (url.pathname !== '/' || url.search || url.hash) throw new Error('服务地址只填写站点根地址');
     const old = this.list().find((c) => c.id === config.id);
     this.cancel(config.id);
     if (
@@ -102,8 +91,6 @@ export class Connectors {
   async test(id: string, token?: string, signal = AbortSignal.timeout(20000)) {
     const c = this.store.get<Connector>('connector', id);
     if (!c.enabled) throw new Error('连接器已停用');
-    if (c.kind === 'browser')
-      throw new Error('浏览器登录态请在独立窗口中检查；Cookie 存在不代表账号已认证');
     let secret = token ?? this.store.secret('connector_' + id);
     if (!secret) throw new Error('请先授权或保存访问令牌');
     const root = serviceUrl(c.baseUrl);

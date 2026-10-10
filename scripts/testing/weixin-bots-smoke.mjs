@@ -172,12 +172,12 @@ try {
     });
   let session;
   if (!live) session = await page.evaluate(() => window.tongzhou.createSession());
-  await page.locator('.sidebar').getByRole('button', { name: '机器人', exact: true }).click();
+  await page.locator('.sidebar').getByRole('button', { name: '渠道', exact: true }).click();
   await app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()[0].setContentSize(1440, 940),
   );
   await page.screenshot({ path: 'test-results/bots-empty-redesign.png' });
-  await page.getByRole('button', { name: '微信 ClawBot机器人', exact: true }).click();
+  await page.getByRole('button', { name: '连接微信', exact: true }).click();
   const dialog = page.getByRole('dialog');
   assert.equal(await dialog.getByRole('button', { name: /手动配置/ }).count(), 0);
   await dialog.getByRole('button', { name: /扫码接入/ }).click();
@@ -202,7 +202,7 @@ try {
     await dialog.getByRole('status').filter({ hasText: '验证码不匹配' }).waitFor();
     await dialog.getByLabel('微信验证码', { exact: true }).fill('123456');
     await dialog.getByRole('button', { name: '确认验证码', exact: true }).click();
-    await dialog.getByRole('button', { name: '配置机器人', exact: true }).click();
+    await dialog.getByRole('button', { name: '配置渠道', exact: true }).click();
     let bot = await page.evaluate(async () =>
       (await window.tongzhou.snapshot()).bots.find((b) => b.kind === 'weixin'),
     );
@@ -226,6 +226,7 @@ try {
       ),
     );
     await dialog.getByRole('button', { name: '取消', exact: true }).click();
+    await page.locator('.channel-list-item').filter({ hasText: '微信 ClawBot渠道' }).click();
     await app.evaluate(() => {
       const m = {
         message_id: '9007199254740993',
@@ -261,7 +262,13 @@ try {
         contextChars: 0,
       });
     }, `http://127.0.0.1:${server.address().port}`);
+    await page.getByRole('button', { name: '机器人通用设置', exact: true }).click();
     await page.getByLabel('机器人模型连接', { exact: true }).selectOption('fixture');
+    await page.getByLabel('机器人执行模式', { exact: true }).selectOption('read-only');
+    await page.getByRole('button', { name: '保存设置', exact: true }).click();
+    await page.waitForFunction(
+      async () => (await window.tongzhou.snapshot()).botSettings.permission === 'read-only',
+    );
     await page.getByLabel('机器人执行模式', { exact: true }).selectOption('full-access');
     await page.getByRole('button', { name: '保存设置', exact: true }).click();
     await page.getByText('已保存，下次消息生效', { exact: true }).waitFor();
@@ -468,17 +475,22 @@ try {
     );
     assert.ok(routerStep >= 3);
     assert.deepEqual(failures, []);
+    await page
+      .getByRole('dialog', { name: '机器人通用设置', exact: true })
+      .locator('.modal-heading')
+      .getByRole('button', { name: '关闭', exact: true })
+      .click();
     await app.evaluate(() => {
       globalThis.weixinSmoke.expired = true;
     });
     await page.getByText('微信登录已失效，请重新扫码连接', { exact: true }).waitFor();
-    await page.getByLabel('更多操作：微信 ClawBot机器人', { exact: true }).click();
     await page.getByRole('button', { name: '重新扫码', exact: true }).click();
+    await dialog.getByRole('button', { name: /扫码接入/ }).click();
     await dialog.getByAltText('微信 ClawBot机器人授权二维码').waitFor();
     await app.evaluate(() => {
       globalThis.weixinSmoke.phase = 'confirmed';
     });
-    await dialog.getByRole('button', { name: '配置机器人', exact: true }).waitFor();
+    await dialog.getByRole('button', { name: '配置渠道', exact: true }).waitFor();
     const bots = (await page.evaluate(() => window.tongzhou.snapshot())).bots;
     assert.equal(bots.length, 1);
     assert.equal(bots[0].id, bot.id);

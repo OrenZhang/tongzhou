@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react';
-import { SlidersHorizontal } from 'lucide-react';
 import type { BotSettings, Snapshot, TongzhouAPI } from '../../shared/types';
 
 export function BotSettingsPanel({
   data,
   api,
   refresh,
+  onClose,
 }: {
   data: Snapshot;
   api: TongzhouAPI;
   refresh: () => Promise<void>;
+  onClose: () => void;
 }) {
   const saved = data.botSettings ?? {
     providerId: '',
@@ -27,12 +28,7 @@ export function BotSettingsPanel({
   const provider = providers.find((p) => p.id === draft.providerId);
   const changed = JSON.stringify(saved) !== JSON.stringify(draft);
   return (
-    <aside className="bot-settings-panel" aria-label="机器人通用设置">
-      <div className="bot-settings-title">
-        <SlidersHorizontal size={16} />
-        <h2>通用设置</h2>
-      </div>
-      <p>所有连接共用，直接用自然语言聊天。</p>
+    <div className="bot-settings-panel modal-content">
       <form
         onSubmit={async (event) => {
           event.preventDefault();
@@ -135,23 +131,23 @@ export function BotSettingsPanel({
           </label>
         )}
         <p className="bot-settings-hint">修改设置会停止正在处理的机器人任务。</p>
-        <button
-          className="primary"
-          disabled={busy || !draft.providerId || !draft.model || !changed}
-        >
-          {busy ? '保存中…' : '保存设置'}
-        </button>
+        <div className="bot-settings-actions">
+          <button type="button" onClick={onClose}>
+            关闭
+          </button>
+          <button
+            className="primary"
+            disabled={busy || !draft.providerId || !draft.model || !changed}
+          >
+            {busy ? '保存中…' : '保存设置'}
+          </button>
+        </div>
         {notice && (
           <p role="status" className="bot-settings-hint">
             {notice}
           </p>
         )}
       </form>
-      <div className="bot-settings-example">
-        <span>试着说</span>
-        <p>{draft.mode === 'chat' ? '“帮我解释这个概念”' : '“看看昨天的会话进展”'}</p>
-        <p>{draft.mode === 'chat' ? '“润色一下这段话”' : '“继续处理刚才的文档”'}</p>
-      </div>
-    </aside>
+    </div>
   );
 }

@@ -224,14 +224,14 @@ try {
     w.setContentSize(1150, 950);
   });
   assert.equal(
-    await page.locator('.sidebar').getByRole('button', { name: '连接中心', exact: true }).count(),
+    await page.locator('.sidebar').getByRole('button', { name: '渠道', exact: true }).count(),
     0,
   );
   await openModels(page);
-  assert.equal(await page.getByRole('button', { name: '服务与浏览器', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: '浏览器账号', exact: true }).count(), 0);
   await page.locator('.sidebar').getByRole('button', { name: '设置', exact: true }).click();
-  await page.getByRole('button', { name: '打开连接中心', exact: true }).click();
-  await page.getByRole('heading', { name: '连接中心', exact: true }).waitFor();
+  await page.getByRole('button', { name: '打开渠道', exact: true }).click();
+  await page.getByRole('heading', { name: '渠道', exact: true }).waitFor();
   assert.equal(await page.getByRole('button', { name: '添加连接', exact: true }).count(), 0);
   assert.equal(await page.locator('.sidebar-bottom .active').innerText(), '设置');
   await page.getByRole('button', { name: '返回设置', exact: true }).click();

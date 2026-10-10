@@ -18,6 +18,7 @@ import type { ContentState } from '../../shared/content';
 import { knowledgeFolderPath } from '../../shared/knowledge';
 import './artifacts.css';
 import { FileLink } from '../../components/files/FileLink';
+import { HtmlPreview } from '../../components/markdown/HtmlPreview';
 
 const sizeLabel = (size?: number) =>
   size === undefined
@@ -371,7 +372,11 @@ export function ArtifactDetail({
               {preview?.type === 'image' ? (
                 <img src={preview.content} alt={item.name} />
               ) : preview?.type === 'text' ? (
-                <pre>{preview.content}</pre>
+                item.mimeType === 'text/html' || /\.html?$/i.test(item.name) ? (
+                  <HtmlPreview text={preview.content ?? ''} />
+                ) : (
+                  <pre>{preview.content}</pre>
+                )
               ) : (
                 <div className="artifact-empty">
                   <FileText size={38} />

@@ -17,6 +17,7 @@ export function runtimeSnapshot(store: Store, approvals: Approval[]): Snapshot {
     bots: store.list<any>('bot').map((b) => publicBot(store, b)),
     connectors: store
       .list<any>('connector')
+      .filter((c) => c.kind === 'github' || c.kind === 'gitlab')
       .map((c) => ({ ...c, hasSecret: store.hasSecret('connector_' + c.id) })),
     channels: store.list('channel'),
     channelAuth: store.list('channelAuth'),

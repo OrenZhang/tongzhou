@@ -157,6 +157,8 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
+      "shortcutName": "同舟",
+      "uninstallDisplayName": "同舟 ${version}",
       "createDesktopShortcut": true
     },
     "mac": {

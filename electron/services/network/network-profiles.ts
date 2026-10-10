@@ -224,7 +224,7 @@ export class NetworkProfiles {
     if (this.running.get(id)?.ready) return;
     const p = this.store.get<Saved>('networkProfile', id);
     if (!this.core.status().installed)
-      throw new Error('请先在设置 → 连接中心 → 网络配置中安装内核');
+      throw new Error('请先在设置 → 网络配置中安装内核');
     const nodes = parseNetworkConfig(JSON.parse(this.store.secret('network_' + id)).config);
     const root = path.join(this.dataDir, 'network-runtime');
     await mkdir(root, { recursive: true, mode: 0o700 });

@@ -1,4 +1,4 @@
-import { BotsPage } from '../features/bots/BotsPage';
+import { ServiceIcon, providerService } from '../components/ServiceIcon';
 import { useNavigation } from './useNavigation';
 import { protocolLabels } from '../features/connections/provider-presets';
 import { AccountLoginPanel } from '../features/connections/AccountLoginPanel';
@@ -39,7 +39,6 @@ import {
   Folder,
   FolderOpen,
   GitBranch,
-  Globe2,
   Layers3,
   LayoutPanelLeft,
   MessageSquare,
@@ -76,7 +75,8 @@ import { InputModePicker, inputModes } from '../features/chat/InputModePicker';
 import { SessionNavigator } from '../features/chat/SessionNavigator';
 import { GlobalPermission, SessionPermission } from '../features/chat/PermissionControls';
 import { effectivePermission } from '../shared/permissions';
-import { ConnectionsPanel } from '../features/connections/ConnectionsPanel';
+import { ConnectionsPage } from '../features/connections/ConnectionsPage';
+import { NetworkProfilesPanel } from '../features/connections/NetworkProfilesPanel';
 import { Appearance, useAppearance } from '../features/settings/Appearance';
 import { useDraft } from '../hooks/useDraft';
 import { AttachmentCards, useAttachmentDraft } from '../components/files/Attachments';
@@ -116,9 +116,6 @@ export default function App() {
   const [artifactOrganizing, setArtifactOrganizing] = useState(false);
   const [artifactSession, setArtifactSession] = useState<string>();
   const [artifactRevision, setArtifactRevision] = useState(0);
-  const [connectionInitialTab, setConnectionInitialTab] = useState<'accounts' | 'network'>(
-    'accounts',
-  );
   const [providerQuery, setProviderQuery] = useState('');
   const [runQuery, setRunQuery] = useState('');
   const [runFilter, setRunFilter] = useState('all');
@@ -405,7 +402,7 @@ export default function App() {
       items: [
         { id: 'agents', label: 'Agent', icon: Users },
         { id: 'knowledge', label: '智库', icon: BookOpen },
-        { id: 'bots', label: '机器人', icon: Bot },
+        { id: 'connections', label: '渠道', icon: Network },
         { id: 'extensions', label: '插件', icon: Puzzle },
       ],
     },
@@ -534,9 +531,9 @@ export default function App() {
               <button
                 onClick={() => setView('settings')}
                 aria-current={
-                  ['settings', 'connections', 'providers'].includes(view) ? 'page' : undefined
+                  ['settings', 'providers', 'network'].includes(view) ? 'page' : undefined
                 }
-                className={['settings', 'connections', 'providers'].includes(view) ? 'active' : ''}
+                className={['settings', 'providers', 'network'].includes(view) ? 'active' : ''}
               >
                 <Settings2 size={16} />
                 <span className="sidebar-nav-text">设置</span>
@@ -559,7 +556,7 @@ export default function App() {
               </button>
               <span>同舟</span>
               <ChevronRight size={13} />
-              {['providers', 'connections'].includes(view) && (
+              {['providers', 'network'].includes(view) && (
                 <>
                   <span>设置</span>
                   <ChevronRight size={13} />
@@ -570,8 +567,8 @@ export default function App() {
                   ? (project?.name ?? (session ? '会话' : '新会话'))
                   : {
                       providers: '模型',
-                      connections: '连接中心',
-                      bots: '机器人',
+                      connections: '渠道',
+                      network: '网络配置',
                       agents: 'Agent',
                       activity: '运行记录',
                       settings: '设置',
@@ -1362,14 +1359,11 @@ export default function App() {
                     .map((p) => (
                       <article className="provider-card" key={p.id}>
                         <div className="card-top">
-                          <div className={'provider-icon ' + p.protocol}>
-                            {p.protocol === 'codex' ? (
-                              <Mark small />
-                            ) : p.auth === 'none' ? (
-                              <Terminal size={23} />
-                            ) : (
-                              <Globe2 size={23} />
-                            )}
+                          <div
+                            className={'provider-icon ' + p.protocol}
+                            data-service={providerService(p)}
+                          >
+                            <ServiceIcon service={providerService(p)} size={23} />
                           </div>
                           {p.protocol === 'codex' ? (
                             <AuthBadge
@@ -1473,24 +1467,18 @@ export default function App() {
               </>
             </main>
           )}
-          {view === 'connections' && (
-            <main className="page settings-page connections-page">
+          {view === 'connections' && <ConnectionsPage api={api} data={data} refresh={refresh} />}
+          {view === 'network' && (
+            <main className="page settings-page">
               <div className="page-heading">
                 <button className="text-button" onClick={() => setView('settings')}>
                   返回设置
                 </button>
-                <h1>连接中心</h1>
-                <p>将服务授权交给同舟保管，让 Agent 使用能力，无需把密码或令牌交给模型。</p>
+                <h1>网络配置</h1>
               </div>
-              <ConnectionsPanel
-                api={api}
-                data={data}
-                refresh={refresh}
-                initialTab={connectionInitialTab}
-              />
+              <NetworkProfilesPanel api={api} />
             </main>
           )}
-          {view === 'bots' && <BotsPage api={api} data={data} refresh={refresh} />}
           {view === 'extensions' && <Extensions api={api} data={data} refresh={refresh} />}
           {view === 'automations' && (
             <main className="page">
@@ -1765,6 +1753,18 @@ export default function App() {
                 <div className="settings-card-title">
                   <Network size={22} />
                   <div>
+                    <h3>网络配置</h3>
+                    <p>管理代理配置、网络内核和连接状态。</p>
+                  </div>
+                </div>
+                <button className="secondary" onClick={() => setView('network')}>
+                  管理网络配置 <ArrowRight size={14} />
+                </button>
+              </section>
+              <section className="settings-card settings-link">
+                <div className="settings-card-title">
+                  <Network size={22} />
+                  <div>
                     <h3>模型</h3>
                     <p>管理模型服务、订阅账号和 API 连接。</p>
                   </div>
@@ -1794,12 +1794,12 @@ export default function App() {
                 <div className="settings-card-title">
                   <Network size={22} />
                   <div>
-                    <h3>连接中心</h3>
-                    <p>管理服务认证、浏览器登录态、通知渠道和网络配置。</p>
+                    <h3>渠道</h3>
+                    <p>管理微信、飞书等平台的机器人与消息通知。</p>
                   </div>
                 </div>
                 <button className="secondary" onClick={() => setView('connections')}>
-                  打开连接中心 <ArrowRight size={14} />
+                  打开渠道 <ArrowRight size={14} />
                 </button>
               </section>
               <section className="settings-card">
@@ -1887,8 +1887,8 @@ export default function App() {
               },
               {
                 id: 'connections',
-                title: '连接中心',
-                detail: '设置 · 服务、浏览器、通知和网络',
+                title: '渠道',
+                detail: '资源与工具 · 机器人和消息通知',
                 icon: Network,
                 run: () => setView('connections'),
               },
@@ -1994,7 +1994,6 @@ export default function App() {
             setCodex={setCodex}
             setNativeAccounts={setNativeAccounts}
             setAuthPanel={setAuthPanel}
-            setConnectionInitialTab={setConnectionInitialTab}
             setView={setView}
             fetchModels={fetchModels}
             saveProvider={saveProvider}

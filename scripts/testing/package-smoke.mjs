@@ -156,26 +156,6 @@ try {
   assert.equal(JSON.parse(commandResult).exitCode, 0);
   assert.match(JSON.parse(commandResult).stdout.trim(), /^v\d+\./);
   checks.push('project Node command returns actual output and exit code');
-  await page.evaluate(() =>
-    window.tongzhou.saveConnector({
-      id: 'browser-fixture',
-      name: '浏览器',
-      kind: 'browser',
-      enabled: true,
-      baseUrl: 'https://example.com',
-    }),
-  );
-  await app.evaluate(async ({ session }) => {
-    const s = session.fromPartition('persist:tongzhou-connector-browser-fixture');
-    await s.cookies.set({
-      url: 'https://example.com',
-      name: 'fixture',
-      value: 'synthetic',
-      secure: true,
-      expirationDate: Date.now() / 1000 + 3600,
-    });
-    await s.cookies.flushStore();
-  });
   if (process.env.TONGZHOU_COMPUTER_SMOKE === '1') {
     const status = await page.evaluate(() => window.tongzhou.computerSelfTest());
     assert.equal(status.diagnostic?.ok, true, status.diagnostic?.detail);
@@ -185,22 +165,6 @@ try {
   app = await electron.launch(options);
   page = await app.firstWindow();
   await page.waitForSelector('.app-shell');
-  const cookies = await app.evaluate(async ({ session }) =>
-    session
-      .fromPartition('persist:tongzhou-connector-browser-fixture')
-      .cookies.get({ name: 'fixture' }),
-  );
-  assert.equal(cookies[0]?.value, 'synthetic');
-  await page.evaluate(() => window.tongzhou.clearBrowserProfile('browser-fixture'));
-  assert.equal(
-    (
-      await app.evaluate(async ({ session }) =>
-        session.fromPartition('persist:tongzhou-connector-browser-fixture').cookies.get({}),
-      )
-    ).length,
-    0,
-  );
-  checks.push('browser cookie persistence across restart and explicit clear');
   await page.screenshot({ path: 'test-results/package-preview.png' });
   await writeFile(
     'test-results/package-report.json',

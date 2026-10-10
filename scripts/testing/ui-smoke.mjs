@@ -87,13 +87,6 @@ store.put('connector', {
   baseUrl: 'https://github.com',
   status: 'unknown',
 });
-store.put('connector', {
-  id: 'ui-browser',
-  name: '独立浏览器',
-  kind: 'browser',
-  enabled: false,
-  baseUrl: 'https://example.invalid',
-});
 store.put('channel', {
   id: 'ui-channel',
   name: '飞书 · 项目通知',
@@ -189,9 +182,9 @@ try {
   const nav = async (name) => {
     if (name === '模型') {
       await openModels(page);
-    } else if (name === '连接中心') {
+    } else if (name === '渠道') {
       await page.locator('.sidebar').getByRole('button', { name: '设置', exact: true }).click();
-      await page.getByRole('button', { name: '打开连接中心', exact: true }).click();
+      await page.getByRole('button', { name: '打开渠道', exact: true }).click();
     } else await page.locator('.sidebar').getByRole('button', { name, exact: true }).click();
   };
   const capture = async (name) => {
@@ -371,17 +364,17 @@ try {
     await page.getByRole('button', { name: '添加连接', exact: true }).click();
     await capture(`${width}-connection-editor`);
     await page.keyboard.press('Escape');
-    await nav('连接中心');
+    await nav('渠道');
     for (const [label, name] of [
-      ['服务与浏览器', 'accounts'],
-      ['渠道通知', 'channels'],
-      ['认证与发送记录', 'records'],
+      ['添加飞书渠道', 'channels'],
+      ['连接记录', 'records'],
     ]) {
+      await nav('渠道');
       await page.getByRole('button', { name: label, exact: true }).click();
       await capture(`${width}-${name}`);
     }
-    await nav('机器人');
-    await page.getByRole('heading', { name: '机器人', exact: true }).waitFor();
+    await nav('渠道');
+    await page.getByRole('heading', { name: '渠道', exact: true }).waitFor();
     await capture(`${width}-bots`);
     await nav('Agent');
     await capture(`${width}-agents`);

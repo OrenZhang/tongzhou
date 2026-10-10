@@ -36,8 +36,8 @@ export const botsPlugin: Plugin.Object<void> = {
       manual(
         '机器人设置',
         '配置机器人共用模型与执行模式',
-        'bots',
-        '由用户在机器人模块设置，Agent 不能自行提高权限',
+        'connections',
+        '由用户在渠道的机器人通用设置中配置，Agent 不能自行提高权限',
         [botSettingsSchema],
       ),
       (settings) => bots.saveSettings(settings),
@@ -68,7 +68,7 @@ export const botsPlugin: Plugin.Object<void> = {
     );
     register(
       'onboardBot',
-      manual('会话机器人', '机器人扫码接入', 'bots', '需要用户扫码完成账号授权', [
+      manual('会话机器人', '机器人扫码接入', 'connections', '需要用户扫码完成账号授权', [
         idSchema.describe('newBotId'),
         z.string().min(1).describe('name'),
         z.enum(['feishu', 'wecom', 'weixin', 'dingtalk']).describe('platform'),
@@ -148,10 +148,13 @@ export const botsPlugin: Plugin.Object<void> = {
     );
     register(
       'verifyBotLogin',
-      manual('会话机器人', '提交微信扫码验证码', 'bots', '需要用户输入手机微信显示的验证码', [
-        idSchema,
-        z.string().regex(/^\d{4,12}$/),
-      ]),
+      manual(
+        '会话机器人',
+        '提交微信扫码验证码',
+        'connections',
+        '需要用户输入手机微信显示的验证码',
+        [idSchema, z.string().regex(/^\d{4,12}$/)],
+      ),
       (rawId, rawCode) => weixin.verify(idSchema.parse(rawId), z.string().parse(rawCode)),
     );
     register(

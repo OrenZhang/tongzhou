@@ -18,6 +18,8 @@ import rehypeKatex from 'rehype-katex';
 import type { Root, RootContent } from 'hast';
 import { highlight } from './highlight';
 import { renderDiagram } from './diagram';
+import { HtmlPreview } from './HtmlPreview';
+import { closedCodeFence, presentationLanguage } from './presentation';
 import { Modal } from '../components';
 import { remarkKnowledgeLinks } from '../../shared/knowledge-links';
 import 'katex/dist/katex.min.css';
@@ -319,15 +321,17 @@ export const Markdown = memo(function Markdown({
               ? (/language-([^\s]+)/.exec(child.props.className ?? '')?.[1]?.toLowerCase() ?? '')
               : '';
             const value = plain(children);
-            if (language === 'mermaid') {
+            const presentation = presentationLanguage(language, value);
+            if (presentation === 'mermaid' || presentation === 'html') {
               const raw = text
                 .slice(node?.position?.start.offset, node?.position?.end.offset)
                 .trimEnd();
-              const fence = /^ {0,3}(`{3,}|~{3,})/.exec(raw)?.[1];
-              const last = raw.split('\n').at(-1)?.trim() ?? '';
-              const closed =
-                !!fence && last.length >= fence.length && [...last].every((c) => c === fence[0]);
-              return <Diagram text={value} pending={streaming && !closed} />;
+              const pending = streaming && !closedCodeFence(raw);
+              return presentation === 'mermaid' ? (
+                <Diagram text={value} pending={pending} />
+              ) : (
+                <HtmlPreview text={value} pending={pending} />
+              );
             }
             return <CodeBlock text={value} language={language} />;
           },

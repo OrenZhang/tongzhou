@@ -80,9 +80,9 @@ try {
   }
   await page.getByRole('button', { name: '设置', exact: true }).click();
   assert.equal(await page.locator('.auth-badge.connected').count(), 0);
-  await page.getByRole('button', { name: '打开连接中心', exact: true }).click();
+  await page.getByRole('button', { name: '打开渠道', exact: true }).click();
   assert.equal(await page.locator('.auth-badge.connected').count(), 0);
-  await page.getByRole('heading', { name: '连接中心', exact: true }).waitFor();
+  await page.getByRole('heading', { name: '渠道', exact: true }).waitFor();
   await openModels(page);
   assert.equal(await page.locator('.auth-badge.connected').count(), 2);
   console.log(

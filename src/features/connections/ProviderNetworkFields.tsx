@@ -81,7 +81,7 @@ export function ProviderNetworkFields({
             </select>
           </Field>
           <button type="button" className="text-button" disabled={testing} onClick={onManage}>
-            管理网络配置（设置 → 连接中心 → 网络配置）
+            管理网络配置（设置 → 网络配置）
           </button>
         </>
       )}

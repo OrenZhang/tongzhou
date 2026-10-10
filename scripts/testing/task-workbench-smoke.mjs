@@ -121,25 +121,11 @@ const server = createServer(async (req, res) => {
     );
     return;
   }
-  if (req.url === '/download') {
-    res.setHeader('Content-Disposition', 'attachment; filename=report.txt');
-    res.end('download verified');
-    return;
-  }
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.end(
-    '<html><body><h1>浏览器验证</h1><a href="/download">下载报告</a><label>名称 <input aria-label="名称" id="name"></label><input type="password" name="password" value="NEVER_RETURN_PASSWORD"><button onclick="document.getElementById(\'result\').textContent=document.getElementById(\'name\').value">保存</button><p id="result">尚未保存</p><select aria-label="选择类型"><option value="a">类型A</option><option value="b">类型B</option></select></body></html>',
-  );
+  res.writeHead(404);
+  res.end();
 });
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const url = 'http://127.0.0.1:' + server.address().port;
-store.put('connector', {
-  id: 'browser-fixture',
-  kind: 'browser',
-  enabled: true,
-  name: '页面验证',
-  baseUrl: url,
-});
 store.saveProvider({
   id: 'probe',
   name: '诊断夹具',
@@ -350,76 +336,6 @@ try {
   );
   assert.equal(health.find((c) => c.name === '推理与工具协议').status, 'passed');
   checks.push('real loopback SSE and tool-protocol diagnostic');
-  await page.evaluate(() => window.tongzhou.openBrowserProfile('browser-fixture'));
-  const snapshot = () => page.evaluate(() => window.tongzhou.browserSnapshot('browser-fixture'));
-  let view = await snapshot();
-  assert.ok(!JSON.stringify(view).includes('NEVER_RETURN_PASSWORD'));
-  const input = view.elements.find((e) => e.name === '名称');
-  await page.evaluate(
-    ({ frame, ref }) =>
-      window.tongzhou.browserAction('browser-fixture', {
-        frame,
-        ref,
-        action: 'fill',
-        text: '页面操作已验证',
-      }),
-    { frame: view.frame, ref: input.ref },
-  );
-  await assert.rejects(
-    page.evaluate(
-      ({ frame, ref }) =>
-        window.tongzhou.browserAction('browser-fixture', {
-          frame,
-          ref,
-          action: 'fill',
-          text: 'stale',
-        }),
-      { frame: view.frame, ref: input.ref },
-    ),
-    /页面已变化/,
-  );
-  view = await snapshot();
-  await page.evaluate(
-    ({ frame, ref }) =>
-      window.tongzhou.browserAction('browser-fixture', { frame, ref, action: 'click' }),
-    { frame: view.frame, ref: view.elements.find((e) => e.name === '保存').ref },
-  );
-  view = await snapshot();
-  assert.match(view.text, /页面操作已验证/);
-  const secret = view.elements.find((e) => e.protected);
-  await assert.rejects(
-    page.evaluate(
-      ({ frame, ref }) =>
-        window.tongzhou.browserAction('browser-fixture', {
-          frame,
-          ref,
-          action: 'fill',
-          text: 'do not enter',
-        }),
-      { frame: view.frame, ref: secret.ref },
-    ),
-    /凭据字段/,
-  );
-  view = await snapshot();
-  await page.evaluate(
-    ({ frame, ref }) =>
-      window.tongzhou.browserAction('browser-fixture', { frame, ref, action: 'click' }),
-    { frame: view.frame, ref: view.elements.find((e) => e.name === '下载报告').ref },
-  );
-  let download;
-  for (let attempt = 0; attempt < 100; attempt++) {
-    download = await page.evaluate(async () =>
-      (await window.tongzhou.browserDownloads('browser-fixture')).find(
-        (d) => d.status === 'completed',
-      ),
-    );
-    if (download) break;
-    await new Promise((r) => setTimeout(r, 100));
-  }
-  assert.ok(download, 'browser download did not complete');
-  assert.equal(await readFile(download.path, 'utf8'), 'download verified');
-  checks.push('browser DOM actions, stale references and credential isolation');
-  checks.push('managed browser download persisted to a real file');
   await writeFile(
     'test-results/task-workbench-report.json',
     JSON.stringify({ passed: true, packaged: !!executablePath, checks }, null, 2),

@@ -1,0 +1,66 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="referrer" content="no-referrer" />
+  </head>
+  <body>
+    <script>
+      // This document is loaded only in an opaque-origin, scripts-only sandbox.
+      // It has no preload API and accepts HTML only from its immediate parent.
+      (() => {
+        const policy = document.querySelector('meta[http-equiv]').outerHTML;
+        const receive = (event) => {
+          if (event.source !== parent || event.data?.type !== 'tongzhou:preview:init') return;
+          const { html, dark } = event.data;
+          if (typeof html !== 'string' || html.length > 1000000) return;
+          removeEventListener('message', receive);
+          const bootstrap = () => {
+            const notify = (type, value) => parent.postMessage({ type, value }, '*');
+            addEventListener('error', () =>
+              notify('tongzhou:preview:error', '交互脚本运行出错，请查看源码。'),
+            );
+            addEventListener('unhandledrejection', () =>
+              notify('tongzhou:preview:error', '交互脚本运行出错，请查看源码。'),
+            );
+            addEventListener('DOMContentLoaded', () => {
+              let last = 0;
+              const measure = () => {
+                const height = Math.min(
+                  1200,
+                  Math.max(120, Math.ceil(document.body.getBoundingClientRect().height + 24)),
+                );
+                if (height !== last) {
+                  last = height;
+                  notify('tongzhou:preview:height', height);
+                }
+              };
+              new ResizeObserver(measure).observe(document.body);
+              measure();
+              notify('tongzhou:preview:loaded', true);
+            });
+          };
+          document.open();
+          document.write(
+            '<!doctype html><html><head><meta charset="utf-8">' +
+              policy +
+              '<meta name="referrer" content="no-referrer"><style>:root{color-scheme:' +
+              (dark ? 'dark' : 'light') +
+              ';font-family:system-ui,sans-serif}body{margin:12px;overflow-wrap:anywhere}img,svg,canvas{max-width:100%}*{box-sizing:border-box}</style><script>(' +
+              bootstrap.toString() +
+              ')();<\/script></head><body>' +
+              html +
+              '</body></html>',
+          );
+          document.close();
+        };
+        addEventListener('message', receive);
+        parent.postMessage({ type: 'tongzhou:preview:ready' }, '*');
+      })();
+    </script>
+  </body>
+</html>

@@ -64,7 +64,6 @@
 | CapabilityDefinition / State     | id、来源、工具 / Skill、平台、配置版本、enabled、health                              | 一个启停来源；权限在每次 dispatch 再校验             |
 | Connector / Account              | 服务类型 / 端点、认证方式、credentialRef、账号身份、状态                             | 登录、模型权益与业务权限分开；共享凭据不下发给模型   |
 | AuthSession / AuthEvent          | connectorId、accountId?、phase、过期时间、脱敏结果                                   | 一次性 code / QR 状态不长期持久化；并发授权隔离      |
-| BrowserProfile                   | accountId、独立存储分区、站点、最近验证                                              | Cookie 不进入聊天历史、认证日志或仓库                |
 | Channel / Target                 | connectorRef、accountRef、平台、机器人 / 群 / 接收人、enabled                        | 发信身份和接收目标明确；全局关闭立即阻止新发送       |
 | NotificationRule / Delivery      | scope、eventFilter、target、template、eventId、幂等键、status                        | 全局规则与会话覆盖去重；队列与事件事务关联           |
 | ProjectChange / CommandExecution | runId、文件前后哈希、diff、命令 ID、输出、退出码                                     | 区分用户原有变更；工具成功与任务成功分开             |

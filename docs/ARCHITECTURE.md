@@ -30,27 +30,26 @@ Electron 主进程持有数据库、网络、文件及引擎进程。React 仅�
 
 源码按 `electron/application`、`electron/core`、`electron/modules`、`electron/services` 分层，界面按 `src/features` 组织，完整目录和新增功能约定见 [代码目录与模块边界](CODE_STRUCTURE.md)。下表的文件名指对应目录中的实现。
 
-客户端管理通过业务入口的注册元数据自动生成目录与调度：UI 和 Agent 调用同一个处理器，新增模块不维护工具白名单。参数、读写权限与本人操作入口随业务一起声明。详见 [客户端能力注册](CLIENT_CAPABILITIES.md)。模型管理位于设置，代码托管认证位于插件，连接中心负责浏览器、渠道和网络。
+客户端管理通过业务入口的注册元数据自动生成目录与调度：UI 和 Agent 调用同一个处理器，新增模块不维护工具白名单。参数、读写权限与本人操作入口随业务一起声明。详见 [客户端能力注册](CLIENT_CAPABILITIES.md)。模型和网络管理位于设置，代码托管认证位于插件，渠道集中管理机器人与通知连接。
 
-| 文件                                                                | 职责                                                                  |
-| ------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `main.ts` / `preload.ts`                                            | IPC 来源校验、业务装配、系统入口                                      |
-| `store.ts`                                                          | SQLite WAL、schema 2 迁移与一致备份、对象与消息顺序、重启恢复         |
-| `task-scheduler.ts` / `context.ts`                                  | 可空 Agent、每会话单 Run、队列、取消、事件、引擎分段、只读团队        |
-| `providers.ts`                                                      | 四类模型推理协议、SSE、公开思考、完成标记和用量                       |
-| `codex.ts` / `codex-auth.ts`                                        | 锁定版本 App Server、官方登录与验证、超时及取消                       |
-| `native-engine.ts` / `native-model.ts`                              | 官方登录、续期与模型目录；订阅凭据到推理协议的适配，不执行会话任务    |
-| `model-gateway.ts`                                                  | 认证的本地 Responses 接口；只转换模型协议，不执行工具、压缩或任务重试 |
-| `accounts.ts` / `account-paths.ts`                                  | 多账号隔离、认证状态与模型目录                                        |
-| `connectors.ts` / `oauth-pkce.ts`                                   | GitHub device flow、GitLab PKCE / 刷新、身份检查和令牌生命周期        |
-| `browser-profiles.ts`                                               | 持久化浏览器分区、登录态清理、外部页面隔离                            |
-| `channels.ts` / `feishu.ts`                                         | Webhook、飞书扫码 / 应用消息 / WS、规则、幂等和入站绑定               |
-| `extensions.ts` / `builtin-mcp.ts`                                  | 全局 MCP / Skills、目录缓存、延迟连接、内置网页与时间                 |
-| `core/codex/execution.ts`                                           | Codex 动态工具目录、调用调度与当前任务作用域                          |
-| `client-commands.ts`                                                | GUI 与会话共用的客户端查询、受审批的配置变更                          |
-| `workspace.ts` / `project-init.ts`                                  | 搜索、读取、哈希修改、命令、路径检查、项目说明初始化                  |
-| `computer.ts` / `computer-diagnostic.ts`                            | 各平台电脑操作、截图坐标和窗口绑定、本机功能自检                      |
-| `src/features/connections/ConnectionsPanel.tsx` / `RunActivity.tsx` | 连接中心、渠道、认证记录、公开运行过程和输入队列                      |
+| 文件                                                               | 职责                                                                  |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------- |
+| `main.ts` / `preload.ts`                                           | IPC 来源校验、业务装配、系统入口                                      |
+| `store.ts`                                                         | SQLite WAL、schema 2 迁移与一致备份、对象与消息顺序、重启恢复         |
+| `task-scheduler.ts` / `context.ts`                                 | 可空 Agent、每会话单 Run、队列、取消、事件、引擎分段、只读团队        |
+| `providers.ts`                                                     | 四类模型推理协议、SSE、公开思考、完成标记和用量                       |
+| `codex.ts` / `codex-auth.ts`                                       | 锁定版本 App Server、官方登录与验证、超时及取消                       |
+| `native-engine.ts` / `native-model.ts`                             | 官方登录、续期与模型目录；订阅凭据到推理协议的适配，不执行会话任务    |
+| `model-gateway.ts`                                                 | 认证的本地 Responses 接口；只转换模型协议，不执行工具、压缩或任务重试 |
+| `accounts.ts` / `account-paths.ts`                                 | 多账号隔离、认证状态与模型目录                                        |
+| `connectors.ts` / `oauth-pkce.ts`                                  | GitHub device flow、GitLab PKCE / 刷新、身份检查和令牌生命周期        |
+| `channels.ts` / `feishu.ts`                                        | Webhook、飞书扫码 / 应用消息 / WS、规则、幂等和入站绑定               |
+| `extensions.ts` / `builtin-mcp.ts`                                 | 全局 MCP / Skills、目录缓存、延迟连接、内置网页与时间                 |
+| `core/codex/execution.ts`                                          | Codex 动态工具目录、调用调度与当前任务作用域                          |
+| `client-commands.ts`                                               | GUI 与会话共用的客户端查询、受审批的配置变更                          |
+| `workspace.ts` / `project-init.ts`                                 | 搜索、读取、哈希修改、命令、路径检查、项目说明初始化                  |
+| `computer.ts` / `computer-diagnostic.ts`                           | 各平台电脑操作、截图坐标和窗口绑定、本机功能自检                      |
+| `src/features/connections/ConnectionsPage.tsx` / `RunActivity.tsx` | 渠道、机器人、通知与认证记录、公开运行过程和输入队列                  |
 
 文件路径均相对 `electron/`，UI 文件除外。应用装配由 Cordis 插件组合，现有 preload 方法和数据格式保持兼容。
 
@@ -58,7 +57,7 @@ Electron 主进程持有数据库、网络、文件及引擎进程。React 仅�
 
 锁定 `cordis@4.0.0-rc.10`。`main.ts` 负责 Electron 应用身份、窗口、安全设置、系统快捷键与启动/退出；`application/application.ts` 组装主进程应用，`application/kernel.ts` 封装 Cordis 生命周期。
 
-- `application/services.ts` 声明基础服务插件，通过 `inject` 获取依赖、`ctx.provide()` 发布服务。存储、领域服务、任务执行、网络、认证、浏览器与渠道按依赖顺序挂载；挂载时缺少依赖直接报错。
+- `application/services.ts` 声明基础服务插件，通过 `inject` 获取依赖、`ctx.provide()` 发布服务。存储、领域服务、任务执行、网络、认证与渠道按依赖顺序挂载；挂载时缺少依赖直接报错。
 - `application/features/` 分功能注册项目、会话、知识、内容、模型账号、插件、权限及桌面操作。新增功能在 `application/features.ts` 中组合，主入口无需增加业务处理器。
 - `application/context.ts` 定义服务类型。知识库、内容库、作品和任务服务通过独立依赖注入；模块注册函数接受所需的有限接口，任务操作通过 `tzTasks: TaskService` 调用，领域类型从各自模块定义；`tzEvents` 发布有类型的运行生命周期与账号失效事件。
 - `application/client-ipc.ts` 将 IPC 和 Agent 能力目录作为同一 Cordis effect 注册。上下文释放时同时撤销两者；注册失败回滚目录，避免残留或重复入口。主窗口与主 frame 来源验证、参数验证、审批和凭据脱敏仍在原有边界执行。
@@ -108,11 +107,11 @@ MiniMax / Kimi 官方客户端仅用于设备登录、令牌刷新、注销和�
 
 电脑操作要求先截图，坐标绑定窗口与 PID，一张截图仅供一次操作；窗口移动 / 关闭 / 截图过期则拒绝。自检只操作新建的同舟测试窗口，截图不发送外部服务。多 Agent 团队保持只读；不让并发写入团队共享目录。
 
-## 认证、浏览器与渠道
+## 认证与渠道
 
 API / 连接器 / 渠道秘密通过系统安全存储加密；渲染层和会话工具只得到是否配置、身份和验证结果。Codex 执行记录与订阅账号使用同舟的私有 home，不扫描其他应用凭据。GitLab refresh token 加密保存，401 后刷新；配置更换站点时清除旧令牌。OAuth state、回调 Host / path、PKCE verifier、取消与超时受验证。
 
-浏览器 Cookie 存在不等于认证或模型权益。独立持久化分区只服务对应连接；清理删除该分区数据，不接触用户其他浏览器。原始 Cookie 不作为模型可读配置。
+浏览器账号模块及其独立窗口、页面操作工具已移除。模型登录和代码托管插件保留各自的认证流程。
 
 通知规则按全局 / 会话、事件和渠道计算。先记录 Delivery 和幂等键，再调用平台；一次性规则在发送前消费。平台业务码验证通过才标成功，超时 / 结果不明不自动重发。主动发送使用审批展示目标与文本。飞书入站仅接受启用的绑定、白名单真人、文字消息和去重后的事件；渠道消息不能代替本机工具审批。企业微信 / 钉钉本版为 Webhook 出站。
 

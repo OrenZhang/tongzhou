@@ -215,35 +215,32 @@ try {
   assert.equal((await page.evaluate(() => window.tongzhou.snapshot())).sessions.length, 1);
   checks.push('history quote and independent branch', 'archive deletion');
   await page.getByRole('button', { name: '设置', exact: true }).click();
-  await page.getByRole('button', { name: '打开连接中心', exact: true }).click();
-  await page.getByRole('button', { name: '服务与浏览器', exact: true }).click();
-  await page.getByRole('button', { name: '添加浏览器账号', exact: true }).click();
+  await page.getByRole('button', { name: '打开渠道', exact: true }).click();
   const form = page.locator('.connection-form');
-  await form.getByLabel('名称', { exact: true }).fill('测试浏览器');
-  await form.getByLabel('站点地址', { exact: true }).fill('https://example.test');
-  await form.getByRole('button', { name: '保存', exact: true }).click();
-  await page.getByRole('heading', { name: '测试浏览器', exact: true }).waitFor();
-  await page.getByRole('button', { name: '渠道通知', exact: true }).click();
-  await page.getByRole('button', { name: '添加 飞书', exact: true }).click();
+  await page.locator('.sidebar').getByRole('button', { name: '渠道', exact: true }).click();
+  await page.getByRole('button', { name: '添加飞书渠道', exact: true }).click();
+  await page.getByRole('button', { name: '飞书仅通知', exact: true }).click();
   await form.getByLabel('名称', { exact: true }).fill('合成飞书');
   await form
     .getByLabel('Webhook', { exact: false })
     .fill('https://open.feishu.cn/open-apis/bot/v2/hook/fixture');
   await form.getByRole('button', { name: '保存', exact: true }).click();
-  const card = page
-    .locator('.provider-card')
-    .filter({ has: page.getByRole('heading', { name: /合成飞书/ }) });
-  await card.getByRole('button', { name: '添加通知规则', exact: true }).click();
+  await page.getByRole('button', { name: /^消息通知/ }).click();
+  await page.getByRole('button', { name: '通知规则', exact: true }).click();
+  await page.getByRole('button', { name: '添加通知规则', exact: true }).click();
   await form
     .getByLabel('会话范围', { exact: true })
     .selectOption((await page.evaluate(() => window.tongzhou.snapshot())).sessions[0].id);
   await form.getByLabel('只发送一次', { exact: true }).check();
   await form.getByRole('button', { name: '保存规则', exact: true }).click();
-  await card.getByRole('button', { name: '停用', exact: true }).click();
+  await page.evaluate(async () => {
+    const c = (await window.tongzhou.snapshot()).channels[0];
+    await window.tongzhou.saveChannel({ ...c, enabled: false });
+  });
   await page.waitForFunction(
     async () => (await window.tongzhou.snapshot()).channels[0].enabled === false,
   );
-  checks.push('connector and notification configuration UI', 'channel disable persists');
+  checks.push('notification configuration UI', 'channel disable persists');
   const snapshot = await page.evaluate(() => window.tongzhou.snapshot());
   assert.ok(!JSON.stringify(snapshot).includes('fixture-token'));
   assert.ok(!JSON.stringify(snapshot).includes('/hook/fixture'));
@@ -252,26 +249,7 @@ try {
   const again = await page.evaluate(() => window.tongzhou.snapshot());
   assert.equal(again.channels[0].enabled, false);
   assert.equal(again.notificationRules[0].once, true);
-  const connector = again.connectors[0];
-  await app.evaluate(async ({ session }, id) => {
-    await session.fromPartition('persist:tongzhou-connector-' + id).cookies.set({
-      url: 'https://fixture.test',
-      name: 'session',
-      value: 'synthetic-only',
-      secure: true,
-      expirationDate: Date.now() / 1000 + 3600,
-    });
-  }, connector.id);
-  await page.evaluate((id) => window.tongzhou.clearBrowserProfile(id), connector.id);
-  assert.equal(
-    await app.evaluate(
-      async ({ session }, id) =>
-        (await session.fromPartition('persist:tongzhou-connector-' + id).cookies.get({})).length,
-      connector.id,
-    ),
-    0,
-  );
-  checks.push('credentials absent from snapshots', 'owned browser cookies clear');
+  checks.push('credentials absent from snapshots');
   const project = path.join(root, 'project');
   await mkdir(project);
   await writeFile(path.join(project, 'package.json'), '{"scripts":{"test":"node --test"}}');

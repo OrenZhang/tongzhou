@@ -55,10 +55,11 @@ try {
         return new Response(JSON.stringify({ errcode: 0, ...data }));
       };
     });
-  await page.locator('.sidebar').getByRole('button', { name: '机器人', exact: true }).click();
+  await page.locator('.sidebar').getByRole('button', { name: '渠道', exact: true }).click();
   const dialog = page.getByRole('dialog');
   const openQr = async () => {
-    await page.getByRole('button', { name: '钉钉机器人', exact: true }).click();
+    await page.getByRole('button', { name: '添加钉钉渠道', exact: true }).click();
+    await page.getByRole('button', { name: '连接钉钉', exact: true }).click();
     await dialog.getByRole('button', { name: /扫码接入/ }).click();
     await dialog.getByAltText('钉钉机器人授权二维码').waitFor();
   };
@@ -78,7 +79,7 @@ try {
     await app.evaluate(() => {
       globalThis.dingtalkSmoke.phase = 'success';
     });
-    await dialog.getByRole('button', { name: '配置机器人', exact: true }).click();
+    await dialog.getByRole('button', { name: '配置渠道', exact: true }).click();
     assert.equal(
       await dialog.getByLabel('App / Client ID', { exact: true }).inputValue(),
       'fixture-qr-bot',

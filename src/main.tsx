@@ -7,6 +7,7 @@ import './components/controls/controls.css';
 import './components/markdown/markdown.css';
 import './features/workspace/workspace.css';
 import './app/ui-system.css';
+import './app/icons.css';
 import { applyAppearance, savedAppearance } from './features/settings/Appearance';
 applyAppearance(savedAppearance());
 ReactDOM.createRoot(document.getElementById('root')!).render(

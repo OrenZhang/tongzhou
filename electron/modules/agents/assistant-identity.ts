@@ -1,4 +1,5 @@
 import common from '../../../prompts/common.json';
+import visualizations from '../../../prompts/visualizations.json';
 
 export const greetingReply = common.greeting;
 export const introductionReply = common.introduction;
@@ -29,7 +30,7 @@ export function identityInstructions(model: string): string {
     introduction: introductionReply,
     model: JSON.stringify(model),
   };
-  return common.instructions
+  return [...common.instructions, ...visualizations.instructions]
     .join('\n')
     .replace(/\{\{(greeting|introduction|model)\}\}/g, (_, key) => values[key]);
 }

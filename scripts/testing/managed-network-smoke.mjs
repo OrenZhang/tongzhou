@@ -71,8 +71,9 @@ try {
     await page.evaluate(() => window.tongzhou.installNetworkCore(true));
   } else await page.evaluate(() => window.tongzhou.installNetworkCore(false));
   await page.getByRole('button', { name: /设置/ }).click();
-  await page.getByRole('button', { name: /打开连接中心/ }).click();
-  await page.getByRole('button', { name: '网络配置', exact: true }).click();
+  await page.getByRole('button', { name: /打开渠道/ }).click();
+  await page.locator('.sidebar').getByRole('button', { name: '设置', exact: true }).click();
+  await page.getByRole('button', { name: '管理网络配置', exact: true }).click();
   await page.getByRole('button', { name: '添加配置', exact: true }).click();
   await page.getByLabel('名称', { exact: true }).fill('测试内置网络');
   await page.getByLabel('导入网络配置文件').setInputFiles(configFile);

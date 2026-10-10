@@ -665,10 +665,33 @@ svg {
 }
 .sidebar-update {
   position: relative;
+  flex: 0 0 28px;
+  --update-color: #2874d0;
 }
-.sidebar-update > button {
-  color: var(--accent);
-  background: var(--accent-soft);
+:root[data-theme='dark'] .sidebar-update {
+  --update-color: #83b8ff;
+}
+.sidebar-update > .icon-button {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 4px;
+  border: 0;
+  border-radius: 50%;
+  color: var(--update-color);
+  background: color-mix(in srgb, var(--update-color) 8%, transparent);
+  box-shadow: none;
+}
+.sidebar-update > .icon-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--update-color) 16%, transparent);
+}
+.sidebar-update > .icon-button:disabled {
+  color: var(--update-color);
+  opacity: 0.8;
+}
+.sidebar-update > .icon-button .lucide {
+  color: inherit;
 }
 .update-error {
   position: absolute;

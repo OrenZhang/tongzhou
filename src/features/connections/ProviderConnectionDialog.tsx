@@ -26,7 +26,6 @@ interface Props {
   setCodex: Dispatch<SetStateAction<CodexAuthState | null>>;
   setNativeAccounts: Dispatch<SetStateAction<Partial<Record<NativeEngine, NativeAuthState>>>>;
   setAuthPanel: Dispatch<SetStateAction<'codex' | NativeEngine | null>>;
-  setConnectionInitialTab: Dispatch<SetStateAction<'network' | 'accounts'>>;
   setView: Dispatch<SetStateAction<View>>;
   fetchModels: () => Promise<void>;
   saveProvider: (test?: boolean) => Promise<void>;
@@ -44,7 +43,6 @@ export function ProviderConnectionDialog({
   setCodex,
   setNativeAccounts,
   setAuthPanel,
-  setConnectionInitialTab,
   setView,
   fetchModels,
   saveProvider,
@@ -198,8 +196,7 @@ export function ProviderConnectionDialog({
             api={api}
             onManage={() => {
               setProviderEdit(null);
-              setConnectionInitialTab('network');
-              setView('connections');
+              setView('network');
             }}
             key={providerEdit.id}
             value={providerEdit.network}

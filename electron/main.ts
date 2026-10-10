@@ -6,6 +6,7 @@ import type { AppEvent, ProviderInput } from '../src/shared/types';
 import { DesktopComputer } from './services/desktop/computer';
 import { ComputerPermissions } from './services/desktop/computer-permissions';
 import { ComputerPermissionPanel } from './services/desktop/computer-permission-panel';
+import { guardPreviewNavigation } from './services/desktop/preview-navigation';
 import './services/network/node-request-identity';
 import { browserUserAgent } from './services/network/request-identity';
 import { redact } from './services/storage/validation';
@@ -14,13 +15,11 @@ import type { Updates } from './services/desktop/updates';
 
 if (process.env.TONGZHOU_USER_DATA) app.setPath('userData', process.env.TONGZHOU_USER_DATA);
 app.setName('Tongzhou');
-if (process.platform === 'darwin') {
-  // Keep the existing profile location when changing the displayed application name.
-  const profile = app.getPath('userData');
-  mkdirSync(profile, { recursive: true });
-  app.setPath('userData', profile);
-  app.setName('同舟');
-}
+// Pin the existing profile before applying the Chinese display name on every platform.
+const profile = app.getPath('userData');
+mkdirSync(profile, { recursive: true });
+app.setPath('userData', profile);
+app.setName('同舟');
 app.on('session-created', (s) => s.setUserAgent(browserUserAgent(s.getUserAgent())));
 let window: BrowserWindow | undefined;
 let application: DesktopApplication | undefined;
@@ -102,6 +101,11 @@ async function createWindow() {
   window.webContents.on('will-navigate', (event, url) => {
     if (!trusted(url)) event.preventDefault();
   });
+  // Generated UI can run locally, but cannot navigate to files, sites or app protocols.
+  const previewUrl = process.env.TONGZHOU_DEV_URL
+    ? new URL('/interactive-preview.html', process.env.TONGZHOU_DEV_URL).href
+    : pathToFileURL(path.join(__dirname, '../dist/interactive-preview.html')).href;
+  guardPreviewNavigation(window.webContents, previewUrl);
   window.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) =>
     callback(false),
   );

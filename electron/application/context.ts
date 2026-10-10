@@ -15,7 +15,6 @@ import type { NetworkProfiles } from '../services/network/network-profiles';
 import type { Accounts } from '../services/accounts/accounts';
 import type { AccountBrowser } from '../services/accounts/account-browser';
 import type { Connectors } from '../services/accounts/connectors';
-import type { BrowserProfiles } from '../services/browser/browser-profiles';
 import type { Bots } from '../services/channels/bots';
 import type { Channels } from '../services/channels/channels';
 import type { Feishu } from '../services/channels/feishu';
@@ -63,7 +62,6 @@ declare module 'cordis' {
     tzAccounts: Accounts;
     tzAccountBrowser: AccountBrowser;
     tzConnectors: Connectors;
-    tzBrowserProfiles: BrowserProfiles;
     tzBots: Bots;
     tzChannels: Channels;
     tzFeishu: Feishu;

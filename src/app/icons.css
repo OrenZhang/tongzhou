@@ -1,0 +1,182 @@
+/* Shared, subdued icon colors. State and action colors take precedence. */
+:root {
+  --icon-blue: #557da8;
+  --icon-teal: #528d83;
+  --icon-violet: #8773aa;
+  --icon-amber: #a08250;
+  --icon-rose: #a67585;
+  --icon-slate: #738399;
+}
+:root[data-theme='dark'] {
+  --icon-blue: #91b2d5;
+  --icon-teal: #87bcb0;
+  --icon-violet: #b3a1d1;
+  --icon-amber: #c5ad80;
+  --icon-rose: #c99eac;
+  --icon-slate: #a1aec1;
+}
+.lucide {
+  color: var(--icon-tone, var(--icon-slate));
+}
+:where(
+  .lucide-book-open,
+  .lucide-notebook-pen,
+  .lucide-file-text,
+  .lucide-files,
+  .lucide-file,
+  .lucide-file-code,
+  .lucide-library,
+  .lucide-shield-check,
+  .lucide-check-check,
+  .lucide-check-circle-2,
+  .lucide-circle-check,
+  .lucide-activity,
+  .lucide-network,
+  .lucide-plug,
+  .lucide-globe-2,
+  .lucide-globe
+) {
+  --icon-tone: var(--icon-teal);
+}
+:where(
+  .lucide-bot,
+  .lucide-users,
+  .lucide-user,
+  .lucide-brain,
+  .lucide-sparkles,
+  .lucide-puzzle,
+  .lucide-image,
+  .lucide-palette,
+  .lucide-moon,
+  .lucide-layers-3
+) {
+  --icon-tone: var(--icon-violet);
+}
+:where(
+  .lucide-message-square,
+  .lucide-message-circle,
+  .lucide-message-square-plus,
+  .lucide-code-2,
+  .lucide-terminal,
+  .lucide-square-terminal,
+  .lucide-monitor,
+  .lucide-settings-2,
+  .lucide-sliders-horizontal,
+  .lucide-git-branch,
+  .lucide-download,
+  .lucide-upload,
+  .lucide-save,
+  .lucide-pencil,
+  .lucide-refresh-cw
+) {
+  --icon-tone: var(--icon-blue);
+}
+:where(
+  .lucide-folder,
+  .lucide-folder-open,
+  .lucide-folder-plus,
+  .lucide-archive,
+  .lucide-archive-restore,
+  .lucide-clock-3,
+  .lucide-clock,
+  .lucide-history,
+  .lucide-bell,
+  .lucide-bell-ring,
+  .lucide-key-round,
+  .lucide-sun
+) {
+  --icon-tone: var(--icon-amber);
+}
+:where(
+  .lucide-trash-2,
+  .lucide-trash,
+  .lucide-shield-alert,
+  .lucide-triangle-alert,
+  .lucide-circle-alert,
+  .lucide-alert-triangle
+) {
+  --icon-tone: var(--danger);
+}
+/* Small navigation glyphs follow their label; filled actions retain contrast. */
+:is(
+  .lucide-chevron-down,
+  .lucide-chevron-up,
+  .lucide-chevron-left,
+  .lucide-chevron-right,
+  .lucide-arrow-left,
+  .lucide-arrow-right,
+  .lucide-arrow-up,
+  .lucide-arrow-up-right,
+  .lucide-plus,
+  .lucide-x,
+  .lucide-check,
+  .lucide-search,
+  .lucide-ellipsis,
+  .lucide-ellipsis-vertical,
+  .lucide-loader-circle,
+  .lucide-square
+) {
+  color: currentColor;
+}
+:is(
+    .primary,
+    .new-chat,
+    .send-button,
+    .composer-send,
+    .danger,
+    .success,
+    .error,
+    [role='alert'],
+    [disabled],
+    [aria-disabled='true']
+  )
+  .lucide,
+.lucide:is(.danger, .success, .error),
+.channel-platform-icon .lucide {
+  color: inherit;
+}
+/* External services keep their own quiet identity, independent of protocol. */
+[data-service] {
+  --service-color: var(--icon-blue);
+}
+[data-service='openai'],
+[data-service='codex'] {
+  --service-color: var(--icon-teal);
+}
+[data-service='anthropic'],
+[data-service='gitlab'] {
+  --service-color: var(--icon-amber);
+}
+[data-service='minimax'] {
+  --service-color: var(--icon-rose);
+}
+[data-service='qwen'],
+[data-service='figma'],
+[data-service='linear'] {
+  --service-color: var(--icon-violet);
+}
+[data-service='github'],
+[data-service='notion'],
+[data-service='local'] {
+  --service-color: var(--icon-slate);
+}
+.service-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--service-color);
+}
+.service-icon .lucide {
+  color: inherit;
+}
+.provider-icon[data-service] {
+  color: var(--service-color);
+  background: color-mix(in srgb, var(--service-color) 10%, var(--surface));
+}
+.service-card-heading > .service-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--service-color) 9%, var(--surface));
+}

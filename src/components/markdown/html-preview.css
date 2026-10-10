@@ -1,0 +1,28 @@
+.html-preview {
+  min-width: 0;
+  margin: 14px 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.html-preview iframe {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: var(--surface);
+}
+.html-preview iframe[hidden] {
+  display: none;
+}
+.html-preview-source {
+  max-height: 480px;
+  overflow: auto;
+  white-space: pre-wrap;
+  margin: 0;
+  padding: 14px;
+  font: 12px/1.6 var(--font-code);
+}
+.html-preview.is-expanded {
+  border-color: var(--accent);
+}

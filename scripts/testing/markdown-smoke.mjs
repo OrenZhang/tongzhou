@@ -46,12 +46,17 @@ const app = await electron.launch({ executablePath, args: executablePath ? [] : 
 const errors = [],
   checks = [],
   externalRequests = [];
+const blockedRequests = new Set();
 try {
   const page = await app.firstWindow();
   page.setDefaultTimeout(20000);
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('request', (r) => {
     if (/^https?:/.test(r.url())) externalRequests.push(r.url());
+  });
+  page.on('requestfailed', (r) => {
+    if (/^(csp|net::ERR_BLOCKED_BY_CSP)$/i.test(r.failure()?.errorText ?? ''))
+      blockedRequests.add(r.url());
   });
   await page.waitForSelector('.app-shell');
   await app.evaluate(({ BrowserWindow, shell }) => {
@@ -201,6 +206,65 @@ try {
   await page.keyboard.press('Escape');
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
   checks.push('8 Mermaid diagram types render locally; source, zoom and expanded preview');
+  await replace(fence('', diagrams.flowchart));
+  await waitImage();
+  checks.push('unlabeled Mermaid grammar renders as a diagram');
+  const interactive = `<style>body{font-family:system-ui}button{padding:8px 12px}</style>
+<h2>交互测试</h2><button id="counter">点击 0</button><input aria-label="名称" placeholder="输入名称"><p id="output"></p>
+<script>let count=0;document.querySelector('#counter').onclick=()=>document.querySelector('#counter').textContent='点击 '+(++count);document.querySelector('input').oninput=e=>document.querySelector('#output').textContent='你好，'+e.target.value;</script>`;
+  await replace(fence('html', interactive, false), 'streaming');
+  await page.getByText('交互界面生成中…', { exact: true }).waitFor();
+  assert.equal(await page.locator('.html-preview iframe').count(), 0);
+  await replace(fence('html', interactive));
+  const htmlFrame = () => page.frameLocator('.html-preview iframe');
+  await htmlFrame().getByRole('button', { name: '点击 0' }).click();
+  await htmlFrame().getByRole('button', { name: '点击 1' }).waitFor();
+  await htmlFrame().getByRole('textbox', { name: '名称' }).fill('同舟');
+  await htmlFrame().getByText('你好，同舟', { exact: true }).waitFor();
+  await page.locator('.html-preview').getByRole('button', { name: '源码', exact: true }).click();
+  await page.locator('.html-preview-source').waitFor();
+  await page.locator('.html-preview').getByRole('button', { name: '预览', exact: true }).click();
+  await htmlFrame().getByRole('button', { name: '点击 1' }).waitFor();
+  await page.getByRole('button', { name: '展开预览', exact: true }).click();
+  assert.equal(await page.locator('.html-preview.is-expanded').count(), 1);
+  await screenshot('html-interactive');
+  const isolated = await htmlFrame()
+    .locator('body')
+    .evaluate(() => {
+      let parentBlocked = false;
+      try {
+        void parent.document.body;
+      } catch {
+        parentBlocked = true;
+      }
+      return { parentBlocked, bridge: typeof window.tongzhou, require: typeof window.require };
+    });
+  assert.deepEqual(isolated, { parentBlocked: true, bridge: 'undefined', require: 'undefined' });
+  await page.getByRole('button', { name: '重新运行预览' }).click();
+  await htmlFrame().getByRole('button', { name: '点击 0' }).waitFor();
+  await replace(
+    fence(
+      'html',
+      '<button id="escape">跳转</button><script>document.querySelector("button").onclick=()=>location.href="https://example.invalid/escape";fetch("https://example.invalid/leak").catch(()=>{});</script><img src="https://example.invalid/pixel">',
+    ),
+  );
+  await htmlFrame().getByRole('button', { name: '跳转' }).click();
+  assert.equal(
+    page.frames().some((frame) => frame.url().startsWith('https://example.invalid')),
+    false,
+  );
+  await page.getByRole('button', { name: '重新运行预览' }).click();
+  await htmlFrame().getByRole('button', { name: '跳转' }).waitFor();
+  // Deliberately triggered CSP failures are console messages, not application errors.
+  assert.equal(await page.locator('.html-preview iframe').getAttribute('sandbox'), 'allow-scripts');
+  checks.push(
+    'HTML buttons and inputs, preserved source-toggle state, inline expansion, rerun, streaming gate, isolated parent/Node/IPC, blocked network and navigation',
+  );
+  assert.equal(
+    externalRequests.every((url) => blockedRequests.has(url)),
+    true,
+  );
+  externalRequests.length = 0;
   await replace(fence('mermaid', 'flowchart LR\nA[正在生成', false), 'streaming');
   await page.getByText('图表生成中…', { exact: true }).waitFor();
   assert.equal(await page.locator('.diagram-image').count(), 0);

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { Store } from '../../electron/services/storage/store';
 import { Channels, webhookUrl } from '../../electron/services/channels/channels';
 import { Connectors } from '../../electron/services/accounts/connectors';
+import { runtimeSnapshot } from '../../electron/core/runtime/snapshot';
 import { initializeAgent } from '../../electron/modules/projects/project-init';
 import { executeTool, fileHash, commandResult } from '../../electron/core/tools/workspace';
 import { ToolScope } from '../../electron/core/tools/extensions';
@@ -31,6 +32,30 @@ async function root() {
 }
 const webhook = 'https://open.feishu.cn/open-apis/bot/v2/hook/fixture-secret';
 describe('connection and channel services', () => {
+  it('excludes retired browser accounts without deleting stored data or code-hosting accounts', () => {
+    const s = store();
+    const c = new Connectors(s, () => {});
+    cleanups.push(() => c.dispose());
+    const retired = {
+      id: 'old-browser',
+      kind: 'browser',
+      name: '旧账号',
+      enabled: true,
+      baseUrl: 'https://example.com',
+    };
+    s.put('connector', retired);
+    c.save({
+      id: 'github',
+      kind: 'github',
+      name: 'GitHub',
+      enabled: true,
+      baseUrl: 'https://github.com',
+    });
+    expect(() => c.save(retired)).toThrow();
+    expect(c.list().map((item) => item.id)).toEqual(['github']);
+    expect(runtimeSnapshot(s, []).connectors?.map((item) => item.id)).toEqual(['github']);
+    expect(s.get('connector', retired.id)).toEqual(retired);
+  });
   it('keeps webhook and signing credentials out of snapshots', () => {
     const s = store();
     const c = new Channels(s, () => {});

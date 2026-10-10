@@ -13,7 +13,6 @@ import { Worktrees } from '../modules/projects/worktrees';
 import { AccountBrowser } from '../services/accounts/account-browser';
 import { Accounts } from '../services/accounts/accounts';
 import { Connectors } from '../services/accounts/connectors';
-import { BrowserProfiles } from '../services/browser/browser-profiles';
 import { Bots } from '../services/channels/bots';
 import { Channels } from '../services/channels/channels';
 import { Feishu } from '../services/channels/feishu';
@@ -265,19 +264,6 @@ export function applicationServices(kernel: ApplicationKernel): Plugin.Object<vo
         ctx.provide('tzSessions', system.sessions);
         ctx.provide('tzApprovals', system.approvals);
         ctx.provide('tzTerminals', system.terminals);
-      },
-    },
-    {
-      name: 'tongzhou-browser-profiles-service',
-      inject: ['tzDesktop', 'tzStore'],
-      apply(ctx) {
-        const store = ctx.tzStore;
-        const { dataDir } = ctx.tzDesktop;
-        const browserProfiles = new BrowserProfiles(store, dataDir);
-        kernel.own(ctx, async () => {
-          browserProfiles.dispose();
-        });
-        ctx.provide('tzBrowserProfiles', browserProfiles);
       },
     },
     {

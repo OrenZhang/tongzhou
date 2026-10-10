@@ -302,8 +302,8 @@ export type AppEvent =
         | 'agents'
         | 'activity'
         | 'settings'
+        | 'network'
         | 'connections'
-        | 'bots'
         | 'extensions'
         | 'knowledge';
     }
@@ -444,19 +444,6 @@ export interface TongzhouAPI {
     model: string,
     inference: boolean,
   ): Promise<import('./connection-diagnostics').ConnectionCheck[]>;
-  browserDownloads(id: string): Promise<any[]>;
-  browserSnapshot(id: string): Promise<any>;
-  browserAction(
-    id: string,
-    input: {
-      frame: string;
-      ref: number;
-      action: 'click' | 'fill' | 'select' | 'focus';
-      text?: string;
-    },
-  ): Promise<any>;
-  browserNavigate(id: string, url: string): Promise<any>;
-  browserPress(id: string, key: string): Promise<any>;
   taskState(id: string): Promise<import('./task').TaskState>;
   searchMessages(
     query: string,
@@ -541,10 +528,6 @@ export interface TongzhouAPI {
   testConnector(id: string): Promise<string>;
   loginConnector(id: string): Promise<{ url: string; code: string; expiresAt: number }>;
   cancelConnectorLogin(id: string): Promise<void>;
-  openBrowserProfile(
-    id: string,
-  ): Promise<{ connectorId: string; opened: boolean; reused: boolean }>;
-  clearBrowserProfile(id: string): Promise<void>;
   saveChannel(
     input: Channel & { webhook?: string; signingSecret?: string; password?: string },
   ): Promise<void>;
@@ -657,7 +640,7 @@ export interface TongzhouAPI {
 export interface Connector {
   id: string;
   name: string;
-  kind: 'github' | 'gitlab' | 'browser';
+  kind: 'github' | 'gitlab';
   enabled: boolean;
   baseUrl: string;
   clientId?: string;

@@ -4,8 +4,8 @@ export type View =
   | 'agents'
   | 'activity'
   | 'settings'
+  | 'network'
   | 'connections'
-  | 'bots'
   | 'extensions'
   | 'knowledge'
   | 'automations';

@@ -1,5 +1,6 @@
+import { ServiceIcon } from '../../components/ServiceIcon';
 import { useState } from 'react';
-import { Plug, ExternalLink } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import { Modal } from '../../components/components';
 import { MarkdownLink } from '../../components/markdown/RichMarkdown';
 import { errorMessage } from '../../lib/feedback';
@@ -366,7 +367,7 @@ export function WorkPlugins({
             return (
               <article className="provider-card" key={p.id}>
                 <div className="service-card-heading row">
-                  <Plug size={20} />
+                  <ServiceIcon service={p.id} />
                   <h3>{p.name}</h3>
                   <span className="tag">应用 · {p.category}</span>
                 </div>

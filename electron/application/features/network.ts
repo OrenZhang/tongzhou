@@ -52,7 +52,7 @@ export const networkPlugin: Plugin.Object<void> = {
       manual(
         '网络配置',
         '导入或更新加密网络配置',
-        'connections',
+        'network',
         '配置及订阅包含凭据，只能由用户在设置中导入',
         [networkProfileSchema],
       ),

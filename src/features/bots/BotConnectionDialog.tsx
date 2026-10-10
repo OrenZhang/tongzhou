@@ -1,59 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import './bots.css';
-import { BotSettingsPanel } from './BotSettingsPanel';
-import {
-  ArrowUpRight,
-  Building2,
-  ChevronRight,
-  MessageCircle,
-  MoreHorizontal,
-  QrCode,
-  KeyRound,
-  Send,
-  Zap,
-} from 'lucide-react';
+import { QrCode, KeyRound } from 'lucide-react';
 import { Modal } from '../../components/components';
 import { MultiValueInput } from '../../components/controls/MultiValueInput';
 import type { BotConfig, Snapshot, TongzhouAPI } from '../../shared/types';
 const labels = { feishu: '飞书', wecom: '企业微信', dingtalk: '钉钉', weixin: '微信 ClawBot' };
-const platforms = [
-  {
-    kind: 'weixin',
-    title: '微信',
-    detail: '通过 ClawBot 私聊，发起任务并接收结果',
-    icon: MessageCircle,
-    method: '扫码接入',
-  },
-  {
-    kind: 'feishu',
-    title: '飞书',
-    detail: '在飞书中查看进度，管理工作会话',
-    icon: Send,
-    method: '扫码接入',
-  },
-  {
-    kind: 'wecom',
-    title: '企业微信',
-    detail: '连接智能机器人，在企业微信中协作',
-    icon: Building2,
-    method: '扫码接入',
-  },
-  {
-    kind: 'dingtalk',
-    title: '钉钉',
-    detail: '连接应用机器人，在钉钉中处理任务',
-    icon: Zap,
-    method: '扫码接入',
-  },
-] as const;
-function PlatformIcon({ kind }: { kind: BotConfig['kind'] }) {
-  const Icon = platforms.find((platform) => platform.kind === kind)!.icon;
-  return (
-    <span className="bot-platform-icon" data-platform={kind}>
-      <Icon size={21} strokeWidth={1.7} aria-hidden="true" />
-    </span>
-  );
-}
 type QrPlatform = BotConfig['kind'];
 const authLabels: Record<string, string> = {
   waiting: '等待扫码授权',
@@ -68,33 +19,34 @@ const authLabels: Record<string, string> = {
   verify_blocked: '验证码错误次数过多，请稍后重新扫码',
   already_bound: '此账号已绑定，请管理已有机器人；若仍无法连接，请重新扫码',
 };
-const statuses = {
-  connecting: '连接中',
-  listening: '正在监听',
-  connected: '已连接',
-  error: '连接异常',
-};
-export function BotsPage({
+export function BotConnectionDialog({
   data,
   api,
   refresh,
+  request,
+  onClose,
 }: {
   data: Snapshot;
   api: TongzhouAPI;
   refresh: () => Promise<void>;
+  request: { kind: BotConfig['kind']; bot?: BotConfig; reconnect?: boolean };
+  onClose: (savedId?: string) => void;
 }) {
-  const [edit, setEdit] = useState<(BotConfig & { secret?: string }) | null>(null),
+  const [edit, setEdit] = useState<(BotConfig & { secret?: string }) | null>(
+      request.bot && !request.reconnect ? { ...request.bot, secret: '' } : null,
+    ),
     [busy, setBusy] = useState(false),
-    [notice, setNotice] = useState(''),
-    [armed, setArmed] = useState('');
+    [notice, setNotice] = useState('');
   const [qr, setQr] = useState<{
     id: string;
     image: string;
     expiresAt: number;
     kind: QrPlatform;
   } | null>(null);
-  const [setup, setSetup] = useState<QrPlatform | null>(null);
-  const [setupId, setSetupId] = useState<string>();
+  const [setup, setSetup] = useState<QrPlatform | null>(
+    request.bot && !request.reconnect ? null : request.kind,
+  );
+  const [setupId, setSetupId] = useState<string | undefined>(request.bot?.id);
   const qrRequest = useRef<string | null>(null);
   const [setupError, setSetupError] = useState('');
   const [verifyCode, setVerifyCode] = useState('');
@@ -124,7 +76,7 @@ export function BotsPage({
     const id = existingId ?? crypto.randomUUID();
     qrRequest.current = id;
     try {
-      const result = await api.onboardBot(id, labels[kind] + '机器人', kind);
+      const result = await api.onboardBot(id, labels[kind] + '渠道', kind);
       if (qrRequest.current !== id) {
         await api.cancelBotLogin(id);
         return;
@@ -138,13 +90,11 @@ export function BotsPage({
       setBusy(false);
     }
   };
-  const act = async (fn: () => Promise<unknown>, success = '已保存') => {
+  const act = async (fn: () => Promise<unknown>) => {
     setBusy(true);
     setNotice('');
     try {
       await fn();
-      await refresh();
-      setNotice(success);
     } catch (e) {
       setNotice(String(e));
     } finally {
@@ -154,157 +104,20 @@ export function BotsPage({
   const create = (kind: BotConfig['kind']) =>
     setEdit({
       id: crypto.randomUUID(),
-      name: labels[kind] + '机器人',
+      name: labels[kind] + '渠道',
       kind,
       appId: '',
       allowedSenders: [],
       allowedChats: [],
     });
   return (
-    <main className="page bots-panel">
-      <header className="page-heading">
-        <div>
-          <h1>机器人</h1>
-          <p>把同舟接到常用聊天工具，随时发起任务、接收结果。</p>
-        </div>
-      </header>
-      {notice && (
-        <p role="status" className="info-strip">
-          {notice}
-        </p>
-      )}
-      <div className="bot-workspace">
-        <div className="bot-connections">
-          {!!data.bots?.length && (
-            <section className="bot-section" aria-label="已添加的机器人">
-              <div className="bot-section-heading">
-                <h2>已添加</h2>
-                <span>{data.bots.length}</span>
-              </div>
-              <div className="bot-connection-list">
-                {data.bots.map((b) => (
-                  <article className="bot-connection-row" key={b.id}>
-                    <PlatformIcon kind={b.kind} />
-                    <div className="bot-connection-copy">
-                      <div className="bot-connection-title">
-                        <h3 title={b.name}>{b.name}</h3>
-                        <span
-                          className="bot-connection-status"
-                          data-status={b.status ?? 'connecting'}
-                        >
-                          {statuses[b.status ?? 'connecting']}
-                        </span>
-                      </div>
-                      <p>
-                        {labels[b.kind]} · {b.allowedSenders.length} 位允许用户
-                      </p>
-                      {b.error && (
-                        <p className="bot-connection-error" role="status">
-                          {b.error}
-                        </p>
-                      )}
-                    </div>
-                    <div className="bot-row-actions">
-                      <button
-                        className="bot-manage-button"
-                        disabled={busy}
-                        onClick={() => setEdit({ ...b, secret: '' })}
-                      >
-                        管理机器人
-                      </button>
-                      <details
-                        className="bot-actions-menu"
-                        onBlur={(event) => {
-                          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-                            event.currentTarget.open = false;
-                            setArmed('');
-                          }
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Escape') {
-                            event.currentTarget.open = false;
-                            event.currentTarget.querySelector('summary')?.focus();
-                            setArmed('');
-                          }
-                        }}
-                      >
-                        <summary aria-label={`更多操作：${b.name}`} title="更多操作">
-                          <MoreHorizontal size={18} />
-                        </summary>
-                        <div className="bot-actions-popover">
-                          {b.kind === 'weixin' && (
-                            <button disabled={busy} onClick={() => void startQr('weixin', b.id)}>
-                              重新扫码
-                            </button>
-                          )}
-                          <button
-                            disabled={busy}
-                            onClick={() => void act(() => api.restartBot(b.id), '已重新连接')}
-                          >
-                            重新连接
-                          </button>
-                          <button
-                            className="bot-delete-action"
-                            disabled={busy}
-                            onClick={() => {
-                              if (armed !== b.id) setArmed(b.id);
-                              else void act(() => api.deleteBot(b.id), '已删除机器人');
-                            }}
-                          >
-                            {armed === b.id ? '确认删除' : '删除机器人'}
-                          </button>
-                        </div>
-                      </details>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-          )}
-          <section className="bot-section" aria-label="添加机器人连接">
-            <div className="bot-section-heading">
-              <h2>{data.bots?.length ? '添加连接' : '选择一个聊天平台'}</h2>
-            </div>
-            <div className="bot-platform-list">
-              {platforms.map(({ kind, title, detail, method }) => (
-                <button
-                  className="bot-platform-row"
-                  aria-label={`${labels[kind]}机器人`}
-                  key={kind}
-                  disabled={busy}
-                  onClick={() => {
-                    setSetupError('');
-                    setSetupId(undefined);
-                    setSetup(kind);
-                  }}
-                >
-                  <PlatformIcon kind={kind} />
-                  <span className="bot-platform-copy">
-                    <strong>
-                      {title}
-                      {kind === 'weixin' && <span className="bot-platform-tag">ClawBot</span>}
-                    </strong>
-                    <small>{detail}</small>
-                  </span>
-                  <span className="bot-platform-action">
-                    {method}
-                    <ArrowUpRight size={15} />
-                  </span>
-                  <ChevronRight className="bot-platform-chevron" size={17} />
-                </button>
-              ))}
-            </div>
-            <p className="bot-availability-note">同舟运行时自动保持连接。</p>
-          </section>
-        </div>
-        <BotSettingsPanel data={data} api={api} refresh={refresh} />
-      </div>
+    <>
       {setup && (
         <Modal
           compact
-          title={`添加${labels[setup]}机器人`}
+          title={`添加${labels[setup]}渠道`}
           onClose={() => {
-            if (!busy) setSetup(null);
+            if (!busy) onClose();
           }}
         >
           <div className="modal-content connection-form">
@@ -355,11 +168,18 @@ export function BotsPage({
         </Modal>
       )}
       {qr && (
-        <Modal compact title={`${labels[qr.kind]}机器人扫码授权`} onClose={closeQr}>
+        <Modal
+          compact
+          title={`${labels[qr.kind]}机器人扫码授权`}
+          onClose={() => {
+            closeQr();
+            onClose();
+          }}
+        >
           <div className="modal-content connection-form bot-qr-form">
             {authPhase === 'success' ? (
               <>
-                <p>✓ 机器人授权已保存。模型和会话范围由右侧通用设置统一管理。</p>
+                <p>渠道授权已保存。可继续设置允许访问的用户。</p>
                 <button
                   className="primary"
                   onClick={() => {
@@ -370,7 +190,7 @@ export function BotsPage({
                     }
                   }}
                 >
-                  配置机器人
+                  配置渠道
                 </button>
               </>
             ) : (
@@ -449,17 +269,23 @@ export function BotsPage({
         </Modal>
       )}
       {edit && (
-        <Modal title={`管理${labels[edit.kind]}机器人`} onClose={() => setEdit(null)}>
+        <Modal title={`管理${labels[edit.kind]}渠道`} onClose={() => onClose()}>
           <form
             className="modal-content connection-form"
             onSubmit={(e) => {
               e.preventDefault();
               void act(async () => {
                 await api.saveBot(edit);
-                setEdit(null);
+                await refresh();
+                onClose(edit.id);
               });
             }}
           >
+            {notice && (
+              <p role="alert" className="info-strip">
+                {notice}
+              </p>
+            )}
             <div className="form-columns">
               <label>
                 名称
@@ -524,15 +350,15 @@ export function BotsPage({
             )}
             <div className="row">
               <button className="primary" disabled={busy}>
-                保存机器人
+                保存渠道
               </button>
-              <button type="button" onClick={() => setEdit(null)}>
+              <button type="button" onClick={() => onClose()}>
                 取消
               </button>
             </div>
           </form>
         </Modal>
       )}
-    </main>
+    </>
   );
 }
