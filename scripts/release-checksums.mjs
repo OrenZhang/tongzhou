@@ -2,7 +2,9 @@ import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-const files = (await readdir('release')).filter((name) => /\.(exe|dmg|zip)$/.test(name));
+const files = (await readdir('release')).filter((name) =>
+  /\.(exe|dmg|zip|AppImage|deb)$/.test(name),
+);
 if (!files.length) throw new Error('No release binaries found');
 const lines = [];
 for (const file of files) {

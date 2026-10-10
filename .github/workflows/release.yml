@@ -26,7 +26,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest, macos-15-intel]
+        os: [windows-latest, macos-latest, macos-15-intel, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
     env:
@@ -38,14 +38,20 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Install Linux toolchain (X11 headers for the native addon)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libx11-dev libxtst-dev
       - run: npm ci
       - run: npm test
       - run: npm run build
-      - run: npm run test:desktop
-      - run: npm run test:workspace-layout
-      - run: npm run test:knowledge
-      - run: node scripts/testing/project-deletion-smoke.mjs
-      - run: node scripts/testing/updates-smoke.mjs
+      - name: Route smoke launches through Xvfb on Linux
+        if: runner.os == 'Linux'
+        run: echo "SMOKE_PREFIX=xvfb-run -a" >> "$GITHUB_ENV"
+      - run: $SMOKE_PREFIX npm run test:desktop
+      - run: $SMOKE_PREFIX npm run test:workspace-layout
+      - run: $SMOKE_PREFIX npm run test:knowledge
+      - run: $SMOKE_PREFIX node scripts/testing/project-deletion-smoke.mjs
+      - run: $SMOKE_PREFIX node scripts/testing/updates-smoke.mjs
       - name: Package and optionally sign
         run: node scripts/package-release.mjs
         env:
@@ -55,10 +61,10 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      - run: npm run test:package
+      - run: $SMOKE_PREFIX npm run test:package
         env:
           TONGZHOU_PACKAGE_AUTO: '1'
-      - run: npm run test:task-workbench
+      - run: $SMOKE_PREFIX npm run test:task-workbench
         env:
           TONGZHOU_PACKAGE_AUTO: '1'
       - run: node scripts/release-checksums.mjs
@@ -70,6 +76,8 @@ jobs:
             release/*.exe
             release/*.dmg
             release/*.zip
+            release/*.AppImage
+            release/*.deb
             release/*.blockmap
             release/latest*.yml
             release/SHA256SUMS-*

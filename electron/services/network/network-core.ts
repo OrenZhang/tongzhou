@@ -19,6 +19,10 @@ const assets: Record<string, [string, string]> = {
     'mihomo-darwin-arm64-v1.19.32.gz',
     '3312a6780652c622890fd4357c6a853bbf865464fd047ac7b7f52dab8de18652',
   ],
+  'linux-x64': [
+    'mihomo-linux-amd64-compatible-v1.19.32.gz',
+    'ba3ce607747a07f948fc35780e108a4a7c7f552a38b9bd4d115f313ebcb89c20',
+  ],
 };
 export async function boundedBody(response: Response, max: number) {
   if (!response.ok || !response.body) throw new Error(`下载失败（HTTP ${response.status}）`);
@@ -62,7 +66,7 @@ export class NetworkCore {
     return this.installing;
   }
   private async performInstall(archive?: Buffer) {
-    if (!this.asset) throw new Error('目前支持 Windows x64、macOS Intel / Apple Silicon');
+    if (!this.asset) throw new Error('目前支持 Windows x64、macOS Intel / Apple Silicon 与 Linux x64');
     const [name, digest] = this.asset;
     if (this.status().installed) return;
     let bytes = archive;

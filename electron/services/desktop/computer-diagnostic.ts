@@ -47,10 +47,19 @@ export async function computerDiagnostic(computer: DesktopComputer) {
       { frameId: frame.frameId, text: '同舟自检成功' },
       controller.signal,
     );
-    const value = await window.webContents.executeJavaScript(
-      'document.querySelector("#sample").value',
-    );
-    if (value !== '同舟自检成功') throw new Error('中文输入未到达自检窗口，请重新聚焦后再试');
+    // Synthetic key events are delivered asynchronously (XWayland → Chromium → renderer);
+    // poll until the field reflects them instead of reading immediately.
+    let parsed = { value: '', focus: false, active: '' };
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const value = await window.webContents.executeJavaScript(
+        'JSON.stringify({value: document.querySelector("#sample").value, focus: document.hasFocus(), active: document.activeElement?.id || document.activeElement?.tagName})',
+      );
+      parsed = JSON.parse(value) as { value: string; focus: boolean; active: string };
+      if (parsed.value === '同舟自检成功') break;
+      await new Promise((r) => setTimeout(r, 150));
+    }
+    if (parsed.value !== '同舟自检成功')
+      throw new Error('中文输入未到达自检窗口，请重新聚焦后再试');
     step = '再次验证截图';
     await adapter.execute('computer_screenshot', { windowId: target.id }, controller.signal);
     return { ok: true, time: Date.now(), detail: '本机窗口发现、截图与中文输入均通过' };

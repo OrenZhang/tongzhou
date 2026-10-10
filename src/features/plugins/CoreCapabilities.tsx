@@ -161,7 +161,11 @@ export function CoreCapabilities({
       : status?.platform === 'darwin'
         ? `屏幕录制：${status.screen === 'granted' ? '已授权' : '待授权'} · 辅助功能：${status.accessibility ? '已授权' : '待授权'}`
         : status
-          ? `${status.platform === 'linux' ? 'Linux' : '当前系统'} 暂不支持电脑控制。`
+          ? status.platform === 'linux'
+            ? status.supported
+              ? 'Linux（X11）无需单独授权，仍需检测实际功能。'
+              : 'Linux 暂不支持电脑控制（需要 X11 / XWayland 显示环境）。'
+            : '当前系统暂不支持电脑控制。'
           : '系统状态尚未加载，可点击刷新。';
   return (
     <div className="core-capabilities">

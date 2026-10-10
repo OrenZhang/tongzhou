@@ -27,19 +27,30 @@ try {
   await navigate();
   const computer = page.getByRole('region', { name: '电脑控制能力', exact: true });
   const management = page.getByRole('region', { name: '客户端管理能力', exact: true });
-  await computer.getByText('尚未检测电脑控制', { exact: true }).waitFor();
+  const computerSupported = (await page.evaluate(() => window.tongzhou.computerStatus()))
+    .supported;
+  if (computerSupported)
+    await computer.getByText('尚未检测电脑控制', { exact: true }).waitFor();
+  else
+    await computer
+      .getByText('当前系统暂不支持此能力。可以继续在会话中使用项目文件、终端和客户端管理。', {
+        exact: true,
+      })
+      .waitFor();
   assert.equal(await computer.getByRole('button', { name: /停止全部任务/ }).count(), 0);
   const computerSwitch = computer.getByRole('switch', { name: '启用电脑控制', exact: true });
-  await computerSwitch.check();
-  await computer.getByText('已启用。Agent 从下一轮对话起可使用此能力。', { exact: true }).waitFor();
-  assert.equal((await page.evaluate(() => window.tongzhou.snapshot())).capabilities.computer, true);
+  if (computerSupported) {
+    await computerSwitch.check();
+    await computer.getByText('已启用。Agent 从下一轮对话起可使用此能力。', { exact: true }).waitFor();
+    assert.equal((await page.evaluate(() => window.tongzhou.snapshot())).capabilities.computer, true);
+  }
   const managementSwitch = management.getByRole('switch', { name: '启用客户端管理', exact: true });
   await managementSwitch.uncheck();
   await management.getByText('已停用，后续工具调用将不再使用此能力。', { exact: true }).waitFor();
   await page.reload();
   await page.waitForSelector('.app-shell');
   await navigate();
-  assert.equal(await computerSwitch.isChecked(), true);
+  if (computerSupported) assert.equal(await computerSwitch.isChecked(), true);
   assert.equal(await managementSwitch.isChecked(), false);
   await app.evaluate(({ ipcMain }) => {
     ipcMain.removeHandler('tongzhou:setCapability');
@@ -47,11 +58,14 @@ try {
       throw new Error('合成保存失败，请重试');
     });
   });
-  await computerSwitch.click();
-  await computer.getByRole('alert').filter({ hasText: '合成保存失败' }).waitFor();
+  const failingSwitch = computerSupported ? computerSwitch : managementSwitch;
+  const failingCard = computerSupported ? computer : management;
+  const savedValue = await failingSwitch.isChecked();
+  await failingSwitch.click();
+  await failingCard.getByRole('alert').filter({ hasText: '合成保存失败' }).waitFor();
   assert.equal(
-    await computerSwitch.isChecked(),
-    true,
+    await failingSwitch.isChecked(),
+    savedValue,
     'failed writes must restore the saved switch value',
   );
   await management.getByRole('button', { name: '复制客户端管理示例' }).click();
@@ -69,14 +83,16 @@ try {
       }));
     });
   }
-  await computer.getByRole('button', { name: /刷新系统状态|检查系统权限/ }).click();
-  await computer
-    .getByText('系统状态已刷新。是否可以截图和输入，请以电脑控制检测结果为准。', { exact: true })
-    .waitFor();
+  if (computerSupported) {
+    await computer.getByRole('button', { name: /刷新系统状态|检查系统权限/ }).click();
+    await computer
+      .getByText('系统状态已刷新。是否可以截图和输入，请以电脑控制检测结果为准。', { exact: true })
+      .waitFor();
+  }
   checks.push(
     'switches persist, separate per-card feedback, actionable example clipboard and permissions refresh, no inert stop button',
   );
-  if (process.env.TONGZHOU_COMPUTER_SMOKE === '1') {
+  if (process.env.TONGZHOU_COMPUTER_SMOKE === '1' && computerSupported) {
     await computer.getByRole('button', { name: '检测电脑控制', exact: true }).click();
     await computer.getByText('正在检测电脑控制', { exact: true }).waitFor();
     await computer
@@ -88,55 +104,57 @@ try {
       'real owned-window detection: native discovery, screenshot, Unicode input, result shown in the same card',
     );
   }
-  await app.evaluate(({ ipcMain }) => {
-    ipcMain.removeHandler('tongzhou:computerSelfTest');
-    ipcMain.handle(
-      'tongzhou:computerSelfTest',
-      () =>
-        new Promise((resolve) => {
-          globalThis.finishCapabilityTest = resolve;
-        }),
+  if (computerSupported) {
+    await app.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler('tongzhou:computerSelfTest');
+      ipcMain.handle(
+        'tongzhou:computerSelfTest',
+        () =>
+          new Promise((resolve) => {
+            globalThis.finishCapabilityTest = resolve;
+          }),
+      );
+    });
+    await computer.getByRole('button', { name: '检测电脑控制', exact: true }).click();
+    await computer.getByText('正在检测电脑控制', { exact: true }).waitFor();
+    assert.equal(
+      await computer.getByRole('button', { name: '检测中…', exact: true }).isDisabled(),
+      true,
     );
-  });
-  await computer.getByRole('button', { name: '检测电脑控制', exact: true }).click();
-  await computer.getByText('正在检测电脑控制', { exact: true }).waitFor();
-  assert.equal(
-    await computer.getByRole('button', { name: '检测中…', exact: true }).isDisabled(),
-    true,
-  );
-  await app.evaluate(() =>
-    globalThis.finishCapabilityTest({
-      supported: true,
-      platform: process.platform,
-      screen: 'available',
-      accessibility: true,
-      emergencyShortcut: false,
-      diagnostic: {
-        ok: false,
-        time: Date.now(),
-        detail: '截取测试窗口未完成：请保持窗口可见后重试。',
-      },
-    }),
-  );
-  await computer.getByRole('alert').filter({ hasText: '请保持窗口可见后重试' }).waitFor();
-  assert.equal(
-    await computer.getByRole('button', { name: '重新检测', exact: true }).isEnabled(),
-    true,
-  );
-  await page.screenshot({ animations: 'disabled', path: 'test-results/capabilities-retry.png' });
-  await computer.getByRole('button', { name: '重新检测', exact: true }).click();
-  await computer.getByText('正在检测电脑控制', { exact: true }).waitFor();
-  await app.evaluate(() =>
-    globalThis.finishCapabilityTest({
-      supported: true,
-      platform: process.platform,
-      screen: 'available',
-      accessibility: true,
-      emergencyShortcut: true,
-      diagnostic: { ok: true, time: Date.now(), detail: '本机窗口发现、截图与中文输入均通过' },
-    }),
-  );
-  await computer.getByText('检测通过，可以返回会话使用电脑控制。', { exact: true }).waitFor();
+    await app.evaluate(() =>
+      globalThis.finishCapabilityTest({
+        supported: true,
+        platform: process.platform,
+        screen: 'available',
+        accessibility: true,
+        emergencyShortcut: false,
+        diagnostic: {
+          ok: false,
+          time: Date.now(),
+          detail: '截取测试窗口未完成：请保持窗口可见后重试。',
+        },
+      }),
+    );
+    await computer.getByRole('alert').filter({ hasText: '请保持窗口可见后重试' }).waitFor();
+    assert.equal(
+      await computer.getByRole('button', { name: '重新检测', exact: true }).isEnabled(),
+      true,
+    );
+    await page.screenshot({ animations: 'disabled', path: 'test-results/capabilities-retry.png' });
+    await computer.getByRole('button', { name: '重新检测', exact: true }).click();
+    await computer.getByText('正在检测电脑控制', { exact: true }).waitFor();
+    await app.evaluate(() =>
+      globalThis.finishCapabilityTest({
+        supported: true,
+        platform: process.platform,
+        screen: 'available',
+        accessibility: true,
+        emergencyShortcut: true,
+        diagnostic: { ok: true, time: Date.now(), detail: '本机窗口发现、截图与中文输入均通过' },
+      }),
+    );
+    await computer.getByText('检测通过，可以返回会话使用电脑控制。', { exact: true }).waitFor();
+  }
   await page.screenshot({ animations: 'disabled', path: 'test-results/capabilities-light.png' });
   await page.evaluate(() => (document.documentElement.dataset.theme = 'dark'));
   await page.screenshot({ animations: 'disabled', path: 'test-results/capabilities-dark.png' });

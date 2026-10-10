@@ -143,6 +143,7 @@
       "dist-electron/builtin-mcp.cjs",
       "dist-electron/terminal-host.cjs"
     ],
+    "afterPack": "scripts/after-pack.mjs",
     "win": {
       "icon": "build/icon.ico",
       "target": [
@@ -175,8 +176,10 @@
     },
     "linux": {
       "target": [
-        "AppImage"
+        "AppImage",
+        "deb"
       ],
+      "maintainer": "Tongzhou contributors <84196323+OrenZhang@users.noreply.github.com>",
       "category": "Development"
     },
     "npmRebuild": false

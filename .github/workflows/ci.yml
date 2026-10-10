@@ -78,3 +78,24 @@ jobs:
           path: |
             test-results/*.png
             test-results/*report.json
+  linux-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install Linux build dependencies (X11 headers for the native addon)
+        run: sudo apt-get update && sudo apt-get install -y libx11-dev libxtst-dev
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - name: Package deb (GUI smokes stay release-only on Linux)
+        run: npx electron-builder --linux deb --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tongzhou-deb
+          path: release/*.deb
+          if-no-files-found: error

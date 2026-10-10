@@ -1,6 +1,7 @@
 import { build } from 'esbuild';
 import { cp, mkdir, rm } from 'node:fs/promises';
 import './prepare-pty.mjs';
+import './prepare-x11.mjs';
 await rm('dist-electron', { recursive: true, force: true });
 await mkdir('dist-electron/skills', { recursive: true });
 await cp('skills/skill-creator', 'dist-electron/skills/skill-creator', { recursive: true });
