@@ -31,7 +31,9 @@ export function assertLocalPath(root: string, file: string) {
   for (let part = file; ; part = path.dirname(part)) {
     if (existsSync(part) && lstatSync(part).isSymbolicLink())
       throw new Error('本地文件目录不能使用符号链接');
-    if (part === path.dirname(part)) break;
+    // Ancestors outside the caller's trusted root may be OS aliases (macOS /var).
+    // The root itself and every descendant must still be real directories.
+    if (path.relative(root, part) === '') break;
   }
 }
 
