@@ -1,3 +1,4 @@
+import { openSidebar } from './navigation-helper.mjs';
 import { chooseOption } from './choice-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { createServer } from 'node:http';
@@ -101,7 +102,7 @@ try {
     });
     await window.tongzhou.knowledgeSettings({ autoCollect: false });
   }, `http://127.0.0.1:${server.address().port}/v1`);
-  await page.getByRole('button', { name: '智库', exact: true }).click();
+  await openSidebar(page, '智库');
   const chatToggle = page.getByRole('button', { name: '切换文档对话', exact: true });
   await page.getByRole('complementary', { name: '文档对话', exact: true }).waitFor();
   await page.getByText('尚未选择文档', { exact: true }).waitFor();
@@ -344,7 +345,7 @@ try {
   await app.close();
   app = undefined;
   page = await launch();
-  await page.getByRole('button', { name: '智库', exact: true }).click();
+  await openSidebar(page, '智库');
   assert.equal(await page.getByLabel('内容库', { exact: true }).count(), 0);
   await page.locator('.content-file-row').filter({ hasText: '通用文章' }).click();
   await page.getByLabel('文档内容', { exact: true }).waitFor();

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import type { Snapshot, TongzhouAPI, Session } from '../../shared/types';
 import type {
   AutomationJobView,
@@ -164,6 +164,113 @@ export function AutomationCenter({
         : s.kind === 'once'
           ? `单次 ${date(s.at)}`
           : `${s.kind === 'daily' ? '每天' : '每周 ' + s.weekdays.map((v) => '日一二三四五六'[v]).join('、')} ${s.time} · ${s.timezone}`;
+  const resultPanel = (
+    <article className="automation-result">
+      {job ? (
+        <>
+          <h2>{job.rule.name}</h2>
+          <p>
+            {statuses[job.status]} · {date(job.startedAt ?? job.createdAt)}
+          </p>
+          {job.flow && (
+            <p className="muted">
+              流程：{job.flow.name} v{job.flow.version}
+            </p>
+          )}
+          <div className="row">
+            {['queued', 'running'].includes(job.status) && (
+              <button
+                disabled={busy}
+                onClick={() => void action(() => api.automationCancel(job.id))}
+              >
+                停止执行
+              </button>
+            )}
+            {['failed', 'cancelled'].includes(job.status) && (
+              <button
+                disabled={busy}
+                onClick={() => void action(() => api.automationRetry(job.id))}
+              >
+                重试
+              </button>
+            )}
+            {job.sessionId && onSession && job.rule.kind !== 'memory' && (
+              <button
+                onClick={() =>
+                  void action(async () => {
+                    const snapshot = await api.snapshot();
+                    const s = snapshot.sessions.find((s) => s.id === job.sessionId);
+                    if (!s) throw new Error('执行会话已删除');
+                    onSession(s);
+                  })
+                }
+              >
+                打开执行会话
+              </button>
+            )}
+            {job.outputId && (
+              <>
+                {job.rule.kind !== 'memory' && (
+                  <button
+                    disabled={busy}
+                    onClick={() =>
+                      void action(async () => {
+                        const r = await api.knowledgeRead(job.outputId!);
+                        await api.knowledgeReview(r.document.id, r.document.version);
+                        setNotice('派生草稿已核对收录');
+                      })
+                    }
+                  >
+                    核对收录
+                  </button>
+                )}
+                {onDocument && (
+                  <button onClick={() => onDocument(job.outputId!, job.rule.libraryId ?? '')}>
+                    {job.rule.kind === 'memory' ? '查看记忆' : '打开派生文档'}
+                  </button>
+                )}
+              </>
+            )}
+            {!job.reviewedAt && ['completed', 'failed', 'cancelled'].includes(job.status) && (
+              <button
+                disabled={busy}
+                onClick={() => void action(() => api.automationReview(job.id))}
+              >
+                标为已查看
+              </button>
+            )}
+          </div>
+          {job.source && (
+            <p className="muted">
+              来源：{job.source.title} · v{job.source.version}
+              {job.sourceState === 'changed'
+                ? ' · 原文已更新，可重新运行生成新草稿'
+                : job.sourceState === 'missing'
+                  ? ' · 原文已删除，保留本次来源记录'
+                  : ''}
+            </p>
+          )}
+          {job.error && <p className="danger">{job.error}</p>}
+          {job.result && <Markdown text={job.result} />}
+          {(job.flow?.prompt || job.rule.prompt) && (
+            <details>
+              <summary>本次任务指令</summary>
+              <pre>{job.flow?.prompt ?? job.rule.prompt}</pre>
+            </details>
+          )}
+        </>
+      ) : (
+        <p className="muted">选择一次执行，查看结果与处理记录。</p>
+      )}
+    </article>
+  );
+  const visibleJobs = state.jobs.filter(
+    (j) =>
+      filter === 'all' ||
+      (filter === 'unread'
+        ? !j.reviewedAt && ['completed', 'failed'].includes(j.status)
+        : j.status === filter),
+  );
   return (
     <div className="automation-center">
       <nav className="automation-tabs" aria-label="自动化分区">
@@ -324,66 +431,99 @@ export function AutomationCenter({
               还没有自动化。内容自动化可处理导入资料，定时任务可独立执行提示词或检查项目。
             </div>
           )}
-          <div className="automation-cards">
-            {state.rules.map((r) => (
-              <article key={r.id}>
-                <h3 title={capability(r.kind)?.description}>
-                  {r.name}
-                  {capability(r.kind)?.builtinRuleId === r.id && <small> · 内置</small>}
-                </h3>
-                <p>
-                  {capability(r.kind)?.name ?? r.kind} · {triggers[r.trigger]} ·{' '}
-                  {r.enabled ? '已启用' : '已暂停'}
-                </p>
-                {r.trigger === 'schedule' && (
-                  <>
-                    <p>{scheduleLabel(r.schedule)}</p>
-                    <small>下次执行：{date(r.nextRunAt)}</small>
-                  </>
-                )}
-                {r.error && <p className="danger">{r.error}</p>}
-                <div className="row">
-                  <button
-                    disabled={busy || (!!capability(r.kind)?.builtinRuleId && !r.enabled)}
-                    title={
-                      r.trigger === 'idle'
-                        ? '有新内容时加入队列，当前任务结束后执行'
-                        : '立即加入执行队列'
-                    }
-                    onClick={() =>
-                      void action(async () => {
-                        const result = await api.automationRun(r.id);
-                        setNotice(
-                          result.queued
-                            ? '已加入执行队列，可在任务与结果中查看'
-                            : (result.reason ?? '没有新增任务'),
-                        );
-                      })
-                    }
-                  >
-                    立即运行
-                  </button>
-                  <button onClick={() => setRule(r)}>编辑</button>
-                  <button
-                    disabled={busy}
-                    onClick={() =>
-                      void action(() => api.automationSave({ ...r, enabled: !r.enabled }))
-                    }
-                  >
-                    {r.enabled ? '暂停' : '启用'}
-                  </button>
-                  {!capability(r.kind)?.builtinRuleId && (
-                    <button
-                      disabled={busy}
-                      onClick={() => void action(() => api.automationDelete(r.id))}
-                    >
-                      删除
-                    </button>
-                  )}
-                </div>
-              </article>
-            ))}
-          </div>
+          {!!state.rules.length && (
+            <div
+              className="automation-table-scroll"
+              role="region"
+              aria-label="自动化任务列表"
+              tabIndex={0}
+            >
+              <table className="automation-rule-table" aria-label="自动化任务">
+                <thead>
+                  <tr>
+                    <th scope="col">任务名称</th>
+                    <th scope="col">类型</th>
+                    <th scope="col">触发方式</th>
+                    <th scope="col">状态</th>
+                    <th scope="col">下次执行</th>
+                    <th scope="col" className="automation-actions-heading">
+                      操作
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {state.rules.map((r) => (
+                    <tr key={r.id}>
+                      <th scope="row" className="automation-task-name">
+                        <h3 title={capability(r.kind)?.description}>{r.name}</h3>
+                        {capability(r.kind)?.builtinRuleId === r.id && (
+                          <span className="automation-builtin">内置</span>
+                        )}
+                        {r.error && <p className="danger">{r.error}</p>}
+                      </th>
+                      <td className="automation-task-kind">{capability(r.kind)?.name ?? r.kind}</td>
+                      <td className="automation-task-trigger">
+                        <span>{triggers[r.trigger]}</span>
+                        {r.trigger === 'schedule' && <small>{scheduleLabel(r.schedule)}</small>}
+                      </td>
+                      <td>
+                        <span
+                          className={`automation-rule-status ${r.enabled ? 'enabled' : 'paused'}`}
+                        >
+                          {r.enabled ? '已启用' : '已暂停'}
+                        </span>
+                      </td>
+                      <td className="automation-next-run">
+                        {r.enabled && r.trigger === 'schedule' ? date(r.nextRunAt) : '—'}
+                      </td>
+                      <td>
+                        <div className="automation-rule-actions">
+                          <button
+                            disabled={busy || (!!capability(r.kind)?.builtinRuleId && !r.enabled)}
+                            title={
+                              r.trigger === 'idle'
+                                ? '有新内容时加入队列，当前任务结束后执行'
+                                : '立即加入执行队列'
+                            }
+                            onClick={() =>
+                              void action(async () => {
+                                const result = await api.automationRun(r.id);
+                                setNotice(
+                                  result.queued
+                                    ? '已加入执行队列，可在任务与结果中查看'
+                                    : (result.reason ?? '没有新增任务'),
+                                );
+                              })
+                            }
+                          >
+                            立即运行
+                          </button>
+                          <button onClick={() => setRule(r)}>编辑</button>
+                          <button
+                            disabled={busy}
+                            onClick={() =>
+                              void action(() => api.automationSave({ ...r, enabled: !r.enabled }))
+                            }
+                          >
+                            {r.enabled ? '暂停' : '启用'}
+                          </button>
+                          {!capability(r.kind)?.builtinRuleId && (
+                            <button
+                              className="danger"
+                              disabled={busy}
+                              onClick={() => void action(() => api.automationDelete(r.id))}
+                            >
+                              删除
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </>
       )}
       {rule && (
@@ -665,132 +805,78 @@ export function AutomationCenter({
               ))}
             </select>
           </div>
-          <div className="automation-jobs">
-            <div className="automation-job-list">
-              {state.jobs
-                .filter(
-                  (j) =>
-                    filter === 'all' ||
-                    (filter === 'unread'
-                      ? !j.reviewedAt && ['completed', 'failed'].includes(j.status)
-                      : j.status === filter),
-                )
-                .map((j) => (
-                  <button
-                    key={j.id}
-                    className={selected === j.id ? 'selected' : ''}
-                    onClick={() => setSelected(j.id)}
-                  >
-                    <strong>{j.rule.name}</strong>
-                    <span>
-                      {statuses[j.status]} · 第 {j.attempt} 次尝试
-                    </span>
-                    <small>{date(j.createdAt)}</small>
-                  </button>
-                ))}
-              {!state.jobs.length && <p className="muted">执行结果会出现在这里。</p>}
-            </div>
-            <article className="automation-result">
-              {job ? (
-                <>
-                  <h2>{job.rule.name}</h2>
-                  <p>
-                    {statuses[job.status]} · {date(job.startedAt ?? job.createdAt)}
-                  </p>
-                  {job.flow && (
-                    <p className="muted">
-                      流程：{job.flow.name} v{job.flow.version}
-                    </p>
-                  )}
-                  <div className="row">
-                    {['queued', 'running'].includes(job.status) && (
-                      <button
-                        disabled={busy}
-                        onClick={() => void action(() => api.automationCancel(job.id))}
-                      >
-                        停止执行
-                      </button>
-                    )}
-                    {['failed', 'cancelled'].includes(job.status) && (
-                      <button
-                        disabled={busy}
-                        onClick={() => void action(() => api.automationRetry(job.id))}
-                      >
-                        重试
-                      </button>
-                    )}
-                    {job.sessionId && onSession && job.rule.kind !== 'memory' && (
-                      <button
-                        onClick={() =>
-                          void action(async () => {
-                            const snapshot = await api.snapshot();
-                            const s = snapshot.sessions.find((s) => s.id === job.sessionId);
-                            if (!s) throw new Error('执行会话已删除');
-                            onSession(s);
-                          })
-                        }
-                      >
-                        打开执行会话
-                      </button>
-                    )}
-                    {job.outputId && (
-                      <>
-                        {job.rule.kind !== 'memory' && (
-                          <button
-                            disabled={busy}
-                            onClick={() =>
-                              void action(async () => {
-                                const r = await api.knowledgeRead(job.outputId!);
-                                await api.knowledgeReview(r.document.id, r.document.version);
-                                setNotice('派生草稿已核对收录');
-                              })
-                            }
-                          >
-                            核对收录
-                          </button>
-                        )}
-                        {onDocument && (
-                          <button
-                            onClick={() => onDocument(job.outputId!, job.rule.libraryId ?? '')}
-                          >
-                            {job.rule.kind === 'memory' ? '查看记忆' : '打开派生文档'}
-                          </button>
-                        )}
-                      </>
-                    )}
-                    {!job.reviewedAt &&
-                      ['completed', 'failed', 'cancelled'].includes(job.status) && (
+          <div
+            className="automation-table-scroll automation-job-table-scroll"
+            role="region"
+            aria-label="执行记录列表"
+            tabIndex={0}
+          >
+            <table className="automation-rule-table automation-job-table" aria-label="执行记录">
+              <thead>
+                <tr>
+                  <th scope="col">任务名称</th>
+                  <th scope="col">状态</th>
+                  <th scope="col">执行时间</th>
+                  <th scope="col">尝试次数</th>
+                  <th scope="col" className="automation-actions-heading">
+                    操作
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleJobs.map((j) => (
+                  <Fragment key={j.id}>
+                    <tr
+                      className={selected === j.id ? 'selected' : ''}
+                      onClick={() => setSelected(selected === j.id ? '' : j.id)}
+                    >
+                      <th scope="row" className="automation-task-name">
                         <button
-                          disabled={busy}
-                          onClick={() => void action(() => api.automationReview(job.id))}
+                          className="automation-job-name"
+                          aria-expanded={selected === j.id}
+                          aria-controls={`automation-result-${j.id}`}
                         >
-                          标为已查看
+                          {j.rule.name}
                         </button>
-                      )}
-                  </div>
-                  {job.source && (
-                    <p className="muted">
-                      来源：{job.source.title} · v{job.source.version}
-                      {job.sourceState === 'changed'
-                        ? ' · 原文已更新，可重新运行生成新草稿'
-                        : job.sourceState === 'missing'
-                          ? ' · 原文已删除，保留本次来源记录'
-                          : ''}
-                    </p>
-                  )}
-                  {job.error && <p className="danger">{job.error}</p>}
-                  {job.result && <Markdown text={job.result} />}
-                  {(job.flow?.prompt || job.rule.prompt) && (
-                    <details>
-                      <summary>本次任务指令</summary>
-                      <pre>{job.flow?.prompt ?? job.rule.prompt}</pre>
-                    </details>
-                  )}
-                </>
-              ) : (
-                <p className="muted">选择一次执行，查看结果与处理记录。</p>
-              )}
-            </article>
+                      </th>
+                      <td>
+                        <span className={`automation-job-status ${j.status}`}>
+                          {statuses[j.status]}
+                        </span>
+                      </td>
+                      <td className="automation-next-run">{date(j.startedAt ?? j.createdAt)}</td>
+                      <td className="automation-task-kind">{j.attempt}</td>
+                      <td>
+                        <div className="automation-rule-actions">
+                          <button
+                            aria-expanded={selected === j.id}
+                            aria-controls={`automation-result-${j.id}`}
+                          >
+                            {selected === j.id ? '收起结果' : '查看结果'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    {selected === j.id && (
+                      <tr className="automation-job-detail-row">
+                        <td colSpan={5} id={`automation-result-${j.id}`}>
+                          {resultPanel}
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                ))}
+                {!visibleJobs.length && (
+                  <tr>
+                    <td colSpan={5} className="automation-job-empty">
+                      {state.jobs.length
+                        ? '没有符合当前筛选条件的执行记录。'
+                        : '执行结果会出现在这里。'}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </>
       )}

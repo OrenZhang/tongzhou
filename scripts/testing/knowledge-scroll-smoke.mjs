@@ -1,3 +1,4 @@
+import { openSidebar } from './navigation-helper.mjs';
 import { seedKnowledge } from './knowledge-fixture.mjs';
 import { _electron as electron } from 'playwright';
 import { mkdir, mkdtemp } from 'node:fs/promises';
@@ -35,8 +36,8 @@ try {
   page.on('pageerror', (e) => errors.push(e.message));
   await page.waitForSelector('.app-shell');
 
-  await page.getByRole('button', { name: '智库', exact: true }).click();
-  await page.getByRole('button', { name: '智库', exact: true }).click();
+  await openSidebar(page, '智库');
+  await openSidebar(page, '智库');
   await page.getByRole('tab', { name: /^内容库/ }).click();
   for (const [width, height] of [
     [1440, 960],

@@ -1,3 +1,4 @@
+import { openSidebar } from './navigation-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { mkdir, mkdtemp, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -64,7 +65,7 @@ try {
     });
     BrowserWindow.getAllWindows()[0].setContentSize(1200, 1000);
   });
-  await page.locator('.sidebar').getByRole('button', { name: '插件', exact: true }).click();
+  await openSidebar(page, '插件');
   const guide = page.getByRole('region', { name: 'macOS 授权引导', exact: true });
   assert.equal(await guide.locator('[draggable=true]').count(), 0);
   await guide.getByRole('button', { name: '打开辅助功能设置', exact: true }).click();
@@ -215,7 +216,7 @@ try {
       };
     }, platform);
     await page.reload();
-    await page.locator('.sidebar').getByRole('button', { name: '插件', exact: true }).click();
+    await openSidebar(page, '插件');
     await computer
       .getByText(platform === 'win32' ? 'Windows 使用条件' : 'Linux 支持状态', { exact: true })
       .waitFor();

@@ -1,4 +1,4 @@
-import { openModels } from './navigation-helper.mjs';
+import { openModels, openSidebar } from './navigation-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { build } from 'esbuild';
 import { createRequire } from 'node:module';
@@ -179,14 +179,7 @@ try {
   await app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows().forEach((w) => w.setIgnoreMouseEvents(true)),
   );
-  const nav = async (name) => {
-    if (name === '模型') {
-      await openModels(page);
-    } else if (name === '渠道') {
-      await page.locator('.sidebar').getByRole('button', { name: '设置', exact: true }).click();
-      await page.getByRole('button', { name: '打开渠道', exact: true }).click();
-    } else await page.locator('.sidebar').getByRole('button', { name, exact: true }).click();
-  };
+  const nav = async (name) => openSidebar(page, name);
   const capture = async (name) => {
     const file = `test-results/ui-${name}.png`;
     await page.screenshot({ path: file, animations: 'disabled' });
@@ -217,18 +210,27 @@ try {
   await page.getByRole('heading', { name: '模型', exact: true }).waitFor();
   assert.equal(
     await page.locator('.sidebar').getByRole('button', { name: '模型', exact: true }).count(),
-    0,
+    1,
   );
   assert.equal(
     await page
       .locator('.sidebar')
       .getByRole('button', { name: '设置', exact: true })
       .getAttribute('aria-current'),
+    null,
+  );
+  assert.equal(await page.getByRole('button', { name: '返回设置', exact: true }).count(), 0);
+  assert.equal(
+    await page
+      .locator('.sidebar')
+      .getByRole('button', { name: '模型', exact: true })
+      .getAttribute('aria-current'),
     'page',
   );
-  await page.getByRole('button', { name: '返回设置', exact: true }).click();
+  await page.locator('.sidebar').getByRole('button', { name: '设置', exact: true }).click();
   await page.getByRole('heading', { name: '设置', exact: true }).waitFor();
-  await page.getByRole('button', { name: '打开模型', exact: true }).click();
+  assert.equal(await page.getByRole('button', { name: '打开模型', exact: true }).count(), 0);
+  await openModels(page);
   checks.push('keyboard command search opens the selected real module');
   await page.getByLabel('搜索模型连接', { exact: true }).fill('does-not-exist');
   await page.getByText('没有匹配的连接，试试其他关键词。', { exact: true }).waitFor();

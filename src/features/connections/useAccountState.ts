@@ -88,7 +88,7 @@ export function useAccountState(
     };
   }, [api, view, providerKey]);
   useEffect(() => {
-    if (!authPanel && view !== 'settings' && view !== 'providers') return;
+    if (!authPanel && view !== 'providers') return;
     let active = true;
     const id = authPanel ? authProviderId : undefined;
     const guard = (providerId: string) => {

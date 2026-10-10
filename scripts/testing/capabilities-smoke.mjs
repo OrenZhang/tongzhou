@@ -1,3 +1,4 @@
+import { openSidebar } from './navigation-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -22,8 +23,7 @@ try {
     w.setContentSize(1200, 950);
     w.setIgnoreMouseEvents(true);
   });
-  const navigate = () =>
-    page.locator('.sidebar').getByRole('button', { name: '插件', exact: true }).click();
+  const navigate = () => openSidebar(page, '插件');
   await navigate();
   const computer = page.getByRole('region', { name: '电脑控制能力', exact: true });
   const management = page.getByRole('region', { name: '客户端管理能力', exact: true });

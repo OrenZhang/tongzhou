@@ -1,3 +1,4 @@
+import { openSidebar } from './navigation-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { createServer } from 'node:http';
 import { mkdir, mkdtemp, readFile } from 'node:fs/promises';
@@ -142,6 +143,7 @@ try {
   assert.equal(await page.locator('.artifact-strip .artifact-card').count(), 2);
   await page.screenshot({ path: path.join(root, 'chat-file-links.png'), animations: 'disabled' });
   assert.equal(await page.locator('.workspace-navigation').count(), 0);
+  await page.locator('.sidebar-bottom [data-nav-expand]').click();
   for (const name of ['Agent', '智库', '插件', '运行记录', '定时任务', '设置'])
     assert.equal(
       await page.locator('.sidebar-bottom').getByRole('button', { name, exact: true }).count(),
@@ -168,7 +170,7 @@ try {
   await waitFor(page, () =>
     document.querySelector('.composer textarea')?.value.includes('描述图片'),
   );
-  await page.getByRole('button', { name: '智库', exact: true }).click();
+  await openSidebar(page, '智库');
   await page.getByRole('tab', { name: /^作品/ }).click();
   await page.getByRole('button', { name: '查看作品 整理结果.md', exact: true }).click();
   const content = await page.evaluate(() => window.tongzhou.contentState('default'));
@@ -188,7 +190,7 @@ try {
   await page.getByRole('button', { name: '会话作品', exact: true }).click();
   await page.getByLabel('作品来源会话', { exact: true }).waitFor();
   assert.equal(await page.getByLabel('作品来源会话', { exact: true }).inputValue(), session.id);
-  await page.getByRole('button', { name: '智库', exact: true }).click();
+  await openSidebar(page, '智库');
   await page.getByRole('tab', { name: /^作品/ }).click();
   assert.equal(await page.getByRole('tab', { name: '资料整理', exact: true }).count(), 0);
   assert.equal(
@@ -249,7 +251,7 @@ try {
   await app.close();
   page = await launch();
   assert.equal((await page.evaluate(() => window.tongzhou.artifactList())).total, 2);
-  await page.getByRole('button', { name: '智库', exact: true }).click();
+  await openSidebar(page, '智库');
   await page.getByRole('tab', { name: /^作品/ }).click();
   await page.getByRole('button', { name: '查看作品 测试图片.png', exact: true }).click();
   await page.getByRole('button', { name: '删除作品', exact: true }).click();

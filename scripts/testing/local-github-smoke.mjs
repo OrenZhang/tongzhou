@@ -1,3 +1,4 @@
+import { openSidebar } from './navigation-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { build } from 'esbuild';
 import { createServer } from 'node:http';
@@ -221,7 +222,7 @@ try {
       local: `http://127.0.0.1:${server.address().port}`,
     },
   );
-  await page.locator('.sidebar').getByRole('button', { name: '插件', exact: true }).click();
+  await openSidebar(page, '插件');
   await page.getByRole('button', { name: /^内置插件/ }).click();
   await page.getByLabel('搜索插件', { exact: true }).fill('GitHub');
   let card = page
@@ -261,7 +262,7 @@ try {
   const repeated = await page.evaluate(() => window.tongzhou.snapshot());
   assert.equal(repeated.plugins.filter((p) => p.connectorId === connector.id).length, 1);
   await page.reload();
-  await page.locator('.sidebar').getByRole('button', { name: '插件', exact: true }).click();
+  await openSidebar(page, '插件');
   await page.getByRole('button', { name: /^内置插件/ }).click();
   await page.getByLabel('搜索插件', { exact: true }).fill('GitHub');
   await card.getByText('连接已验证 · 已启用', { exact: false }).waitFor();
@@ -427,7 +428,7 @@ try {
     window.setFocusable(false);
     window.blur();
   });
-  await page.locator('.sidebar').getByRole('button', { name: '插件', exact: true }).click();
+  await openSidebar(page, '插件');
   await page.getByRole('button', { name: /^内置插件/ }).click();
   await page.getByLabel('搜索插件', { exact: true }).fill('GitHub');
   card = page
@@ -438,7 +439,7 @@ try {
   assert.ok(persisted.plugins.find((p) => p.id === plugin.id).hasSecret);
   assert.ok(!JSON.stringify(persisted).includes('fixture-local-github-token'));
   await page.locator('.sidebar').getByRole('button', { name: '设置', exact: true }).click();
-  await page.getByRole('button', { name: '打开渠道', exact: true }).click();
+  await openSidebar(page, '渠道');
   await page.locator('.sidebar').getByRole('button', { name: '设置', exact: true }).click();
   assert.equal(await page.getByRole('button', { name: '管理浏览器账号', exact: true }).count(), 0);
   assert.ok(

@@ -1,3 +1,4 @@
+import { openSidebar } from './navigation-helper.mjs';
 import { chooseOption } from './choice-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { createServer } from 'node:http';
@@ -215,9 +216,9 @@ try {
   assert.equal((await page.evaluate(() => window.tongzhou.snapshot())).sessions.length, 1);
   checks.push('history quote and independent branch', 'archive deletion');
   await page.getByRole('button', { name: '设置', exact: true }).click();
-  await page.getByRole('button', { name: '打开渠道', exact: true }).click();
+  await openSidebar(page, '渠道');
   const form = page.locator('.connection-form');
-  await page.locator('.sidebar').getByRole('button', { name: '渠道', exact: true }).click();
+  await openSidebar(page, '渠道');
   await page.getByRole('button', { name: '添加飞书渠道', exact: true }).click();
   await page.getByRole('button', { name: '飞书仅通知', exact: true }).click();
   await form.getByLabel('名称', { exact: true }).fill('合成飞书');

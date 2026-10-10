@@ -1,3 +1,4 @@
+import { openSidebar } from './navigation-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { build } from 'esbuild';
 import { createRequire } from 'node:module';
@@ -113,7 +114,7 @@ try {
     });
   }, `http://127.0.0.1:${server.address().port}/v1`);
   const open = async () => {
-    await page.getByRole('button', { name: '智库', exact: true }).click();
+    await openSidebar(page, '智库');
     await page.getByRole('tab', { name: '个性与偏好' }).click();
     await page.getByLabel('补充要求', { exact: true }).waitFor();
   };

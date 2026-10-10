@@ -1,3 +1,4 @@
+import { openSidebar } from './navigation-helper.mjs';
 import { seedKnowledge } from './knowledge-fixture.mjs';
 import { _electron as electron } from 'playwright';
 import { mkdir, mkdtemp } from 'node:fs/promises';
@@ -57,8 +58,8 @@ try {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
 
-  await page.getByRole('button', { name: '智库', exact: true }).click();
-  await page.getByRole('button', { name: '智库', exact: true }).click();
+  await openSidebar(page, '智库');
+  await openSidebar(page, '智库');
   await page.getByRole('tab', { name: /^内容库/ }).click();
   assert.equal(await page.getByRole('button', { name: '查看来源记录', exact: true }).count(), 0);
   await page.locator('.content-file-row').filter({ hasText: '后台运行知识' }).click();
@@ -94,7 +95,7 @@ try {
   const saved = await page.evaluate((id) => window.tongzhou.knowledgeRead(id), ids.doc);
   assert.equal(saved.document.assertions[0].object, 'npm start --safe');
   assert.ok(saved.revisions.length >= 1);
-  await page.getByRole('button', { name: '智库', exact: true }).click();
+  await openSidebar(page, '智库');
   await page.getByRole('tab', { name: '知识与记忆', exact: false }).click();
   await page.getByLabel('搜索知识关系', { exact: true }).fill('safe');
   await page.waitForFunction(() => document.querySelectorAll('.ontology-fact').length === 1);
@@ -105,18 +106,18 @@ try {
       content: r.document.content + '\n配置已变更。',
     });
   }, ids.source);
-  await page.getByRole('button', { name: '智库', exact: true }).click();
+  await openSidebar(page, '智库');
   await page.getByRole('tab', { name: /^内容库/ }).click();
-  await page.getByRole('button', { name: '智库', exact: true }).click();
+  await openSidebar(page, '智库');
   await page.getByRole('tab', { name: '知识与记忆', exact: false }).click();
   await page.waitForFunction(
     () => document.querySelectorAll('.ontology-status.stale').length === 3,
   );
   await page.reload();
-  await page.getByRole('button', { name: '智库', exact: true }).click();
-  await page.getByRole('button', { name: '智库', exact: true }).click();
+  await openSidebar(page, '智库');
+  await openSidebar(page, '智库');
   await page.getByRole('tab', { name: /^内容库/ }).click();
-  await page.getByRole('button', { name: '智库', exact: true }).click();
+  await openSidebar(page, '智库');
   await page.getByRole('tab', { name: '知识与记忆', exact: false }).click();
   await page.waitForFunction(
     () => document.querySelectorAll('.ontology-status.stale').length === 3,

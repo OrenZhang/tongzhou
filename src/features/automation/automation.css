@@ -11,8 +11,7 @@
   border-bottom: 1px solid var(--border);
   padding-bottom: 12px;
 }
-.automation-tabs button.selected,
-.automation-job-list button.selected {
+.automation-tabs button.selected {
   color: var(--accent);
   background: var(--accent-soft);
 }
@@ -54,6 +53,120 @@
   overflow: hidden;
   white-space: pre-wrap;
 }
+.automation-table-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.automation-rule-table {
+  width: 100%;
+  min-width: 820px;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: left;
+}
+.automation-rule-table th,
+.automation-rule-table td {
+  padding: 14px 16px;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--border);
+}
+.automation-rule-table thead th {
+  padding-top: 11px;
+  padding-bottom: 11px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.automation-rule-table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+.automation-rule-table tbody tr:hover {
+  background: color-mix(in srgb, var(--accent-soft) 35%, var(--surface));
+}
+.automation-task-name {
+  min-width: 160px;
+  max-width: 280px;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+.automation-task-name h3 {
+  display: inline;
+  font-size: 14px;
+  font-weight: 600;
+}
+.automation-builtin {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 11px;
+  vertical-align: middle;
+}
+.automation-task-name .danger {
+  margin-top: 5px;
+  font-size: 12px;
+}
+.automation-task-kind,
+.automation-next-run {
+  color: var(--muted);
+  white-space: nowrap;
+}
+.automation-task-trigger small {
+  display: block;
+  max-width: 260px;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.automation-rule-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+.automation-rule-status::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.automation-rule-status.enabled {
+  color: var(--success);
+}
+.automation-rule-table .automation-actions-heading {
+  text-align: right;
+}
+.automation-rule-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  white-space: nowrap;
+}
+.automation-rule-actions button {
+  min-height: 28px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--running);
+  font-size: 12px;
+}
+.automation-rule-actions button.danger {
+  color: var(--danger);
+}
+.automation-rule-actions button:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
 .automation-form {
   max-width: 960px;
   width: 100%;
@@ -85,32 +198,72 @@
   padding: 16px;
   border-radius: 10px;
 }
-.automation-jobs {
-  display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
-  gap: 18px;
-  align-items: start;
+.automation-job-table {
+  min-width: 640px;
 }
-.automation-job-list {
-  max-height: 700px;
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.automation-job-table-scroll {
+  max-height: 650px;
 }
-.automation-job-list button {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+.automation-job-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.automation-job-table tbody > tr:not(.automation-job-detail-row) {
+  cursor: pointer;
+}
+.automation-job-table tbody > tr.selected {
+  background: var(--accent-soft);
+}
+.automation-job-table th,
+.automation-job-table td {
+  padding: 9px 16px;
+}
+.automation-job-name {
+  padding: 2px 0;
+  color: var(--running);
+  font-weight: 600;
   text-align: left;
-  gap: 8px;
-  padding: 14px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  line-height: 20px;
   overflow-wrap: anywhere;
 }
+.automation-job-name:hover {
+  background: transparent;
+  color: var(--accent);
+}
+.automation-job-status {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.automation-job-status.completed {
+  color: var(--success);
+}
+.automation-job-status.failed {
+  color: var(--danger);
+}
+.automation-job-status.running,
+.automation-job-status.queued {
+  color: var(--running);
+}
+.automation-job-table .automation-job-detail-row > td {
+  padding: 0;
+}
+.automation-job-detail-row .automation-result {
+  border: 0;
+  border-radius: 0;
+  padding: 16px 20px;
+  background: var(--surface-muted);
+}
+.automation-job-detail-row h2 {
+  font-size: 15px;
+}
+.automation-job-table .automation-job-empty {
+  padding: 28px 16px;
+  color: var(--muted);
+  text-align: center;
+}
 .automation-result {
-  min-height: 300px;
   overflow-wrap: anywhere;
 }
 .automation-result .row {
@@ -121,12 +274,6 @@
   white-space: pre-wrap;
 }
 @media (max-width: 800px) {
-  .automation-jobs {
-    grid-template-columns: 1fr;
-  }
-  .automation-job-list {
-    max-height: 260px;
-  }
   .automation-form {
     padding: 14px;
   }
