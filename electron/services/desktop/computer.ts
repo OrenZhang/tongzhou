@@ -6,6 +6,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { z } from 'zod';
 import { command } from '../../core/tools/workspace';
 import type { ComputerAdapter } from '../../core/tools/extensions';
+import { x11Available, x11Run, rgbaToPng, type X11Capture } from './linux-computer';
 import type { ComputerStatus, ToolOutput } from '../../../src/shared/types';
 import type { ToolSpec } from '../../core/models/providers';
 
@@ -162,7 +163,10 @@ export class DesktopComputer implements ComputerAdapter {
   emergencyShortcut = false;
   status(): ComputerStatus {
     return {
-      supported: ['win32', 'darwin'].includes(process.platform),
+      supported:
+        process.platform === 'linux'
+          ? x11Available()
+          : ['win32', 'darwin'].includes(process.platform),
       platform: process.platform,
       screen:
         process.platform === 'darwin'
@@ -181,6 +185,23 @@ export class DesktopComputer implements ComputerAdapter {
     return computerTools.filter((_, i) => !readOnly || i < 2);
   }
   private async helper(payload: unknown, signal: AbortSignal) {
+    if (process.platform === 'linux') {
+      signal.throwIfAborted();
+      try {
+        return await x11Run(payload, signal);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (message.includes('Could not focus'))
+          throw new Error(
+            '无法聚焦目标窗口。请将同舟置于前台批准操作，或先点击目标窗口使其获得键盘焦点后重试。未发送输入。',
+          );
+        if (message.includes('focus was lost'))
+          throw new Error(
+            '输入过程中目标窗口失去了键盘焦点，字符可能未完整送入。请重新截图确认，必要时先点击目标窗口再输入。',
+          );
+        throw new Error('电脑操作失败，请检查系统权限与目标窗口状态。');
+      }
+    }
     const root = path
       .join(__dirname, '../build/computer')
       .replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep);
@@ -227,7 +248,9 @@ export class DesktopComputer implements ComputerAdapter {
     return JSON.parse(output.slice('exit code: 0\n'.length).trim());
   }
   async execute(name: string, args: any, signal: AbortSignal): Promise<ToolOutput> {
-    if (!this.status().supported) throw new Error('电脑控制仅支持 Windows 和 macOS');
+    if (!this.status().supported)
+      throw new Error('电脑控制需要 Windows、macOS，或带 X11/XWayland 显示的 Linux');
+    const platform = this.status().platform;
     if (this.lock.busy) throw new Error('另一项电脑操作正在执行，请稍后重试');
     this.lock.busy = true;
     try {
@@ -245,17 +268,21 @@ export class DesktopComputer implements ComputerAdapter {
         let source: Awaited<ReturnType<typeof desktopCapturer.getSources>>[number] | undefined;
         // A newly shown window may be enumerated before its first capture frame exists.
         // Retry only the requested window; never substitute another window or a full screen.
-        for (let attempt = 0; attempt < 3; attempt++) {
-          signal.throwIfAborted();
-          const sources = await desktopCapturer.getSources({
-            types: ['window'],
-            thumbnailSize: { width: 1280, height: 960 },
-            fetchWindowIcons: false,
-          });
-          signal.throwIfAborted();
-          source = sources.find((s) => s.id.split(':')[1] === window.id);
-          if (source && !source.thumbnail.isEmpty()) break;
-          if (attempt < 2) await delay(150 * (attempt + 1), undefined, { signal });
+        // Linux skips desktopCapturer entirely: on Wayland sessions it hangs waiting for
+        // the capture portal and exposes no window sources (the X11 capture below covers it).
+        if (platform !== 'linux') {
+          for (let attempt = 0; attempt < 3; attempt++) {
+            signal.throwIfAborted();
+            const sources = await desktopCapturer.getSources({
+              types: ['window'],
+              thumbnailSize: { width: 1280, height: 960 },
+              fetchWindowIcons: false,
+            });
+            signal.throwIfAborted();
+            source = sources.find((s) => s.id.split(':')[1] === window.id);
+            if (source && !source.thumbnail.isEmpty()) break;
+            if (attempt < 2) await delay(150 * (attempt + 1), undefined, { signal });
+          }
         }
         let image = source?.thumbnail;
         let dialogBounds: WindowInfo['bounds'] | undefined;
@@ -271,6 +298,21 @@ export class DesktopComputer implements ComputerAdapter {
           const captured = await this.helper({ action: 'capture-dialog', window }, signal);
           image = nativeImage.createFromBuffer(Buffer.from(captured.data, 'base64'));
           dialogBounds = captured.bounds;
+        }
+        // The X11 addon reads window pixels directly, on the same connection as input.
+        if ((!image || image.isEmpty()) && platform === 'linux') {
+          try {
+            const captured = (await x11Run({
+              action: 'capture',
+              windowId: window.id,
+              pid: window.pid,
+            })) as X11Capture;
+            image = nativeImage.createFromBuffer(
+              rgbaToPng(captured.width, captured.height, captured.data),
+            );
+          } catch {
+            // Fall through to the unified error below.
+          }
         }
         if (!image || image.isEmpty())
           throw new Error(

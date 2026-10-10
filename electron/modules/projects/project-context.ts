@@ -19,7 +19,9 @@ async function git(root: string, args: string[]) {
       ['--no-pager', '--literal-pathspecs', '-c', 'core.quotepath=false', ...args],
       {
         cwd: root,
-        env: { ...minimalEnv(), GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0' },
+        // Git 本地化消息（如 zh_CN 的“不是 Git 仓库”）会让基于英文的解析失配；
+        // 强制 C locale 保证 plumbing 输出稳定，UTF-8 路径由 core.quotepath=false 保证。
+        env: { ...minimalEnv(), LC_ALL: 'C', GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0' },
         windowsHide: true,
         timeout: 15000,
         maxBuffer: 2 * 1024 * 1024,

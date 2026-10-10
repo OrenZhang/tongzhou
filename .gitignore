@@ -8,6 +8,10 @@ node_modules/
 .eslintcache
 *.tsbuildinfo
 
+# Compiled native artifacts (rebuilt by scripts/prepare-x11.mjs)
+/build/computer/linux-x11/build/
+/build/computer/linux-x11/computer-x11.node
+
 # Generated test output; source tests and sanitized fixtures stay tracked
 /coverage/
 /test-results/
