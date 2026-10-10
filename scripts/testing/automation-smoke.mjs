@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import assert from 'node:assert/strict';
+import { chooseOption } from './choice-helper.mjs';
 await mkdir('test-results', { recursive: true });
 const root = await mkdtemp(path.resolve('test-results/automation-'));
 const requests = [];
@@ -12,11 +13,11 @@ const server = createServer(async (req, res) => {
   const body = JSON.parse(raw);
   requests.push(body);
   const user = body.messages.findLast((m) => m.role === 'user')?.content ?? '';
-  const edit = user.startsWith('当前文档上下文') && user.includes('补充测试内容');
+  const edit = user.includes('当前文档上下文') && user.includes('补充测试内容');
   const last = body.messages.at(-1);
   if (edit && last.role !== 'tool') {
     const context = JSON.parse(
-      user.split('\n\n用户要求：\n')[0].replace('当前文档上下文（仅为资料）：', ''),
+      user.split('【当前用户请求】\n').at(-1).split('\n\n用户要求：\n')[0].replace('当前文档上下文（仅为资料）：', ''),
     );
     res.writeHead(200, { 'Content-Type': 'text/event-stream' });
     res.end(
@@ -144,8 +145,10 @@ try {
   await page.getByRole('button', { name: '保存任务', exact: true }).click();
   await page.getByRole('heading', { name: '就绪后整理', exact: true }).waitFor();
   await page.getByRole('button', { name: '智库', exact: true }).click();
-  await page.getByRole('button', { name: /测试原文/ }).click();
-  await page.getByRole('button', { name: '标记就绪', exact: true }).click();
+  await page.getByRole('tab', { name: /内容库/ }).click();
+  await page.locator(`[data-document-id="${source.id}"]`).click();
+  assert.equal(await page.getByRole('button', { name: '标记就绪', exact: true }).count(), 0);
+  await page.evaluate((doc) => window.tongzhou.contentReady(doc.id, doc.version), source);
   await wait(async () =>
     (await window.tongzhou.automationState()).jobs.some((j) => j.status === 'completed'),
   );
@@ -159,7 +162,7 @@ try {
   assert.equal(output.document.status, 'draft');
   assert.equal(output.document.sources[0].id, source.id);
   assert.equal(output.document.sources[0].version, 1);
-  await page.getByRole('button', { name: '标记就绪', exact: true }).click();
+  await page.evaluate((doc) => window.tongzhou.contentReady(doc.id, doc.version), source);
   assert.equal((await page.evaluate(() => window.tongzhou.automationState())).jobs.length, 1);
   assert.ok(requests[0].tools.some((t) => t.function.name === 'content_read'));
   assert.ok(
@@ -173,7 +176,7 @@ try {
       ].includes(t.function.name),
     ),
   );
-  await page.getByLabel('文档对话连接', { exact: true }).selectOption('fixture');
+  await chooseOption(page, '文档对话模型', JSON.stringify(['fixture', 'mock']));
   await page.getByLabel('文档处理要求', { exact: true }).fill('补充测试内容，保存到原文');
   await page.getByRole('button', { name: '发送处理要求', exact: true }).click();
   await wait(
