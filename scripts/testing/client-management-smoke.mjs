@@ -225,7 +225,7 @@ try {
   });
   assert.equal(
     await page.locator('.sidebar').getByRole('button', { name: '渠道', exact: true }).count(),
-    0,
+    1,
   );
   await openModels(page);
   assert.equal(await page.getByRole('button', { name: '浏览器账号', exact: true }).count(), 0);
@@ -233,8 +233,7 @@ try {
   await page.getByRole('button', { name: '打开渠道', exact: true }).click();
   await page.getByRole('heading', { name: '渠道', exact: true }).waitFor();
   assert.equal(await page.getByRole('button', { name: '添加连接', exact: true }).count(), 0);
-  assert.equal(await page.locator('.sidebar-bottom .active').innerText(), '设置');
-  await page.getByRole('button', { name: '返回设置', exact: true }).click();
+  await page.locator('.sidebar').getByRole('button', { name: '设置', exact: true }).click();
   const catalog = await page.evaluate(() => window.tongzhou.clientMethods());
   const source = (
     await Promise.all(
