@@ -66,7 +66,10 @@ async function main() {
   } finally {
     codex.stop();
     await scope.close();
-    await rm(root, { recursive: true, force: true });
+    const relative = path.relative(path.resolve('test-results'), root);
+    assert.ok(relative && !relative.startsWith('..') && !path.isAbsolute(relative));
+    // Windows releases SQLite handles shortly after the stopped child exits.
+    await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 }
 main().catch((error) => {
