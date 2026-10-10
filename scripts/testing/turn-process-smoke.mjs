@@ -162,7 +162,6 @@ try {
       elements.map((e) => e.dataset.entryKind).filter((kind) => kind !== 'phase'),
     );
   assert.deepEqual(ordered, [
-    'notice',
     'reasoning',
     'response',
     'reasoning',

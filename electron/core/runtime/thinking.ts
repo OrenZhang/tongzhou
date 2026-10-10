@@ -99,29 +99,3 @@ export function codexThinking(model: any, enabled = true): { effort?: string; no
       ) ?? positive[0]);
   return { effort, ...(!enabled ? { note: '此模型不能关闭思考，已使用支持的最低强度。' } : {}) };
 }
-
-export async function nativeThinking(
-  client: { request(method: string, params: any): Promise<any> },
-  sessionId: string,
-  state: any,
-  enabled = true,
-) {
-  const option = state?.configOptions?.find(
-    (o: any) => o.category === 'thought_level' || o.id === 'thinking',
-  );
-  const flatten = (items: any[]): any[] =>
-    items.flatMap((o) => (o.options ? flatten(o.options) : [o]));
-  const values: string[] = flatten(option?.options ?? []).map((o) => o.value);
-  const off = ['off', 'none', 'disabled', 'false'];
-  const preferred = enabled
-    ? ['on', 'enabled', 'true', 'medium', option?.currentValue, 'low', 'high']
-    : off;
-  const value =
-    preferred.find((v) => values.includes(v) && (!enabled || !off.includes(v))) ??
-    ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'].find((v) => values.includes(v));
-  if (!option || !value) return;
-  await client.request('session/set_config_option', { sessionId, configId: option.id, value });
-  return !enabled && !off.includes(value)
-    ? '此模型不能关闭思考，已使用支持的最低强度。'
-    : undefined;
-}

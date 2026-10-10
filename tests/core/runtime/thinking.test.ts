@@ -1,9 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-import {
-  thinkingRequest,
-  codexThinking,
-  nativeThinking,
-} from '../../../electron/core/runtime/thinking';
+import { describe, it, expect } from 'vitest';
+import { thinkingRequest, codexThinking } from '../../../electron/core/runtime/thinking';
 import { requestBody, type CompletionInput } from '../../../electron/core/models/providers';
 import { Store } from '../../../electron/services/storage/store';
 import { providerSchema } from '../../../electron/services/storage/validation';
@@ -32,7 +28,7 @@ function input(p: Provider, model: string): CompletionInput {
   };
 }
 describe('connection-level model thinking', () => {
-  it('defaults both legacy and new connections on and preserves an explicit off on partial saves', () => {
+  it('defaults connections on and preserves an explicit off on partial saves', () => {
     const store = new Store(':memory:', { encrypt: (s) => s, decrypt: (s) => s });
     try {
       store.put('provider', provider);
@@ -82,34 +78,6 @@ describe('connection-level model thinking', () => {
         false,
       ).effort,
     ).toBe('none');
-  });
-  it('uses native engine advertised config values rather than inventing a thinking command', async () => {
-    const client = { request: vi.fn(async () => ({})) };
-    const state = {
-      configOptions: [
-        {
-          id: 'thinking',
-          category: 'thought_level',
-          currentValue: 'off',
-          options: [{ value: 'off' }, { value: 'on' }],
-        },
-      ],
-    };
-    await nativeThinking(client, 's', state);
-    expect(client.request).toHaveBeenLastCalledWith('session/set_config_option', {
-      sessionId: 's',
-      configId: 'thinking',
-      value: 'on',
-    });
-    await nativeThinking(client, 's', state, false);
-    expect(client.request).toHaveBeenLastCalledWith('session/set_config_option', {
-      sessionId: 's',
-      configId: 'thinking',
-      value: 'off',
-    });
-    client.request.mockClear();
-    expect(await nativeThinking(client, 's', {})).toBeUndefined();
-    expect(client.request).not.toHaveBeenCalled();
   });
   it('handles Claude adaptive/manual thinking and enforces an adequate output budget', () => {
     const p = { ...provider, protocol: 'anthropic' as const };

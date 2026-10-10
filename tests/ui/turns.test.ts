@@ -43,16 +43,16 @@ const event = (id: string, runId: string, seq: number, sessionId = 'chat'): RunE
 });
 
 describe('conversation turn presentation', () => {
-  it('hides persisted engine fallback details while retaining actionable notices', () => {
+  it('retains actionable notices in their recorded order', () => {
     const t = conversationTurns(
       'chat',
       [message('ask', 'user', 'r')],
       [run('r')],
       [
         {
-          ...event('internal', 'r', 1),
+          ...event('compacted', 'r', 1),
           type: 'notice',
-          text: '此模型未匹配可控制的思考参数，沿用服务默认；连接偏好已保留。',
+          text: 'Codex 已完成上下文压缩，继续当前任务；完整历史仍保留在本地。',
         },
         {
           ...event('warning', 'r', 2),
@@ -61,7 +61,7 @@ describe('conversation turn presentation', () => {
         },
       ],
     )[0];
-    expect(turnEntries(t).map((entry) => entry.key)).toEqual(['warning']);
+    expect(turnEntries(t).map((entry) => entry.key)).toEqual(['compacted', 'warning']);
     expect(t.events).toHaveLength(2);
   });
   it('groups consecutive tools, removes duplicate labels and keeps reasoning boundaries', () => {
@@ -190,11 +190,11 @@ describe('conversation turn presentation', () => {
     expect(turns[0].runId).toBe('active');
     expect(turns[0].events.map((e) => e.id)).toEqual(['live-event']);
   });
-  it('groups legacy and branched records at user boundaries without merging separate runs', () => {
+  it('groups copied and branched records at user boundaries without merging separate runs', () => {
     const turns = conversationTurns(
       'chat',
       [
-        message('legacy-user', 'user'),
+        message('copied-user', 'user'),
         message('part1', 'assistant'),
         message('part2', 'assistant'),
         message('another-user', 'user'),
@@ -206,7 +206,7 @@ describe('conversation turn presentation', () => {
       [],
     );
     expect(turns.map((t) => t.messages.map((m) => m.id))).toEqual([
-      ['legacy-user', 'part1', 'part2'],
+      ['copied-user', 'part1', 'part2'],
       ['another-user', 'reply'],
       ['modern', 'modern-reply'],
     ]);
