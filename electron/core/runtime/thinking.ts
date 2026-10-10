@@ -76,14 +76,14 @@ export function thinkingRequest(
       ...(!on ? { note: fixed } : {}),
     };
   }
-  return { body: {}, note: '此模型未匹配可控制的思考参数，沿用服务默认；连接偏好已保留。' };
+  return { body: {} };
 }
 
 export function codexThinking(model: any, enabled = true): { effort?: string; note?: string } {
   const options: string[] = (model?.supportedReasoningEfforts ?? []).map(
     (o: any) => o.reasoningEffort,
   );
-  if (!options.length) return { note: '引擎未提供此模型的思考选项，沿用引擎默认。' };
+  if (!options.length) return {};
   if (!enabled && options.includes('none')) return { effort: 'none' };
   const positive = options.filter((v) => v !== 'none');
   if (!positive.length)
@@ -119,7 +119,7 @@ export async function nativeThinking(
   const value =
     preferred.find((v) => values.includes(v) && (!enabled || !off.includes(v))) ??
     ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'].find((v) => values.includes(v));
-  if (!option || !value) return '引擎未提供可用的思考开关，沿用引擎默认。';
+  if (!option || !value) return;
   await client.request('session/set_config_option', { sessionId, configId: option.id, value });
   return !enabled && !off.includes(value)
     ? '此模型不能关闭思考，已使用支持的最低强度。'

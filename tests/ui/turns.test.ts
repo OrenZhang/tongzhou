@@ -43,6 +43,27 @@ const event = (id: string, runId: string, seq: number, sessionId = 'chat'): RunE
 });
 
 describe('conversation turn presentation', () => {
+  it('hides persisted engine fallback details while retaining actionable notices', () => {
+    const t = conversationTurns(
+      'chat',
+      [message('ask', 'user', 'r')],
+      [run('r')],
+      [
+        {
+          ...event('internal', 'r', 1),
+          type: 'notice',
+          text: '此模型未匹配可控制的思考参数，沿用服务默认；连接偏好已保留。',
+        },
+        {
+          ...event('warning', 'r', 2),
+          type: 'notice',
+          text: '此模型不能关闭思考，已使用支持的最低强度。',
+        },
+      ],
+    )[0];
+    expect(turnEntries(t).map((entry) => entry.key)).toEqual(['warning']);
+    expect(t.events).toHaveLength(2);
+  });
   it('groups consecutive tools, removes duplicate labels and keeps reasoning boundaries', () => {
     const t = conversationTurns(
       'chat',

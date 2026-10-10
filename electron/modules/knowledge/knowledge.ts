@@ -16,6 +16,7 @@ import { z } from 'zod';
 import type { Store } from '../../services/storage/store';
 import type { ToolScope } from '../../core/tools/extensions';
 import type { Run, Session } from '../../../src/shared/types';
+import { isUserSession } from '../../../src/shared/session-scope';
 import type {
   KnowledgeDocument,
   KnowledgeInput,
@@ -633,7 +634,8 @@ export class Knowledge {
     const entries = doc.memoryEntries.filter((entry) =>
       project
         ? entry.projectId === project
-        : !entry.projectId && (!session || entry.sessionId === session.id),
+        : !entry.projectId &&
+          (!session || isUserSession(session) || entry.sessionId === session.id),
     );
     if (!entries.length) return;
     return {
@@ -862,7 +864,7 @@ export class Knowledge {
       {
         name: 'knowledge_search',
         description:
-          '按任务需要搜索本地智库。范围为当前项目、当前会话、全局资料；专门整理任务还可读取用户选定的来源。返回摘要和 ID，需 knowledge_read 阅读原文。',
+          '按任务需要搜索本地智库。范围为当前项目、当前会话、全局资料；无项目的普通会话还可检索其他普通会话沉淀的个人记忆，项目记忆按项目隔离。专门整理任务还可读取用户选定的来源。返回摘要和 ID，需 knowledge_read 阅读原文。',
         parameters: {
           type: 'object',
           properties: { query: { type: 'string' }, offset: { type: 'integer', minimum: 0 } },

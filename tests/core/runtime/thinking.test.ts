@@ -108,7 +108,7 @@ describe('connection-level model thinking', () => {
       value: 'off',
     });
     client.request.mockClear();
-    expect(await nativeThinking(client, 's', {})).toContain('引擎默认');
+    expect(await nativeThinking(client, 's', {})).toBeUndefined();
     expect(client.request).not.toHaveBeenCalled();
   });
   it('handles Claude adaptive/manual thinking and enforces an adequate output budget', () => {
@@ -143,7 +143,8 @@ describe('connection-level model thinking', () => {
       '不能',
     );
     expect(thinkingRequest(provider, 'my-custom-model').body).toEqual({});
-    expect(thinkingRequest(provider, 'my-custom-model').note).toContain('服务默认');
+    expect(thinkingRequest(provider, 'my-custom-model').note).toBeUndefined();
+    expect(codexThinking({})).toEqual({});
   });
   it('replays vendor reasoning only to the same connection and model', () => {
     const req = input(provider, 'deepseek-chat');

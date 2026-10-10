@@ -97,6 +97,57 @@ const text = (content: string) => ({
   usage: { prompt_tokens: 10, completion_tokens: 4 },
 });
 describe('conversation input and lifecycle changes', () => {
+  it('recalls yesterday in another chat through the task tool bridge without workspace management', async () => {
+    let sourceSession = '';
+    const f = await fixture((body) => {
+      const tools = body.messages.filter((m: any) => m.role === 'tool');
+      const call = (id: string, name: string, args: any) => [
+        {
+          choices: [
+            {
+              delta: {
+                tool_calls: [{ index: 0, id, function: { name, arguments: JSON.stringify(args) } }],
+              },
+              finish_reason: 'tool_calls',
+            },
+          ],
+        },
+      ];
+      if (!tools.length) {
+        expect(body.tools.map((t: any) => t.function?.name ?? t.name)).not.toContain(
+          'client_catalog',
+        );
+        expect(JSON.stringify(body)).toContain('本机当前日期');
+        return call('search', 'search_history', {
+          scope: 'all',
+          query: '',
+          startDate: '2026-10-09',
+          endDate: '2026-10-10',
+        });
+      }
+      if (tools.length === 1) {
+        const result = JSON.parse(tools[0].content);
+        expect(result.results).toMatchObject([{ sessionId: sourceSession, id: 'yesterday' }]);
+        return call('read', 'read_history', { sessionId: sourceSession, messageId: 'yesterday' });
+      }
+      expect(JSON.parse(tools[1].content).content).toBe('昨天决定接入飞书');
+      return [text('昨天讨论了飞书接入，来源为昨日会话原文。')];
+    });
+    f.store.setCapability('management', false);
+    const old = f.store.createSession();
+    sourceSession = old.id;
+    f.store.message({
+      id: 'yesterday',
+      sessionId: old.id,
+      role: 'user',
+      content: '昨天决定接入飞书',
+      createdAt: new Date(2026, 9, 9, 12).getTime(),
+    });
+    await f.runtime.start({ ...f.input, prompt: '昨天都聊了些什么' });
+    await f.runtime.waitForIdle();
+    expect(f.requests).toHaveLength(3);
+    expect(f.store.messages(f.input.sessionId).at(-1)?.content).toContain('飞书接入');
+  });
   it('keeps deletion confirmation visible even when the running chat has full access', async () => {
     const f = await fixture(() => [text('unused')]);
     f.store.put('run', {

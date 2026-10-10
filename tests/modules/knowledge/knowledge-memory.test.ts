@@ -70,6 +70,40 @@ function fixture() {
   return { root, store, k, enqueue, commit };
 }
 describe('daily memory consolidation', () => {
+  it('recalls personal memories in new ordinary chats while keeping project and worker scopes isolated', async () => {
+    const { k, store, enqueue, commit } = fixture();
+    const personal = enqueue('personal', '个人笔记使用 Markdown 保存');
+    commit('personal', '个人笔记使用 Markdown 保存');
+    const project = enqueue('project', '项目笔记使用独立仓库保存', 'work');
+    commit('project', '项目笔记使用独立仓库保存');
+    const chat = store.createSession();
+    const recalled = k.search('笔记', chat.id);
+    expect(recalled).toHaveLength(1);
+    expect(recalled[0].excerpt).toContain('Markdown');
+    expect(recalled[0].excerpt).not.toContain('独立仓库');
+    expect(JSON.stringify(k.search('笔记', project.session.id))).not.toContain('Markdown');
+    const handlers = new Map<string, any>();
+    k.attach(
+      { add: (spec: any, _title: any, fn: any) => handlers.set(spec.name, fn) } as any,
+      chat.id,
+      true,
+      () => {},
+    );
+    const page = JSON.parse((await handlers.get('knowledge_read')({ id: recalled[0].id })).text);
+    expect(page.content).toContain('Markdown');
+    expect(page.content).not.toContain('独立仓库');
+    expect(page.status).toBe('draft');
+    for (const boundary of [
+      { knowledgeJob: true },
+      { automationJob: 'job' },
+      { parentId: chat.id },
+    ]) {
+      const worker = store.createSession();
+      store.put('session', { ...worker, ...boundary });
+      expect(k.search('笔记', worker.id)).toEqual([]);
+    }
+    expect(k.search('笔记', personal.session.id)[0].excerpt).toContain('Markdown');
+  });
   it('accepts user-grounded preferences but rejects assistant self-description', () => {
     const { k, enqueue } = fixture();
     enqueue('style', '以后请先给结论，再补充原因');

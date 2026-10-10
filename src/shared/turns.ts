@@ -67,6 +67,16 @@ export function turnEntries(turn: ConversationTurn): TurnEntry[] {
     }
   }
   for (const event of turn.events) {
+    // Older histories persisted implementation details as notices.
+    if (
+      event.type === 'notice' &&
+      [
+        '此模型未匹配可控制的思考参数，沿用服务默认；连接偏好已保留。',
+        '引擎未提供此模型的思考选项，沿用引擎默认。',
+        '引擎未提供可用的思考开关，沿用引擎默认。',
+      ].includes(event.text.trim())
+    )
+      continue;
     if (event.type !== 'phase' && event.text.trim())
       entries.push({ key: event.id, time: event.time, seq: event.seq, event });
   }

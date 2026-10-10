@@ -8,6 +8,8 @@ import type { TaskToolPreparation } from '../core/task-contracts';
 import { executeTool, toolSpecs, readOnlyToolSpecs } from '../core/tools/workspace';
 import { historyChars } from '../core/runtime/history';
 import artifactPrompts from '../../prompts/artifacts.json';
+import { isUserSession } from '../../src/shared/session-scope';
+import { recallInstructions } from '../modules/sessions/task-memory';
 
 /** Application composition: task orchestration does not select or implement business tools. */
 export function taskToolPreparation(
@@ -19,6 +21,7 @@ export function taskToolPreparation(
   commands?: ClientCommands,
 ): TaskToolPreparation {
   return async ({ scope, session, agent, project, run, signal, ask, progress }) => {
+    if (isUserSession(session)) agent.instructions += recallInstructions();
     if (!session.knowledgeJob) await scope.prepare(store, agent, computer, project ?? undefined);
     else if (session.contentContext) scope.prepareSkills(store);
     if (session.memoryJob)
@@ -113,37 +116,6 @@ export function taskToolPreparation(
         terminals.attach(scope, session.id, agent.permission === 'read-only');
       if (!session.knowledgeJob || project || historyChars(store.messages(session.id)) > 4000) {
         domains.memories.attach(scope, session.id);
-        scope.add(
-          {
-            name: 'read_history',
-            description:
-              '分段读取当前会话保存的原始消息，用于恢复自动压缩的历史细节。使用摘要或 search_history 返回的消息 ID，不能读取其他会话。',
-            parameters: {
-              type: 'object',
-              properties: {
-                messageId: { type: 'string' },
-                offset: { type: 'integer', minimum: 0 },
-                limit: { type: 'integer', minimum: 1, maximum: 8000 },
-              },
-              required: ['messageId'],
-              additionalProperties: false,
-            },
-          },
-          '读取当前会话历史',
-          async (args) => {
-            const p = z
-              .object({
-                messageId: z.string().min(1),
-                offset: z.number().int().min(0).default(0),
-                limit: z.number().int().min(1).max(8000).default(2000),
-              })
-              .parse(args);
-            return {
-              text: JSON.stringify(store.readMessage(session.id, p.messageId, p.offset, p.limit)),
-            };
-          },
-          false,
-        );
       }
     }
     if (!session.knowledgeJob && store.capabilities().management)

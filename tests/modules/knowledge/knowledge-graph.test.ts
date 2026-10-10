@@ -115,10 +115,11 @@ describe('document-backed ontology', () => {
     ).toHaveLength(0);
     expect(handlers.has('knowledge_write')).toBe(false);
   });
-  it('groups cross-date memories, preserves per-entry scopes and allows reviewed correction/removal', () => {
+  it('groups cross-date memories, preserves project scopes and allows reviewed correction/removal', () => {
     const { k, store } = fixture();
+    store.put('project', { id: 'private', name: 'private', path: '/private' });
     const s = store.createSession(),
-      other = store.createSession();
+      other = store.createSession('private');
     const entry: MemoryEntry = {
       id: randomUUID(),
       category: 'preference',
@@ -147,7 +148,13 @@ describe('document-backed ontology', () => {
       });
     const d = day('2026-10-01', [
       entry,
-      { ...entry, id: randomUUID(), sessionId: other.id, content: '保密内容' },
+      {
+        ...entry,
+        id: randomUUID(),
+        sessionId: other.id,
+        projectId: 'private',
+        content: '保密内容',
+      },
     ]);
     day('2026-10-02', [{ ...entry, id: randomUUID(), reviewedAt: 2 }]);
     const graph = k.graph('', undefined, s.id);

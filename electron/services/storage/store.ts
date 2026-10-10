@@ -288,7 +288,14 @@ export class Store {
       .reverse()
       .map((r) => JSON.parse(r.value));
   }
-  searchMessages(query: string, sessionId?: string, role?: string, before?: number, limit = 30) {
+  searchMessages(
+    query: string,
+    sessionId?: string,
+    role?: string,
+    before?: number,
+    limit = 30,
+    range?: { from?: number; to?: number; conversationsOnly?: boolean },
+  ) {
     if (sessionId) this.get('session', sessionId);
     const rows = this.db
       .prepare(
@@ -296,6 +303,15 @@ export class Store {
       JOIN message_search f ON f.rowid=m.rowid
       WHERE f.content LIKE ? AND instr(lower(f.content),lower(?))>0 AND (? IS NULL OR m.session_id=?)
       AND (? IS NULL OR json_extract(m.value,'$.role')=?) AND m.seq<?
+      AND (? IS NULL OR json_extract(m.value,'$.createdAt')>=?)
+      AND (? IS NULL OR json_extract(m.value,'$.createdAt')<?)
+      AND (?=0 OR (json_extract(m.value,'$.role') IN ('user','assistant') AND EXISTS (
+        SELECT 1 FROM objects s WHERE s.kind='session' AND s.id=m.session_id
+        AND NOT coalesce(json_extract(s.value,'$.knowledgeJob'),0)
+        AND json_extract(s.value,'$.memoryJob') IS NULL
+        AND json_extract(s.value,'$.automationJob') IS NULL
+        AND json_extract(s.value,'$.parentId') IS NULL
+        AND json_extract(s.value,'$.contentContext') IS NULL)))
       ORDER BY m.seq DESC LIMIT ?`,
       )
       .all(
@@ -306,6 +322,11 @@ export class Store {
         role ?? null,
         role ?? null,
         before ?? Number.MAX_SAFE_INTEGER,
+        range?.from ?? null,
+        range?.from ?? null,
+        range?.to ?? null,
+        range?.to ?? null,
+        range?.conversationsOnly ? 1 : 0,
         Math.min(50, Math.max(1, limit)),
       ) as { seq: number; value: string }[];
     return rows.map(({ seq, value }) => {
