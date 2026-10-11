@@ -3,18 +3,24 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
-import os from 'node:os';
+import { callKimiWeb, kimiTools } from './kimi-web';
+import { webSearchTool, searchWeb } from './web-search';
 
 const mode = process.argv[2] ?? '--web';
-if (!['--web', '--system'].includes(mode)) throw new Error('Unknown built-in plugin mode');
+if (!['--web', '--kimi'].includes(mode)) throw new Error('Unknown built-in plugin mode');
 const server = new Server(
-  { name: mode === '--web' ? 'tongzhou-web' : 'tongzhou-system', version: clientIdentity.version },
+  {
+    name: mode === '--kimi' ? 'tongzhou-kimi-web' : 'tongzhou-web',
+    version: clientIdentity.version,
+  },
   { capabilities: { tools: {} } },
 );
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools:
-    mode === '--web'
-      ? [
+    mode === '--kimi'
+      ? kimiTools
+      : [
+          webSearchTool,
           {
             name: 'fetch_page',
             description:
@@ -26,59 +32,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
               additionalProperties: false,
             },
           },
-        ]
-      : [
-          {
-            name: 'current_time',
-            description: '查询当前 UTC 时间、本地时间、系统时区和 UTC 偏移。',
-            inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-          },
-          {
-            name: 'system_info',
-            description:
-              '查询宿主机操作系统、架构、CPU、内存、时区和内置插件 Node.js 运行时。不读取环境变量或凭据；项目路径和依赖请使用项目工具查询。',
-            inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-          },
         ],
 }));
 server.setRequestHandler(CallToolRequestSchema, async (req, extra) => {
-  if (mode === '--system') {
-    z.object({})
-      .strict()
-      .parse(req.params.arguments ?? {});
-    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    let result: Record<string, unknown>;
-    if (req.params.name === 'current_time') {
-      const now = new Date();
-      result = {
-        utc: now.toISOString(),
-        local: new Intl.DateTimeFormat('sv-SE', {
-          dateStyle: 'short',
-          timeStyle: 'long',
-          timeZone,
-        }).format(now),
-        timeZone,
-        utcOffsetMinutes: -now.getTimezoneOffset(),
-        unixMilliseconds: now.getTime(),
-      };
-    } else if (req.params.name === 'system_info') {
-      result = {
-        platform: process.platform,
-        os: { name: os.type(), release: os.release(), version: os.version(), arch: os.arch() },
-        cpu: { model: os.cpus()[0]?.model ?? '', logicalCores: os.cpus().length },
-        memory: { totalBytes: os.totalmem(), freeBytes: os.freemem() },
-        uptimeSeconds: os.uptime(),
-        timeZone,
-        locale: Intl.DateTimeFormat().resolvedOptions().locale,
-        runtime: {
-          scope: '同舟内置插件进程，不代表项目运行环境',
-          node: process.versions.node,
-          arch: process.arch,
-        },
-      };
-    } else throw new Error('Unknown tool');
-    return { content: [{ type: 'text', text: JSON.stringify(result) }] };
-  }
+  if (mode === '--kimi') return callKimiWeb(req.params.name, req.params.arguments, extra.signal);
+  if (req.params.name === 'web_search') return searchWeb(req.params.arguments, extra.signal);
   if (req.params.name !== 'fetch_page') throw new Error('Unknown tool');
   const { url: raw } = z.object({ url: z.string().url().max(2000) }).parse(req.params.arguments);
   const url = new URL(raw);

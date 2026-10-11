@@ -25,6 +25,40 @@
   margin: 10px 0;
   min-width: 0;
 }
+.artifact-image-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: min(100%, 498px);
+  min-width: 0;
+  margin: 4px 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--muted);
+  text-align: left;
+  cursor: zoom-in;
+}
+.artifact-image-card img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: min(100%, 480px);
+  max-height: 360px;
+  object-fit: contain;
+  border-radius: 5px;
+}
+.artifact-image-card span {
+  max-width: 100%;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.artifact-image-card:hover,
+.artifact-image-card:focus-visible {
+  border-color: var(--accent);
+}
 .artifact-empty {
   padding: 36px 20px;
   text-align: center;

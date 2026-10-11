@@ -20,7 +20,7 @@ export const STORE_SCHEMA_VERSION = '2';
 export class Store {
   readonly db: DatabaseSync;
   constructor(
-    path: string,
+    readonly path: string,
     private codec: SecretCodec,
   ) {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });

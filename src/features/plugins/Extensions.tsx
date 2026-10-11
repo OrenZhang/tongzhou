@@ -13,8 +13,11 @@ import {
 import { errorMessage } from '../../lib/feedback';
 import { CoreCapabilities } from './CoreCapabilities';
 import { builtinPlugins } from '../../shared/builtin-plugins';
+import { vendorPlugins, vendorPlugin } from '../../shared/vendor-plugins';
+import { VendorPluginSetup } from './VendorPluginSetup';
+import { PluginTile, PluginDetailPage, PluginDetailSection } from './PluginDetail';
 import { builtinSkills, isBuiltinSkill } from '../../shared/builtin-skills';
-import type { PluginInput, Snapshot, TongzhouAPI } from '../../shared/types';
+import type { PluginConfig, PluginInput, Snapshot, TongzhouAPI } from '../../shared/types';
 import { codeHost } from '../../shared/code-hosting';
 
 export function Extensions({
@@ -33,6 +36,8 @@ export function Extensions({
   const [loginUrl, setLoginUrl] = useState('');
   const [loginCode, setLoginCode] = useState('');
   const [edit, setEdit] = useState<PluginInput | null>(null);
+  const [vendorEdit, setVendorEdit] = useState<PluginConfig | null>(null);
+  const [detail, setDetail] = useState<{ kind: 'app' | 'skill' | 'builtin'; id: string }>();
   const [busy, setBusy] = useState(false);
   const [pendingToggle, setPendingToggle] = useState<{ id: string; enabled: boolean } | null>(null);
   const [catalogs, setCatalogs] = useState<Record<string, { name: string; description: string }[]>>(
@@ -40,13 +45,14 @@ export function Extensions({
   );
   const [notice, setNotice] = useState('');
   const otherPlugins = (data.plugins ?? []).filter((p) => !workPluginDefinition(p));
-  const builtinIds = new Set<string>(builtinPlugins.map((p) => p.id));
+  const definitions = [...builtinPlugins, ...vendorPlugins];
+  const builtinIds = new Set<string>(definitions.map((p) => p.id));
   const matchesQuery = (text: string) => text.toLowerCase().includes(query.trim().toLowerCase());
   const visiblePlugins = otherPlugins.filter(
     (p) =>
       (tab === 'builtin' ? builtinIds.has(p.id) : !builtinIds.has(p.id)) &&
       (kind === 'all' || kind === 'mcp') &&
-      matchesQuery(p.name + (builtinPlugins.find((b) => b.id === p.id)?.description ?? p.url)),
+      matchesQuery(p.name + (definitions.find((b) => b.id === p.id)?.description ?? p.url)),
   );
   const visibleSkills =
     kind === 'all' || kind === 'skill'
@@ -86,6 +92,7 @@ export function Extensions({
   };
   return (
     <main className="page extensions-page">
+      <div id="plugin-detail-outlet" className="plugin-detail-outlet" />
       <div className="page-heading">
         <h1>插件</h1>
         <p>管理同舟的核心能力、内置插件和个人插件，供所有会话与 Agent 按需使用。</p>
@@ -172,20 +179,14 @@ export function Extensions({
           </div>
           <div className="provider-grid plugin-library-grid">
             {localApps.map((app) => (
-              <article className="provider-card" key={app.id}>
-                <div className="card-top">
-                  <Bot />
-                  <span className="tag">应用</span>
-                </div>
-                <h3>{app.name}</h3>
-                <p>{app.description}</p>
-                <button
-                  className="text-button"
-                  onClick={() => void perform(() => api.openModule(app.view))}
-                >
-                  打开{app.name}
-                </button>
-              </article>
+              <PluginTile
+                key={app.id}
+                name={app.name}
+                type="应用"
+                icon={<Bot />}
+                enabled
+                onOpen={() => setDetail({ kind: 'app', id: app.id })}
+              />
             ))}
             {showApps && (
               <WorkPlugins
@@ -202,104 +203,51 @@ export function Extensions({
               />
             )}
             {visiblePlugins.map((p) => (
-              <article className="provider-card" key={p.id}>
-                <div className="card-top">
-                  <Plug />
-                  <span className="tag">MCP</span>
-                  <label className="switch-control">
-                    <input
-                      type="checkbox"
-                      aria-label={`启用 ${p.name}`}
-                      checked={pendingToggle?.id === p.id ? pendingToggle.enabled : p.enabled}
-                      disabled={busy}
-                      onChange={(e) => {
-                        const enabled = e.target.checked;
-                        setPendingToggle({ id: p.id, enabled });
-                        void perform(() => api.savePlugin({ ...p, enabled })).finally(() =>
-                          setPendingToggle(null),
-                        );
-                      }}
-                    />
-                    <span aria-hidden="true" />
-                  </label>
-                </div>
-                <h3>{p.name}</h3>
-                <p>
-                  {builtinPlugins.find((item) => item.id === p.id)?.description ??
-                    (p.transport === 'http' ? p.url : [p.command, ...p.args].join(' '))}
-                </p>
-                <p className="muted">
-                  {p.enabled ? '已启用' : '已停用'} ·{' '}
-                  {(catalogs[p.id] ?? p.catalog)
-                    ? `已发现 ${(catalogs[p.id] ?? p.catalog)!.length} 个工具`
-                    : '会话按需连接'}
-                </p>
-                <div className="row wrap">
-                  {!builtinPlugins.some((item) => item.id === p.id) && (
-                    <button
-                      className="text-button"
-                      onClick={() => {
-                        setNotice('');
-                        setLoginUrl('');
-                        setLoginCode('');
-                        setEdit({ ...p, secret: '' });
-                      }}
-                    >
-                      管理插件
-                    </button>
-                  )}
-                </div>
-              </article>
+              <PluginTile
+                key={p.id}
+                name={p.name}
+                type="MCP"
+                icon={<Plug />}
+                enabled={pendingToggle?.id === p.id ? pendingToggle.enabled : p.enabled}
+                disabled={busy}
+                onOpen={() => {
+                  setNotice('');
+                  if (vendorPlugin(p.id)) setVendorEdit(p);
+                  else if (builtinIds.has(p.id)) setDetail({ kind: 'builtin', id: p.id });
+                  else {
+                    setLoginUrl('');
+                    setLoginCode('');
+                    setEdit({ ...p, secret: '' });
+                  }
+                }}
+                onToggle={(enabled) => {
+                  if (enabled && vendorPlugin(p.id) && !p.hasSecret && !p.accountProviderId) {
+                    setVendorEdit({ ...p, enabled: true });
+                    return;
+                  }
+                  setPendingToggle({ id: p.id, enabled });
+                  void perform(() => api.savePlugin({ ...p, enabled })).finally(() =>
+                    setPendingToggle(null),
+                  );
+                }}
+              />
             ))}
             {visibleSkills.map((s) => (
-              <article className="provider-card" key={'skill:' + s.id}>
-                <div className="card-top">
-                  <BookOpen />
-                  <span className="tag">技能</span>
-                  <label className="switch-control">
-                    <input
-                      type="checkbox"
-                      aria-label={`启用技能 ${s.name}`}
-                      checked={
-                        pendingToggle?.id === 'skill:' + s.id ? pendingToggle.enabled : s.enabled
-                      }
-                      disabled={busy}
-                      onChange={(e) => {
-                        const enabled = e.target.checked;
-                        setPendingToggle({ id: 'skill:' + s.id, enabled });
-                        void perform(() => api.saveSkill({ ...s, enabled })).finally(() =>
-                          setPendingToggle(null),
-                        );
-                      }}
-                    />
-                    <span aria-hidden="true" />
-                  </label>
-                </div>
-                <h3>{builtinSkills.find((b) => b.id === s.id)?.title ?? s.name}</h3>
-                <p>{s.description}</p>
-                {isBuiltinSkill(s.id) && (
-                  <p className="muted">在会话中说“帮我创建一个技能并保存到个人插件”。</p>
-                )}
-                <p className="muted">
-                  {s.enabled ? '已启用' : '已停用'} · {Object.keys(s.files).length} 个附属文本文件
-                </p>
-                <details>
-                  <summary>查看指令</summary>
-                  <pre className="skill-preview">{s.instructions}</pre>
-                </details>
-                {!isBuiltinSkill(s.id) && (
-                  <div className="row wrap">
-                    <button
-                      className="text-button danger"
-                      disabled={busy}
-                      onClick={() => perform(() => api.deleteSkill(s.id))}
-                    >
-                      <Trash2 size={14} />
-                      移除
-                    </button>
-                  </div>
-                )}
-              </article>
+              <PluginTile
+                key={'skill:' + s.id}
+                name={builtinSkills.find((b) => b.id === s.id)?.title ?? s.name}
+                type="技能"
+                icon={<BookOpen />}
+                disabled={busy}
+                enabled={pendingToggle?.id === 'skill:' + s.id ? pendingToggle.enabled : s.enabled}
+                onOpen={() => setDetail({ kind: 'skill', id: s.id })}
+                onToggle={(enabled) => {
+                  setPendingToggle({ id: 'skill:' + s.id, enabled });
+                  void perform(() => api.saveSkill({ ...s, enabled })).finally(() =>
+                    setPendingToggle(null),
+                  );
+                }}
+              />
             ))}
           </div>
           {!visiblePlugins.length &&
@@ -376,13 +324,114 @@ export function Extensions({
           </div>
         </Modal>
       )}
+      {detail &&
+        (() => {
+          const close = () => setDetail(undefined);
+          if (detail.kind === 'app') {
+            const app = builtinApps.find((a) => a.id === detail.id);
+            return (
+              app && (
+                <PluginDetailPage
+                  title={app.name}
+                  type="应用"
+                  subtitle={app.description}
+                  onClose={close}
+                >
+                  <PluginDetailSection title="功能配置">
+                    <p>内置应用始终可用。各渠道的账号、认证和启用状态在渠道管理中独立配置。</p>
+                    <button onClick={() => void perform(() => api.openModule(app.view))}>
+                      打开{app.name}
+                    </button>
+                  </PluginDetailSection>
+                </PluginDetailPage>
+              )
+            );
+          }
+          if (detail.kind === 'skill') {
+            const skill = data.skills?.find((s) => s.id === detail.id);
+            return (
+              skill && (
+                <PluginDetailPage
+                  title={builtinSkills.find((b) => b.id === skill.id)?.title ?? skill.name}
+                  type="技能"
+                  subtitle={skill.description}
+                  onClose={close}
+                >
+                  <PluginDetailSection title="技能指令">
+                    <pre className="skill-preview">{skill.instructions}</pre>
+                    <p>{Object.keys(skill.files).length} 个附属文本文件</p>
+                  </PluginDetailSection>
+                  {!isBuiltinSkill(skill.id) && (
+                    <PluginDetailSection title="管理">
+                      <button
+                        className="text-button danger"
+                        disabled={busy}
+                        onClick={() =>
+                          void perform(async () => {
+                            await api.deleteSkill(skill.id);
+                            close();
+                          })
+                        }
+                      >
+                        <Trash2 size={14} />
+                        移除技能
+                      </button>
+                    </PluginDetailSection>
+                  )}
+                  {notice && <p role="status">{notice}</p>}
+                </PluginDetailPage>
+              )
+            );
+          }
+          const p = data.plugins?.find((p) => p.id === detail.id);
+          return (
+            p && (
+              <PluginDetailPage
+                title={p.name}
+                subtitle={definitions.find((d) => d.id === p.id)?.description}
+                onClose={close}
+              >
+                <PluginDetailSection title="工具与连接">
+                  <p>使用同舟自带运行环境，无需安装依赖或认证。</p>
+                  <button
+                    disabled={busy}
+                    onClick={() =>
+                      void perform(async () => {
+                        const tools = await api.testPlugin(p.id);
+                        setNotice('连接成功，发现 ' + tools.length + ' 个工具');
+                      })
+                    }
+                  >
+                    检查连接
+                  </button>
+                  <ul>
+                    {(p.catalog ?? []).map((t) => (
+                      <li key={t.name}>{t.name}</li>
+                    ))}
+                  </ul>
+                </PluginDetailSection>
+                {notice && <p role="status">{notice}</p>}
+              </PluginDetailPage>
+            )
+          );
+        })()}
+      {vendorEdit && (
+        <VendorPluginSetup
+          plugin={vendorEdit}
+          providers={data.providers}
+          api={api}
+          refresh={refresh}
+          onClose={() => setVendorEdit(null)}
+        />
+      )}
       {edit && (
-        <Modal
-          title="管理 MCP 插件"
+        <PluginDetailPage
+          title={edit.name || '新建 MCP 插件'}
           subtitle="仅添加你信任的服务。本地服务会以当前用户权限运行。"
+          busy={busy}
           onClose={() => setEdit(null)}
         >
-          <div className="modal-content">
+          <PluginDetailSection title="连接与认证">
             <Field label="插件名称">
               <input
                 value={edit.name}
@@ -555,7 +604,7 @@ export function Extensions({
               </details>
             )}
             {notice && <p role="status">{notice}</p>}
-          </div>
+          </PluginDetailSection>
           <div className="modal-footer">
             <button
               className="text-button danger"
@@ -577,7 +626,7 @@ export function Extensions({
               {busy ? <Spinner /> : null}保存插件
             </button>
           </div>
-        </Modal>
+        </PluginDetailPage>
       )}
     </main>
   );

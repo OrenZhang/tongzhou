@@ -211,6 +211,15 @@ code,
 .settings-card {
   padding: 22px 24px;
 }
+.power-settings > p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 8px 0 16px;
+}
+.power-settings .task-confirm {
+  margin-top: 16px;
+}
 .settings-card-title {
   margin-bottom: 20px;
 }

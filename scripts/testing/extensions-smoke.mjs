@@ -87,78 +87,148 @@ try {
   await page.getByRole('button', { name: /^内置插件/ }).click();
   await page.getByLabel('类型', { exact: true }).selectOption('mcp');
   const builtins = (await page.evaluate(() => window.tongzhou.snapshot())).plugins;
-  assert.deepEqual(builtins.map((p) => p.id).sort(), ['tongzhou-system', 'tongzhou-web']);
-  assert.ok(builtins.every((p) => !p.enabled));
-  const webCard = page
-    .locator('.provider-card')
-    .filter({ has: page.getByRole('heading', { name: '网页读取 · 内置', exact: true }) });
-  const systemCard = page
-    .locator('.provider-card')
-    .filter({ has: page.getByRole('heading', { name: '系统环境 · 内置', exact: true }) });
-  await systemCard.getByRole('checkbox').check();
-  await page.waitForFunction(
-    async () =>
-      (await window.tongzhou.snapshot()).plugins.find((p) => p.id === 'tongzhou-system').enabled,
+  assert.deepEqual(builtins.map((p) => p.id).sort(), [
+    'minimax-coding',
+    'minimax-multimedia',
+    'tongzhou-kimi-web',
+    'tongzhou-web',
+  ]);
+  assert.ok(builtins.every((p) => p.enabled === (p.id === 'tongzhou-web')));
+  // Turn it off for the independent-switch and single-MCP conversation checks below.
+  await page.evaluate(async () => {
+    const web = (await window.tongzhou.snapshot()).plugins.find((p) => p.id === 'tongzhou-web');
+    await window.tongzhou.savePlugin({ ...web, enabled: false });
+  });
+  const kimiCard = page
+    .locator('.plugin-tile')
+    .filter({ has: page.getByRole('heading', { name: 'Kimi 搜索与网页读取', exact: true }) });
+  await kimiCard.getByRole('button').click();
+  assert.equal(await page.getByLabel('认证方式', { exact: true }).inputValue(), 'account');
+  await page.getByLabel('认证方式', { exact: true }).selectOption('key');
+  await page.getByRole('button', { name: '保存配置', exact: true }).click();
+  await page.getByText('请先填写 API Key', { exact: true }).waitFor();
+  await page.getByLabel('API Key', { exact: true }).fill('fixture-kimi-key');
+  await page.getByRole('button', { name: '保存并检查连接', exact: true }).click();
+  await page.getByText(/MCP 连接成功，发现 2 个工具/).waitFor();
+  assert.equal(await page.getByLabel('API Key', { exact: true }).inputValue(), '');
+  await page.getByRole('button', { name: '保存配置', exact: true }).click();
+  const savedKimi = (await page.evaluate(() => window.tongzhou.snapshot())).plugins.find(
+    (p) => p.id === 'tongzhou-kimi-web',
   );
-  assert.equal(await webCard.getByRole('checkbox').isChecked(), false);
-  assert.equal(await page.getByRole('button', { name: '连接检查', exact: true }).count(), 0);
+  assert.ok(savedKimi.hasSecret);
+  assert.equal(savedKimi.enabled, false);
+
+  const accountHome = path.join(root, 'profile', 'engines', 'kimi');
+  await mkdir(path.join(accountHome, 'credentials'), { recursive: true });
+  await writeFile(
+    path.join(accountHome, 'config.toml'),
+    '[providers."managed:kimi-code"]\ntype="kimi"\nbase_url="https://api.kimi.com/coding/v1"\n[providers."managed:kimi-code".oauth]\nstorage="file"\nkey="oauth/kimi-code"\n',
+  );
+  await writeFile(
+    path.join(accountHome, 'credentials', 'kimi-code.json'),
+    JSON.stringify({ access_token: 'fixture-plan-token', expires_at: Date.now() / 1000 + 3600 }),
+  );
+  await page.evaluate(async () => {
+    const data = await window.tongzhou.snapshot();
+    await window.tongzhou.saveProvider({
+      ...data.providers.find((p) => p.id === 'kimi-account'),
+      enabled: true,
+    });
+  });
+  await kimiCard.getByRole('button').click();
+  await page.getByLabel('认证方式', { exact: true }).selectOption('account');
+  await page.getByLabel('套餐账号', { exact: true }).selectOption('kimi-account');
+  assert.equal(await page.getByLabel('API Key', { exact: true }).count(), 0);
+  await page.getByRole('button', { name: '保存并检查连接', exact: true }).click();
+  await page.getByText(/套餐账号认证配置检查通过，可用 2 个工具/).waitFor();
+  const boundKimi = (await page.evaluate(() => window.tongzhou.snapshot())).plugins.find(
+    (p) => p.id === 'tongzhou-kimi-web',
+  );
+  assert.equal(boundKimi.accountProviderId, 'kimi-account');
+  assert.ok(boundKimi.hasSecret); // Previous key remains encrypted for switching back.
+  assert.ok(!JSON.stringify(boundKimi).includes('fixture-plan-token'));
+  await page.getByLabel('认证方式', { exact: true }).selectOption('key');
+  await page.getByRole('button', { name: '保存并检查连接', exact: true }).click();
+  await page.getByText(/MCP 连接成功，发现 2 个工具/).waitFor();
+  await page.getByRole('button', { name: '保存配置', exact: true }).click();
   assert.equal(
-    (await page.evaluate(() => window.tongzhou.testPlugin('tongzhou-system'))).length,
-    2,
+    (await page.evaluate(() => window.tongzhou.snapshot())).plugins.find(
+      (p) => p.id === 'tongzhou-kimi-web',
+    ).accountProviderId,
+    undefined,
   );
-  assert.equal((await page.evaluate(() => window.tongzhou.testPlugin('tongzhou-web'))).length, 1);
+
+  assert.ok(!JSON.stringify(savedKimi).includes('fixture-kimi-key'));
+  assert.equal(savedKimi.catalog.length, 2);
+  const minimaxCard = page
+    .locator('.plugin-tile')
+    .filter({ has: page.getByRole('heading', { name: 'MiniMax 多媒体', exact: true }) });
+  await minimaxCard.getByRole('button').click();
+  await page.getByLabel('认证方式', { exact: true }).selectOption('key');
+  await page.getByLabel('API Key', { exact: true }).fill('fixture-minimax-key');
+  await page.getByLabel('密钥所属区域', { exact: true }).selectOption('global');
+  await page.getByRole('button', { name: '保存配置', exact: true }).click();
+  await minimaxCard.getByRole('button').click();
+  assert.equal(await page.getByLabel('密钥所属区域', { exact: true }).inputValue(), '');
+  assert.equal(await page.getByLabel('密钥所属区域', { exact: true }).isDisabled(), true);
+  await page.getByRole('button', { name: '保存配置', exact: true }).click();
+  await page.locator('.plugin-detail-page').waitFor({ state: 'detached' });
+  await page.getByLabel('类型', { exact: true }).selectOption('all');
+  for (const width of [1440, 900]) {
+    await page.setViewportSize({ width, height: 900 });
+    const tiles = await page.locator('.plugin-tile').evaluateAll((items) =>
+      items.map((el) => ({
+        height: el.getBoundingClientRect().height,
+        overflow: el.scrollWidth - el.clientWidth,
+      })),
+    );
+    assert.ok(tiles.every((t) => t.height <= 80 && t.overflow <= 1));
+    await page.screenshot({ path: path.join(root, 'compact-plugins-' + width + '.png') });
+  }
+  await page.getByRole('button', { name: '查看 GitHub 仓库工具', exact: true }).click();
+  await page.getByRole('button', { name: '检测本地账号', exact: true }).waitFor();
+  assert.equal(await page.locator('.plugin-tile:visible').count(), 0);
+  await page.screenshot({ path: path.join(root, 'github-detail.png') });
+  await page.getByRole('button', { name: '返回插件列表', exact: true }).click();
+  await page.getByLabel('类型', { exact: true }).selectOption('mcp');
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const webCard = page
+    .locator('.plugin-tile')
+    .filter({ has: page.getByRole('heading', { name: '网页搜索与读取 · 内置', exact: true }) });
+  assert.equal(
+    await page.getByRole('heading', { name: '系统环境 · 内置', exact: true }).count(),
+    0,
+  );
+  assert.equal((await page.evaluate(() => window.tongzhou.testPlugin('tongzhou-web'))).length, 2);
   assert.equal(await webCard.getByRole('checkbox').isChecked(), false);
   assert.ok(!(await webCard.innerText()).includes('builtin-mcp.cjs'));
   await page.screenshot({ path: 'test-results/builtin-plugins.png' });
   // Exercise the actual bundled servers, including rejecting cross-plugin calls.
-  for (const config of builtins) {
+  for (const config of builtins.filter((p) => p.id === 'tongzhou-web')) {
     const client = new Client({ name: 'builtin-smoke', version: '1' });
     try {
       await client.connect(
         new StdioClientTransport({ command: config.command, args: config.args }),
       );
       const { tools } = await client.listTools();
-      if (config.id === 'tongzhou-system') {
-        assert.deepEqual(tools.map((t) => t.name).sort(), ['current_time', 'system_info']);
-        const time = JSON.parse(
-          (await client.callTool({ name: 'current_time', arguments: {} })).content[0].text,
-        );
-        assert.ok(Math.abs(Date.parse(time.utc) - Date.now()) < 10000);
-        assert.ok(time.timeZone && time.local && Number.isFinite(time.utcOffsetMinutes));
-        const info = JSON.parse(
-          (await client.callTool({ name: 'system_info', arguments: {} })).content[0].text,
-        );
-        assert.equal(info.platform, process.platform);
-        assert.ok(info.memory.totalBytes > 0 && info.cpu.logicalCores > 0 && info.runtime.node);
-        assert.equal(info.env, undefined);
-        await assert.rejects(
-          client.callTool({ name: 'fetch_page', arguments: {} }),
-          /Unknown tool/,
-        );
-      } else {
-        assert.deepEqual(
-          tools.map((t) => t.name),
-          ['fetch_page'],
-        );
-        const result = await client.callTool({
-          name: 'fetch_page',
-          arguments: { url: `http://127.0.0.1:${server.address().port}/` },
-        });
-        assert.ok(result.content[0].text.includes('model-a'));
-        await assert.rejects(
-          client.callTool({ name: 'current_time', arguments: {} }),
-          /Unknown tool/,
-        );
-      }
+
+      assert.deepEqual(
+        tools.map((t) => t.name),
+        ['web_search', 'fetch_page'],
+      );
+      const result = await client.callTool({
+        name: 'fetch_page',
+        arguments: { url: `http://127.0.0.1:${server.address().port}/` },
+      });
+      assert.ok(result.content[0].text.includes('model-a'));
+      await assert.rejects(
+        client.callTool({ name: 'current_time', arguments: {} }),
+        /Unknown tool/,
+      );
     } finally {
       await client.close();
     }
   }
-  await systemCard.getByRole('checkbox').uncheck();
-  await page.waitForFunction(
-    async () =>
-      !(await window.tongzhou.snapshot()).plugins.find((p) => p.id === 'tongzhou-system').enabled,
-  );
   assert.equal(await page.getByRole('button', { name: /^Skills/ }).count(), 0);
   await page.getByRole('button', { name: /^个人插件/ }).click();
   await page.getByRole('button', { name: '添加插件', exact: true }).click();
@@ -168,25 +238,25 @@ try {
   await page.getByLabel('启动参数', { exact: true }).fill(mcp);
   await page.keyboard.press('Enter');
   await page.getByRole('button', { name: '保存并检查连接', exact: true }).click();
-  await page.getByRole('dialog').getByText('read_note', { exact: true }).waitFor();
+  await page.locator('.plugin-detail-page').getByText('read_note', { exact: true }).waitFor();
   await page.getByRole('button', { name: '保存插件', exact: true }).click();
   await page.getByRole('button', { name: '添加插件', exact: true }).click();
   await page.screenshot({ path: 'test-results/plugin-type-picker.png' });
   await page.getByRole('button', { name: '导入 Skill 技能', exact: true }).click();
   await page.getByRole('heading', { name: 'sample-skill', exact: true }).waitFor();
   const skillCard = page
-    .locator('.provider-card')
+    .locator('.plugin-tile')
     .filter({ has: page.getByRole('heading', { name: 'sample-skill', exact: true }) });
   await skillCard.getByText('技能', { exact: true }).waitFor();
-  assert.equal(await page.locator('.plugin-library .provider-card').count(), 2);
+  assert.equal(await page.locator('.plugin-library .plugin-tile').count(), 2);
   await page.getByLabel('类型', { exact: true }).selectOption('mcp');
-  assert.equal(await page.locator('.plugin-library .provider-card').count(), 1);
+  assert.equal(await page.locator('.plugin-library .plugin-tile').count(), 1);
   await page.getByRole('heading', { name: '测试笔记插件', exact: true }).waitFor();
   await page.getByLabel('搜索插件', { exact: true }).fill('不存在的插件');
   await page.getByRole('heading', { name: '没有匹配的插件', exact: true }).waitFor();
   await page.getByLabel('搜索插件', { exact: true }).fill('');
   await page.getByLabel('类型', { exact: true }).selectOption('skill');
-  assert.equal(await page.locator('.provider-grid .provider-card:visible').count(), 1);
+  assert.equal(await page.locator('.provider-grid .plugin-tile:visible').count(), 1);
   await skillCard.getByRole('checkbox').uncheck();
   await page.waitForFunction(
     async () =>
@@ -197,12 +267,15 @@ try {
     async () =>
       (await window.tongzhou.snapshot()).skills.find((s) => s.name === 'sample-skill').enabled,
   );
-  await skillCard.getByText('查看指令', { exact: true }).click();
-  await skillCard.locator('pre').waitFor();
-  assert.ok((await skillCard.locator('pre').innerText()).includes('Use concise answers.'));
+  await skillCard.getByRole('button').click();
+  await page.locator('.plugin-detail-page pre').waitFor();
+  assert.ok(
+    (await page.locator('.plugin-detail-page pre').innerText()).includes('Use concise answers.'),
+  );
+  await page.getByRole('button', { name: '返回插件列表', exact: true }).click();
   await page.getByLabel('类型', { exact: true }).selectOption('mcp');
   assert.equal(await page.getByRole('heading', { name: 'sample-skill', exact: true }).count(), 0);
-  assert.equal(await page.locator('.provider-grid .provider-card:visible').count(), 1);
+  assert.equal(await page.locator('.provider-grid .plugin-tile:visible').count(), 1);
   await page.getByLabel('类型', { exact: true }).selectOption('all');
   assert.equal(
     (await page.evaluate(() => window.tongzhou.snapshot())).agents.filter((a) => !a.builtin).length,
@@ -260,11 +333,12 @@ try {
   await page.waitForSelector('.app-shell');
   const persisted = await page.evaluate(() => window.tongzhou.snapshot());
   assert.equal(persisted.sessions[0].model, 'model-b');
-  assert.equal(persisted.plugins.length, 3);
+  assert.equal(persisted.plugins.length, 5);
   assert.equal(persisted.skills.length, 2);
   await openSidebar(page, '插件');
   await page.getByRole('button', { name: /^个人插件/ }).click();
-  await skillCard.getByRole('button', { name: '移除', exact: true }).click();
+  await skillCard.getByRole('button').click();
+  await page.getByRole('button', { name: '移除技能', exact: true }).click();
   await page.waitForFunction(
     async () => !(await window.tongzhou.snapshot()).skills.some((s) => s.name === 'sample-skill'),
   );

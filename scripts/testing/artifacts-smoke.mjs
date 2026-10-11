@@ -6,7 +6,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 await mkdir('test-results', { recursive: true });
 const root = await mkdtemp(path.resolve('test-results/artifacts-'));
-const png =
+let png =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jN1kAAAAASUVORK5CYII=';
 const server = createServer(async (req, res) => {
   let raw = '';
@@ -92,6 +92,21 @@ try {
   let page = await launch();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
+  png = await app.evaluate(({ nativeImage }) => {
+    const width = 720,
+      height = 420;
+    const bitmap = Buffer.alloc(width * height * 4);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const offset = (y * width + x) * 4;
+        bitmap[offset] = 170;
+        bitmap[offset + 1] = Math.round((x / width) * 200);
+        bitmap[offset + 2] = Math.round((y / height) * 200);
+        bitmap[offset + 3] = 255;
+      }
+    }
+    return nativeImage.createFromBitmap(bitmap, { width, height }).toPNG().toString('base64');
+  });
   const session = await page.evaluate(async (baseUrl) => {
     const api = window.tongzhou;
     await api.saveProvider({
@@ -132,6 +147,36 @@ try {
   );
   await page.locator(`[data-session-id="${session.id}"]`).click();
   await page.getByRole('button', { name: '查看作品 测试图片.png', exact: true }).waitFor();
+  await page.waitForFunction(() => {
+    const image = document.querySelector('.artifact-strip .artifact-image-card img');
+    return image?.complete && image.naturalWidth === 720;
+  });
+  assert.equal(await page.locator('.artifact-strip .file-link').count(), 1);
+  for (const width of [1440, 900]) {
+    await page.setViewportSize({ width, height: 1000 });
+    const bounds = await page.locator('.artifact-image-card img').evaluate((img) => {
+      const box = img.getBoundingClientRect();
+      return { width: box.width, height: box.height, right: box.right, viewport: innerWidth };
+    });
+    assert.ok(bounds.width > 100 && bounds.width <= 480);
+    assert.ok(bounds.height > 0 && bounds.height <= 360);
+    assert.ok(bounds.right <= bounds.viewport);
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.screenshot({ path: path.join(root, 'chat-inline-image.png') });
+  await page.getByRole('button', { name: '查看作品 测试图片.png', exact: true }).click();
+  await page.locator('.artifact-preview img').waitFor();
+  await page.getByRole('button', { name: '关闭工作区', exact: true }).click();
+  // A decode failure must leave the original file action accessible.
+  await page.locator('.artifact-image-card img').dispatchEvent('error');
+  await page.locator('.artifact-strip .file-link').filter({ hasText: '测试图片.png' }).waitFor();
+  await page.reload();
+  await page.waitForSelector('.app-shell');
+  await page.locator(`[data-session-id="${session.id}"]`).click();
+  await page.waitForFunction(() => {
+    const image = document.querySelector('.artifact-strip .artifact-image-card img');
+    return image?.complete && image.naturalWidth === 720;
+  });
   await page.getByRole('button', { name: '查看作品 整理结果.md', exact: true }).click();
   await page.locator('.artifact-preview pre').waitFor();
   assert.equal(await page.getByRole('dialog').count(), 0);

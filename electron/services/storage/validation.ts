@@ -119,6 +119,7 @@ export const agentSchema = z.object({
 });
 export const pluginSchema = z
   .object({
+    accountProviderId: id.optional(),
     connectorId: id.optional(),
     authMode: z.enum(['headers', 'oauth']).optional(),
     oauthClientId: z.string().trim().max(300).optional(),

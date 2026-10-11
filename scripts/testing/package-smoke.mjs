@@ -104,12 +104,10 @@ try {
     shell.openExternal = async () => {};
   });
   await page.evaluate(() => window.tongzhou.installBuiltinPlugin());
-  const tools = await page.evaluate(() => window.tongzhou.testPlugin('tongzhou-system'));
-  assert.deepEqual(tools.map((t) => t.name).sort(), ['current_time', 'system_info']);
   const webTools = await page.evaluate(() => window.tongzhou.testPlugin('tongzhou-web'));
   assert.deepEqual(
     webTools.map((t) => t.name),
-    ['fetch_page'],
+    ['web_search', 'fetch_page'],
   );
   checks.push('bundled MCP starts outside repository cwd');
   await app.evaluate(({ dialog }, p) => {

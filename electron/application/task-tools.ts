@@ -14,6 +14,7 @@ import { historyChars } from '../core/runtime/history';
 import artifactPrompts from '../../prompts/artifacts.json';
 import { isUserSession } from '../../src/shared/session-scope';
 import { recallInstructions } from '../modules/sessions/task-memory';
+import { attachEnvironmentTools } from '../core/tools/environment';
 
 /** Application composition: task orchestration does not select or implement business tools. */
 export function taskToolPreparation(
@@ -38,6 +39,7 @@ export function taskToolPreparation(
       agent.instructions += '\n' + botPrompts.instructions.join('\n');
     }
     if (isUserSession(session)) agent.instructions += recallInstructions();
+    if (!session.knowledgeJob) attachEnvironmentTools(scope);
     if (!session.knowledgeJob) await scope.prepare(store, agent, computer, project ?? undefined);
     else if (session.contentContext) scope.prepareSkills(store);
     if (session.memoryJob)

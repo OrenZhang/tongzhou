@@ -19,6 +19,7 @@ import { WorkspaceFileContext } from '../features/workspace/WorkspaceFileContext
 import { SessionTitle } from '../features/chat/SessionTitle';
 import { useTaskContext, useWorkspaceLayout } from '../features/workspace/workspace-state';
 import { DataMaintenance } from '../features/settings/DataMaintenance';
+import { PowerSettings } from '../features/settings/PowerSettings';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApplicationState } from '../hooks/useApplicationState';
 import { useAccountState } from '../features/connections/useAccountState';
@@ -1751,6 +1752,7 @@ export default function App() {
                 </button>
               </section>
               <Appearance value={appearance} onChange={setAppearance} />
+              <PowerSettings api={api} />
               <UpdateControl api={api} settings />
               <DataMaintenance api={api} />
               <section className="settings-card">

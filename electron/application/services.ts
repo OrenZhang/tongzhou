@@ -1,8 +1,13 @@
 import { createDomainServices } from '../modules/domain-services';
 import { createTaskSystem } from './task-system';
-import { app, safeStorage, session, shell } from 'electron';
+import { app, powerMonitor, powerSaveBlocker, safeStorage, session, shell } from 'electron';
+import { PowerSettings } from '../services/desktop/power';
+import { LidProcess } from '../services/desktop/lid-process';
+import type { PowerPreferences } from '../../src/shared/power';
 import { autoUpdater } from 'electron-updater';
 import { createRequire } from 'node:module';
+import { existsSync } from 'node:fs';
+import { macLidDirectory } from '../services/desktop/macos-lid-script';
 import path from 'node:path';
 import type { Provider } from '../../src/shared/types';
 import { ensureBuiltinPlugins } from '../modules/plugins/builtin-plugins';
@@ -74,6 +79,69 @@ export function applicationServices(kernel: ApplicationKernel): Plugin.Object<vo
             .replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep),
         );
         ensureBuiltinSkills(store, path.join(bundleDir, 'skills'));
+      },
+    },
+    {
+      name: 'tongzhou-power-service',
+      inject: ['tzStore', 'tzDesktop'],
+      async apply(ctx) {
+        const { bundleDir, dataDir, emit } = ctx.tzDesktop;
+        const store = ctx.tzStore;
+        const require = createRequire(path.join(bundleDir, '../package.json'));
+        const nodeRoot = path
+          .dirname(require.resolve('node/package.json'))
+          .replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep);
+        const lid = new LidProcess(
+          path.join(nodeRoot, 'bin', process.platform === 'win32' ? 'node.exe' : 'node'),
+          bundleDir,
+          dataDir,
+          (message) => power.reportLidError(message),
+        );
+        const saved = store
+          .list<PowerPreferences & { id: string }>('preferences')
+          .find((item) => item.id === 'power');
+        const power = new PowerSettings(
+          {
+            platform: process.platform,
+            supported: ['win32', 'darwin'].includes(process.platform),
+            onBatteryPower: () => powerMonitor.isOnBatteryPower(),
+            startBlocker: () => powerSaveBlocker.start('prevent-app-suspension'),
+            stopBlocker: (id) => {
+              powerSaveBlocker.stop(id);
+            },
+            setLidEnabled: (enabled, interactive) => lid.setEnabled(enabled, interactive),
+          },
+          {
+            keepAwakeOnAC: saved?.keepAwakeOnAC === true,
+            keepAwakeWhenLidClosed:
+              process.platform !== 'darwin' && saved?.keepAwakeWhenLidClosed === true,
+          },
+          (value) => store.put('preferences', { id: 'power', ...value }),
+          (state) => emit({ type: 'power', state }),
+        );
+        const onAC = () => {
+          void power.refresh(false);
+        };
+        const onBattery = () => {
+          void power.refresh(true);
+        };
+        const onResume = () => {
+          void power.refresh();
+        };
+        powerMonitor.on('on-ac', onAC);
+        powerMonitor.on('on-battery', onBattery);
+        powerMonitor.on('resume', onResume);
+        kernel.own(ctx, async () => {
+          powerMonitor.removeListener('on-ac', onAC);
+          powerMonitor.removeListener('on-battery', onBattery);
+          powerMonitor.removeListener('resume', onResume);
+          await power.dispose();
+        });
+        ctx.provide('tzPower', power);
+        // macOS authorization is user initiated; never block startup on a password dialog.
+        await power.refresh();
+        if (process.platform === 'darwin' && existsSync(macLidDirectory + '/original'))
+          power.reportLidError('检测到未恢复的合盖设置，请点击重试并完成管理员授权');
       },
     },
     {

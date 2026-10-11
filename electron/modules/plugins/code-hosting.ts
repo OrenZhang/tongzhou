@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { Connector, PluginConfig, Project } from '../../../src/shared/types';
+import type { Connector, PluginConfig, Project, Provider } from '../../../src/shared/types';
 import { codeHost } from '../../../src/shared/code-hosting';
 import type { Store } from '../../services/storage/store';
 import { serviceFetch } from '../../services/network/service-network';
@@ -47,6 +47,10 @@ export async function verifyGithubPluginToken(secret: string, signal: AbortSigna
 }
 
 export function pluginCredentialVersion(store: Store, config: PluginConfig) {
+  if (config.accountProviderId)
+    return JSON.stringify(
+      store.list<Provider>('provider').find((p) => p.id === config.accountProviderId) ?? null,
+    );
   if (!config.connectorId) return store.secret('plugin_' + config.id);
   const account = store.list<Connector>('connector').find((c) => c.id === config.connectorId);
   return JSON.stringify([
@@ -58,6 +62,7 @@ export function pluginCredentialVersion(store: Store, config: PluginConfig) {
 }
 
 export function pluginSecret(store: Store, config: PluginConfig) {
+  if (config.accountProviderId) return '';
   if (!config.connectorId) return store.secret('plugin_' + config.id);
   const account = store.list<Connector>('connector').find((c) => c.id === config.connectorId);
   const provider = codeHost(config);

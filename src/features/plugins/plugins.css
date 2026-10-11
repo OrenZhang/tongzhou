@@ -1,0 +1,138 @@
+.extensions-page .plugin-library-grid {
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+}
+.plugin-tile {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.plugin-tile:hover {
+  border-color: var(--accent);
+}
+.plugin-tile-open {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+.plugin-tile-open:hover {
+  background: transparent;
+}
+.plugin-tile-icon {
+  display: flex;
+  flex-shrink: 0;
+  color: var(--accent);
+}
+.plugin-tile-icon > svg {
+  width: 22px;
+  height: 22px;
+}
+.plugin-tile-label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 3px;
+}
+.plugin-tile-label h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.plugin-tile-label small {
+  font-size: 11px;
+  color: var(--muted);
+}
+.plugin-tile .switch-control {
+  margin: 0;
+  flex-shrink: 0;
+}
+.extensions-page:has(> .plugin-detail-outlet > *) > :not(.plugin-detail-outlet) {
+  display: none;
+}
+.plugin-detail-page {
+  max-width: 860px;
+  margin: 0 auto;
+}
+.plugin-detail-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 24px;
+}
+.plugin-detail-heading {
+  margin-bottom: 24px;
+}
+.plugin-detail-heading h1 {
+  font-size: 23px;
+  margin: 10px 0;
+}
+.plugin-detail-heading p {
+  color: var(--muted);
+  line-height: 1.7;
+}
+.plugin-detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.plugin-detail-section {
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  min-width: 0;
+}
+.plugin-detail-section > h2 {
+  font-size: 14px;
+  margin: 0 0 16px;
+}
+.plugin-detail-section > p {
+  color: var(--muted);
+  line-height: 1.7;
+}
+.plugin-detail-page .modal-content {
+  padding: 0;
+  max-height: none;
+  overflow: visible;
+}
+.plugin-detail-page .modal-footer {
+  padding: 16px 0;
+  flex-wrap: wrap;
+}
+.plugin-detail-page .connection-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.plugin-detail-page .local-github {
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+.plugin-detail-page .skill-preview {
+  max-height: 440px;
+  overflow: auto;
+}
+@media (max-width: 760px) {
+  .extensions-page .plugin-library-grid {
+    grid-template-columns: 1fr;
+  }
+  .plugin-detail-section {
+    padding: 14px;
+  }
+}

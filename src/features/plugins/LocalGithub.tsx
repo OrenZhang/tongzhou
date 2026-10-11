@@ -2,7 +2,15 @@ import { useState } from 'react';
 import type { LocalGithubAccount, TongzhouAPI } from '../../shared/types';
 import { errorMessage } from '../../lib/feedback';
 
-export function LocalGithub({ api, refresh }: { api: TongzhouAPI; refresh: () => Promise<void> }) {
+export function LocalGithub({
+  api,
+  refresh,
+  onConfigure,
+}: {
+  api: TongzhouAPI;
+  refresh: () => Promise<void>;
+  onConfigure?: (id: string) => Promise<void>;
+}) {
   const [accounts, setAccounts] = useState<LocalGithubAccount[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
@@ -59,8 +67,9 @@ export function LocalGithub({ api, refresh }: { api: TongzhouAPI; refresh: () =>
               aria-label={`使用 ${account.account} 的${account.source === 'git' ? 'Git 凭据' : 'GitHub CLI'}并启用`}
               onClick={() =>
                 void act(async () => {
-                  await api.enableLocalGithubAccount(account.id);
+                  const id = await api.enableLocalGithubAccount(account.id);
                   await refresh();
+                  await onConfigure?.(id);
                   setAccounts(null);
                   setNotice(`已使用 ${account.account} 启用 GitHub 插件`);
                 })

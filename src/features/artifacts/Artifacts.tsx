@@ -38,6 +38,39 @@ function ArtworkCard({ item, onOpen }: { item: Artifact; onOpen(): void }) {
     />
   );
 }
+function ConversationArtworkCard({ item, onOpen }: { item: Artifact; onOpen(): void }) {
+  const [image, setImage] = useState<string>();
+  useEffect(() => {
+    let live = true;
+    setImage(undefined);
+    if (item.kind === 'image' && !item.remoteUrl) {
+      void window.tongzhou
+        .artifactPreview(item.id)
+        .then((preview) => {
+          if (live && preview.type === 'image') setImage(preview.content);
+        })
+        .catch(() => {
+          // Keep the file entry available when a stored image cannot be read.
+        });
+    }
+    return () => {
+      live = false;
+    };
+  }, [item.id, item.kind, item.remoteUrl]);
+  if (!image) return <ArtworkCard item={item} onOpen={onOpen} />;
+  return (
+    <button
+      type="button"
+      className="artifact-card artifact-image-card"
+      onClick={onOpen}
+      aria-label={`查看作品 ${item.name}`}
+      title={`查看原图 · ${item.name}`}
+    >
+      <img src={image} alt={item.name} decoding="async" onError={() => setImage(undefined)} />
+      <span>{item.name}</span>
+    </button>
+  );
+}
 export function ArtifactCards({ ids, onOpen }: { ids: string[]; onOpen(id: string): void }) {
   const [items, setItems] = useState<Artifact[]>([]);
   const key = [...new Set(ids)].join(',');
@@ -70,7 +103,7 @@ export function ArtifactCards({ ids, onOpen }: { ids: string[]; onOpen(id: strin
   return items.length ? (
     <div className="artifact-strip" aria-label="本轮生成的作品">
       {items.map((a) => (
-        <ArtworkCard key={a.id} item={a} onOpen={() => onOpen(a.id)} />
+        <ConversationArtworkCard key={a.id} item={a} onOpen={() => onOpen(a.id)} />
       ))}
     </div>
   ) : null;

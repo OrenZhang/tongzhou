@@ -1,4 +1,7 @@
+import { subscriptionPlugin, subscriptionPluginAccount } from './subscription-plugin';
 import type { ChangePublisher } from '../../core/task-contracts';
+import { pluginStartupTimeout } from '../../../src/shared/vendor-plugins';
+import { installVendorDependencies } from './vendor-dependencies';
 import type { ApplicationEvents } from '../../core/application-events';
 import { dialog, type BrowserWindow } from 'electron';
 import type { Store } from '../../services/storage/store';
@@ -36,6 +39,18 @@ export function registerPluginServices(
   getWindow: () => BrowserWindow | undefined,
 ) {
   const localGithub = new LocalGithubAccounts(store);
+  register(
+    'installPluginDependencies',
+    manual('插件', '安装内置 MCP 的固定版本依赖', 'extensions', '请在插件详情的依赖与安装中操作', [
+      idSchema.describe('pluginId'),
+      z.string().trim().min(1).max(2048).describe('command'),
+    ]),
+    (id, command) =>
+      installVendorDependencies(
+        idSchema.parse(id),
+        z.string().trim().min(1).max(2048).parse(command),
+      ),
+  );
   const localGitlab = new LocalGitlabAccounts(store);
   register(
     'detectLocalGitlabAccounts',
@@ -104,6 +119,11 @@ export function registerPluginServices(
       }
       const { secret, clearSecret, oauthClientSecret, clearOAuthClientSecret, ...config } = input;
       if (secret || clearSecret || config.authMode === 'oauth') config.connectorId = undefined;
+      if (config.accountProviderId) {
+        if (secret || config.authMode === 'oauth')
+          throw new Error('套餐账号与 API Key 不能同时配置');
+        if (config.enabled) subscriptionPluginAccount(store, config);
+      }
       if (config.connectorId) pluginSecret(store, config);
       const previous = store.list<PluginConfig>('plugin').find((p) => p.id === config.id);
       const identityChanged =
@@ -112,6 +132,7 @@ export function registerPluginServices(
           previous.command !== config.command ||
           previous.connectorId !== config.connectorId ||
           JSON.stringify(previous.args) !== JSON.stringify(config.args));
+      const accountChanged = previous?.accountProviderId !== config.accountProviderId;
       const clientSecretChanged = !!oauthClientSecret || !!clearOAuthClientSecret;
       if (codeHost(config) && config.authMode !== 'oauth' && !config.connectorId) {
         let token = '';
@@ -132,7 +153,8 @@ export function registerPluginServices(
         if (!token || /\s/.test(token))
           throw new Error('请配置有效的 Token，或选择本地检测保存的账号');
       }
-      if (identityChanged || clearSecret || clientSecretChanged) mcpAuth.logout(config.id);
+      if (identityChanged || accountChanged || clearSecret || clientSecretChanged)
+        mcpAuth.logout(config.id);
       store.saveSecret(
         'plugin_oauth_client_' + config.id,
         config.authMode === 'oauth' ? oauthClientSecret : undefined,
@@ -141,6 +163,7 @@ export function registerPluginServices(
       const same =
         previous &&
         !identityChanged &&
+        !accountChanged &&
         !secret &&
         !clearSecret &&
         !clientSecretChanged &&
@@ -199,8 +222,13 @@ export function registerPluginServices(
       const credentials = pluginCredentialVersion(store, p);
       let c: PluginConnection | undefined;
       try {
-        c = new PluginConnection(p, pluginSecret(store, p), pluginOAuth(store, p));
-        const signal = AbortSignal.timeout(30000);
+        c = new PluginConnection(
+          p,
+          pluginSecret(store, p),
+          pluginOAuth(store, p),
+          subscriptionPlugin(store, p),
+        );
+        const signal = AbortSignal.timeout(pluginStartupTimeout(p.id) + 10000);
         if (codeHost(p) === 'github' && p.authMode !== 'oauth')
           await verifyGithubPluginToken(pluginSecret(store, p), signal);
         await c.connect(signal);

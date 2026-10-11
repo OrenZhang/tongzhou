@@ -1004,6 +1004,8 @@ describe('agent execution lifecycle', () => {
         r.tools.every(
           (t: any) =>
             [
+              'current_time',
+              'system_info',
               'request_user_input',
               'get_goal',
               'create_goal',
@@ -1099,6 +1101,8 @@ describe('agent execution lifecycle', () => {
       f.requests.every((r) =>
         r.tools.every((t: any) =>
           [
+            'current_time',
+            'system_info',
             'request_user_input',
             'get_goal',
             'create_goal',
@@ -1231,6 +1235,8 @@ describe('agent execution lifecycle', () => {
       f.requests.every((r) =>
         r.tools.every((t: any) =>
           [
+            'current_time',
+            'system_info',
             'request_user_input',
             'get_goal',
             'create_goal',

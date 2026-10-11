@@ -1,4 +1,9 @@
+import {
+  subscriptionPlugin,
+  type SubscriptionPluginConnection,
+} from '../../modules/plugins/subscription-plugin';
 import { clientIdentity } from '../../services/network/request-identity';
+import { pluginStartupTimeout } from '../../../src/shared/vendor-plugins';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -186,9 +191,13 @@ export class PluginConnection {
     readonly config: PluginConfig,
     private secret: string,
     private oauth?: PluginOAuthProvider,
+    private subscription?: SubscriptionPluginConnection,
   ) {}
   async connect(signal: AbortSignal) {
     signal.throwIfAborted();
+    if (this.config.accountProviderId && !this.subscription)
+      throw new Error('套餐插件缺少账号连接');
+    if (this.subscription) return this.subscription.connect(signal);
     await this.oauth?.prepare(signal);
     const credentials: Record<string, string> =
       !this.oauth && this.secret ? JSON.parse(this.secret) : {};
@@ -221,7 +230,10 @@ export class PluginConnection {
           });
     if (transport instanceof StdioClientTransport) transport.stderr?.on('data', () => {});
     try {
-      await this.client.connect(transport, { signal, timeout: 20000 });
+      await this.client.connect(transport, {
+        signal,
+        timeout: pluginStartupTimeout(this.config.id),
+      });
       if (this.oauth) this.secretValues.push(...this.oauth.sensitiveValues());
     } catch (e) {
       await this.close();
@@ -234,6 +246,7 @@ export class PluginConnection {
   }
   async tools(signal: AbortSignal) {
     signal.throwIfAborted();
+    if (this.subscription) return this.subscription.tools();
     await this.oauth?.prepare(signal);
     if (this.oauth) this.secretValues.push(...this.oauth.sensitiveValues());
     if (this.gitlabApi) return gitlabApiTools;
@@ -261,6 +274,8 @@ export class PluginConnection {
   }
   async call(name: string, args: Record<string, unknown>, signal: AbortSignal, generated = false) {
     try {
+      if (this.subscription)
+        return normalizeOutput(await this.subscription.call(name, args, signal), generated);
       await this.oauth?.prepare(signal);
       if (this.oauth) this.secretValues.push(...this.oauth.sensitiveValues());
       if (this.gitlabApi) return await this.gitlabApi.call(name, args, signal);
@@ -361,6 +376,7 @@ export class ToolScope {
             current.oauthClientId === config.oauthClientId &&
             current.oauthIssuer === config.oauthIssuer &&
             current.connectorId === config.connectorId &&
+            current.accountProviderId === config.accountProviderId &&
             JSON.stringify(current.args) === JSON.stringify(config.args) &&
             JSON.stringify(current.readOnlyTools) === JSON.stringify(config.readOnlyTools) &&
             pluginCredentialVersion(store, config) === capturedSecret &&
@@ -375,6 +391,7 @@ export class ToolScope {
               config,
               pluginSecret(store, config),
               pluginOAuth(store, config),
+              subscriptionPlugin(store, config),
             );
             this.connections.push(connection);
             await connection.connect(this.signal);

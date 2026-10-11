@@ -65,6 +65,8 @@ export interface AgentProfile {
   computerEnabled?: boolean;
 }
 export interface PluginConfig {
+  /** Reuse a Tongzhou subscription account; no token is copied into plugin settings. */
+  accountProviderId?: string;
   /** Live account binding; credentials stay in the main process. */
   connectorId?: string;
   authMode?: 'headers' | 'oauth';
@@ -293,6 +295,7 @@ export interface CodexAuthState {
 export type AppEvent =
   | { type: 'messages-removed'; sessionId: string; ids: string[] }
   | { type: 'update'; state: import('./updates').UpdateState }
+  | { type: 'power'; state: import('./power').PowerState }
   | { type: 'appearance'; value: Partial<import('./appearance').AppearancePreferences> }
   | {
       type: 'navigate';
@@ -480,6 +483,10 @@ export interface TongzhouAPI {
   attachmentContent(id: string): Promise<string>;
   clientMethods(): Promise<import('./client-catalog').ClientCatalog>;
   getAppearance(): Promise<Partial<import('./appearance').AppearancePreferences>>;
+  powerStatus(): Promise<import('./power').PowerState>;
+  savePowerSettings(
+    value: import('./power').PowerPreferences,
+  ): Promise<import('./power').PowerState>;
   setAppearance(value: import('./appearance').AppearancePreferences): Promise<void>;
   gitRepository(projectId: string): Promise<GitRepositoryInfo>;
   bindGitAccount(projectId: string, connectorId: string): Promise<void>;
@@ -550,6 +557,7 @@ export interface TongzhouAPI {
   savePlugin(plugin: PluginInput): Promise<void>;
   deletePlugin(id: string): Promise<void>;
   testPlugin(id: string): Promise<{ name: string; description: string }[]>;
+  installPluginDependencies(id: string, command: string): Promise<void>;
   importSkill(): Promise<SkillRecord | null>;
   createSkill(input: {
     instructions: string;

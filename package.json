@@ -18,6 +18,7 @@
     "test:watch": "vitest",
     "test:desktop": "node scripts/testing/smoke.mjs",
     "test:tray": "node scripts/testing/tray-smoke.mjs",
+    "test:power": "node scripts/testing/power-smoke.mjs",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -143,7 +144,9 @@
       "dist-electron/node-request-identity.cjs",
       "dist-electron/network-core-host.cjs",
       "dist-electron/builtin-mcp.cjs",
-      "dist-electron/terminal-host.cjs"
+      "dist-electron/terminal-host.cjs",
+      "dist-electron/windows-lid-host.cjs",
+      "dist-electron/macos-lid-host.cjs"
     ],
     "afterPack": "scripts/after-pack.mjs",
     "win": {

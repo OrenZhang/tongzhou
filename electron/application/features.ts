@@ -1,5 +1,6 @@
 import { botsPlugin } from './features/bots';
 import { updatesPlugin } from './features/updates';
+import { powerPlugin } from './features/power';
 import { networkPlugin } from './features/network';
 import { attachmentsPlugin } from './features/attachments';
 import { projectsPlugin } from './features/projects';
@@ -22,6 +23,7 @@ import { providersPlugin } from './features/providers';
 import { agentsPlugin } from './features/agents';
 export const applicationFeatures = [
   updatesPlugin,
+  powerPlugin,
   networkPlugin,
   attachmentsPlugin,
   projectsPlugin,

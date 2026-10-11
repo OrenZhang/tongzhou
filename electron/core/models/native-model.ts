@@ -1,62 +1,24 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { createHash } from 'node:crypto';
 import TOML from '@iarna/toml';
 import YAML from 'yaml';
 import type { Provider } from '../../../src/shared/types';
-import { NativeAccount } from '../../services/accounts/native-engine';
-import { kimiOAuthKey, kimiSubscriptionEndpoint } from '../../services/accounts/kimi-credentials';
+import {
+  readMiniMaxCredential,
+  readKimiCredential,
+  refreshSubscription,
+} from '../../services/accounts/subscription-credentials';
 import type { ModelConnection } from './model-gateway';
-
-const json = async (file: string) => JSON.parse(await readFile(file, 'utf8'));
-const refreshes = new Map<string, Promise<unknown>>();
-
-/** The official clients own login/token rotation only. No session/prompt or agent loop. */
-async function refreshAccount(provider: Provider, home: string) {
-  let pending = refreshes.get(home);
-  if (!pending) {
-    const account = new NativeAccount(
-      provider.protocol as 'kimi' | 'minimax',
-      home,
-      () => {},
-      () => {},
-    );
-    pending = account.refresh().finally(() => {
-      account.dispose();
-      refreshes.delete(home);
-    });
-    refreshes.set(home, pending);
-  }
-  await pending;
-}
 
 export async function nativeModelConnection(
   provider: Provider,
   selected: string,
   home: string,
-  refresh: () => Promise<unknown> = () => refreshAccount(provider, home),
+  refresh: () => Promise<unknown> = () => refreshSubscription(provider, home),
 ): Promise<ModelConnection> {
   async function read(): Promise<ModelConnection & { expires: number }> {
     if (provider.protocol === 'minimax') {
-      const preference = await json(path.join(home, 'preferences', 'mcode-region.json'));
-      const region = preference.regions?.prod;
-      if (region !== 'cn' && region !== 'en') throw new Error('MiniMax 登录地区无效，请重新登录');
-      const authHome = path.join(path.resolve(home), 'auth');
-      const namespace = path.join(authHome, 'prod', region, 'mcode-public');
-      const state = await json(path.join(namespace, 'auth-state.json'));
-      if (!['authenticated', 'refreshing', 'expired'].includes(state.status))
-        throw new Error('MiniMax 未登录');
-      const records = await json(path.join(namespace, 'auth.json'));
-      const account = createHash('sha256')
-        .update(authHome + '\0mcode-public')
-        .digest('base64url');
-      const token = records.records?.[`com.minimax.mcode.oauth.prod.${region}\0${account}`];
-      if (
-        !token?.accessToken ||
-        token.audience !== 'agent-backend' ||
-        !token.scopes?.includes('agent.default')
-      )
-        throw new Error('MiniMax 登录凭据不可用，请重新登录');
+      const token = await readMiniMaxCredential(home);
       const config: any = YAML.parse(await readFile(path.join(home, 'config.yaml'), 'utf8'));
       const match = /^m:minimax:([^:]+):v:$/.exec(selected);
       const model = match?.[1] ?? selected;
@@ -67,11 +29,11 @@ export async function nativeModelConnection(
           ...provider,
           protocol: 'anthropic',
           auth: 'bearer',
-          baseUrl: `https://agent.minimax.${region === 'cn' ? 'cn' : 'io'}/mavis/api/v1/llm/v1`,
+          baseUrl: `${token.origin}/mavis/api/v1/llm/v1`,
         },
         model,
-        secret: token.accessToken,
-        expires: token.expiresAtMs,
+        secret: token.secret,
+        expires: token.expires,
       };
     }
     if (provider.protocol === 'kimi') {
@@ -80,10 +42,7 @@ export async function nativeModelConnection(
       const source = config.providers?.[alias?.provider];
       if (!alias || source?.type !== 'kimi' || source.oauth?.storage !== 'file')
         throw new Error('Kimi 模型或订阅未配置，请重新登录并刷新模型列表');
-      const endpoint = kimiSubscriptionEndpoint(source);
-      const key = kimiOAuthKey(source.oauth);
-      const token = await json(path.join(home, 'credentials', key + '.json'));
-      if (!token.access_token) throw new Error('Kimi 未登录');
+      const token = await readKimiCredential(home, source);
       // Kimi Code 2.1.x omits protocol for its default OpenAI Chat wire format.
       // Explicit model overrides still select Anthropic or Responses.
       const protocol =
@@ -101,11 +60,11 @@ export async function nativeModelConnection(
           ...provider,
           protocol,
           auth: 'bearer',
-          baseUrl: endpoint.href.replace(/\/$/, ''),
+          baseUrl: token.endpoint,
         },
         model: alias.model,
-        secret: token.access_token,
-        expires: token.expires_at * 1000,
+        secret: token.secret,
+        expires: token.expires,
       };
     }
     throw new Error('不是订阅模型连接');

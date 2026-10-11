@@ -63,3 +63,15 @@ await build({
   target: 'node22',
   external: ['node-pty'],
 });
+await build({
+  entryPoints: [
+    'electron/services/desktop/windows-lid-host.ts',
+    'electron/services/desktop/macos-lid-host.ts',
+  ],
+  outdir: 'dist-electron',
+  outExtension: { '.js': '.cjs' },
+  bundle: true,
+  platform: 'node',
+  format: 'cjs',
+  target: 'node22',
+});

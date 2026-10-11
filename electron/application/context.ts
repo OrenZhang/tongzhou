@@ -11,6 +11,7 @@ import type { ExecutionNetwork } from '../core/task-contracts';
 import type { ClientCommands } from '../core/tools/client-commands';
 import type { Store } from '../services/storage/store';
 import type { Updates } from '../services/desktop/updates';
+import type { PowerSettings } from '../services/desktop/power';
 import type { NetworkProfiles } from '../services/network/network-profiles';
 import type { Accounts } from '../services/accounts/accounts';
 import type { AccountBrowser } from '../services/accounts/account-browser';
@@ -58,6 +59,7 @@ declare module 'cordis' {
     tzMemories: DomainServices['memories'];
     tzCheckpoints: DomainServices['checkpoints'];
     tzUpdates: Updates;
+    tzPower: PowerSettings;
     tzNetworks: NetworkProfiles;
     tzAccounts: Accounts;
     tzAccountBrowser: AccountBrowser;

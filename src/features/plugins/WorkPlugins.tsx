@@ -1,7 +1,7 @@
 import { ServiceIcon } from '../../components/ServiceIcon';
 import { useState } from 'react';
 import { ExternalLink } from 'lucide-react';
-import { Modal } from '../../components/components';
+import { PluginTile, PluginDetailPage, PluginDetailSection } from './PluginDetail';
 import { MarkdownLink } from '../../components/markdown/RichMarkdown';
 import { errorMessage } from '../../lib/feedback';
 import { LocalGithub } from './LocalGithub';
@@ -346,6 +346,33 @@ export function WorkPlugins({
     setToken('');
     await refresh();
   };
+  const begin = (p: (typeof workPluginCatalog)[number], installed?: PluginConfig) => {
+    setNotice('');
+    setLoginUrl('');
+    setLoginCode('');
+    setEditingService(p.id);
+    setEdit(
+      installed
+        ? { ...installed, secret: '', authMode: installed.authMode ?? p.authMode }
+        : {
+            id: crypto.randomUUID(),
+            name: p.name,
+            transport: 'http',
+            url: p.url,
+            command: '',
+            args: [],
+            enabled: false,
+            readOnlyTools: [],
+            authMode: p.authMode,
+          },
+    );
+    setToken('');
+    setSource(
+      ['github', 'gitlab'].includes(p.id) && installed?.authMode !== 'oauth'
+        ? (installed?.connectorId ?? '')
+        : '',
+    );
+  };
   return (
     <section className="work-plugins">
       {notice && !edit && (
@@ -365,476 +392,441 @@ export function WorkPlugins({
             const installed =
               connections.find((c) => c.id === selectedConnections[p.id]) ?? connections[0];
             return (
-              <article className="provider-card" key={p.id}>
-                <div className="service-card-heading row">
-                  <ServiceIcon service={p.id} />
-                  <h3>{p.name}</h3>
-                  <span className="tag">应用 · {p.category}</span>
-                </div>
-                <p>{p.description}</p>
-                {connections.length > 1 && (
-                  <select
-                    aria-label={`${p.name} 连接`}
-                    value={installed.id}
-                    onChange={(e) =>
-                      setSelectedConnections((old) => ({ ...old, [p.id]: e.target.value }))
-                    }
-                  >
-                    {connections.map((connection, index) => (
-                      <option key={connection.id} value={connection.id}>
-                        {connection.name} · {index + 1}
-                        {connection.url === figmaDesktopUrl ? ' · 桌面' : ''}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                <div className="row">
-                  <span className="muted">
-                    {installed
-                      ? installed.oauthStatus === 'error'
-                        ? '授权未完成'
-                        : installed.oauthStatus === 'starting'
-                          ? '正在连接授权服务'
-                          : installed.oauthStatus === 'waiting'
-                            ? '等待浏览器授权'
-                            : installed.url === figmaDesktopUrl
-                              ? installed.catalog
-                                ? '✓ 已连接'
-                                : '待连接桌面服务'
-                              : installed.oauthStatus === 'authorized'
-                                ? '✓ 已授权'
-                                : installed.hasSecret
-                                  ? installed.checkedAt
-                                    ? '✓ 连接已验证'
-                                    : '凭据已保存 · 待检查'
-                                  : '待认证'
-                      : '未配置'}
-                    {installed ? ' · ' + (installed.enabled ? '已启用' : '已停用') : ''}
-                  </span>
-                  <a
-                    href={p.docs}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      void api
-                        .openExternalLink(p.docs)
-                        .catch((error) => setNotice(errorMessage(error)));
-                    }}
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label={`${p.name} 官方说明`}
-                    title="官方说明"
-                  >
-                    <ExternalLink size={13} />
-                  </a>
-                </div>
-                <div className="row service-card-actions">
-                  <button
-                    className="secondary"
-                    disabled={busy}
-                    onClick={() => {
-                      setNotice('');
-                      setLoginUrl('');
-                      setLoginCode('');
-                      setEditingService(p.id);
-                      setEdit(
-                        installed
-                          ? {
-                              ...installed,
-                              secret: '',
-                              authMode: installed.authMode ?? p.authMode,
-                            }
-                          : {
-                              id: crypto.randomUUID(),
-                              name: p.name,
-                              transport: 'http',
-                              url: p.url,
-                              command: '',
-                              args: [],
-                              enabled: false,
-                              readOnlyTools: [],
-                              authMode: p.authMode,
-                            },
-                      );
-                      setToken('');
-                      setSource(
-                        ['github', 'gitlab'].includes(p.id) && installed?.authMode !== 'oauth'
-                          ? (installed?.connectorId ?? '')
-                          : '',
-                      );
-                    }}
-                  >
-                    {installed ? '管理连接' : '配置插件'}
-                  </button>
-                </div>
-                {installed?.catalog && <PluginToolList plugin={installed} />}
-                {p.id === 'github' && <LocalGithub api={api} refresh={refresh} />}
-                {p.id === 'gitlab' && (
-                  <LocalGitlab
-                    key={installed?.url ?? 'gitlab'}
-                    api={api}
-                    refresh={refresh}
-                    instance={installed?.url.replace(/\/api\/v4\/mcp\/?$/, '')}
-                    instances={(data.connectors ?? [])
-                      .filter((c) => c.kind === 'gitlab')
-                      .map((c) => c.baseUrl)}
-                    onConfigure={configureLocalGitlab}
-                  />
-                )}
-              </article>
+              <PluginTile
+                key={p.id}
+                name={p.name}
+                type={'应用 · ' + p.category}
+                icon={<ServiceIcon service={p.id} />}
+                enabled={installed?.enabled ?? false}
+                disabled={busy}
+                onOpen={() => begin(p, installed)}
+                onToggle={(enabled) => {
+                  if (!installed) {
+                    begin(p);
+                    setEdit((old) => (old ? { ...old, enabled } : old));
+                    return;
+                  }
+                  void act(() => api.savePlugin({ ...installed, enabled }));
+                }}
+              />
             );
           })}
       </div>
       {edit && (
-        <Modal title={`连接 ${edit.name}`} onClose={() => setEdit(null)}>
-          <form
-            className="modal-content connection-form"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void act(async () => {
-                await save();
-                setEdit(null);
-              });
-            }}
-          >
-            {notice && notice !== current?.oauthError && (
-              <p role="status" className="info-strip">
-                {notice}
-              </p>
-            )}
-            {editingService === 'gitlab' && (
-              <>
-                <label>
-                  GitLab 实例地址
-                  <input
-                    aria-label="GitLab 实例地址"
-                    type="url"
-                    required
-                    value={edit.url.replace(/\/api\/v4\/mcp\/?$/, '')}
-                    placeholder="https://gitlab.com"
-                    onChange={(e) => {
-                      setSource('');
-                      setToken('');
-                      setLoginUrl('');
-                      setLoginCode('');
-                      setNotice('');
-                      setEdit({
-                        ...edit,
-                        url: e.target.value.replace(/\/$/, '') + '/api/v4/mcp',
-                        authMode: edit.authMode ?? 'headers',
-                        oauthClientId: '',
-                        oauthIssuer: '',
-                        oauthClientSecret: '',
-                        clearSecret: true,
-                      });
-                    }}
-                  />
-                </label>
-                {edit.authMode !== 'oauth' && (
-                  <LocalGitlab
-                    key={edit.url}
-                    api={api}
-                    refresh={refresh}
-                    instance={edit.url.replace(/\/api\/v4\/mcp\/?$/, '')}
-                    showInstanceInput={false}
-                    onConfigure={configureLocalGitlab}
-                  />
-                )}
-                {(data.connectors ?? []).some((c) => c.kind === 'gitlab') && (
-                  <label>
-                    使用已有 GitLab 站点
-                    <select
-                      aria-label="使用已有 GitLab 站点"
-                      value=""
-                      onChange={(e) => {
-                        if (e.target.value) {
-                          setSource('');
-                          setToken('');
-                          setLoginUrl('');
-                          setLoginCode('');
-                          setNotice('');
-                          setEdit({
-                            ...edit,
-                            url: e.target.value.replace(/\/$/, '') + '/api/v4/mcp',
-                            authMode: edit.authMode ?? 'headers',
-                            oauthClientId: '',
-                            oauthIssuer: '',
-                            oauthClientSecret: '',
-                            clearSecret: true,
-                          });
-                        }
-                      }}
-                    >
-                      <option value="">选择站点（仍需独立授权）</option>
-                      {(data.connectors ?? [])
-                        .filter((c) => c.kind === 'gitlab')
-                        .map((c) => (
-                          <option key={c.id} value={c.baseUrl}>
-                            {c.name} · {c.baseUrl}
-                          </option>
-                        ))}
-                    </select>
-                  </label>
-                )}
-                <p>
-                  {edit.authMode === 'oauth'
-                    ? '点击「使用 GitLab 登录」前往该实例授权，无需填写应用密钥。实例需启用 MCP 和 OAuth 应用自动注册；不支持时可使用 Token 配置。'
-                    : 'Token 使用此实例的官方 REST API，无需实例启用 MCP。保存并检查会验证 Token 身份和 API 连接。'}
-                </p>
-              </>
-            )}
-            {codeHost(edit) && (
-              <p>
-                {codeHostDescription(codeHost(edit)!)}{' '}
-                工具将在会话中按需发现，也可点击「保存并检查」预览完整目录。
-              </p>
-            )}
-            {(edit.url === 'https://mcp.figma.com/mcp' || edit.url === figmaDesktopUrl) && (
-              <>
-                <label>
-                  Figma 连接方式
-                  <select
-                    aria-label="Figma 连接方式"
-                    value={edit.url}
-                    onChange={(e) => {
-                      setEdit({
-                        ...edit,
-                        url: e.target.value,
-                        authMode: e.target.value === figmaDesktopUrl ? 'headers' : 'oauth',
-                        clearSecret: true,
-                        oauthClientId: '',
-                        oauthIssuer: '',
-                        oauthClientSecret: '',
-                      });
-                      setToken('');
-                      setLoginUrl('');
-                      setLoginCode('');
-                      setNotice('');
-                    }}
-                  >
-                    <option value="https://mcp.figma.com/mcp">远程服务 · 浏览器授权</option>
-                    <option value={figmaDesktopUrl}>桌面服务 · 本机连接</option>
-                  </select>
-                </label>
-                <p>
-                  {edit.url === figmaDesktopUrl
-                    ? '在 Figma 桌面应用打开文件，进入 Dev Mode 并启用 MCP Server，然后点击「保存并检查」。无需在同舟登录。'
-                    : 'Figma 远程 MCP 要求服务方认可的客户端。注册被拒绝时可配置已获准的 OAuth 应用，或选择桌面服务。'}
-                </p>
-              </>
-            )}
-            {codeHost(edit) && (
-              <label>
-                认证方式
-                <select
-                  aria-label="认证方式"
-                  value={edit.authMode === 'oauth' ? 'oauth' : 'headers'}
-                  disabled={busy}
-                  onChange={(e) => {
-                    const mode = e.target.value as 'headers' | 'oauth';
-                    setToken('');
-                    setSource('');
-                    setLoginUrl('');
-                    setLoginCode('');
-                    setNotice('');
-                    setEdit({
-                      ...edit,
-                      authMode: mode,
-                      clearSecret: true,
-                      oauthClientSecret: '',
-                      oauthClientId: current?.authMode === mode ? current.oauthClientId : '',
-                      oauthIssuer:
-                        mode === 'oauth'
-                          ? codeHost(edit) === 'github'
-                            ? 'https://github.com/login/oauth'
-                            : new URL(edit.url).origin
-                          : '',
-                    });
-                  }}
-                >
-                  <option value="headers">Token 配置</option>
-                  <option value="oauth">OAuth2 授权</option>
-                </select>
-              </label>
-            )}
-            {codeHost(edit) && edit.authMode !== 'oauth' && tokenAccounts.length > 0 && (
-              <label>
-                Token 来源
-                <select
-                  aria-label="Token 来源"
-                  value={source}
-                  disabled={busy}
-                  onChange={(e) => {
-                    setSource(e.target.value);
-                    setToken('');
-                    setEdit({ ...edit, clearSecret: false });
-                  }}
-                >
-                  <option value="">手动配置 Token</option>
-                  {tokenAccounts.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
+        <PluginDetailPage
+          title={edit.name}
+          type="应用"
+          subtitle={workPluginCatalog.find((p) => p.id === editingService)?.description}
+          busy={busy}
+          onClose={() => setEdit(null)}
+        >
+          <PluginDetailSection title="连接与账号">
+            {(data.plugins ?? []).filter((p) => workPluginDefinition(p)?.id === editingService)
+              .length > 1 && (
+              <select
+                aria-label="当前插件连接"
+                value={edit.id}
+                onChange={(e) => {
+                  const p = workPluginCatalog.find((p) => p.id === editingService)!;
+                  const connection = data.plugins?.find((c) => c.id === e.target.value);
+                  setSelectedConnections((old) => ({ ...old, [editingService]: e.target.value }));
+                  begin(p, connection);
+                }}
+              >
+                {(data.plugins ?? [])
+                  .filter((p) => workPluginDefinition(p)?.id === editingService)
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} · {p.url}
                     </option>
                   ))}
-                </select>
-                <small>可复用本地检测保存的 Token；调用时仍会检查账号和连接权限。</small>
-              </label>
+              </select>
             )}
-            {edit.url !== figmaDesktopUrl && (
-              <OAuthFields edit={edit} onChange={setEdit} showAuthentication={!codeHost(edit)} />
-            )}
-            {edit.authMode !== 'oauth' && edit.url !== figmaDesktopUrl && !source && (
-              <label>
-                访问令牌（留空保留）
-                <input
-                  aria-label="访问令牌（留空保留）"
-                  type="password"
-                  autoComplete="new-password"
-                  value={token}
-                  onChange={(e) => setToken(e.target.value)}
-                />
-                {codeHost(edit) && (
-                  <small>
+            <form
+              className="modal-content connection-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void act(async () => {
+                  await save();
+                  setEdit(null);
+                });
+              }}
+            >
+              {notice && notice !== current?.oauthError && (
+                <p role="status" className="info-strip">
+                  {notice}
+                </p>
+              )}
+              {editingService === 'gitlab' && (
+                <>
+                  <label>
+                    GitLab 实例地址
+                    <input
+                      aria-label="GitLab 实例地址"
+                      type="url"
+                      required
+                      value={edit.url.replace(/\/api\/v4\/mcp\/?$/, '')}
+                      placeholder="https://gitlab.com"
+                      onChange={(e) => {
+                        setSource('');
+                        setToken('');
+                        setLoginUrl('');
+                        setLoginCode('');
+                        setNotice('');
+                        setEdit({
+                          ...edit,
+                          url: e.target.value.replace(/\/$/, '') + '/api/v4/mcp',
+                          authMode: edit.authMode ?? 'headers',
+                          oauthClientId: '',
+                          oauthIssuer: '',
+                          oauthClientSecret: '',
+                          clearSecret: true,
+                        });
+                      }}
+                    />
+                  </label>
+                  {(data.connectors ?? []).some((c) => c.kind === 'gitlab') && (
+                    <label>
+                      使用已有 GitLab 站点
+                      <select
+                        aria-label="使用已有 GitLab 站点"
+                        value=""
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            setSource('');
+                            setToken('');
+                            setLoginUrl('');
+                            setLoginCode('');
+                            setNotice('');
+                            setEdit({
+                              ...edit,
+                              url: e.target.value.replace(/\/$/, '') + '/api/v4/mcp',
+                              authMode: edit.authMode ?? 'headers',
+                              oauthClientId: '',
+                              oauthIssuer: '',
+                              oauthClientSecret: '',
+                              clearSecret: true,
+                            });
+                          }
+                        }}
+                      >
+                        <option value="">选择站点（仍需独立授权）</option>
+                        {(data.connectors ?? [])
+                          .filter((c) => c.kind === 'gitlab')
+                          .map((c) => (
+                            <option key={c.id} value={c.baseUrl}>
+                              {c.name} · {c.baseUrl}
+                            </option>
+                          ))}
+                      </select>
+                    </label>
+                  )}
+                  <p>
+                    {edit.authMode === 'oauth'
+                      ? '点击「使用 GitLab 登录」前往该实例授权，无需填写应用密钥。实例需启用 MCP 和 OAuth 应用自动注册；不支持时可使用 Token 配置。'
+                      : 'Token 使用此实例的官方 REST API，无需实例启用 MCP。保存并检查会验证 Token 身份和 API 连接。'}
+                  </p>
+                </>
+              )}
+              {codeHost(edit) && (
+                <p>
+                  {codeHostDescription(codeHost(edit)!)}{' '}
+                  工具将在会话中按需发现，也可点击「保存并检查」预览完整目录。
+                </p>
+              )}
+              {(edit.url === 'https://mcp.figma.com/mcp' || edit.url === figmaDesktopUrl) && (
+                <>
+                  <label>
+                    Figma 连接方式
+                    <select
+                      aria-label="Figma 连接方式"
+                      value={edit.url}
+                      onChange={(e) => {
+                        setEdit({
+                          ...edit,
+                          url: e.target.value,
+                          authMode: e.target.value === figmaDesktopUrl ? 'headers' : 'oauth',
+                          clearSecret: true,
+                          oauthClientId: '',
+                          oauthIssuer: '',
+                          oauthClientSecret: '',
+                        });
+                        setToken('');
+                        setLoginUrl('');
+                        setLoginCode('');
+                        setNotice('');
+                      }}
+                    >
+                      <option value="https://mcp.figma.com/mcp">远程服务 · 浏览器授权</option>
+                      <option value={figmaDesktopUrl}>桌面服务 · 本机连接</option>
+                    </select>
+                  </label>
+                  <p>
+                    {edit.url === figmaDesktopUrl
+                      ? '在 Figma 桌面应用打开文件，进入 Dev Mode 并启用 MCP Server，然后点击「保存并检查」。无需在同舟登录。'
+                      : 'Figma 远程 MCP 要求服务方认可的客户端。注册被拒绝时可配置已获准的 OAuth 应用，或选择桌面服务。'}
+                  </p>
+                </>
+              )}
+              {codeHost(edit) && (
+                <label>
+                  认证方式
+                  <select
+                    aria-label="认证方式"
+                    value={edit.authMode === 'oauth' ? 'oauth' : 'headers'}
+                    disabled={busy}
+                    onChange={(e) => {
+                      const mode = e.target.value as 'headers' | 'oauth';
+                      setToken('');
+                      setSource('');
+                      setLoginUrl('');
+                      setLoginCode('');
+                      setNotice('');
+                      setEdit({
+                        ...edit,
+                        authMode: mode,
+                        clearSecret: true,
+                        oauthClientSecret: '',
+                        oauthClientId: current?.authMode === mode ? current.oauthClientId : '',
+                        oauthIssuer:
+                          mode === 'oauth'
+                            ? codeHost(edit) === 'github'
+                              ? 'https://github.com/login/oauth'
+                              : new URL(edit.url).origin
+                            : '',
+                      });
+                    }}
+                  >
+                    <option value="headers">Token 配置</option>
+                    <option value="oauth">OAuth2 授权</option>
+                  </select>
+                </label>
+              )}
+              {codeHost(edit) && edit.authMode !== 'oauth' && tokenAccounts.length > 0 && (
+                <label>
+                  Token 来源
+                  <select
+                    aria-label="Token 来源"
+                    value={source}
+                    disabled={busy}
+                    onChange={(e) => {
+                      setSource(e.target.value);
+                      setToken('');
+                      setEdit({ ...edit, clearSecret: false });
+                    }}
+                  >
+                    <option value="">手动配置 Token</option>
+                    {tokenAccounts.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                  <small>可复用本地检测保存的 Token；调用时仍会检查账号和连接权限。</small>
+                </label>
+              )}
+              {edit.url !== figmaDesktopUrl && (
+                <OAuthFields edit={edit} onChange={setEdit} showAuthentication={!codeHost(edit)} />
+              )}
+              {edit.authMode !== 'oauth' && edit.url !== figmaDesktopUrl && !source && (
+                <label>
+                  访问令牌（留空保留）
+                  <input
+                    aria-label="访问令牌（留空保留）"
+                    type="password"
+                    autoComplete="new-password"
+                    value={token}
+                    onChange={(e) => setToken(e.target.value)}
+                  />
+                  {codeHost(edit) && (
+                    <small>
+                      {codeHost(edit) === 'github'
+                        ? '使用 GitHub Personal Access Token，按目标仓库授予权限；保存并检查后确认官方 MCP 连接。'
+                        : '使用 GitLab Personal / Project / Group Access Token；读取通常需要 read_api，写操作需要 api，并受项目权限限制。'}
+                    </small>
+                  )}
+                </label>
+              )}
+              {edit.authMode === 'oauth' && (
+                <div className="plugin-auth-controls">
+                  <PluginAuthStatus plugin={authCurrent} />
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={
+                      busy || ['starting', 'waiting'].includes(authCurrent?.oauthStatus ?? '')
+                    }
+                    onClick={() =>
+                      void act(async () => {
+                        await save();
+                        const result = await api.loginPlugin(edit.id);
+                        setLoginUrl(result.url ?? '');
+                        setLoginCode(result.code ?? '');
+                        return result.url
+                          ? result.browserOpened
+                            ? '已打开浏览器，请完成授权。'
+                            : '系统浏览器未打开，请点击「打开授权页面」继续。'
+                          : '授权已更新。';
+                      }, '授权状态已更新，请在下方查看。')
+                    }
+                  >
                     {codeHost(edit) === 'github'
-                      ? '使用 GitHub Personal Access Token，按目标仓库授予权限；保存并检查后确认官方 MCP 连接。'
-                      : '使用 GitLab Personal / Project / Group Access Token；读取通常需要 read_api，写操作需要 api，并受项目权限限制。'}
-                  </small>
-                )}
+                      ? '使用 GitHub 登录'
+                      : codeHost(edit) === 'gitlab'
+                        ? '使用 GitLab 登录'
+                        : '浏览器授权'}
+                  </button>
+                  {loginCode && authCurrent?.oauthStatus === 'waiting' && (
+                    <p className="info-strip">
+                      在 GitHub 授权页面输入验证码：<strong>{loginCode}</strong>
+                    </p>
+                  )}
+                  {loginUrl && authCurrent?.oauthStatus === 'waiting' && (
+                    <MarkdownLink href={loginUrl}>打开授权页面</MarkdownLink>
+                  )}
+                  {['starting', 'waiting'].includes(authCurrent?.oauthStatus ?? '') && (
+                    <button
+                      type="button"
+                      onClick={() => void act(() => api.cancelPluginLogin(edit.id), '已取消授权')}
+                    >
+                      取消授权
+                    </button>
+                  )}
+                  {authCurrent?.oauthStatus === 'authorized' && (
+                    <button
+                      type="button"
+                      onClick={() => void act(() => api.logoutPlugin(edit.id), '已清除本地授权')}
+                    >
+                      退出授权
+                    </button>
+                  )}
+                </div>
+              )}
+              <label className="checkbox-line">
+                <input
+                  type="checkbox"
+                  checked={edit.enabled}
+                  onChange={(e) => setEdit({ ...edit, enabled: e.target.checked })}
+                />
+                在会话中启用此插件
               </label>
-            )}
-            {edit.authMode === 'oauth' && (
-              <div className="plugin-auth-controls">
-                <PluginAuthStatus plugin={authCurrent} />
+              <p>凭据使用系统加密保存。工具能访问的范围取决于服务端授权，执行遵循同舟会话权限。</p>
+              <div className="row">
+                <button className="primary" disabled={busy}>
+                  保存连接
+                </button>
                 <button
                   type="button"
-                  className="secondary"
-                  disabled={
-                    busy || ['starting', 'waiting'].includes(authCurrent?.oauthStatus ?? '')
-                  }
+                  disabled={busy}
                   onClick={() =>
                     void act(async () => {
                       await save();
-                      const result = await api.loginPlugin(edit.id);
-                      setLoginUrl(result.url ?? '');
-                      setLoginCode(result.code ?? '');
-                      return result.url
-                        ? result.browserOpened
-                          ? '已打开浏览器，请完成授权。'
-                          : '系统浏览器未打开，请点击「打开授权页面」继续。'
-                        : '授权已更新。';
-                    }, '授权状态已更新，请在下方查看。')
+                      await api.testPlugin(edit.id);
+                    }, '✓ 插件连接检查通过')
                   }
                 >
-                  {codeHost(edit) === 'github'
-                    ? '使用 GitHub 登录'
-                    : codeHost(edit) === 'gitlab'
-                      ? '使用 GitLab 登录'
-                      : '浏览器授权'}
+                  保存并检查
                 </button>
-                {loginCode && authCurrent?.oauthStatus === 'waiting' && (
-                  <p className="info-strip">
-                    在 GitHub 授权页面输入验证码：<strong>{loginCode}</strong>
-                  </p>
-                )}
-                {loginUrl && authCurrent?.oauthStatus === 'waiting' && (
-                  <MarkdownLink href={loginUrl}>打开授权页面</MarkdownLink>
-                )}
-                {['starting', 'waiting'].includes(authCurrent?.oauthStatus ?? '') && (
+                {current && (
                   <button
                     type="button"
-                    onClick={() => void act(() => api.cancelPluginLogin(edit.id), '已取消授权')}
+                    disabled={busy}
+                    onClick={() =>
+                      void act(async () => {
+                        await save();
+                        const saved = (await api.snapshot()).plugins?.find(
+                          (p) => p.id === current.id,
+                        );
+                        if (!saved) throw new Error('连接已删除，请刷新后重试');
+                        setEdit(null);
+                        onManage(saved);
+                      })
+                    }
                   >
-                    取消授权
-                  </button>
-                )}
-                {authCurrent?.oauthStatus === 'authorized' && (
-                  <button
-                    type="button"
-                    onClick={() => void act(() => api.logoutPlugin(edit.id), '已清除本地授权')}
-                  >
-                    退出授权
+                    高级 MCP 设置
                   </button>
                 )}
               </div>
-            )}
-            <label className="checkbox-line">
-              <input
-                type="checkbox"
-                checked={edit.enabled}
-                onChange={(e) => setEdit({ ...edit, enabled: e.target.checked })}
-              />
-              在会话中启用此插件
-            </label>
-            <p>凭据使用系统加密保存。工具能访问的范围取决于服务端授权，执行遵循同舟会话权限。</p>
-            <div className="row">
-              <button className="primary" disabled={busy}>
-                保存连接
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  void act(async () => {
-                    await save();
-                    await api.testPlugin(edit.id);
-                  }, '✓ 插件连接检查通过')
-                }
-              >
-                保存并检查
-              </button>
               {current && (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() =>
-                    void act(async () => {
-                      await save();
-                      const saved = (await api.snapshot()).plugins?.find(
-                        (p) => p.id === current.id,
-                      );
-                      if (!saved) throw new Error('连接已删除，请刷新后重试');
-                      setEdit(null);
-                      onManage(saved);
-                    })
-                  }
-                >
-                  高级 MCP 设置
-                </button>
+                <details>
+                  <summary>其他账号与站点</summary>
+                  <button
+                    type="button"
+                    className="text-button"
+                    disabled={busy}
+                    onClick={() => {
+                      const p = workPluginCatalog.find((p) => p.id === editingService);
+                      if (!p) return;
+                      setNotice('');
+                      setLoginUrl('');
+                      setLoginCode('');
+                      setToken('');
+                      setSource('');
+                      setEdit({
+                        id: crypto.randomUUID(),
+                        name: p.name,
+                        transport: 'http',
+                        url: p.url,
+                        command: '',
+                        args: [],
+                        enabled: false,
+                        readOnlyTools: [],
+                        authMode: p.authMode,
+                      });
+                    }}
+                  >
+                    添加其他账号或站点
+                  </button>
+                </details>
               )}
-            </div>
-            {current && (
-              <details>
-                <summary>其他账号与站点</summary>
-                <button
-                  type="button"
-                  className="text-button"
-                  disabled={busy}
-                  onClick={() => {
-                    const p = workPluginCatalog.find((p) => p.id === editingService);
-                    if (!p) return;
-                    setNotice('');
-                    setLoginUrl('');
-                    setLoginCode('');
-                    setToken('');
-                    setSource('');
-                    setEdit({
-                      id: crypto.randomUUID(),
-                      name: p.name,
-                      transport: 'http',
-                      url: p.url,
-                      command: '',
-                      args: [],
-                      enabled: false,
-                      readOnlyTools: [],
-                      authMode: p.authMode,
-                    });
-                  }}
-                >
-                  添加其他账号或站点
-                </button>
-              </details>
-            )}
-          </form>
-        </Modal>
+            </form>
+          </PluginDetailSection>
+          {editingService === 'github' && (
+            <PluginDetailSection title="本机账号">
+              <LocalGithub
+                api={api}
+                refresh={refresh}
+                onConfigure={async (id) => {
+                  const plugin = (await api.snapshot()).plugins?.find((p) => p.id === id);
+                  if (plugin) begin(workPluginCatalog.find((p) => p.id === 'github')!, plugin);
+                }}
+              />
+            </PluginDetailSection>
+          )}
+          {editingService === 'gitlab' && (
+            <PluginDetailSection title="本机账号">
+              <LocalGitlab
+                key={edit.url}
+                showInstanceInput={false}
+                api={api}
+                refresh={refresh}
+                instance={edit.url.replace(/\/api\/v4\/mcp\/?$/, '')}
+                instances={(data.connectors ?? [])
+                  .filter((c) => c.kind === 'gitlab')
+                  .map((c) => c.baseUrl)}
+                onConfigure={configureLocalGitlab}
+              />
+            </PluginDetailSection>
+          )}
+          {current?.catalog && (
+            <PluginDetailSection title="可用工具">
+              <PluginToolList plugin={current} />
+            </PluginDetailSection>
+          )}
+          <PluginDetailSection title="使用说明">
+            <a
+              href={workPluginCatalog.find((p) => p.id === editingService)?.docs}
+              onClick={(e) => {
+                e.preventDefault();
+                void api
+                  .openExternalLink(e.currentTarget.href)
+                  .catch((error) => setNotice(errorMessage(error)));
+              }}
+            >
+              官方配置说明 <ExternalLink size={13} />
+            </a>
+          </PluginDetailSection>
+        </PluginDetailPage>
       )}
     </section>
   );

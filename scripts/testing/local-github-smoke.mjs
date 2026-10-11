@@ -225,9 +225,8 @@ try {
   await openSidebar(page, '插件');
   await page.getByRole('button', { name: /^内置插件/ }).click();
   await page.getByLabel('搜索插件', { exact: true }).fill('GitHub');
-  let card = page
-    .locator('.provider-card')
-    .filter({ has: page.getByRole('heading', { name: 'GitHub 仓库工具', exact: true }) });
+  await page.getByRole('button', { name: '查看 GitHub 仓库工具', exact: true }).click();
+  let card = page.locator('.plugin-detail-page');
   await card.getByRole('button', { name: '检测本地账号', exact: true }).click();
   await card.getByText('GitHub CLI', { exact: true }).waitFor();
   await card.getByText('· 登录未验证，请检查网络或重新登录', { exact: false }).waitFor();
@@ -265,12 +264,15 @@ try {
   await openSidebar(page, '插件');
   await page.getByRole('button', { name: /^内置插件/ }).click();
   await page.getByLabel('搜索插件', { exact: true }).fill('GitHub');
-  await card.getByText('连接已验证 · 已启用', { exact: false }).waitFor();
+  assert.equal(
+    await page.getByRole('checkbox', { name: '启用 GitHub 仓库工具', exact: true }).isChecked(),
+    true,
+  );
   await app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()[0].setContentSize(820, 700),
   );
-  await card.getByRole('button', { name: '管理连接', exact: true }).click();
-  const githubDialog = page.getByRole('dialog');
+  await page.getByRole('button', { name: '查看 GitHub 仓库工具', exact: true }).click();
+  const githubDialog = page.locator('.plugin-detail-page');
   assert.equal(
     await githubDialog.getByLabel('认证方式', { exact: true }).locator('option').count(),
     2,
@@ -296,20 +298,21 @@ try {
   await githubDialog.getByLabel('Token 来源', { exact: true }).selectOption(plugin.connectorId);
   await githubDialog.getByRole('button', { name: '保存并检查', exact: true }).click();
   await githubDialog.getByText('✓ 插件连接检查通过', { exact: true }).waitFor();
-  await githubDialog.getByRole('button', { name: '关闭', exact: true }).click();
+  await githubDialog.getByRole('button', { name: '返回插件列表', exact: true }).click();
+  await page.getByRole('button', { name: '查看 GitHub 仓库工具', exact: true }).click();
   await card.getByRole('button', { name: '检测本地账号', exact: true }).click();
   await use.waitFor();
   assert.ok(await card.evaluate((el) => el.scrollWidth <= el.clientWidth + 2));
   await page.screenshot({ path: 'test-results/local-github-narrow.png' });
+  await page.getByRole('button', { name: '返回插件列表', exact: true }).click();
   await page.getByLabel('搜索插件', { exact: true }).fill('GitLab');
-  const gitlabCard = page
-    .locator('.provider-card')
-    .filter({ has: page.getByRole('heading', { name: 'GitLab 仓库工具', exact: true }) });
+  await page.getByRole('button', { name: '查看 GitLab 仓库工具', exact: true }).click();
+  const gitlabCard = page.locator('.plugin-detail-page');
   await gitlabCard.getByRole('button', { name: '检测本地账号', exact: true }).click();
   await gitlabCard
     .getByRole('button', { name: '使用 local-gitlab-user 的GitLab CLI并配置', exact: true })
     .waitFor();
-  const instance = gitlabCard.getByLabel('检测 GitLab 实例', { exact: true });
+  const instance = gitlabCard.getByLabel('GitLab 实例地址', { exact: true });
   await instance.fill('https://gitlab.fixture.example:8443');
   assert.equal(
     await gitlabCard.getByRole('button', { name: /并配置$/ }).count(),
@@ -326,9 +329,9 @@ try {
   await gitlabCard
     .getByRole('button', { name: '使用 local-gitlab-user 的Git 凭据并配置', exact: true })
     .click();
-  const dialog = page.getByRole('dialog');
+  const dialog = page.locator('.plugin-detail-page');
   await dialog
-    .getByRole('heading', { name: '连接 GitLab · local-gitlab-user（本地）', exact: true })
+    .getByRole('heading', { name: 'GitLab · local-gitlab-user（本地）', exact: true })
     .waitFor();
   assert.equal(
     await dialog.getByLabel('GitLab 实例地址', { exact: true }).inputValue(),
@@ -393,7 +396,7 @@ try {
   await dialog.getByRole('button', { name: '保存并检查', exact: true }).click();
   await dialog.getByText('✓ 插件连接检查通过', { exact: true }).waitFor();
   await page.screenshot({ path: 'test-results/local-gitlab-dialog.png' });
-  await dialog.getByRole('button', { name: '关闭', exact: true }).click();
+  await dialog.getByRole('button', { name: '返回插件列表', exact: true }).click();
   const gitlabState = await page.evaluate(() => window.tongzhou.snapshot());
   const gitlabAccount = gitlabState.connectors.find((c) => c.kind === 'gitlab');
   const gitlabPlugin = gitlabState.plugins.find(
@@ -407,11 +410,12 @@ try {
   assert.equal(gitlabPlugin.connectorId, gitlabAccount.id);
   assert.ok(gitlabPlugin.hasSecret, 'Token mode resolves the verified bound account');
   assert.ok(!JSON.stringify(gitlabState).includes('fixture-local-gitlab-token'));
+  await page.getByRole('button', { name: '查看 GitLab 仓库工具', exact: true }).click();
   await gitlabCard.getByRole('button', { name: '检测本地账号', exact: true }).click();
   await gitlabCard
     .getByRole('button', { name: '使用 local-gitlab-user 的Git 凭据并配置', exact: true })
     .click();
-  await dialog.getByRole('button', { name: '关闭', exact: true }).click();
+  await dialog.getByRole('button', { name: '返回插件列表', exact: true }).click();
   assert.equal(
     (await page.evaluate(() => window.tongzhou.snapshot())).connectors.filter(
       (c) => c.kind === 'gitlab',
@@ -431,10 +435,11 @@ try {
   await openSidebar(page, '插件');
   await page.getByRole('button', { name: /^内置插件/ }).click();
   await page.getByLabel('搜索插件', { exact: true }).fill('GitHub');
-  card = page
-    .locator('.provider-card')
-    .filter({ has: page.getByRole('heading', { name: 'GitHub 仓库工具', exact: true }) });
-  await card.getByText('连接已验证 · 已启用', { exact: false }).waitFor();
+  card = page.locator('.plugin-detail-page');
+  assert.equal(
+    await page.getByRole('checkbox', { name: '启用 GitHub 仓库工具', exact: true }).isChecked(),
+    true,
+  );
   const persisted = await page.evaluate(() => window.tongzhou.snapshot());
   assert.ok(persisted.plugins.find((p) => p.id === plugin.id).hasSecret);
   assert.ok(!JSON.stringify(persisted).includes('fixture-local-github-token'));
