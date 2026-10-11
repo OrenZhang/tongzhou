@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, globalShortcut, Menu, nativeTheme } from 'electron';
+import { app, BrowserWindow, dialog, globalShortcut, Menu, nativeTheme, Tray } from 'electron';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -25,6 +25,7 @@ app.on('session-created', (s) => s.setUserAgent(browserUserAgent(s.getUserAgent(
 const linuxStore = linuxPasswordStore(process.platform, process.env, process.argv);
 if (linuxStore) app.commandLine.appendSwitch('password-store', linuxStore);
 let window: BrowserWindow | undefined;
+let tray: Tray | undefined;
 let application: DesktopApplication | undefined;
 const computer = new DesktopComputer();
 const computerPermissions = new ComputerPermissions();
@@ -53,6 +54,26 @@ async function setup() {
     pendingImports,
   });
   await application.start();
+}
+function showWindow() {
+  if (quitting || !window || window.isDestroyed()) return;
+  if (window.isMinimized()) window.restore();
+  window.show();
+  window.focus();
+}
+function createTray() {
+  if (process.platform !== 'win32') return;
+  tray = new Tray(path.join(__dirname, '../build/icon.ico'));
+  tray.setToolTip('同舟 Tongzhou');
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: '打开同舟', click: showWindow },
+      { type: 'separator' },
+      { label: '退出同舟', click: () => app.quit() },
+    ]),
+  );
+  tray.on('click', showWindow);
+  tray.on('double-click', showWindow);
 }
 async function createWindow() {
   const icon = path.join(
@@ -97,6 +118,16 @@ async function createWindow() {
   });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.on('focus', () => computerPermissionPanel.close());
+  window.on('close', (event) => {
+    if (quitting || !tray || tray.isDestroyed()) return;
+    event.preventDefault();
+    computerPermissionPanel.close();
+    window?.hide();
+  });
+  // Windows shutdown/logoff must not be intercepted by close-to-tray.
+  window.on('query-session-end', () => {
+    quitting = true;
+  });
   window.on('closed', () => {
     computerPermissionPanel.close();
     window = undefined;
@@ -129,16 +160,14 @@ async function createWindow() {
 const lock = app.requestSingleInstanceLock();
 if (!lock) app.quit();
 else {
-  app.on('second-instance', () => {
-    if (window?.isMinimized()) window.restore();
-    window?.focus();
-  });
+  app.on('second-instance', showWindow);
   app
     .whenReady()
     .then(async () => {
       await setup();
       const tasks = application!.tasks;
       const updates = application!.kernel.get<Updates>('tzUpdates');
+      createTray();
       await createWindow();
       if (!process.env.TONGZHOU_DISABLE_UPDATES) updates.start();
       computer.emergencyShortcut = globalShortcut.register('CommandOrControl+Alt+Escape', () => {
@@ -153,18 +182,24 @@ else {
     });
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) void createWindow();
+    else showWindow();
   });
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();
   });
   app.on('before-quit', (event) => {
-    if (quitting || !application) return;
-    event.preventDefault();
+    if (quitting) return;
     quitting = true;
+    if (!application) return;
+    event.preventDefault();
     globalShortcut.unregisterAll();
     void application
       .stop()
       .catch((error) => console.error(redact(String(error))))
       .finally(() => app.quit());
+  });
+  app.on('will-quit', () => {
+    tray?.destroy();
+    tray = undefined;
   });
 }
