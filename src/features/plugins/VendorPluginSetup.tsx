@@ -4,6 +4,7 @@ import type { PluginConfig, Provider, TongzhouAPI } from '../../shared/types';
 import { vendorPlugin } from '../../shared/vendor-plugins';
 import { PluginDetailPage, PluginDetailSection } from './PluginDetail';
 import { errorMessage } from '../../lib/feedback';
+import { McpPermissions } from './McpPermissions';
 
 export function VendorPluginSetup({
   plugin,
@@ -303,6 +304,9 @@ export function VendorPluginSetup({
         ) : (
           <p>保存并检查连接后，在这里查看插件提供的工具。</p>
         )}
+      </PluginDetailSection>
+      <PluginDetailSection title="权限与连接校验">
+        <McpPermissions plugin={plugin} />
       </PluginDetailSection>
       <div className="modal-footer">
         <button disabled={busy} onClick={() => void save(true)}>

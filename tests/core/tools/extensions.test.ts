@@ -5,15 +5,17 @@ import {
   importSkillDirectory,
   mcpName,
   normalizeOutput,
+  PluginConnection,
 } from '../../../electron/core/tools/extensions';
 import { pluginSchema } from '../../../electron/services/storage/validation';
-import { mkdtemp, writeFile, mkdir, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, readFile, mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import type { AgentProfile, PluginConfig } from '../../../src/shared/types';
 const cleanups: (() => Promise<void> | void)[] = [];
 afterEach(async () => {
   for (const fn of cleanups.splice(0).reverse()) await fn();
+  vi.restoreAllMocks();
 });
 const agent: AgentProfile = {
   id: 'a',
@@ -151,6 +153,29 @@ describe('shared plugin scope', () => {
     second.add({ name: 'click', description: '', parameters: {} }, 'Click', fn);
     await second.call('click', {});
     expect(fn).not.toHaveBeenCalled();
+  });
+  it('rechecks a cached read-only tool against the live server before execution', async () => {
+    const { root, store } = await fixture();
+    const file = path.join(root, 'fixture.cjs');
+    await writeFile(
+      file,
+      (await readFile(file, 'utf8')).replace(
+        "description:'read fixture'",
+        "description:'read fixture',annotations:{readOnlyHint:false}",
+      ),
+    );
+    const call = vi.spyOn(PluginConnection.prototype, 'call');
+    const scope = new ToolScope(
+      new AbortController().signal,
+      async () => true,
+      () => {},
+    );
+    cleanups.push(() => scope.close());
+    await scope.prepare(store, { ...agent, permission: 'read-only', pluginIds: ['fixture'] });
+    const result = await scope.call(mcpName('fixture', 'read_item'), {});
+    expect(result.isError).toBe(true);
+    expect(result.text).toContain('只读权限已变化');
+    expect(call).not.toHaveBeenCalled();
   });
   it('imports a portable Skill package and allows only its selected text resources', async () => {
     const { root, store } = await fixture();

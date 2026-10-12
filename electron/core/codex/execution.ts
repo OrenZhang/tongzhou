@@ -24,6 +24,7 @@ import { modelGateway } from '../models/model-gateway';
 import { nativeModelConnection } from '../models/native-model';
 import { CodexSessions } from './codex-sessions';
 import { networkKey } from '../../../src/shared/provider-network';
+import { modelProvider } from '../../../src/shared/model-protocol';
 import path from 'node:path';
 import { mkdir } from 'node:fs/promises';
 import type { ProviderNetwork } from '../../../src/shared/provider-network';
@@ -93,6 +94,7 @@ export class CodexExecution implements ExecutionAdapter {
       'codex-core-v2-local-files',
       input.providerId,
       provider.protocol,
+      provider.modelProtocols,
       provider.baseUrl,
       provider.auth,
       provider.contextChars,
@@ -144,7 +146,11 @@ export class CodexExecution implements ExecutionAdapter {
                     input.model,
                     engineHome(this.ports.dataDir, provider.protocol, provider.id),
                   )
-                : { provider, model: input.model, secret: this.ports.store.secret(provider.id) };
+                : {
+                    provider: modelProvider(current, input.model),
+                    model: input.model,
+                    secret: this.ports.store.secret(provider.id),
+                  };
             },
             loadState: (callId) => {
               try {
@@ -456,7 +462,7 @@ export class CodexExecution implements ExecutionAdapter {
         (m: any) => m.model === input.model || m.id === input.model,
       );
       const thinking = customModel
-        ? { note: thinkingRequest(provider, input.model).note }
+        ? { note: thinkingRequest(modelProvider(provider, input.model), input.model).note }
         : codexThinking(modelInfo, provider.thinkingEnabled !== false);
       if (thinking.note) this.ports.progress(run, 'notice', thinking.note);
       await client.request('turn/start', {

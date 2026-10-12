@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import type { Message, Provider, ToolCall } from '../../../src/shared/types';
 import { redact } from '../../services/storage/validation';
 import { portableHistory, historyChars, isContextOverflow } from '../runtime/history';
+import { modelProvider } from '../../../src/shared/model-protocol';
 export { portableHistory } from '../runtime/history';
 
 export interface ToolSpec {
@@ -96,6 +97,7 @@ export async function* sse(
 }
 
 export function requestBody(input: CompletionInput) {
+  input = { ...input, provider: modelProvider(input.provider, input.model) };
   const { provider: p, model, instructions, tools } = input;
   const thinking = thinkingRequest(p, model).body;
   const history = input.historyPrepared
@@ -416,8 +418,9 @@ export async function complete(input: CompletionInput): Promise<Completion> {
 }
 
 export async function completeRequest(input: CompletionInput): Promise<Completion> {
+  input = { ...input, provider: modelProvider(input.provider, input.model) };
   const go = /^https:\/\/opencode\.ai\/zen\/go\/v1\/?$/.test(input.provider.baseUrl);
-  if (go)
+  if (go && !input.provider.modelProtocols?.[input.model])
     input = {
       ...input,
       provider: {

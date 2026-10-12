@@ -7,11 +7,12 @@ import type { AccountBrowser } from './account-browser';
 import type { NetworkProfiles } from '../network/network-profiles';
 import type { Provider, ProviderInput } from '../../../src/shared/types';
 import type { ConnectionCheck } from '../../../src/shared/connection-diagnostics';
-import { operation, type ClientRegistrar } from '../../core/tools/client-commands';
+import { manual, operation, type ClientRegistrar } from '../../core/tools/client-commands';
 import { idSchema, providerSchema, redact } from '../storage/validation';
 import { nativeEngine } from './native-engine';
 import { networkKey } from '../../../src/shared/provider-network';
 import { complete, listModels } from '../../core/models/providers';
+import { modelProvider } from '../../../src/shared/model-protocol';
 
 export function registerProviderServices(
   register: ClientRegistrar,
@@ -22,6 +23,28 @@ export function registerProviderServices(
   networks: NetworkProfiles,
   pendingImports: Map<string, ProviderInput>,
 ) {
+  register(
+    'revealProviderSecret',
+    manual(
+      '模型连接与认证',
+      '在本机界面查看或复制已保存的 API Key，不提供给会话工具',
+      'providers',
+      '请在模型连接中点击查看或复制密钥',
+      [idSchema.describe('providerId')],
+    ),
+    (raw) => {
+      const provider = store.get<Provider>('provider', idSchema.parse(raw));
+      if (
+        provider.auth === 'none' ||
+        provider.protocol === 'codex' ||
+        nativeEngine(provider.protocol)
+      )
+        throw new Error('此连接不使用 API Key');
+      const secret = store.secret(provider.id);
+      if (!secret) throw new Error('此连接尚未保存密钥');
+      return secret;
+    },
+  );
   register(
     'saveProvider',
     operation('模型连接与认证', 'change', '保存模型连接配置，使用完整对象，密钥在界面保存', [
@@ -178,6 +201,12 @@ export function registerProviderServices(
           return `${models.length} 个模型；不支持目录接口的服务可手动配置模型后测试推理`;
         });
         if (inference && model) {
+          checks.push({
+            name: '检测模型与协议',
+            status: 'passed',
+            detail: model + ' · ' + modelProvider(p, model).protocol,
+            ms: 0,
+          });
           const stamp = randomUUID();
           let first: number | undefined;
           const start = Date.now();

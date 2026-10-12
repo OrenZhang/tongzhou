@@ -451,3 +451,33 @@ it('isolates OAuth credentials by plugin endpoint and requires explicit UI login
   ).toThrow('不匹配');
   await expect(oauthFetch('http://remote.example.com/token')).rejects.toThrow('HTTPS');
 });
+it('publishes only granted scope names, preserves them across refresh and clears them on logout', () => {
+  const s = store();
+  s.put('plugin', plugin);
+  const provider = new PluginOAuthProvider(s, plugin);
+  provider.saveTokens({
+    access_token: 'scope-private-token',
+    token_type: 'Bearer',
+    issuer: 'https://auth.example.com',
+    scope: 'mcp read:user mcp',
+  });
+  expect(s.get<PluginConfig>('plugin', plugin.id).oauthScopes).toEqual(['mcp', 'read:user']);
+  expect(JSON.stringify(s.list('plugin'))).not.toContain('scope-private-token');
+  provider.saveTokens({
+    access_token: 'refreshed-private-token',
+    token_type: 'Bearer',
+    issuer: 'https://auth.example.com',
+  });
+  expect(s.get<PluginConfig>('plugin', plugin.id).oauthScopes).toEqual(['mcp', 'read:user']);
+  provider.invalidateCredentials('tokens');
+  expect(s.get<PluginConfig>('plugin', plugin.id).oauthScopes).toBeUndefined();
+  provider.saveTokens({ access_token: 'unknown-scope-token', token_type: 'Bearer' });
+  expect(s.get<PluginConfig>('plugin', plugin.id).oauthScopes).toBeUndefined();
+  const service = new McpAuth(
+    s,
+    () => {},
+    async () => {},
+  );
+  service.logout(plugin.id);
+  expect(s.get<PluginConfig>('plugin', plugin.id).oauthScopes).toBeUndefined();
+});

@@ -12,6 +12,8 @@ import { Field, Modal, Spinner } from '../../components/components';
 import type { Dispatch, SetStateAction } from 'react';
 import type { View } from '../../app/views';
 import { protocolLabels, presets } from './provider-presets';
+import { ProviderSecretField } from './ProviderSecretField';
+import { ModelProtocolFields } from './ModelProtocolFields';
 
 interface Props {
   data: Snapshot;
@@ -66,6 +68,7 @@ export function ProviderConnectionDialog({
                     ...p,
                     models: [...p.models],
                     modelLabels: undefined,
+                    modelProtocols: undefined,
                     secret: '',
                     clearSecret:
                       providerEdit.baseUrl !== p.baseUrl || providerEdit.protocol !== p.protocol,
@@ -161,21 +164,11 @@ export function ProviderConnectionDialog({
                   <option value="none">无需认证（本地 / 自建）</option>
                 </select>
               </Field>
-              <Field
-                label="API Key / Token"
-                hint={
-                  providerEdit.hasSecret ? '已有密钥；留空保留，填写可替换。' : '密钥不回传到界面。'
-                }
-              >
-                <input
-                  type="password"
-                  autoComplete="new-password"
-                  disabled={providerEdit.auth === 'none'}
-                  value={providerEdit.secret ?? ''}
-                  placeholder={providerEdit.hasSecret ? '•••••••• 已安全保存' : '输入密钥'}
-                  onChange={(e) => setProviderEdit({ ...providerEdit, secret: e.target.value })}
-                />
-              </Field>
+              <ProviderSecretField
+                provider={providerEdit}
+                api={api}
+                onChange={(secret) => setProviderEdit({ ...providerEdit, secret })}
+              />
             </div>
             {providerEdit.hasSecret && (
               <label className="checkbox-line">
@@ -208,7 +201,11 @@ export function ProviderConnectionDialog({
             }}
           />
         )}
-        <ConnectionDiagnostics api={api} onSave={() => api.saveProvider(normalizedProvider())} />
+        <ConnectionDiagnostics
+          api={api}
+          models={providerEdit.models}
+          onSave={() => api.saveProvider(normalizedProvider())}
+        />
         <button className="secondary" disabled={busy} onClick={fetchModels}>
           {busy ? <Spinner /> : <RefreshCw size={14} />}
           保存连接并获取模型
@@ -229,6 +226,10 @@ export function ProviderConnectionDialog({
             />
           </Field>
         </details>
+        <ModelProtocolFields
+          provider={providerEdit}
+          onChange={(modelProtocols) => setProviderEdit({ ...providerEdit, modelProtocols })}
+        />
         <details className="thinking-settings">
           <summary>
             高级：模型思考 ·{' '}

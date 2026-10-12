@@ -51,6 +51,8 @@ npm run dev
 3. 在 **设置 → 连接中心** 中配置服务账号、通知和机器人，选择允许访问的用户与会话范围。
 4. 在 **插件** 中启用所需的 MCP、Skills、浏览器或电脑控制能力；需要开发代码时打开项目。
 
+同一 API 网关可在模型连接的 **高级：按模型设置接口协议** 中为个别模型选择 Chat Completions、Responses、Anthropic 或 Gemini，其余模型继承连接协议。按网关实际支持情况配置；保存后从下一轮生效，请求失败不会自动切换协议重发。**分项连接检测** 可选择具体模型验证推理与工具参数。API Key 保持加密保存，在本机界面点击查看／隐藏或复制；留空保存会保留已有密钥。
+
 插件列表使用紧凑卡片，仅展示图标、名称、类型和启用开关。点击名称进入统一详情页，按插件类型展示连接与认证、本机账号、依赖安装、工具列表或技能指令；返回列表保留搜索与类型筛选。渠道属于始终可用的内置应用，其具体账号开关在渠道管理中操作。
 
 时间和系统信息查询已并入核心工具，按需调用，不再以“系统环境”MCP 插件展示或启动额外进程。已有配置会在启动时自动迁移。
@@ -75,6 +77,8 @@ GitHub 和 GitLab 的认证统一在 **插件 → 内置插件** 管理，选择
 - **GitLab**：填写 GitLab.com 或自建实例 HTTPS 根地址。Token 模式使用官方 REST API，无需开启 MCP；**保存并检查** 验证身份与项目 API，读取通常需要 `read_api`，写操作需要 `api`，并受项目权限限制。会话通过 `gitlab_api_read` / `gitlab_api_write` 调用实例上的项目、仓库、Issue、Merge Request 和 CI/CD API，写操作遵循会话权限。OAuth2 点击 **使用 GitLab 登录**，在所填实例的官方页面登录授权，授权加密保存在本机，普通用户无需填写 Client ID / Client Secret。此方式通过官方 MCP 自动注册 OAuth 应用，要求实例支持并开启 MCP 和应用自动注册；管理员关闭自动注册或实例不支持时，可改用 Token 配置。插件卡片与 Token 配置弹窗均支持本地 Git / glab 检测，**使用并配置** 保存 Token 账号；切换地址清除旧检测结果，不将普通 Token 当成 MCP OAuth 授权。
 
 认证依据：[GitHub 官方 MCP 接入](https://github.com/github/github-mcp-server/blob/main/docs/host-integration.md) · [GitLab REST API 认证](https://docs.gitlab.com/api/rest/authentication/) · [GitLab 官方 MCP](https://docs.gitlab.com/user/model_context_protocol/mcp_server/)。仅保存凭据会显示待检查，通过连接检查后才显示已验证。
+
+**Figma** 支持远程浏览器授权和桌面 MCP，应用配置由同舟管理，用户无需填写 Client ID / Secret。同舟已申请远程 MCP 全部读写工具接入，尚未获批；当前可连接 Figma 桌面 MCP 读取设计，FigJam 图表生成需要远程服务。插件详情提供授权范围、工具读写分类及只读配置校验；连接检查不会执行写操作，也不代表拥有所有文件或项目的读写权限。详见 [Figma 连接与 MCP 权限](docs/FIGMA_MCP.md)。
 
 智库的使用流程、来源核对与本地数据说明见 [本地智库与每日记忆](docs/KNOWLEDGE-CENTER.md)。
 

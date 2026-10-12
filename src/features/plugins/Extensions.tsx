@@ -19,6 +19,9 @@ import { PluginTile, PluginDetailPage, PluginDetailSection } from './PluginDetai
 import { builtinSkills, isBuiltinSkill } from '../../shared/builtin-skills';
 import type { PluginConfig, PluginInput, Snapshot, TongzhouAPI } from '../../shared/types';
 import { codeHost } from '../../shared/code-hosting';
+import { configureFigmaPlugin, figmaConnection } from '../../shared/figma';
+import { FigmaConnectionInfo, McpPermissions, PluginToolList } from './McpPermissions';
+import { pluginPermissionState } from '../../shared/plugin-permissions';
 
 export function Extensions({
   api,
@@ -40,10 +43,13 @@ export function Extensions({
   const [detail, setDetail] = useState<{ kind: 'app' | 'skill' | 'builtin'; id: string }>();
   const [busy, setBusy] = useState(false);
   const [pendingToggle, setPendingToggle] = useState<{ id: string; enabled: boolean } | null>(null);
-  const [catalogs, setCatalogs] = useState<Record<string, { name: string; description: string }[]>>(
-    {},
-  );
   const [notice, setNotice] = useState('');
+  const permissionState = edit
+    ? pluginPermissionState(
+        edit,
+        data.plugins?.find((p) => p.id === edit.id),
+      )
+    : undefined;
   const otherPlugins = (data.plugins ?? []).filter((p) => !workPluginDefinition(p));
   const definitions = [...builtinPlugins, ...vendorPlugins];
   const builtinIds = new Set<string>(definitions.map((p) => p.id));
@@ -83,11 +89,18 @@ export function Extensions({
   };
   const save = async (test = false) => {
     if (!edit) return;
-    await api.savePlugin(edit);
+    const input = configureFigmaPlugin(edit);
+    await api.savePlugin(input);
     if (test) {
+      setEdit({
+        ...input,
+        secret: '',
+        clearSecret: false,
+        oauthClientSecret: '',
+        clearOAuthClientSecret: false,
+      });
       const tools = await api.testPlugin(edit.id);
-      setCatalogs((c) => ({ ...c, [edit.id]: tools }));
-      setNotice(`${edit.name}：连接成功，发现 ${tools.length} 个工具`);
+      setNotice(`${edit.name}：目录和只读配置检查通过，发现 ${tools.length} 个工具；未执行写操作`);
     } else setEdit(null);
   };
   return (
@@ -404,11 +417,8 @@ export function Extensions({
                   >
                     检查连接
                   </button>
-                  <ul>
-                    {(p.catalog ?? []).map((t) => (
-                      <li key={t.name}>{t.name}</li>
-                    ))}
-                  </ul>
+                  <McpPermissions plugin={p} />
+                  {p.catalog && <PluginToolList plugin={p} />}
                 </PluginDetailSection>
                 {notice && <p role="status">{notice}</p>}
               </PluginDetailPage>
@@ -479,12 +489,13 @@ export function Extensions({
               <Field label="MCP 服务地址">
                 <input
                   value={edit.url}
-                  onChange={(e) => setEdit({ ...edit, url: e.target.value })}
+                  onChange={(e) => setEdit(configureFigmaPlugin({ ...edit, url: e.target.value }))}
                 />
               </Field>
             )}
             {edit.transport === 'http' && <OAuthFields edit={edit} onChange={setEdit} />}
-            {edit.authMode !== 'oauth' && (
+            {figmaConnection(edit) && <FigmaConnectionInfo plugin={edit} />}
+            {edit.authMode !== 'oauth' && !figmaConnection(edit) && (
               <Field
                 label={edit.transport === 'stdio' ? '环境变量 JSON' : '请求头 JSON'}
                 hint={
@@ -509,7 +520,7 @@ export function Extensions({
                   disabled={busy}
                   onClick={() =>
                     perform(async () => {
-                      await api.savePlugin(edit);
+                      await api.savePlugin(configureFigmaPlugin(edit));
                       setEdit({
                         ...edit,
                         clearSecret: false,
@@ -533,7 +544,9 @@ export function Extensions({
                     ? '使用 GitHub 登录'
                     : codeHost(edit) === 'gitlab'
                       ? '使用 GitLab 登录'
-                      : '保存并浏览器授权'}
+                      : figmaConnection(edit) === 'remote'
+                        ? '使用 Figma 登录'
+                        : '保存并浏览器授权'}
                 </button>
                 {loginCode &&
                   data.plugins?.find((p) => p.id === edit.id)?.oauthStatus === 'waiting' && (
@@ -581,7 +594,7 @@ export function Extensions({
             </label>
             <Field
               label="允许只读 Agent 使用的工具名（每行一个）"
-              hint="仅填写你已确认不会修改状态的工具。GitHub/GitLab 官方端点也会识别工具的只读标记；其他插件须显式填写。"
+              hint="仅填写确认不会修改状态的工具。官方 GitHub/GitLab/Figma 可识别只读声明；保存并检查会校验名称和写操作冲突。"
             >
               <textarea
                 rows={2}
@@ -591,19 +604,11 @@ export function Extensions({
                 }
               />
             </Field>
-            {catalogs[edit.id] && (
-              <details open>
-                <summary>发现的工具</summary>
-                <ul>
-                  {catalogs[edit.id].map((t) => (
-                    <li key={t.name}>
-                      <strong>{t.name}</strong> — {t.description.slice(0, 150)}
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            )}
             {notice && <p role="status">{notice}</p>}
+          </PluginDetailSection>
+          <PluginDetailSection title="权限与连接校验">
+            <McpPermissions plugin={permissionState!} />
+            {permissionState?.catalog && <PluginToolList plugin={permissionState} />}
           </PluginDetailSection>
           <div className="modal-footer">
             <button

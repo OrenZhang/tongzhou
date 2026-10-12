@@ -11,6 +11,8 @@ import {
 } from '../../../electron/core/models/providers';
 import type { Message, Protocol } from '../../../src/shared/types';
 import { userAgent } from '../../../electron/services/network/request-identity';
+import { providerSchema } from '../../../electron/services/storage/validation';
+import { modelProvider } from '../../../src/shared/model-protocol';
 const message: Message = { id: 'm', sessionId: 's', role: 'user', content: '你好', createdAt: 1 };
 function input(protocol: Protocol, baseUrl = 'http://127.0.0.1:1234/v1'): CompletionInput {
   return {
@@ -56,6 +58,51 @@ async function serve(events: string[], fn: (base: string, requests: any[]) => Pr
 }
 const event = (d: any) => 'data: ' + JSON.stringify(d) + '\n\n';
 describe('streaming protocol adapters', () => {
+  it.each(['openai-chat', 'openai-responses'] as const)(
+    'uses the selected model protocol for both the request and stream decoder: %s',
+    async (protocol) => {
+      const events =
+        protocol === 'openai-chat'
+          ? [
+              event({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }),
+              'data: [DONE]\n\n',
+            ]
+          : [
+              event({ type: 'response.output_text.delta', delta: 'ok' }),
+              event({ type: 'response.completed', response: {} }),
+            ];
+      await serve(events, async (base, requests) => {
+        const request = input(
+          protocol === 'openai-chat' ? 'openai-responses' : 'openai-chat',
+          base,
+        );
+        request.provider.modelProtocols = { test: protocol };
+        expect((await complete(request)).text).toBe('ok');
+        expect(requests[0].path).toBe(
+          protocol === 'openai-chat' ? '/v1/chat/completions' : '/v1/responses',
+        );
+        expect(modelProvider(request.provider, 'other')).toBe(request.provider);
+        expect(request.provider.protocol).not.toBe(protocol);
+      });
+    },
+  );
+  it('validates per-model protocols and rejects mappings on native account connections', () => {
+    const provider = input('openai-responses').provider;
+    expect(
+      providerSchema.parse({ ...provider, modelProtocols: { test: 'openai-chat' } }).modelProtocols,
+    ).toEqual({ test: 'openai-chat' });
+    expect(
+      providerSchema.safeParse({ ...provider, modelProtocols: { test: 'invalid' } }).success,
+    ).toBe(false);
+    expect(
+      providerSchema.safeParse({
+        ...provider,
+        protocol: 'codex',
+        auth: 'chatgpt',
+        modelProtocols: { test: 'openai-chat' },
+      }).success,
+    ).toBe(false);
+  });
   it.each(['openai-chat', 'openai-responses'] as const)(
     'retains %s reasoning across a streamed tool roundtrip',
     async (protocol) => {

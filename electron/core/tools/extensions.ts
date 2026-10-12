@@ -35,6 +35,9 @@ import {
   pluginSecret,
 } from '../../modules/plugins/code-hosting';
 import { GitlabApiConnection, gitlabApiTools } from '../../modules/plugins/gitlab-api';
+import { isReadOnlyTool } from '../../../src/shared/plugin-permissions';
+import { figmaConnection } from '../../../src/shared/figma';
+export { isReadOnlyTool } from '../../../src/shared/plugin-permissions';
 
 export function pluginTool(tool: any): PluginTool {
   return {
@@ -44,27 +47,16 @@ export function pluginTool(tool: any): PluginTool {
     ...(tool.annotations
       ? {
           annotations: {
-            readOnlyHint: tool.annotations.readOnlyHint === true,
-            destructiveHint: tool.annotations.destructiveHint === true,
+            ...(typeof tool.annotations.readOnlyHint === 'boolean'
+              ? { readOnlyHint: tool.annotations.readOnlyHint }
+              : {}),
+            ...(typeof tool.annotations.destructiveHint === 'boolean'
+              ? { destructiveHint: tool.annotations.destructiveHint }
+              : {}),
           },
         }
       : {}),
   };
-}
-
-export function isReadOnlyTool(config: PluginConfig, tool: PluginTool) {
-  if (
-    codeHost(config) === 'gitlab' &&
-    config.authMode === 'headers' &&
-    tool.name === 'gitlab_api_write'
-  )
-    return false;
-  return (
-    config.readOnlyTools.includes(tool.name) ||
-    (!!codeHost(config) &&
-      tool.annotations?.readOnlyHint === true &&
-      tool.annotations.destructiveHint === false)
-  );
 }
 
 export interface ComputerAdapter {
@@ -397,7 +389,7 @@ export class ToolScope {
             await connection.connect(this.signal);
           })());
         let catalog = config.catalog;
-        if (!catalog || codeHost(config) || largeCatalog) {
+        if (!catalog || codeHost(config) || figmaConnection(config) || largeCatalog) {
           // A compact gateway keeps the complete server catalog available to every engine.
           // Refresh once per run; saved catalogs are for UI display, not authority to execute.
           let discovered: Promise<PluginTool[]> | undefined;
@@ -508,6 +500,7 @@ export class ToolScope {
           );
           continue;
         }
+        let currentCatalog: Promise<PluginTool[]> | undefined;
         for (const tool of catalog) {
           if (agent.permission === 'read-only' && !isReadOnlyTool(config, tool)) continue;
           const name = mcpName(id, tool.name);
@@ -525,7 +518,15 @@ export class ToolScope {
               await connect();
               this.signal.throwIfAborted();
               if (this.closed || !allowed()) throw new Error('工具已停止、停用或配置已改变');
-              return connection.call(tool.name, args, this.signal, !isReadOnlyTool(config, tool));
+              currentCatalog ??= connection
+                .tools(this.signal)
+                .then((tools) => tools.map(pluginTool));
+              const fresh = (await currentCatalog).find((t) => t.name === tool.name);
+              if (!fresh || (agent.permission === 'read-only' && !isReadOnlyTool(config, fresh)))
+                throw new Error('工具已移除或只读权限已变化，请重新检查插件');
+              this.signal.throwIfAborted();
+              if (this.closed || !allowed()) throw new Error('工具已停止、停用或配置已改变');
+              return connection.call(tool.name, args, this.signal, !isReadOnlyTool(config, fresh));
             },
             true,
             allowed,

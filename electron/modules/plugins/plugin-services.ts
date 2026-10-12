@@ -19,6 +19,8 @@ import { McpAuth, pluginOAuth, pluginAuthIdentity } from './mcp-auth';
 import { PluginConnection, importSkillDirectory, pluginTool } from '../../core/tools/extensions';
 import { pluginSecret, pluginCredentialVersion, verifyGithubPluginToken } from './code-hosting';
 import { codeHost } from '../../../src/shared/code-hosting';
+import { configureFigmaPlugin, figmaConnection } from '../../../src/shared/figma';
+import { validateReadOnlyTools } from '../../../src/shared/plugin-permissions';
 import { isBuiltinSkill } from '../../../src/shared/builtin-skills';
 import { LocalGithubAccounts } from '../../services/accounts/local-github';
 import { LocalGitlabAccounts, gitlabInstance } from '../../services/accounts/local-gitlab';
@@ -109,7 +111,11 @@ export function registerPluginServices(
     'savePlugin',
     operation('插件', 'change', '保存或启停 MCP 插件配置，凭据在界面输入', [pluginSchema]),
     (raw) => {
-      const input = pluginSchema.parse(raw);
+      const input = configureFigmaPlugin(pluginSchema.parse(raw));
+      if (figmaConnection(input)) {
+        input.clearOAuthClientSecret = store.hasSecret('plugin_oauth_client_' + input.id);
+        input.clearSecret = !!input.clearSecret || store.hasSecret('plugin_' + input.id);
+      }
       if (codeHost(input) === 'github') {
         input.oauthClientId = undefined;
         input.oauthIssuer =
@@ -134,6 +140,16 @@ export function registerPluginServices(
           JSON.stringify(previous.args) !== JSON.stringify(config.args));
       const accountChanged = previous?.accountProviderId !== config.accountProviderId;
       const clientSecretChanged = !!oauthClientSecret || !!clearOAuthClientSecret;
+      if (
+        previous?.catalog &&
+        !identityChanged &&
+        !accountChanged &&
+        !secret &&
+        !clearSecret &&
+        !clientSecretChanged &&
+        !(previous.enabled && !config.enabled)
+      )
+        validateReadOnlyTools(config, previous.catalog);
       if (codeHost(config) && config.authMode !== 'oauth' && !config.connectorId) {
         let token = '';
         try {
@@ -191,6 +207,10 @@ export function registerPluginServices(
           config.authMode === 'oauth' && !identityChanged && !clearSecret && !clientSecretChanged
             ? previous?.oauthAccount
             : undefined,
+        oauthScopes:
+          config.authMode === 'oauth' && !identityChanged && !clearSecret && !clientSecretChanged
+            ? previous?.oauthScopes
+            : undefined,
         ...(same ? { catalog: previous.catalog, checkedAt: previous.checkedAt } : {}),
       });
       services.invalidateNative();
@@ -233,6 +253,7 @@ export function registerPluginServices(
           await verifyGithubPluginToken(pluginSecret(store, p), signal);
         await c.connect(signal);
         const catalog = (await c.tools(signal)).map(pluginTool);
+        validateReadOnlyTools(p, catalog);
         const current = store.get<PluginConfig>('plugin', p.id);
         if (
           JSON.stringify(current) !== JSON.stringify(p) ||

@@ -37,6 +37,8 @@ export interface Provider {
   auth: AuthMode;
   models: string[];
   modelLabels?: Record<string, string>;
+  /** Explicit wire protocol overrides for mixed-model API gateways. */
+  modelProtocols?: Record<string, 'openai-chat' | 'openai-responses' | 'anthropic' | 'gemini'>;
   hasSecret?: boolean;
   maxOutputTokens: number;
   /** 0 = automatic compaction; positive = manual character target (never a turn limit). */
@@ -75,6 +77,8 @@ export interface PluginConfig {
   oauthStatus?: 'none' | 'starting' | 'waiting' | 'authorized' | 'error' | 'cancelled';
   oauthError?: string;
   oauthAccount?: string;
+  /** Scope names reported by the token endpoint, never access or refresh tokens. */
+  oauthScopes?: string[];
   hasOAuthClientSecret?: boolean;
   id: string;
   name: string;
@@ -576,6 +580,7 @@ export interface TongzhouAPI {
   taskSnapshot(): Promise<TaskSnapshot>;
   messages(sessionId: string, options?: { before?: string; limit?: number }): Promise<Message[]>;
   saveProvider(provider: ProviderInput): Promise<Provider>;
+  revealProviderSecret(id: string): Promise<string>;
   deleteProvider(id: string): Promise<void>;
   testProvider(id: string, model: string): Promise<string>;
   testProviderNetwork(id: string): Promise<string>;

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { normalizeProxyUrl } from '../../../src/shared/provider-network';
+import { apiProtocols } from '../../../src/shared/model-protocol';
 const id = z
   .string()
   .min(1)
@@ -42,6 +43,10 @@ export const providerSchema = z
     auth: z.enum(['api-key', 'bearer', 'none', 'chatgpt', 'native']),
     models: z.array(z.string().trim().min(1).max(200)).max(200),
     modelLabels: z.record(z.string().max(200), z.string().max(200)).optional(),
+    modelProtocols: z
+      .record(z.string().trim().min(1).max(200), z.enum(apiProtocols))
+      .refine((value) => Object.keys(value).length <= 200, '单个连接最多配置 200 个模型协议')
+      .optional(),
     maxOutputTokens: z.number().int().min(256).max(131072),
     contextChars: z.union([z.literal(0), z.number().int().min(4000).max(1000000)]),
     secret: z.string().max(16000).optional(),
@@ -77,6 +82,16 @@ export const providerSchema = z
       .optional(),
   })
   .superRefine((p, ctx) => {
+    if (
+      p.modelProtocols &&
+      Object.keys(p.modelProtocols).length &&
+      !apiProtocols.includes(p.protocol as any)
+    )
+      ctx.addIssue({
+        code: 'custom',
+        message: '只有 API 连接支持单独配置模型协议',
+        path: ['modelProtocols'],
+      });
     if (p.network && p.protocol !== 'codex')
       ctx.addIssue({
         code: 'custom',

@@ -161,6 +161,7 @@ const api: TongzhouAPI = {
   taskSnapshot: () => call('taskSnapshot'),
   messages: (id, options) => call('messages', id, options),
   saveProvider: (p) => call('saveProvider', p),
+  revealProviderSecret: (id) => call('revealProviderSecret', id),
   deleteProvider: (id) => call('deleteProvider', id),
   testProvider: (id, model) => call('testProvider', id, model),
   testProviderNetwork: (id) => call('testProviderNetwork', id),

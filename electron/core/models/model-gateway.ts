@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import { randomBytes, randomUUID, timingSafeEqual, createHash } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
+import { isDeepStrictEqual } from 'node:util';
 import type { Message, Provider } from '../../../src/shared/types';
 import { completeRequest, type CompletionInput, type Completion, type ToolSpec } from './providers';
 import { redact } from '../../services/storage/validation';
@@ -42,14 +43,12 @@ export function decodeModelRequest(body: any, sessionId: string) {
           createHash('sha256').update(original).digest('hex').slice(0, 12) +
           '_' +
           t.name.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 40);
-    if (names.has(name)) throw new Error('Duplicate model tool');
-    names.set(name, {
+    const wire: WireTool = {
       name: t.name,
       namespace,
       type: t.type === 'custom' ? 'custom_tool_call' : 'function_call',
-    });
-    reverse.set(original, name);
-    tools.push({
+    };
+    const spec: ToolSpec = {
       name,
       description:
         (t.description ?? '') + (t.format ? '\nInput format: ' + JSON.stringify(t.format) : ''),
@@ -67,9 +66,31 @@ export function decodeModelRequest(body: any, sessionId: string) {
               additionalProperties: false,
             }
           : (t.parameters ?? { type: 'object', properties: {} }),
-    });
+    };
+    if (names.has(name)) {
+      if (
+        !isDeepStrictEqual(names.get(name), wire) ||
+        !isDeepStrictEqual(
+          tools.find((tool) => tool.name === name),
+          spec,
+        )
+      )
+        throw new Error('Duplicate model tool with conflicting definition: ' + original);
+      return;
+    }
+    names.set(name, wire);
+    reverse.set(original, name);
+    tools.push(spec);
   }
   for (const t of body.tools ?? []) addTool(t);
+  // Codex can stage definitions inside the conversation. Other model protocols
+  // need the currently available definitions in their request-level tool list.
+  for (const item of body.input) {
+    if (item.type !== 'additional_tools') continue;
+    if (item.role !== 'developer' || !Array.isArray(item.tools))
+      throw new Error('Invalid Responses additional_tools item');
+    for (const tool of item.tools) addTool(tool);
+  }
   const calls = new Map<string, string>();
   const runId = randomUUID();
   const message = (role: Message['role'], content = ''): Message => ({
@@ -138,7 +159,7 @@ export function decodeModelRequest(body: any, sessionId: string) {
         toolCallId: item.call_id,
         toolName: calls.get(item.call_id) ?? 'historical_tool',
       });
-    } else if (item.type === 'reasoning') {
+    } else if (item.type === 'additional_tools' || item.type === 'reasoning') {
       // Provider-private signatures are kept separately by the gateway, never translated into user instructions.
       continue;
     } else throw new Error('模型适配器不支持 Responses 项目：' + String(item.type));

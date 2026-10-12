@@ -3652,6 +3652,20 @@ kbd {
   overflow-y: auto;
   margin-top: 10px;
 }
+.provider-secret-control {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.provider-secret-control input {
+  flex: 1;
+  min-width: 0;
+}
+.provider-secret-control button {
+  padding: 6px;
+  flex-shrink: 0;
+}
 .plugin-tool-list p {
   display: flex;
   flex-direction: column;

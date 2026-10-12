@@ -4,14 +4,18 @@ import type { ConnectionCheck } from '../../shared/connection-diagnostics';
 export function ConnectionDiagnostics({
   api,
   onSave,
+  models,
 }: {
   api: TongzhouAPI;
   onSave: () => Promise<Provider>;
+  models: string[];
 }) {
   const [busy, setBusy] = useState(false),
     [inference, setInference] = useState(false),
     [checks, setChecks] = useState<ConnectionCheck[]>([]),
-    [error, setError] = useState('');
+    [error, setError] = useState(''),
+    [model, setModel] = useState('');
+  const selected = models.includes(model) ? model : models[0] || '';
   return (
     <section className="task-block">
       <h3>分项连接检测</h3>
@@ -24,6 +28,26 @@ export function ConnectionDiagnostics({
         />
         直接 API 同时做一次真实推理和无副作用工具测试（可能计费）
       </label>
+      {inference && (
+        <label>
+          检测模型
+          <select
+            aria-label="检测模型"
+            value={selected}
+            disabled={busy}
+            onChange={(e) => {
+              setModel(e.target.value);
+              setChecks([]);
+            }}
+          >
+            {models.filter(Boolean).map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <button
         className="secondary"
         disabled={busy}
@@ -32,7 +56,7 @@ export function ConnectionDiagnostics({
           setError('');
           setChecks([]);
           void onSave()
-            .then((p) => api.diagnoseProvider(p.id, p.models[0] || '', inference))
+            .then((p) => api.diagnoseProvider(p.id, selected, inference))
             .then(setChecks)
             .catch((e) => setError(String(e)))
             .finally(() => setBusy(false));
