@@ -362,30 +362,28 @@ try {
   await nav('插件');
   await page.getByRole('button', { name: /^内置插件/ }).click();
   assert.equal(await page.getByRole('button', { name: /^工作插件|^内置与自定义/ }).count(), 0);
-  assert.equal(await page.locator('.plugin-library .provider-card').count(), 9);
+  const detail = page.locator('.plugin-detail-page');
+  assert.equal(await page.locator('.plugin-library .plugin-tile').count(), 11);
   await capture('builtin-plugin-library-all');
   assert.equal(await page.getByRole('button', { name: '添加插件', exact: true }).count(), 0);
   await page.getByLabel('类型', { exact: true }).selectOption('mcp');
-  assert.equal(await page.locator('.plugin-library .provider-card').count(), 2);
-  await page.getByLabel('搜索插件', { exact: true }).fill('系统环境');
-  assert.equal(await page.locator('.plugin-library .provider-card').count(), 1);
+  assert.equal(await page.locator('.plugin-library .plugin-tile').count(), 4);
+  await page.getByLabel('搜索插件', { exact: true }).fill('网页搜索与读取');
+  assert.equal(await page.locator('.plugin-library .plugin-tile').count(), 1);
   await page.getByLabel('搜索插件', { exact: true }).fill('');
   await page.getByLabel('类型', { exact: true }).selectOption('skill');
   await page.getByRole('heading', { name: '技能创建', exact: true }).waitFor();
   assert.equal(await page.getByRole('button', { name: '移除', exact: true }).count(), 0);
   await page.getByLabel('类型', { exact: true }).selectOption('app');
-  assert.equal(await page.locator('.plugin-library .provider-card').count(), 6);
+  assert.equal(await page.locator('.plugin-library .plugin-tile').count(), 6);
   await capture('builtin-plugin-library');
   await page.getByLabel('搜索插件', { exact: true }).fill('Figma');
-  assert.equal(await page.locator('.work-plugins .provider-card').count(), 1);
-  await page
-    .locator('.work-plugins')
-    .getByRole('button', { name: '配置插件', exact: true })
-    .click();
-  assert.equal(await dialog.getByLabel('认证方式', { exact: true }).inputValue(), 'oauth');
+  assert.equal(await page.locator('.work-plugins .plugin-tile').count(), 1);
+  await page.locator('.work-plugins .plugin-tile-open').click();
+  assert.equal(await detail.getByLabel('认证方式', { exact: true }).inputValue(), 'oauth');
   await capture('plugin-editor');
-  await dialog.getByRole('button', { name: '保存连接', exact: true }).click();
-  await dialog.waitFor({ state: 'hidden' });
+  await detail.getByRole('button', { name: '保存连接', exact: true }).click();
+  await detail.waitFor({ state: 'hidden' });
   const plugin = await page.evaluate(async () =>
     (await window.tongzhou.snapshot()).plugins.find((p) => p.name === 'Figma'),
   );
@@ -405,75 +403,60 @@ try {
   await capture('personal-plugin-library-empty');
   await page.getByRole('button', { name: /^内置插件/ }).click();
   await page.getByLabel('搜索插件', { exact: true }).fill('Figma');
-  await page
-    .locator('.work-plugins')
-    .getByRole('button', { name: '管理连接', exact: true })
-    .click();
-  await dialog.getByRole('button', { name: '高级 MCP 设置', exact: true }).click();
-  await dialog.getByRole('heading', { name: '管理 MCP 插件', exact: true }).waitFor();
-  assert.equal(await dialog.getByLabel('插件名称', { exact: true }).inputValue(), 'Figma');
-  await dialog.getByRole('button', { name: '保存插件', exact: true }).click();
-  await dialog.waitFor({ state: 'hidden' });
+  await page.locator('.work-plugins .plugin-tile-open').click();
+  await detail.getByRole('button', { name: '高级 MCP 设置', exact: true }).click();
+  await detail.getByRole('heading', { name: 'Figma', exact: true }).waitFor();
+  assert.equal(await detail.getByLabel('插件名称', { exact: true }).inputValue(), 'Figma');
+  await detail.getByRole('button', { name: '保存插件', exact: true }).click();
+  await detail.waitFor({ state: 'hidden' });
   // Multiple accounts of the same application remain reachable in its one card.
   await page.evaluate(
     (p) => window.tongzhou.savePlugin({ ...p, id: 'figma-extra', name: 'Figma 备用' }),
     plugin,
   );
-  await page.getByLabel('Figma 连接', { exact: true }).selectOption('figma-extra');
-  await page
-    .locator('.work-plugins')
-    .getByRole('button', { name: '管理连接', exact: true })
-    .click();
-  await dialog.getByRole('heading', { name: '连接 Figma 备用', exact: true }).waitFor();
-  await dialog.getByRole('button', { name: '关闭', exact: true }).click();
+  await page.locator('.work-plugins .plugin-tile-open').click();
+  await detail.getByLabel('当前插件连接', { exact: true }).selectOption('figma-extra');
+  await detail.getByRole('heading', { name: 'Figma 备用', exact: true }).waitFor();
+  await detail.getByRole('button', { name: '返回插件列表', exact: true }).click();
   await page.evaluate(() => window.tongzhou.deletePlugin('figma-extra'));
-  await page.getByLabel('Figma 连接', { exact: true }).waitFor({ state: 'detached' });
+  assert.equal(await page.getByLabel('当前插件连接', { exact: true }).count(), 0);
   await capture('plugin-single-entry');
-  assert.equal(await page.locator('.work-plugins .service-card-actions button').count(), 1);
-  await page
-    .locator('.work-plugins')
-    .getByRole('button', { name: '管理连接', exact: true })
-    .click();
-  await dialog
+  assert.equal(await page.locator('.work-plugins .plugin-tile-open').count(), 1);
+  await page.locator('.work-plugins .plugin-tile-open').click();
+  await detail
     .getByLabel('Figma 连接方式', { exact: true })
     .selectOption('http://127.0.0.1:3845/mcp');
-  assert.equal(await dialog.getByRole('button', { name: '浏览器授权', exact: true }).count(), 0);
-  await dialog.getByText(/在 Figma 桌面应用打开文件/).waitFor();
-  await dialog
+  assert.equal(await detail.getByRole('button', { name: '浏览器授权', exact: true }).count(), 0);
+  await detail.getByText(/在 Figma 桌面应用打开文件/).waitFor();
+  await detail
     .getByLabel('Figma 连接方式', { exact: true })
     .selectOption('https://mcp.figma.com/mcp');
-  await dialog.getByRole('button', { name: '关闭', exact: true }).click();
+  await detail.getByRole('button', { name: '返回插件列表', exact: true }).click();
   await page.getByLabel('搜索插件', { exact: true }).fill('GitHub');
-  await page
-    .locator('.work-plugins')
-    .getByRole('button', { name: '配置插件', exact: true })
-    .click();
-  assert.equal(await dialog.getByLabel('认证方式', { exact: true }).inputValue(), 'headers');
-  await dialog.getByLabel('Token 来源', { exact: true }).selectOption(connector.id);
-  assert.equal(await dialog.getByLabel('Token 来源', { exact: true }).inputValue(), connector.id);
-  assert.equal(await dialog.getByText('高级：自定义 GitHub OAuth 应用').count(), 0);
+  await page.locator('.work-plugins .plugin-tile-open').click();
+  assert.equal(await detail.getByLabel('认证方式', { exact: true }).inputValue(), 'headers');
+  await detail.getByLabel('Token 来源', { exact: true }).selectOption(connector.id);
+  assert.equal(await detail.getByLabel('Token 来源', { exact: true }).inputValue(), connector.id);
+  assert.equal(await detail.getByText('高级：自定义 GitHub OAuth 应用').count(), 0);
   await capture('github-saved-auth');
-  await dialog.getByRole('button', { name: '保存连接', exact: true }).click();
-  await dialog.waitFor({ state: 'hidden' });
+  await detail.getByRole('button', { name: '保存连接', exact: true }).click();
+  await detail.waitFor({ state: 'hidden' });
   const githubPlugin = await page.evaluate(async () =>
     (await window.tongzhou.snapshot()).plugins.find((p) => p.name === 'GitHub 仓库工具'),
   );
   assert.ok(githubPlugin.hasSecret);
   assert.ok(!JSON.stringify(githubPlugin).includes('fixture-github-token'));
-  await page
-    .locator('.work-plugins')
-    .getByRole('button', { name: '管理连接', exact: true })
-    .click();
-  assert.equal(await dialog.getByLabel('认证方式', { exact: true }).inputValue(), 'headers');
+  await page.locator('.work-plugins .plugin-tile-open').click();
+  assert.equal(await detail.getByLabel('认证方式', { exact: true }).inputValue(), 'headers');
   assert.equal(githubPlugin.connectorId, connector.id);
-  assert.equal(await dialog.getByLabel('Token 来源', { exact: true }).inputValue(), connector.id);
-  await dialog.getByLabel('认证方式', { exact: true }).selectOption('oauth');
-  await dialog.getByLabel('认证方式', { exact: true }).selectOption('headers');
-  await dialog
+  assert.equal(await detail.getByLabel('Token 来源', { exact: true }).inputValue(), connector.id);
+  await detail.getByLabel('认证方式', { exact: true }).selectOption('oauth');
+  await detail.getByLabel('认证方式', { exact: true }).selectOption('headers');
+  await detail
     .getByLabel('访问令牌（留空保留）', { exact: true })
     .fill('fixture-github-independent-token');
-  await dialog.getByRole('button', { name: '保存连接', exact: true }).click();
-  await dialog.waitFor({ state: 'hidden' });
+  await detail.getByRole('button', { name: '保存连接', exact: true }).click();
+  await detail.waitFor({ state: 'hidden' });
   assert.ok(
     await page.evaluate(
       async (id) => (await window.tongzhou.snapshot()).plugins.find((p) => p.id === id).hasSecret,
@@ -481,43 +464,37 @@ try {
     ),
     'switching away from advanced settings must preserve a saved token',
   );
-  await page
-    .locator('.work-plugins')
-    .getByRole('button', { name: '管理连接', exact: true })
-    .click();
-  await dialog.getByLabel('认证方式', { exact: true }).selectOption('oauth');
-  await dialog.getByRole('button', { name: '使用 GitHub 登录', exact: true }).click();
-  await dialog
+  await page.locator('.work-plugins .plugin-tile-open').click();
+  await detail.getByLabel('认证方式', { exact: true }).selectOption('oauth');
+  await detail.getByRole('button', { name: '使用 GitHub 登录', exact: true }).click();
+  await detail
     .getByRole('alert')
     .filter({ hasText: /尚未配置同舟的 GitHub 登录应用/ })
     .waitFor();
-  assert.ok(!(await dialog.innerText()).includes('Error invoking remote method'));
+  assert.ok(!(await detail.innerText()).includes('Error invoking remote method'));
   await capture('github-oauth-requirements');
-  await dialog.getByRole('button', { name: '关闭', exact: true }).click();
+  await detail.getByRole('button', { name: '返回插件列表', exact: true }).click();
   await page.getByLabel('搜索插件', { exact: true }).fill('GitLab');
-  await page
-    .locator('.work-plugins')
-    .getByRole('button', { name: '配置插件', exact: true })
-    .click();
+  await page.locator('.work-plugins .plugin-tile-open').click();
   assert.equal(
-    await dialog.getByLabel('GitLab 实例地址', { exact: true }).inputValue(),
+    await detail.getByLabel('GitLab 实例地址', { exact: true }).inputValue(),
     'https://gitlab.com',
   );
-  await dialog
+  await detail
     .getByLabel('GitLab 实例地址', { exact: true })
     .fill('https://gitlab.fixture.example');
-  assert.equal(await dialog.getByLabel('认证方式', { exact: true }).inputValue(), 'headers');
-  await dialog.getByLabel('认证方式', { exact: true }).selectOption('oauth');
+  assert.equal(await detail.getByLabel('认证方式', { exact: true }).inputValue(), 'headers');
+  await detail.getByLabel('认证方式', { exact: true }).selectOption('oauth');
   assert.equal(
-    await dialog.getByRole('button', { name: '使用 GitLab 登录', exact: true }).count(),
+    await detail.getByRole('button', { name: '使用 GitLab 登录', exact: true }).count(),
     1,
   );
-  assert.equal(await dialog.getByText('高级：使用已注册的 OAuth 应用', { exact: true }).count(), 0);
-  assert.equal(await dialog.getByLabel('预注册 Client ID（可选）', { exact: true }).count(), 0);
-  assert.equal(await dialog.getByLabel('访问令牌（留空保留）', { exact: true }).count(), 0);
+  assert.equal(await detail.getByText('高级：使用已注册的 OAuth 应用', { exact: true }).count(), 0);
+  assert.equal(await detail.getByLabel('预注册 Client ID（可选）', { exact: true }).count(), 0);
+  assert.equal(await detail.getByLabel('访问令牌（留空保留）', { exact: true }).count(), 0);
   await capture('gitlab-self-managed');
-  await dialog.getByRole('button', { name: '保存连接', exact: true }).click();
-  await dialog.waitFor({ state: 'hidden' });
+  await detail.getByRole('button', { name: '保存连接', exact: true }).click();
+  await detail.waitFor({ state: 'hidden' });
   const gitlabPlugin = await page.evaluate(async () =>
     (await window.tongzhou.snapshot()).plugins.find((p) => p.name === 'GitLab 仓库工具'),
   );
@@ -526,37 +503,31 @@ try {
   assert.equal(gitlabPlugin.enabled, false);
   assert.equal(
     await page
-      .locator('.work-plugins .service-card-actions')
+      .locator('.work-plugins')
       .getByRole('button', { name: '添加连接', exact: true })
       .count(),
     0,
   );
-  await page
-    .locator('.work-plugins')
-    .getByRole('button', { name: '管理连接', exact: true })
-    .click();
-  await dialog.getByText('其他账号与站点', { exact: true }).click();
-  await dialog.getByRole('button', { name: '添加其他账号或站点', exact: true }).click();
+  await page.locator('.work-plugins .plugin-tile-open').click();
+  await detail.getByText('其他账号与站点', { exact: true }).click();
+  await detail.getByRole('button', { name: '添加其他账号或站点', exact: true }).click();
   assert.equal(
-    await dialog.getByLabel('GitLab 实例地址', { exact: true }).inputValue(),
+    await detail.getByLabel('GitLab 实例地址', { exact: true }).inputValue(),
     'https://gitlab.com',
   );
-  assert.equal(await dialog.getByLabel('认证方式', { exact: true }).inputValue(), 'headers');
-  await dialog
+  assert.equal(await detail.getByLabel('认证方式', { exact: true }).inputValue(), 'headers');
+  await detail
     .getByLabel('访问令牌（留空保留）', { exact: true })
     .fill('fixture-other-gitlab-token');
-  await dialog.getByRole('button', { name: '保存连接', exact: true }).click();
-  await dialog.waitFor({ state: 'hidden' });
-  await page.getByLabel('GitLab 仓库工具 连接', { exact: true }).selectOption(gitlabPlugin.id);
-  await page
-    .locator('.work-plugins')
-    .getByRole('button', { name: '管理连接', exact: true })
-    .click();
+  await detail.getByRole('button', { name: '保存连接', exact: true }).click();
+  await detail.waitFor({ state: 'hidden' });
+  await page.locator('.work-plugins .plugin-tile-open').click();
+  await detail.getByLabel('当前插件连接', { exact: true }).selectOption(gitlabPlugin.id);
   assert.equal(
-    await dialog.getByLabel('GitLab 实例地址', { exact: true }).inputValue(),
+    await detail.getByLabel('GitLab 实例地址', { exact: true }).inputValue(),
     'https://gitlab.fixture.example',
   );
-  await dialog.getByRole('button', { name: '关闭', exact: true }).click();
+  await detail.getByRole('button', { name: '返回插件列表', exact: true }).click();
   await page.getByLabel('搜索插件', { exact: true }).fill('');
   checks.push(
     'plugin library separates built-in and personal sources, filters applications/MCP/skills, searches built-ins, and preserves app connections without duplicates',

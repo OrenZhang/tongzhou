@@ -1,16 +1,18 @@
-# 同舟 v1.0.2
+# 同舟 v1.0.3
 
-首次发布 Linux 桌面版：与 Windows / macOS 使用同一套界面、任务系统与业务能力，不为 Linux 做精简。
+本版优化后台运行、电源控制和插件接入体验。
 
-- Linux 桌面版首发：面向 Ubuntu 24.04 x86_64（X11 / XWayland 会话）完成验收；原生 Wayland 会话的电脑控制在后续版本支持。
-- 电脑控制（X11）：窗口识别、截图、点击、拖拽、滚动与中文输入可用；目标窗口失焦时中止操作并给出提示，不产生不完整输入。
-- 凭据安全存储：桌面会话变量缺失时自动回退 gnome-libsecret；显式 --password-store 参数始终优先；不支持明文降级。
-- 内置网络：Linux x64 提供 mihomo 代理资产，带固定 SHA-256 校验。
-- 修复中文本地化系统（zh_CN）下 git 消息解析失配导致的项目操作失败。
-- 打包与发布：Linux 提供 AppImage 与 deb 两种格式；CI 增加 Linux 预合并构建验证，发布流水线新增 Linux 打包与完整性守门。
+- **Windows 系统托盘**：关闭窗口后同舟继续运行，后台会话与机器人连接保持；点击托盘恢复窗口，从托盘菜单退出客户端。
+- **电源与睡眠**：Windows / macOS 可在接通电源时保持唤醒，屏幕仍可熄灭；支持合盖不睡眠，拔电、关闭功能或退出后恢复。macOS 合盖模式需管理员授权，每次启动同舟后重新开启，会临时禁用系统睡眠（包括手动睡眠）；异常中断后提供恢复重试入口。
+- **插件详情**：紧凑卡片列表与统一详情页，返回时保留筛选；账号、认证、工具和依赖配置集中展示，API Key 模式提供依赖安装／修复。
+- **套餐账号复用**：MiniMax 多媒体、搜索与图片理解，以及 Kimi 搜索与网页读取可绑定同舟内已登录的套餐账号，共享令牌刷新；无需复制 API Key 或安装 Python。仍支持独立 API Key 模式，实际工具能力与额度以服务端套餐为准。
+- **网页与系统工具**：内置网页搜索与读取默认启用，保留已有用户开关；时间、时区与系统信息查询改为核心只读工具，无需额外 MCP 进程。
+- **图片预览**：图片作品可在会话中直接查看，优化作品与插件界面布局。
 
 ## 安装包
 
-Windows 使用 win-x64.exe；Apple Silicon 使用 mac-arm64.dmg；Intel Mac 使用 mac-x64.dmg；macOS ZIP 用于更新通道。Linux 使用 linux-x86_64.AppImage（下载后直接运行）或 linux-amd64.deb（`sudo apt install ./Tongzhou-1.0.2-linux-amd64.deb` 安装或升级）。各平台校验文件为 SHA256SUMS-\*。
+Windows 使用 win-x64.exe；Apple Silicon 使用 mac-arm64.dmg；Intel Mac 使用 mac-x64.dmg；macOS ZIP 用于更新通道。Linux 使用 linux-x86_64.AppImage（下载后直接运行）或 linux-amd64.deb（`sudo apt install ./Tongzhou-1.0.3-linux-amd64.deb` 安装或升级）。各平台校验文件为 SHA256SUMS-\*。
+
+Linux 电脑控制目前面向 X11 / XWayland 会话；原生 Wayland 电脑控制尚未支持。电源与合盖功能目前仅支持 Windows / macOS。
 
 未配置发布证书时，安装包不具备发行者签名。macOS 未签名版本提供新版安装包下载；配置 Developer ID 与公证凭据后，签名版本才启用自动安装。Linux 版本暂不支持应用内自动更新，请下载新版安装包覆盖安装。

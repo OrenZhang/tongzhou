@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { _electron as electron } from 'playwright';
 import { openSidebar } from './navigation-helper.mjs';
 
 await mkdir('test-results', { recursive: true });
 const root = await mkdtemp(path.resolve('test-results/power-'));
+// Electron uses the bootstrap directory as appPath, including for update metadata.
+await writeFile(path.join(root, 'package.json'), await readFile('package.json'));
 const bootstrap = path.join(root, 'bootstrap.cjs');
 // Replace only OS effects. Real service, IPC, persistence and settings UI remain in use.
 await writeFile(
