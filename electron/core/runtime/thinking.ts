@@ -35,29 +35,54 @@ export function thinkingRequest(
   if (p.protocol === 'anthropic' && /^claude-/.test(m)) {
     const adaptive =
       /^claude-(?:opus|sonnet)-4[.-][6-9]/.test(m) ||
-      /^claude-(?:opus|sonnet|fable|mythos)-5(?:[-.]|$)/.test(m) ||
+      /^claude-(?:opus|sonnet|haiku|fable|mythos)-5(?:[-.]|$)/.test(m) ||
       /^claude-mythos/.test(m);
     const manual =
       /^claude-(?:3-7-sonnet|(?:opus|sonnet|haiku)-4|(?:opus|sonnet)-4-[015])(?:[-.]|$)/.test(m);
     if (adaptive || manual) {
-      const always = /^claude-(?:mythos|fable)/.test(m) || /^claude-(?:opus|sonnet)-5[.-]5/.test(m);
+      const always =
+        /^claude-(?:mythos|fable)/.test(m) ||
+        /^claude-(?:opus|sonnet|haiku)-5[.-]5/.test(m) ||
+        /^claude-opus-4[.-][7-9]/.test(m);
       if (!on && !always) return { body: { thinking: { type: 'disabled' } } };
-      if (adaptive)
+      if (adaptive) {
+        // 4.6 supports max but not xhigh. Keep shared connection settings usable.
+        const effort = !on && always ? 'low' : p.reasoningEffort;
+        const mapped = effort === 'xhigh' && /-4[.-]6(?:[-.]|$)/.test(m) ? 'high' : effort;
         return {
-          body: { thinking: { type: 'adaptive', display: 'summarized' } },
-          ...(!on ? { note: '此模型始终启用思考，关闭选项不适用。' } : {}),
+          body: {
+            thinking: { type: 'adaptive', display: 'summarized' },
+            ...(mapped ? { output_config: { effort: mapped } } : {}),
+          },
+          ...(!on
+            ? { note: '此模型始终启用思考，已使用最低强度 low。' }
+            : mapped !== effort
+              ? { note: '此 Claude 模型不支持 xhigh，已使用 high。' }
+              : {}),
         };
+      }
       if (p.maxOutputTokens < 2048)
         throw new Error(
           '此 Claude 模型开启思考需要至少 2048 的单次最大输出 Tokens，请在模型调整。',
         );
+      const budget = p.thinkingBudgetTokens ?? Math.min(8192, Math.floor(p.maxOutputTokens / 2));
+      if (budget < 1024 || budget >= p.maxOutputTokens)
+        throw new Error('Claude 思考预算必须至少 1024，且小于单次最大输出 Tokens。');
+      const effort = /^(claude-opus-4[.-]5)(?:[-.]|$)/.test(m) ? p.reasoningEffort : undefined;
+      const mapped = effort === 'xhigh' || effort === 'max' ? 'high' : effort;
       return {
         body: {
           thinking: {
             type: 'enabled',
-            budget_tokens: Math.min(8192, Math.floor(p.maxOutputTokens / 2)),
+            budget_tokens: budget,
           },
+          ...(mapped ? { output_config: { effort: mapped } } : {}),
         },
+        ...(mapped !== effort
+          ? { note: '此 Claude 模型仅支持 low、medium、high，已使用 high。' }
+          : p.reasoningEffort && !mapped
+            ? { note: '此 Claude 模型使用思考 Token 预算，不支持 effort 档位。' }
+            : {}),
       };
     }
   }

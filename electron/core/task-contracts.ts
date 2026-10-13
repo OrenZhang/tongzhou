@@ -44,6 +44,7 @@ export interface ExecutionAdapter {
     signal: AbortSignal,
     scope: ToolScope,
     prepareScope?: (signal: AbortSignal, threadId: string) => Promise<ToolScope>,
+    checkCompletion?: () => Promise<string | undefined>,
   ): Promise<void>;
   hasSteering(sessionId: string): boolean;
   steer(

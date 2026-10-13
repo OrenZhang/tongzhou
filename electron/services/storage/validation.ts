@@ -13,6 +13,7 @@ export const providerSchema = z
     enabled: z.boolean().optional(),
     thinkingEnabled: z.boolean().optional(),
     reasoningEffort: z.enum(reasoningEfforts).optional(),
+    thinkingBudgetTokens: z.number().int().min(1024).max(1000000).optional(),
     name: z.string().trim().min(1).max(100),
     protocol: z.enum([
       'openai-chat',

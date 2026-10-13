@@ -255,10 +255,12 @@ export function ProviderConnectionDialog({
               <option value="off">关闭（模型支持时）</option>
             </select>
           </Field>
-          {['codex', 'openai-chat', 'openai-responses'].includes(providerEdit.protocol) && (
+          {['codex', 'openai-chat', 'openai-responses', 'anthropic'].includes(
+            providerEdit.protocol,
+          ) && (
             <Field
               label="思考强度"
-              hint="仅应用到支持推理档位的模型。官方账号按模型目录校验；API 网关以服务实际支持为准。保存后从下一轮生效。"
+              hint="仅应用到支持档位的模型。旧版 Claude 使用下方 Token 预算；API 网关以服务实际支持为准。保存后从下一轮生效。"
             >
               <select
                 aria-label="思考强度"
@@ -274,7 +276,9 @@ export function ProviderConnectionDialog({
                 }
               >
                 <option value="">
-                  {providerEdit.protocol === 'codex' ? '模型默认' : '默认 · medium（支持时）'}
+                  {['codex', 'anthropic'].includes(providerEdit.protocol)
+                    ? '模型默认'
+                    : '默认 · medium（支持时）'}
                 </option>
                 {reasoningEfforts.map((effort) => (
                   <option key={effort} value={effort}>
@@ -282,6 +286,27 @@ export function ProviderConnectionDialog({
                   </option>
                 ))}
               </select>
+            </Field>
+          )}
+          {providerEdit.protocol === 'anthropic' && (
+            <Field
+              label="旧版 Claude 思考预算 Tokens"
+              hint="仅用于手动思考模型；留空沿用现有默认。至少 1024，且小于单次最大输出 Tokens。自适应模型使用上方强度。"
+            >
+              <input
+                type="number"
+                min={1024}
+                max={1000000}
+                step={1024}
+                disabled={providerEdit.thinkingEnabled === false}
+                value={providerEdit.thinkingBudgetTokens ?? ''}
+                onChange={(e) =>
+                  setProviderEdit({
+                    ...providerEdit,
+                    thinkingBudgetTokens: e.target.value ? Number(e.target.value) : undefined,
+                  })
+                }
+              />
             </Field>
           )}
           <p className="muted">

@@ -98,6 +98,7 @@ export class CodexExecution implements ExecutionAdapter {
     signal: AbortSignal,
     scope: ToolScope,
     prepareScope?: (signal: AbortSignal, threadId: string) => Promise<ToolScope>,
+    checkCompletion?: () => Promise<string | undefined>,
   ) {
     const provider = this.ports.store.get<Provider>('provider', input.providerId);
     const network = this.ports.resolveNetwork
@@ -127,6 +128,7 @@ export class CodexExecution implements ExecutionAdapter {
       networkKey(provider.network),
       provider.thinkingEnabled !== false,
       provider.reasoningEffort,
+      provider.thinkingBudgetTokens,
       input.model,
       cwd,
       agent.instructions,
@@ -273,11 +275,15 @@ export class CodexExecution implements ExecutionAdapter {
     };
     let finish: (value?: unknown) => void = () => {};
     let fail: (e: Error) => void = () => {};
-    const done = new Promise((resolve, reject) => {
-      finish = resolve;
-      fail = reject;
-    });
-    done.catch(() => {});
+    const nextTurn = () => {
+      const pending = new Promise((resolve, reject) => {
+        finish = resolve;
+        fail = reject;
+      });
+      pending.catch(() => {});
+      return pending;
+    };
+    let done = nextTurn();
     const onFailure = (e: Error) => fail(e);
     client.on('failure', onFailure);
     const abort = () => {
@@ -651,7 +657,10 @@ export class CodexExecution implements ExecutionAdapter {
       );
       const thinking = customModel
         ? {
-            effort: requestThinking.body.reasoning?.effort ?? requestThinking.body.reasoning_effort,
+            effort:
+              requestThinking.body.reasoning?.effort ??
+              requestThinking.body.reasoning_effort ??
+              requestThinking.body.output_config?.effort,
             note: requestThinking.note,
           }
         : codexThinking(modelInfo, provider.thinkingEnabled !== false, provider.reasoningEffort);
@@ -690,7 +699,33 @@ export class CodexExecution implements ExecutionAdapter {
       });
       turnId ||= accepted.turn?.id ?? '';
       if (signal.aborted) abort();
-      await done;
+      while (true) {
+        await done;
+        signal.throwIfAborted();
+        let feedback;
+        try {
+          feedback = await checkCompletion?.();
+        } finally {
+          if (run.completionChecks?.checks.some((c) => c.status !== 'passed'))
+            for (const message of items.values()) {
+              if (message.phase === 'final_answer' || !message.phase) {
+                message.phase = 'commentary';
+                this.ports.message({ ...message });
+              }
+            }
+        }
+        if (!feedback) break;
+        turnId = '';
+        done = nextTurn();
+        this.ports.progress(run, 'phase', '根据检查结果继续处理');
+        const continued = await client.request('turn/start', {
+          threadId,
+          input: [{ type: 'text', text: feedback }],
+          model: input.model,
+          ...(thinking.effort ? { effort: thinking.effort, summary: 'auto' } : {}),
+        });
+        turnId ||= continued.turn?.id ?? '';
+      }
       if (signal.aborted) throw new Error('已停止');
       completed = true;
       keepAlive =

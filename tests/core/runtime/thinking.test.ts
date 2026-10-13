@@ -130,6 +130,57 @@ describe('connection-level model thinking', () => {
       '2048',
     );
   });
+  it.each(['low', 'medium', 'high', 'xhigh', 'max'] as const)(
+    'serializes Claude adaptive effort %s without changing defaults',
+    (reasoningEffort) => {
+      const p = {
+        ...provider,
+        protocol: 'anthropic' as const,
+        reasoningEffort,
+        thinkingBudgetTokens: 2048,
+      };
+      const body: any = requestBody(input(p, 'claude-opus-4-8')).body;
+      expect(body.output_config).toEqual({ effort: reasoningEffort });
+      expect(body.thinking).toEqual({ type: 'adaptive', display: 'summarized' });
+      expect(
+        thinkingRequest({ ...p, reasoningEffort: undefined }, 'claude-sonnet-4-6').body,
+      ).toEqual({ thinking: { type: 'adaptive', display: 'summarized' } });
+      expect(thinkingRequest(p, 'claude-sonnet-4-6').body.output_config.effort).toBe(
+        reasoningEffort === 'xhigh' ? 'high' : reasoningEffort,
+      );
+    },
+  );
+  it('retains explicit manual budgets through storage and leaves off/unknown models unchanged', () => {
+    const store = new Store(':memory:', { encrypt: (s) => s, decrypt: (s) => s });
+    try {
+      const p = store.saveProvider(
+        providerSchema.parse({
+          ...provider,
+          protocol: 'anthropic',
+          thinkingBudgetTokens: 6144,
+          reasoningEffort: 'high',
+        }),
+      );
+      const body: any = requestBody(input(p, 'claude-opus-4-5')).body;
+      expect(body.thinking.budget_tokens).toBe(6144);
+      expect(body.output_config.effort).toBe('high');
+      expect(thinkingRequest(p, 'claude-sonnet-4-5').body.output_config).toBeUndefined();
+      expect(thinkingRequest({ ...p, thinkingEnabled: false }, 'claude-sonnet-4-5').body).toEqual({
+        thinking: { type: 'disabled' },
+      });
+      expect(
+        thinkingRequest({ ...p, thinkingEnabled: false }, 'claude-opus-5-5').body.output_config
+          .effort,
+      ).toBe('low');
+      expect(thinkingRequest(p, 'custom-claude').body).toEqual({});
+      expect(() =>
+        thinkingRequest({ ...p, thinkingBudgetTokens: 8192 }, 'claude-sonnet-4-5'),
+      ).toThrow('小于');
+      expect(providerSchema.safeParse({ ...p, thinkingBudgetTokens: 512 }).success).toBe(false);
+    } finally {
+      store.close();
+    }
+  });
   it('enables DeepSeek/Kimi chat thinking and Gemini budgets while leaving unknown gateways unchanged', () => {
     expect(thinkingRequest(provider, 'deepseek-chat').body).toEqual({
       thinking: { type: 'enabled' },

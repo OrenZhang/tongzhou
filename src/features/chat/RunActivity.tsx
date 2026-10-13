@@ -182,6 +182,32 @@ export function TurnProcess({
             </small>
           )}
           <AgentActivity agents={agents} active={active} onControl={onAgentControl} />
+          {!!run?.completionChecks?.checks.length && (
+            <section className="agent-plan" aria-label="完成检查">
+              <small className="muted">
+                完成检查 · {run.completionChecks.checks.filter((c) => c.status === 'passed').length}
+                /{run.completionChecks.checks.length} · 第 {run.completionChecks.attempts} 轮
+              </small>
+              <ol>
+                {run.completionChecks.checks.map((c) => (
+                  <li key={c.command} title={c.command}>
+                    {c.status === 'passed' ? <Check size={13} /> : <Circle size={11} />}
+                    <span>
+                      {c.description} ·{' '}
+                      {
+                        {
+                          pending: '待检查',
+                          passed: '通过',
+                          failed: '未通过',
+                          blocked: '未执行成功',
+                        }[c.status]
+                      }
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )}
           {timing && explicitlyExpanded && (
             <small className="muted">{timing}（包含网络与服务端等待）</small>
           )}

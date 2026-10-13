@@ -96,6 +96,98 @@ const text = (content: string) => ({
   choices: [{ delta: { content }, finish_reason: 'stop' }],
   usage: { prompt_tokens: 10, completion_tokens: 4 },
 });
+describe('completion verification in the real Codex tool loop', () => {
+  it('continues the same thread after failed checks and verifies preserved behavior before completing', async () => {
+    let round = 0;
+    const call = (id: string, name: string, args: any) => [
+      {
+        choices: [
+          {
+            delta: {
+              tool_calls: [{ index: 0, id, function: { name, arguments: JSON.stringify(args) } }],
+            },
+            finish_reason: 'tool_calls',
+          },
+        ],
+      },
+    ];
+    const f = await fixture(() => {
+      round++;
+      if (round === 1)
+        return call('register', 'completion_check', {
+          checks: [
+            {
+              command: 'test -f result.txt && test "$(cat existing.txt)" = preserved',
+              description: 'New result and original successful behavior',
+            },
+          ],
+        });
+      if (round === 2) return [text('Premature completion')];
+      if (round === 3) return call('write', 'write_file', { path: 'result.txt', content: 'fixed' });
+      return [text('Verified completion')];
+    });
+    await writeFile(path.join(f.root, 'existing.txt'), 'preserved');
+    f.runtime.setSessionPermission(f.input.sessionId, 'full-access');
+    f.runtime.start(f.input);
+    await f.runtime.waitForIdle();
+    const run = f.store.list<Run>('run')[0];
+    expect(run.status).toBe('completed');
+    expect(run.completionChecks).toMatchObject({ attempts: 2, checks: [{ status: 'passed' }] });
+    expect(f.requests).toHaveLength(4);
+    expect(JSON.stringify(f.requests[2].messages)).toContain('完成检查未通过');
+    expect(await readFile(path.join(f.root, 'existing.txt'), 'utf8')).toBe('preserved');
+    expect(await readFile(path.join(f.root, 'result.txt'), 'utf8')).toBe('fixed');
+    expect(
+      f.store.messages(f.input.sessionId).find((m) => m.content === 'Premature completion')?.phase,
+    ).toBe('commentary');
+    expect(
+      f.store.messages(f.input.sessionId).findLast((m) => m.role === 'assistant')?.content,
+    ).toBe('Verified completion');
+    expect(f.store.list<any>('engineSegment')[0].completed).toBe(true);
+  });
+  it('does not complete or restart when approval for a check is refused', async () => {
+    let round = 0;
+    const f = await fixture(() =>
+      ++round === 1
+        ? [
+            {
+              choices: [
+                {
+                  delta: {
+                    tool_calls: [
+                      {
+                        index: 0,
+                        id: 'check',
+                        function: {
+                          name: 'completion_check',
+                          arguments: JSON.stringify({
+                            checks: [
+                              { command: 'touch forbidden.txt', description: 'Denied command' },
+                            ],
+                          }),
+                        },
+                      },
+                    ],
+                  },
+                  finish_reason: 'tool_calls',
+                },
+              ],
+            },
+          ]
+        : [text('Unverified completion')],
+    );
+    f.runtime.start(f.input);
+    await expect.poll(() => f.runtime.snapshot().approvals.length).toBe(1);
+    f.system.approvals.approve(f.runtime.snapshot().approvals[0].id, false);
+    await f.runtime.waitForIdle();
+    expect(f.store.list<Run>('run')[0]).toMatchObject({
+      status: 'failed',
+      completionChecks: { attempts: 1, checks: [{ status: 'blocked' }] },
+    });
+    expect(f.requests).toHaveLength(2);
+    await expect(readFile(path.join(f.root, 'forbidden.txt'))).rejects.toThrow();
+  });
+});
 describe('conversation input and lifecycle changes', () => {
   it('recalls yesterday in another chat through the task tool bridge without workspace management', async () => {
     let sourceSession = '';

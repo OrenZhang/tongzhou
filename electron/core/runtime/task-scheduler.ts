@@ -1,5 +1,6 @@
 import { assertBotSession, botPermission } from '../../services/bots/access';
 import { RunLedger } from './run-ledger';
+import { CompletionChecks } from './completion-checks';
 import type { DomainServices } from '../../modules/domain-services';
 import type {
   ExecutionAdapter,
@@ -465,6 +466,10 @@ export class TaskScheduler implements TaskService {
         }
         const taskController = controller;
         const baseAgent = { ...agent };
+        const checks = new CompletionChecks(run, () => {
+          this.store.put('run', run);
+          this.changed();
+        });
         while (true) {
           taskController.signal.throwIfAborted();
           executionController = new AbortController();
@@ -541,6 +546,7 @@ export class TaskScheduler implements TaskService {
           try {
             this.ledger.progress(run, 'phase', '准备工具');
             await prepare(scope, controller.signal, agent);
+            if (!session.knowledgeJob && !session.contentContext) checks.attach(scope);
             const compiled = taskInstructions({
               store: this.store,
               knowledge: this.knowledge,
@@ -569,6 +575,11 @@ export class TaskScheduler implements TaskService {
               controller.signal,
               scope,
               prepareChild,
+              async () => {
+                if (run.completionChecks?.checks.length)
+                  this.ledger.progress(run, 'phase', '检查完成条件');
+                return checks.evaluate(scope, controller.signal);
+              },
             );
             break;
           } catch (error) {

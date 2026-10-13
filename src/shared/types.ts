@@ -29,6 +29,8 @@ export interface Provider {
   thinkingEnabled?: boolean;
   /** Missing means use the model's default; only supported reasoning models apply it. */
   reasoningEffort?: import('./model-reasoning').ReasoningEffort;
+  /** Explicit budget for Claude models using manual extended thinking. */
+  thinkingBudgetTokens?: number;
   /** Existing connections without this field remain enabled. */
   enabled?: boolean;
   network?: import('./provider-network').ProviderNetwork;
@@ -241,6 +243,16 @@ export interface Run {
   knowledgeReferences?: import('./knowledge').KnowledgeReference[];
   usageReported?: boolean;
   workspace?: { before: string; after?: string };
+  completionChecks?: {
+    attempts: number;
+    checks: {
+      command: string;
+      description: string;
+      timeoutMs: number;
+      status: 'pending' | 'passed' | 'failed' | 'blocked';
+      output?: string;
+    }[];
+  };
   id: string;
   sessionId: string;
   providerId: string;

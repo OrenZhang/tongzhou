@@ -2,5 +2,6 @@
 export function toolLabel(name?: string, fallback = '工具结果') {
   if (name === 'Codex · 终端') return '执行命令';
   if (name === 'Codex · 文件变更') return '修改文件';
+  if (name === 'completion_check') return '登记完成检查';
   return name || fallback;
 }
