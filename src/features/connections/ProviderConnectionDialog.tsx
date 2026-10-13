@@ -14,6 +14,7 @@ import type { View } from '../../app/views';
 import { protocolLabels, presets } from './provider-presets';
 import { ProviderSecretField } from './ProviderSecretField';
 import { ModelProtocolFields } from './ModelProtocolFields';
+import { reasoningEfforts, reasoningLabels } from '../../shared/model-reasoning';
 
 interface Props {
   data: Snapshot;
@@ -233,7 +234,11 @@ export function ProviderConnectionDialog({
         <details className="thinking-settings">
           <summary>
             高级：模型思考 ·{' '}
-            {providerEdit.thinkingEnabled !== false ? '默认开启' : '关闭（支持时）'}
+            {providerEdit.thinkingEnabled === false
+              ? '关闭（支持时）'
+              : providerEdit.reasoningEffort
+                ? `${reasoningLabels[providerEdit.reasoningEffort]} · ${providerEdit.reasoningEffort}`
+                : '默认开启'}
           </summary>
           <Field
             label="模型思考"
@@ -250,6 +255,35 @@ export function ProviderConnectionDialog({
               <option value="off">关闭（模型支持时）</option>
             </select>
           </Field>
+          {['codex', 'openai-chat', 'openai-responses'].includes(providerEdit.protocol) && (
+            <Field
+              label="思考强度"
+              hint="仅应用到支持推理档位的模型。官方账号按模型目录校验；API 网关以服务实际支持为准。保存后从下一轮生效。"
+            >
+              <select
+                aria-label="思考强度"
+                disabled={providerEdit.thinkingEnabled === false}
+                value={providerEdit.reasoningEffort ?? ''}
+                onChange={(e) =>
+                  setProviderEdit({
+                    ...providerEdit,
+                    reasoningEffort: e.target.value
+                      ? (e.target.value as ProviderInput['reasoningEffort'])
+                      : undefined,
+                  })
+                }
+              >
+                <option value="">
+                  {providerEdit.protocol === 'codex' ? '模型默认' : '默认 · medium（支持时）'}
+                </option>
+                {reasoningEfforts.map((effort) => (
+                  <option key={effort} value={effort}>
+                    {reasoningLabels[effort]} · {effort}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
           <p className="muted">
             始终思考的模型无法彻底关闭，会使用支持的最低强度。未识别的兼容模型和未提供开关的订阅模型沿用服务默认，并在运行记录中说明。
           </p>

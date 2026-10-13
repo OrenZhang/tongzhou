@@ -299,6 +299,28 @@ export const sessionsPlugin: Plugin.Object<void> = {
       (id, allow) => ctx.tzApprovals.approve(idSchema.parse(id), z.boolean().parse(allow)),
     );
     register(
+      'answerQuestions',
+      manual('会话', '回答或取消结构化追问', 'workspace', '只有用户可以回答引擎追问', [
+        idSchema,
+        z.record(z.string(), z.array(z.string().max(8000)).max(10)).nullable(),
+      ]),
+      (id, answers) => ctx.tzApprovals.answer(idSchema.parse(id), answers),
+    );
+    register(
+      'controlAgent',
+      manual('会话', '停止或继续当前任务的子 Agent', 'workspace', '由用户控制子任务生命周期', [
+        idSchema,
+        idSchema,
+        z.enum(['interrupt', 'resume']),
+      ]),
+      (sessionId, threadId, action) =>
+        ctx.tzTasks.controlAgent(
+          idSchema.parse(sessionId),
+          idSchema.parse(threadId),
+          z.enum(['interrupt', 'resume']).parse(action),
+        ),
+    );
+    register(
       'exportSession',
       workspaceOperation(store, '会话', 'change', '导出会话为 Markdown', [
         idSchema.describe('sessionId'),

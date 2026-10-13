@@ -13,6 +13,7 @@ import type {
 import type { ToolScope } from './tools/extensions';
 
 export interface TaskService {
+  controlAgent(sessionId: string, threadId: string, action: 'interrupt' | 'resume'): Promise<void>;
   start(input: RunInput, resendMessageId?: string): string;
   enqueue(input: RunInput, mode: PendingInput['mode']): Promise<void>;
   cancel(sessionId: string): Promise<void>;
@@ -33,6 +34,8 @@ export interface ChangePublisher {
   changed(): void;
 }
 export interface ExecutionAdapter {
+  deliverAnswer?(sessionId: string, threadId: string, text: string): Promise<string | undefined>;
+  controlAgent?(sessionId: string, threadId: string, action: 'interrupt' | 'resume'): Promise<void>;
   run(
     input: RunInput,
     project: Project | null,
@@ -40,6 +43,7 @@ export interface ExecutionAdapter {
     run: Run,
     signal: AbortSignal,
     scope: ToolScope,
+    prepareScope?: (signal: AbortSignal, threadId: string) => Promise<ToolScope>,
   ): Promise<void>;
   hasSteering(sessionId: string): boolean;
   steer(
@@ -53,6 +57,12 @@ export interface ExecutionAdapter {
   close(): Promise<void>;
 }
 export interface ExecutionCallbacks {
+  question?(
+    sessionId: string,
+    runId: string,
+    params: import('../../src/shared/agent-execution').QuestionRequest,
+    signal: AbortSignal,
+  ): Promise<import('../../src/shared/agent-execution').QuestionAnswers | null>;
   isStopping(): boolean;
   ask(
     sessionId: string,

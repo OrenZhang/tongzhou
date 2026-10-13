@@ -9,6 +9,63 @@
   display: grid;
   gap: 8px;
 }
+.question-card {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 9px;
+  padding: 10px 12px;
+  font-size: 12px;
+}
+.question-card fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0 0 10px;
+  min-width: 0;
+}
+.question-card legend {
+  font-weight: 600;
+}
+.question-card fieldset > input {
+  width: 100%;
+  min-width: 0;
+  font-size: 12px;
+}
+.question-card p {
+  margin: 4px 0 7px;
+  overflow-wrap: anywhere;
+}
+.question-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 5px 0;
+}
+.question-option input {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  margin: 2px 0;
+}
+.question-option small {
+  display: block;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.question-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.question-actions small {
+  flex: 1;
+}
+.question-actions button {
+  min-height: 26px;
+  height: 26px;
+  padding: 3px 8px;
+  font-size: 12px;
+}
 :root[data-theme='dark'] .approval-queue {
   --approval-ink: #ffadb3;
   --approval-fill: #342326;

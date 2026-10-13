@@ -76,6 +76,7 @@ export function ConversationTurn({
   editableMessageId,
   resendDisabled,
   onResend,
+  onAgentControl,
   ...actions
 }: Actions & {
   turn: Turn;
@@ -84,6 +85,7 @@ export function ConversationTurn({
   editableMessageId?: string;
   resendDisabled?: boolean;
   onResend?: (message: Message, text: string) => Promise<void>;
+  onAgentControl?: (id: string, action: 'interrupt' | 'resume') => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
   const [editedText, setEditedText] = useState('');
@@ -142,6 +144,14 @@ export function ConversationTurn({
           <summary>
             <Terminal size={13} />
             {toolLabel(m.toolName)}
+            {m.sourceThreadId && (
+              <small>
+                {' '}
+                ·{' '}
+                {turn.run?.agents?.find((agent) => agent.threadId === m.sourceThreadId)?.name ??
+                  '子 Agent'}
+              </small>
+            )}
             {m.status === 'error' ? ' · 未完成' : ''}
           </summary>
           <pre>{entry.text}</pre>
@@ -257,6 +267,7 @@ export function ConversationTurn({
         <article className={'chat-message assistant' + (active ? ' is-active' : '')}>
           <div className="message-body">
             <TurnProcess
+              onAgentControl={onAgentControl}
               events={turn.events}
               run={turn.run}
               active={active}
@@ -307,8 +318,13 @@ export function ConversationTurn({
                 <div className="message-meta">
                   {agentName && agentName !== '同舟' && <strong>{agentName}</strong>}
                   {(assistant?.model || turn.run?.model) && (
-                    <span className="message-model" title={assistant?.model ?? turn.run?.model}>
-                      {assistant?.model ?? turn.run?.model}
+                    <span
+                      className="message-model"
+                      title={
+                        turn.run?.observation?.actualModel ?? assistant?.model ?? turn.run?.model
+                      }
+                    >
+                      {turn.run?.observation?.actualModel ?? assistant?.model ?? turn.run?.model}
                     </span>
                   )}
                   <time>

@@ -64,7 +64,10 @@ describe('connection-level model thinking', () => {
         reasoningEffort,
       })),
     };
-    expect(codexThinking(model).effort).toBe('medium');
+    expect(codexThinking(model).effort).toBe('high');
+    expect(codexThinking(model, true, 'medium').effort).toBe('medium');
+    expect(() => codexThinking(model, true, 'max')).toThrow('不支持思考强度');
+    expect(() => codexThinking({}, true, 'high')).toThrow('未提供思考强度');
     expect(codexThinking(model, false)).toMatchObject({
       effort: 'low',
       note: expect.stringContaining('不能关闭'),
@@ -79,6 +82,40 @@ describe('connection-level model thinking', () => {
       ).effort,
     ).toBe('none');
   });
+  it.each(['openai-chat', 'openai-responses'] as const)(
+    'retains the requested GPT-6 effort across validation, storage and %s serialization',
+    (protocol) => {
+      const store = new Store(':memory:', { encrypt: (value) => value, decrypt: (value) => value });
+      try {
+        const saved = store.saveProvider(
+          providerSchema.parse({ ...provider, protocol, reasoningEffort: 'high' }),
+        );
+        const body: any = requestBody(input(saved, 'gpt-6-sol')).body;
+        expect(protocol === 'openai-chat' ? body.reasoning_effort : body.reasoning.effort).toBe(
+          'high',
+        );
+        expect(providerSchema.safeParse({ ...provider, reasoningEffort: 'invented' }).success).toBe(
+          false,
+        );
+        expect(
+          thinkingRequest({ ...saved, thinkingEnabled: false }, 'gpt-6-sol').body,
+        ).toMatchObject(
+          protocol === 'openai-chat'
+            ? { reasoning_effort: 'none' }
+            : { reasoning: { effort: 'none' } },
+        );
+        expect(
+          thinkingRequest({ ...saved, thinkingEnabled: false }, 'gpt-6.1-sol').body,
+        ).toMatchObject(
+          protocol === 'openai-chat'
+            ? { reasoning_effort: 'low' }
+            : { reasoning: { effort: 'low' } },
+        );
+      } finally {
+        store.close();
+      }
+    },
+  );
   it('handles Claude adaptive/manual thinking and enforces an adequate output budget', () => {
     const p = { ...provider, protocol: 'anthropic' as const };
     expect(thinkingRequest(p, 'claude-sonnet-4-6').body.thinking.type).toBe('adaptive');

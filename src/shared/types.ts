@@ -27,6 +27,8 @@ export type AuthMode = 'api-key' | 'bearer' | 'none' | 'chatgpt' | 'native';
 export interface Provider {
   /** Missing on older connections means enabled. */
   thinkingEnabled?: boolean;
+  /** Missing means use the model's default; only supported reasoning models apply it. */
+  reasoningEffort?: import('./model-reasoning').ReasoningEffort;
   /** Existing connections without this field remain enabled. */
   enabled?: boolean;
   network?: import('./provider-network').ProviderNetwork;
@@ -40,6 +42,8 @@ export interface Provider {
   /** Explicit wire protocol overrides for mixed-model API gateways. */
   modelProtocols?: Record<string, 'openai-chat' | 'openai-responses' | 'anthropic' | 'gemini'>;
   hasSecret?: boolean;
+  /** Saved legacy ciphertext is preserved but needs a user-supplied replacement. */
+  secretNeedsUpdate?: boolean;
   maxOutputTokens: number;
   /** 0 = automatic compaction; positive = manual character target (never a turn limit). */
   contextChars: number;
@@ -183,6 +187,8 @@ export interface WorktreeInfo {
   unsharedCommits: boolean;
 }
 export interface Message {
+  sourceThreadId?: string;
+  phase?: 'commentary' | 'final_answer';
   artifactIds?: string[];
   attachments?: Attachment[];
   // Presentation order within a run; protocol content remains unchanged.
@@ -227,6 +233,9 @@ export interface Session {
   archived: boolean;
 }
 export interface Run {
+  agents?: import('./agent-execution').ChildAgent[];
+  observation?: import('./agent-execution').ExecutionObservation;
+  plan?: import('./agent-plan').AgentPlan;
   botContext?: BotExecutionContext;
   retryOf?: string;
   knowledgeReferences?: import('./knowledge').KnowledgeReference[];
@@ -246,14 +255,23 @@ export interface Run {
   phase?: string;
   config?: {
     executionCore?: 'codex';
+    reasoningEffort?: string;
     protocol: Protocol;
     baseUrl: string;
     instructions: string;
+    instructionSources?: { source: string; chars: number }[];
+    taskMemory?: import('./task').TaskMemory;
     permission: AgentProfile['permission'];
     maxSteps: number;
   };
 }
 export interface Approval {
+  kind?: 'question';
+  questions?: import('./agent-execution').UserQuestion[];
+  runId?: string;
+  threadId?: string;
+  expiresAt?: number;
+  isBlocking?: boolean;
   id: string;
   sessionId: string;
   title: string;
@@ -336,7 +354,7 @@ export interface RunEvent {
   runId: string;
   seq: number;
   time: number;
-  type: 'phase' | 'reasoning' | 'tool' | 'input' | 'notice';
+  type: 'phase' | 'reasoning' | 'tool' | 'input' | 'notice' | 'plan' | 'agents' | 'observation';
   text: string;
 }
 export interface PendingInput {
@@ -610,6 +628,11 @@ export interface TongzhouAPI {
   team(input: RunInput, agentIds: string[]): Promise<string>;
   cancel(sessionId: string): Promise<void>;
   approve(id: string, allow: boolean): Promise<void>;
+  answerQuestions(
+    id: string,
+    answers: import('./agent-execution').QuestionAnswers | null,
+  ): Promise<void>;
+  controlAgent(sessionId: string, threadId: string, action: 'interrupt' | 'resume'): Promise<void>;
   listFiles(projectId: string, path: string): Promise<FileEntry[]>;
   readFile(projectId: string, path: string): Promise<string>;
   diff(projectId: string): Promise<string>;

@@ -390,12 +390,14 @@ export const readOnlyToolSpecs = toolSpecs.filter((t) =>
 );
 export const fileHash = (content: string) => createHash('sha256').update(content).digest('hex');
 
-export async function projectInstructions(root: string) {
+export async function projectInstructions(root: string, rulesOnly = false) {
   const names = await files(root);
   const wanted = names.filter(
     (f) =>
-      /^(agents?\.md|readme\.md|package\.json|pyproject\.toml|cargo\.toml)$/i.test(f.name) &&
-      !f.directory,
+      (rulesOnly
+        ? /^agents?\.md$/i
+        : /^(agents?\.md|readme\.md|package\.json|pyproject\.toml|cargo\.toml)$/i
+      ).test(f.name) && !f.directory,
   );
   const result: { path: string; content: string }[] = [];
   for (const f of wanted)

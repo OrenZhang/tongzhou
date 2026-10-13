@@ -2571,6 +2571,69 @@ input[type='checkbox'] {
 .process-timeline[hidden] {
   display: none;
 }
+.agent-plan ol {
+  margin: 5px 0;
+  padding: 0;
+  list-style: none;
+}
+.execution-meta {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.agent-activity {
+  font-size: 12px;
+}
+.agent-activity summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  cursor: pointer;
+}
+.agent-activity-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.agent-activity summary small {
+  color: var(--muted);
+}
+.agent-activity summary button {
+  min-height: 24px;
+  height: 24px;
+  padding: 2px 7px;
+  font-size: 11px;
+}
+.agent-activity p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 180px;
+  overflow: auto;
+  margin: 5px 0;
+}
+.agent-plan li {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 3px 0;
+  color: var(--secondary-text);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.agent-plan li > svg {
+  flex-shrink: 0;
+  align-self: center;
+}
+.agent-plan li[data-status='completed'] {
+  color: var(--muted);
+}
+.agent-plan li[data-status='inProgress'] {
+  color: var(--text);
+}
+.agent-plan li span,
+.agent-plan > small {
+  overflow-wrap: anywhere;
+}
 .process-phase {
   color: var(--muted);
   font-size: 11px;

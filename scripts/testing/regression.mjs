@@ -37,6 +37,8 @@ const suites = [
   'native',
   'updates',
   'dynamic-tools',
+  'codex-platform',
+  'codex-interactions',
   'request-identity',
   'node-identity',
   'codex-identity',

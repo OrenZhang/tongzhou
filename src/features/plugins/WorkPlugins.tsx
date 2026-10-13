@@ -676,7 +676,7 @@ export function WorkPlugins({
                 />
                 在会话中启用此插件
               </label>
-              <p>凭据使用系统加密保存。工具能访问的范围取决于服务端授权，执行遵循同舟会话权限。</p>
+              <p>凭据加密保存在本机。工具能访问的范围取决于服务端授权，执行遵循同舟会话权限。</p>
               <div className="row">
                 <button className="primary" disabled={busy}>
                   保存连接

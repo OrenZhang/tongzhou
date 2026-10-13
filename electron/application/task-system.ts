@@ -29,7 +29,10 @@ export async function createTaskSystem(
   const terminals = new Terminals(store, events.changed, dataDir);
   const sessions = new SessionLifecycle(store, dataDir, {
     isActive: (id) => tasks!.isActive(id),
-    removeEngineSession: (id) => execution!.removeSession(id),
+    removeEngineSession: (id) => {
+      approvals.cancelSession(id);
+      return execution!.removeSession(id);
+    },
     stopTerminalSession: (id) => terminals.stopSession(id),
     changed: events.changed,
   });

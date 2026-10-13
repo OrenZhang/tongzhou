@@ -15,6 +15,7 @@ import type {
 export interface SecretCodec {
   encrypt(value: string): string;
   decrypt(value: string): string;
+  needsReplacement?(value: string): boolean;
 }
 export const STORE_SCHEMA_VERSION = '2';
 export class Store {
@@ -122,14 +123,20 @@ export class Store {
     this.db.prepare('DELETE FROM objects WHERE kind=? AND id=?').run(kind, id);
   }
   providers(): Provider[] {
-    return this.list<Provider>('provider').map((p) => ({
-      ...p,
-      thinkingEnabled: p.thinkingEnabled !== false,
-      hasSecret: !!this.db.prepare('SELECT id FROM secrets WHERE id=?').get(p.id),
-    }));
+    return this.list<Provider>('provider').map((p) => {
+      const secret = this.db.prepare('SELECT value FROM secrets WHERE id=?').get(p.id) as
+        | { value: string }
+        | undefined;
+      return {
+        ...p,
+        thinkingEnabled: p.thinkingEnabled !== false,
+        hasSecret: !!secret,
+        secretNeedsUpdate: !!secret && !!this.codec.needsReplacement?.(secret.value),
+      };
+    });
   }
   saveProvider(input: ProviderInput): Provider {
-    const { secret, clearSecret, hasSecret: _, ...provider } = input;
+    const { secret, clearSecret, hasSecret: _, secretNeedsUpdate: _update, ...provider } = input;
     provider.thinkingEnabled ??=
       this.list<Provider>('provider').find((p) => p.id === input.id)?.thinkingEnabled ?? true;
     provider.enabled ??=
@@ -416,6 +423,7 @@ export class Store {
         for (const kind of [
           'run',
           'runEvent',
+          'userQuestion',
           'pendingInput',
           'engineSegment',
           'modelCallState',

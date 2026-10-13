@@ -3,6 +3,8 @@ import { ChevronDown, ShieldAlert } from 'lucide-react';
 import type { Approval } from '../../shared/types';
 import { errorMessage } from '../../lib/feedback';
 import './approval.css';
+import { QuestionCard } from './QuestionCard';
+import type { QuestionAnswers } from '../../shared/agent-execution';
 
 function approvalDescription(approval: Approval) {
   let title = approval.title;
@@ -83,19 +85,25 @@ function ApprovalCard({
 export function ApprovalQueue({
   approvals,
   onDecide,
+  onAnswer,
 }: {
   approvals: Approval[];
   onDecide(id: string, allow: boolean): Promise<void>;
+  onAnswer(id: string, answers: QuestionAnswers | null): Promise<void>;
 }) {
   if (!approvals.length) return null;
   return (
     <div className="approval-queue" aria-label="待批准操作">
       <p className="approval-count" role="status">
-        {approvals.length} 项操作等待你批准
+        {approvals.length} 项等待你处理
       </p>
-      {approvals.map((approval) => (
-        <ApprovalCard key={approval.id} approval={approval} onDecide={onDecide} />
-      ))}
+      {approvals.map((approval) =>
+        approval.kind === 'question' ? (
+          <QuestionCard key={approval.id} request={approval} onAnswer={onAnswer} />
+        ) : (
+          <ApprovalCard key={approval.id} approval={approval} onDecide={onDecide} />
+        ),
+      )}
     </div>
   );
 }

@@ -431,6 +431,321 @@ describe('live execution permissions', () => {
   });
 });
 describe('locked Codex resume and steer contracts', () => {
+  it('answers structured RPC questions and removes server-resolved questions without replying twice', async () => {
+    const f = await fixture();
+    fake.hold = true;
+    f.runtime.start(f.input);
+    await vi.waitFor(() => expect(fake.calls.some((c) => c.method === 'turn/start')).toBe(true));
+    const client = fake.instances.at(-1),
+      threadId = fake.calls.find((c) => c.method === 'turn/start').params.threadId,
+      turnId = 'turn-' + fake.next;
+    const params = {
+      threadId,
+      turnId,
+      itemId: 'ask',
+      isBlocking: true,
+      autoResolutionMs: null,
+      questions: [
+        {
+          id: 'scope',
+          header: '范围',
+          question: '处理哪个范围',
+          isOther: true,
+          isSecret: false,
+          options: [{ label: 'A', description: '当前目录' }],
+        },
+      ],
+    };
+    client.emit('request', { id: 'ask-1', method: 'item/tool/requestUserInput', params });
+    await vi.waitFor(() => expect(f.runtime.snapshot().approvals).toHaveLength(1));
+    f.system.approvals.answer(f.runtime.snapshot().approvals[0].id, { scope: ['自定义范围'] });
+    await vi.waitFor(() =>
+      expect(fake.replies.find((r) => r.id === 'ask-1')?.result).toEqual({
+        answers: { scope: { answers: ['自定义范围'] } },
+      }),
+    );
+    client.emit('request', { id: 'ask-2', method: 'item/tool/requestUserInput', params });
+    await vi.waitFor(() => expect(f.runtime.snapshot().approvals).toHaveLength(1));
+    client.emit('notification', {
+      method: 'serverRequest/resolved',
+      params: { threadId, requestId: 'ask-2' },
+    });
+    await vi.waitFor(() => expect(f.runtime.snapshot().approvals).toEqual([]));
+    expect(fake.replies.some((r) => r.id === 'ask-2')).toBe(false);
+    await f.runtime.cancel(f.input.sessionId);
+    await f.runtime.waitForIdle();
+  });
+
+  it('records the sent prompt and updates handoff context without discarding the native thread', async () => {
+    const f = await fixture();
+    const memory = {
+      goal: 'original goal',
+      constraints: [],
+      decisions: [],
+      completed: [],
+      nextSteps: [],
+      sources: [],
+    };
+    f.system.domains.memories.save(f.input.sessionId, memory);
+    const first = f.runtime.start(f.input);
+    await f.runtime.waitForIdle();
+    const started = fake.calls.find((c) => c.method === 'thread/start');
+    const run = f.store.get<Run>('run', first);
+    expect(started.params.developerInstructions).toBe(run.config?.instructions);
+    expect(run.config?.instructionSources?.reduce((n, p) => n + p.chars + 2, -2)).toBe(
+      run.config?.instructions.length,
+    );
+    expect(run.config?.instructions).not.toContain('original goal');
+    expect(fake.calls.find((c) => c.method === 'turn/start').params.input[0].text).toContain(
+      'original goal',
+    );
+    f.system.domains.memories.save(f.input.sessionId, { ...memory, goal: 'updated goal' });
+    f.runtime.start({ ...f.input, prompt: 'continue' });
+    await f.runtime.waitForIdle();
+    expect(fake.calls.filter((c) => c.method === 'thread/start')).toHaveLength(1);
+    expect(
+      fake.calls.filter((c) => c.method === 'turn/start').at(-1).params.input[0].text,
+    ).toContain('updated goal');
+  });
+
+  it('keeps asynchronous questions after turn completion and sends the answer in the next turn once', async () => {
+    const f = await fixture();
+    fake.hold = true;
+    f.runtime.start(f.input);
+    await vi.waitFor(() => expect(fake.calls.some((c) => c.method === 'turn/start')).toBe(true));
+    const client = fake.instances.at(-1),
+      threadId = fake.calls.find((c) => c.method === 'turn/start').params.threadId,
+      turnId = 'turn-' + fake.next;
+    const params = {
+      threadId,
+      turnId,
+      item: {
+        id: 'async-question',
+        type: 'agentMessage',
+        phase: 'commentary',
+        text: '请选择范围',
+        delivery: 'async',
+        questions: [{ title: '处理哪个范围', options: ['当前目录', '全部'] }],
+      },
+    };
+    client.emit('notification', { method: 'item/completed', params });
+    client.emit('notification', { method: 'item/completed', params });
+    fake.hold = false;
+    client.complete(threadId, turnId);
+    await f.runtime.waitForIdle();
+    expect(f.runtime.snapshot().approvals).toHaveLength(1);
+    const request = f.runtime.snapshot().approvals[0];
+    f.system.approvals.answer(request.id, { q0: ['当前目录'] });
+    await vi.waitFor(() =>
+      expect(fake.calls.filter((c) => c.method === 'turn/start')).toHaveLength(2),
+    );
+    await f.runtime.waitForIdle();
+    expect(
+      fake.calls.filter((c) => c.method === 'turn/start').at(-1).params.input[0].text,
+    ).toContain('补充回答');
+    expect(
+      f.store
+        .messages(f.input.sessionId)
+        .filter((m) => m.role === 'user' && m.content.includes('补充回答')),
+    ).toHaveLength(1);
+    expect(() => f.system.approvals.answer(request.id, { q0: ['全部'] })).toThrow('失效');
+  });
+
+  it('does not start another turn when an asynchronous answer races with stopping the task', async () => {
+    const f = await fixture();
+    fake.hold = true;
+    f.runtime.start(f.input);
+    await vi.waitFor(() => expect(fake.calls.some((c) => c.method === 'turn/start')).toBe(true));
+    const client = fake.instances.at(-1);
+    const threadId = fake.calls.find((c) => c.method === 'turn/start').params.threadId;
+    client.emit('notification', {
+      method: 'item/completed',
+      params: {
+        threadId,
+        turnId: 'turn-' + fake.next,
+        item: {
+          id: 'cancel-question',
+          type: 'agentMessage',
+          text: '请选择范围',
+          delivery: 'async',
+          questions: [{ title: '处理哪个范围', options: ['当前目录', '全部'] }],
+        },
+      },
+    });
+    await vi.waitFor(() => expect(f.runtime.snapshot().approvals).toHaveLength(1));
+    f.system.approvals.answer(f.runtime.snapshot().approvals[0].id, { q0: ['当前目录'] });
+    await f.runtime.cancel(f.input.sessionId);
+    await f.runtime.waitForIdle();
+    expect(fake.calls.filter((c) => c.method === 'turn/start')).toHaveLength(1);
+    expect(f.runtime.snapshot().approvals).toEqual([]);
+    expect(f.store.messages(f.input.sessionId).some((m) => m.content.includes('补充回答'))).toBe(
+      false,
+    );
+  });
+
+  it('records model routing and native phases without letting foreign or old-turn events overwrite them', async () => {
+    const f = await fixture();
+    fake.hold = true;
+    const id = f.runtime.start(f.input);
+    await vi.waitFor(() => expect(fake.calls.some((c) => c.method === 'turn/start')).toBe(true));
+    const client = fake.instances.at(-1),
+      threadId = fake.calls.find((c) => c.method === 'turn/start').params.threadId,
+      turnId = 'turn-' + fake.next;
+    const notify = (method: string, extra: any) =>
+      client.emit('notification', { method, params: { threadId, turnId, ...extra } });
+    notify('model/rerouted', {
+      fromModel: 'fixture-model',
+      toModel: 'actual-model',
+      reason: 'fallback',
+    });
+    notify('model/rerouted', { threadId: 'other', toModel: 'wrong' });
+    notify('item/started', { item: { type: 'agentMessage', id: 'comment', phase: 'commentary' } });
+    notify('item/agentMessage/delta', { itemId: 'comment', delta: '正在核对' });
+    notify('item/completed', {
+      item: { type: 'agentMessage', id: 'comment', phase: 'commentary', text: '正在核对' },
+    });
+    notify('item/completed', { item: { type: 'contextCompaction', id: 'compact' } });
+    notify('item/completed', {
+      item: { type: 'agentMessage', id: 'final', phase: 'final_answer', text: '已验证' },
+    });
+    notify('turn/completed', { turnId: 'old', turn: { id: 'old', status: 'completed' } });
+    expect(f.store.get<Run>('run', id).status).toBe('running');
+    client.complete(threadId, turnId);
+    await f.runtime.waitForIdle();
+    expect(f.store.get<Run>('run', id).observation).toMatchObject({
+      actualModel: 'actual-model',
+      compactions: 1,
+      reroutes: [{ fromModel: 'fixture-model', toModel: 'actual-model', reason: 'fallback' }],
+    });
+    expect(
+      f.store
+        .messages(f.input.sessionId)
+        .find(
+          (m) =>
+            m.id === f.store.messages(f.input.sessionId).find((m) => m.content === '正在核对')?.id,
+        )?.phase,
+    ).toBe('commentary');
+    expect(f.store.messages(f.input.sessionId).find((m) => m.content === '已验证')).toMatchObject({
+      phase: 'final_answer',
+      model: 'actual-model',
+    });
+  });
+  it('releases the native client and listeners if saving its final boundary fails', async () => {
+    const f = await fixture();
+    const put = f.store.put.bind(f.store);
+    vi.spyOn(f.store, 'put').mockImplementation((kind, value: any) => {
+      if (kind === 'engineSegment' && value.state === 'completed')
+        throw new Error('fixture disk full');
+      return put(kind, value);
+    });
+    const id = f.runtime.start(f.input);
+    await f.runtime.waitForIdle();
+    expect(f.store.get<Run>('run', id)).toMatchObject({
+      status: 'failed',
+      error: 'fixture disk full',
+    });
+    const client = fake.instances.at(-1);
+    expect(client.stopped).toBe(true);
+    expect(client.listenerCount('notification')).toBe(0);
+    expect(client.listenerCount('failure')).toBe(0);
+  });
+  it('persists native plans, isolates foreign notifications and keeps unfinished steps after failure', async () => {
+    const f = await fixture();
+    fake.hold = true;
+    const id = f.runtime.start(f.input);
+    await vi.waitFor(() => expect(fake.calls.some((c) => c.method === 'turn/start')).toBe(true));
+    const turn = fake.calls.find((c) => c.method === 'turn/start');
+    const client = fake.instances.at(-1);
+    const plan = {
+      explanation: '先验证现状再修改',
+      plan: [
+        { step: '读取现状', status: 'completed' },
+        { step: '实现并验证', status: 'inProgress' },
+      ],
+    };
+    const notify = (params: any) =>
+      client.emit('notification', { method: 'turn/plan/updated', params });
+    notify({ threadId: 'other', turnId: 'turn-' + fake.next, ...plan });
+    expect(f.store.get<Run>('run', id).plan).toBeUndefined();
+    notify({ threadId: turn.params.threadId, turnId: 'turn-' + fake.next, ...plan });
+    notify({
+      threadId: turn.params.threadId,
+      turnId: 'turn-' + fake.next,
+      plan: [{ step: 'invalid', status: 'done' }],
+    });
+    expect(f.store.get<Run>('run', id).plan).toEqual(plan);
+    expect(f.runtime.events(f.input.sessionId).filter((e) => e.type === 'plan')).toHaveLength(1);
+    client.emit('notification', {
+      method: 'turn/completed',
+      params: {
+        threadId: turn.params.threadId,
+        turn: { id: 'turn-' + fake.next, status: 'failed', error: { message: 'fixture failure' } },
+      },
+    });
+    await f.runtime.waitForIdle();
+    expect(f.store.get<Run>('run', id)).toMatchObject({ status: 'failed', plan });
+  });
+
+  it.each(['failed', 'interrupted'] as const)(
+    'resumes the durable native thread after a %s turn on explicit continuation',
+    async (status) => {
+      const f = await fixture();
+      fake.hold = true;
+      const id = f.runtime.start(f.input);
+      await vi.waitFor(() => expect(fake.calls.some((c) => c.method === 'turn/start')).toBe(true));
+      const turn = fake.calls.find((c) => c.method === 'turn/start');
+      const old = fake.instances.at(-1);
+      if (status === 'interrupted') await f.runtime.cancel(f.input.sessionId);
+      else
+        old.emit('notification', {
+          method: 'turn/completed',
+          params: {
+            threadId: turn.params.threadId,
+            turn: { id: 'turn-' + fake.next, status, error: { message: 'fixture failure' } },
+          },
+        });
+      await f.runtime.waitForIdle();
+      expect(f.store.get<any>('engineSegment', id)).toMatchObject({
+        state: status,
+        completed: false,
+      });
+      expect(fake.calls.filter((c) => c.method === 'turn/start')).toHaveLength(1);
+      fake.hold = false;
+      f.runtime.start({ ...f.input, prompt: '检查现状后继续' });
+      await f.runtime.waitForIdle();
+      expect(fake.calls.filter((c) => c.method === 'thread/start')).toHaveLength(1);
+      expect(fake.calls.filter((c) => c.method === 'thread/resume')).toHaveLength(1);
+      const resumed = fake.calls.filter((c) => c.method === 'turn/start').at(-1).params;
+      expect(resumed.threadId).toBe(turn.params.threadId);
+      expect(resumed.input[0].text).toContain('不要重放');
+      expect(resumed.input[0].text).not.toContain('以下 JSON 行是历史资料');
+    },
+  );
+
+  it('starts a fresh thread when an accepted failed prompt is edited', async () => {
+    const f = await fixture();
+    fake.hold = true;
+    f.runtime.start(f.input);
+    await vi.waitFor(() => expect(fake.calls.some((c) => c.method === 'turn/start')).toBe(true));
+    const turn = fake.calls.find((c) => c.method === 'turn/start');
+    fake.instances.at(-1).emit('notification', {
+      method: 'turn/completed',
+      params: {
+        threadId: turn.params.threadId,
+        turn: { id: 'turn-' + fake.next, status: 'failed', error: { message: 'fixture failure' } },
+      },
+    });
+    await f.runtime.waitForIdle();
+    const prompt = f.store.messages(f.input.sessionId).find((m) => m.role === 'user')!;
+    fake.hold = false;
+    f.runtime.start({ ...f.input, prompt: 'replacement request' }, prompt.id);
+    await f.runtime.waitForIdle();
+    expect(fake.calls.filter((c) => c.method === 'thread/start')).toHaveLength(2);
+    expect(fake.calls.filter((c) => c.method === 'thread/resume')).toHaveLength(0);
+    const text = fake.calls.filter((c) => c.method === 'turn/start').at(-1).params.input[0].text;
+    expect(text).toBe('replacement request');
+  });
+
   it.each(['openai-chat', 'openai-responses', 'anthropic', 'gemini', 'minimax', 'kimi'] as const)(
     'always delegates %s conversations to Codex with a model-only transport',
     async (protocol) => {

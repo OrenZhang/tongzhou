@@ -10,8 +10,8 @@ export function thinkingRequest(
   const fixed = '所选模型不能彻底关闭思考，已使用支持的最低强度。';
   if (['openai-chat', 'openai-responses'].includes(p.protocol)) {
     if (/^(gpt-[56](?:[.-]|$)|o[134](?:[-.]|$))/.test(m) && !m.includes('chat')) {
-      const canOff = /^gpt-5\.[1-9]/.test(m) || /^gpt-6.*(?:sol|luna)/.test(m);
-      const effort = on ? 'medium' : canOff ? 'none' : 'low';
+      const canOff = /^gpt-5\.[1-9]/.test(m) || /^gpt-6-(?:sol|luna)(?:-|$)/.test(m);
+      const effort = on ? (p.reasoningEffort ?? 'medium') : canOff ? 'none' : 'low';
       return {
         body:
           p.protocol === 'openai-chat'
@@ -79,20 +79,33 @@ export function thinkingRequest(
   return { body: {} };
 }
 
-export function codexThinking(model: any, enabled = true): { effort?: string; note?: string } {
+export function codexThinking(
+  model: any,
+  enabled = true,
+  requested?: Provider['reasoningEffort'],
+): { effort?: string; note?: string } {
   const options: string[] = (model?.supportedReasoningEfforts ?? []).map(
     (o: any) => o.reasoningEffort,
   );
-  if (!options.length) return {};
+  if (!options.length) {
+    if (enabled && requested)
+      throw new Error('模型目录未提供思考强度，无法确认所选档位；请选择模型默认。');
+    return {};
+  }
+  if (enabled && requested) {
+    if (!options.includes(requested))
+      throw new Error(`当前模型不支持思考强度 ${requested}；支持：${options.join('、')}`);
+    return { effort: requested };
+  }
   if (!enabled && options.includes('none')) return { effort: 'none' };
   const positive = options.filter((v) => v !== 'none');
   if (!positive.length)
     return { effort: options[0], note: '此模型不支持思考，已使用模型支持的模式。' };
   const effort = enabled
-    ? positive.includes('medium')
-      ? 'medium'
-      : positive.includes(model.defaultReasoningEffort)
-        ? model.defaultReasoningEffort
+    ? positive.includes(model.defaultReasoningEffort)
+      ? model.defaultReasoningEffort
+      : positive.includes('medium')
+        ? 'medium'
         : positive[0]
     : (['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'].find((v) =>
         positive.includes(v),

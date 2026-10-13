@@ -64,14 +64,18 @@ export function ProviderSecretField({
       if (version === generation.current) setBusy(false);
     }
   };
-  const available = !!provider.secret || (!!provider.hasSecret && !provider.clearSecret);
+  const available =
+    !!provider.secret ||
+    (!!provider.hasSecret && !provider.clearSecret && !provider.secretNeedsUpdate);
   return (
     <Field
       label="API Key / Token"
       hint={
-        provider.hasSecret
-          ? '已有密钥；留空保留，填写可替换。'
-          : '密钥加密保存，可在本机查看或复制。'
+        provider.secretNeedsUpdate && !provider.secret
+          ? '旧版密钥已保留；已停止访问钥匙串，请重新填写并保存。'
+          : provider.hasSecret
+            ? '已有密钥；留空保留，填写可替换。'
+            : '密钥加密保存，可在本机查看或复制。'
       }
     >
       <div className="provider-secret-control">
@@ -82,7 +86,11 @@ export function ProviderSecretField({
           disabled={provider.auth === 'none' || busy}
           value={provider.secret || (visible ? saved : '')}
           placeholder={
-            provider.hasSecret && !provider.clearSecret ? '已保存，点击查看或复制' : '输入密钥'
+            provider.secretNeedsUpdate
+              ? '请重新填写密钥（不访问钥匙串）'
+              : provider.hasSecret && !provider.clearSecret
+                ? '已保存，点击查看或复制'
+                : '输入密钥'
           }
           onChange={(e) => onChange(e.target.value)}
         />

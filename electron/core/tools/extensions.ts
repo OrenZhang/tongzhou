@@ -586,6 +586,12 @@ export class ToolScope {
   has(name: string) {
     return this.handlers.has(name);
   }
+  assertAvailable(name: string) {
+    const handler = this.handlers.get(name);
+    if (!handler) throw new Error('工具未启用或没有权限：' + name);
+    if (!handler.allowed()) throw new Error('工具已停用或配置已改变，请在下一轮使用新配置');
+    if (this.closed || this.signal.aborted) throw new Error('工具执行已停止');
+  }
   call(name: string, args: any, callId: string = randomUUID()): Promise<ToolOutput> {
     if (this.seen.has(callId)) return this.seen.get(callId)!;
     const pending = this.execute(name, args);
@@ -593,10 +599,8 @@ export class ToolScope {
     return pending;
   }
   private async execute(name: string, args: any): Promise<ToolOutput> {
-    const handler = this.handlers.get(name);
-    if (!handler) throw new Error('工具未启用或没有权限：' + name);
-    if (!handler.allowed()) throw new Error('工具已停用或配置已改变，请在下一轮使用新配置');
-    if (this.closed || this.signal.aborted) throw new Error('工具执行已停止');
+    this.assertAvailable(name);
+    const handler = this.handlers.get(name)!;
     let result: ToolOutput;
     try {
       if (!args || Array.isArray(args) || typeof args !== 'object')
@@ -635,14 +639,14 @@ export class ToolScope {
 }
 
 export function skillInstructions(store: Store) {
-  return store
+  const summaries = store
     .list<SkillRecord>('skill')
     .filter((s) => s.enabled)
-    .map(
-      (s) =>
-        `\n[可用 Skill：${s.name}；ID：${s.id}] ${s.description}\n任务相关时调用 read_skill_file 读取 SKILL.md，按需使用；不自动扩大工具权限。`,
-    )
+    .map((s) => `[${s.name}；ID：${s.id}] ${s.description}`)
     .join('\n');
+  return summaries
+    ? '相关任务才用 read_skill_file 读取 SKILL.md，技能不扩大权限。\n' + summaries
+    : '';
 }
 export async function importSkillDirectory(root: string): Promise<SkillRecord> {
   const instructions = await readFile(await within(root, 'SKILL.md'), 'utf8');

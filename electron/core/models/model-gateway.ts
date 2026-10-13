@@ -6,6 +6,8 @@ import type { Message, Provider } from '../../../src/shared/types';
 import { completeRequest, type CompletionInput, type Completion, type ToolSpec } from './providers';
 import { redact } from '../../services/storage/validation';
 import { isContextOverflow } from '../runtime/history';
+import { modelProvider } from '../../../src/shared/model-protocol';
+import { relayResponses } from './responses-relay';
 
 export interface ModelConnection {
   provider: Provider;
@@ -18,7 +20,7 @@ type ThoughtState = Pick<Message, 'anthropicContent' | 'reasoningContent' | 'res
   signatureModel?: string;
 };
 
-/** Protocol conversion only: no tool handlers, task loop, or history compaction.
+/** Model transport only: no tool handlers, task loop, or history compaction.
  * Codex owns those responsibilities, including the decision to call a tool. */
 export function decodeModelRequest(body: any, sessionId: string) {
   if (!body || !Array.isArray(body.input) || !Array.isArray(body.tools ?? []))
@@ -206,9 +208,23 @@ export async function modelGateway(options: {
         if (Buffer.byteLength(raw) > 32_000_000) throw new Error('模型请求超过 32 MB');
       }
       const body = JSON.parse(raw);
-      const decoded = decodeModelRequest(body, options.sessionId);
-      const connection = await options.resolve();
+      const resolved = await options.resolve();
+      const connection = {
+        ...resolved,
+        provider: modelProvider(resolved.provider, resolved.model),
+      };
       secret = connection.secret;
+      // A Responses-compatible endpoint does not imply native Codex tool grammar
+      // support for every model. Keep the established adapter for other families.
+      if (
+        connection.provider.protocol === 'openai-responses' &&
+        /^(?:.*\/)?gpt-6(?:[.-]|$)/i.test(connection.model) &&
+        !options.complete
+      ) {
+        await relayResponses(body, connection, res, controller.signal, options.transport);
+        return;
+      }
+      const decoded = decodeModelRequest(body, options.sessionId);
       for (const m of decoded.messages) {
         const callId = m.toolCalls?.[0]?.id;
         const state = callId

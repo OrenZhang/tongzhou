@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { normalizeProxyUrl } from '../../../src/shared/provider-network';
 import { apiProtocols } from '../../../src/shared/model-protocol';
+import { reasoningEfforts } from '../../../src/shared/model-reasoning';
 const id = z
   .string()
   .min(1)
@@ -11,6 +12,7 @@ export const providerSchema = z
     id,
     enabled: z.boolean().optional(),
     thinkingEnabled: z.boolean().optional(),
+    reasoningEffort: z.enum(reasoningEfforts).optional(),
     name: z.string().trim().min(1).max(100),
     protocol: z.enum([
       'openai-chat',

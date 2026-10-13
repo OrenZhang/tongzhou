@@ -582,7 +582,7 @@ export default function App() {
                     if (target) activateSession(target);
                   }}
                 >
-                  待批准 ·{' '}
+                  待处理 ·{' '}
                   {
                     data.approvals.filter((a) => view !== 'workspace' || a.sessionId !== sessionId)
                       .length
@@ -919,6 +919,9 @@ export default function App() {
                                 </div>
                               ) : undefined
                             }
+                            onAgentControl={(threadId, action) =>
+                              api.controlAgent(sessionId, threadId, action)
+                            }
                             onCopy={(message) =>
                               void perform(async () => {
                                 await api.copyText(message.content);
@@ -948,6 +951,10 @@ export default function App() {
                 <div className="composer-wrap">
                   <ApprovalQueue
                     approvals={data.approvals.filter((a) => a.sessionId === sessionId)}
+                    onAnswer={async (id, answers) => {
+                      await api.answerQuestions(id, answers);
+                      await refresh();
+                    }}
                     onDecide={async (id, allow) => {
                       await api.approve(id, allow);
                       await refresh();
@@ -1249,7 +1256,7 @@ export default function App() {
                         <>
                           <span className="live-dot" />
                           {data.approvals.some((approval) => approval.sessionId === sessionId)
-                            ? '等待你处理审批'
+                            ? '有问题或审批需要你处理'
                             : `${running.agentName} · ${running.phase || '正在工作'}`}
                         </>
                       ) : (
@@ -1311,7 +1318,7 @@ export default function App() {
                 <div className="info-strip">
                   <ShieldCheck size={17} />
                   <span>
-                    API 密钥通过操作系统加密保存。每次运行使用独立配置，切换连接不会覆盖已有会话。
+                    API 密钥加密保存在本机。每次运行使用独立配置，切换连接不会覆盖已有会话。
                   </span>
                 </div>
                 <div className="collection-toolbar">

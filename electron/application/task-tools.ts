@@ -1,6 +1,5 @@
 import { botSettings } from '../services/bots/settings';
 import { botClientPolicy } from '../services/bots/client-policy';
-import botPrompts from '../../prompts/bots.json';
 import type { RunInput } from '../../src/shared/types';
 import { z } from 'zod';
 import type { Store } from '../services/storage/store';
@@ -11,9 +10,6 @@ import type { ComputerAdapter } from '../core/tools/extensions';
 import type { TaskToolPreparation } from '../core/task-contracts';
 import { executeTool, toolSpecs, readOnlyToolSpecs } from '../core/tools/workspace';
 import { historyChars } from '../core/runtime/history';
-import artifactPrompts from '../../prompts/artifacts.json';
-import { isUserSession } from '../../src/shared/session-scope';
-import { recallInstructions } from '../modules/sessions/task-memory';
 import { attachEnvironmentTools } from '../core/tools/environment';
 
 /** Application composition: task orchestration does not select or implement business tools. */
@@ -30,15 +26,7 @@ export function taskToolPreparation(
     const context = run.botContext;
     const policy =
       context && startBotTask ? botClientPolicy(store, context, run.id, startBotTask) : undefined;
-    if (context) {
-      if (botSettings(store).mode === 'chat') {
-        agent.instructions +=
-          '\n当前为机器人仅聊天模式。直接回答用户问题，保持当前聊天上下文。没有工作台、文件、配置或其他会话的访问工具，不得声称已查询或执行这些操作。';
-        return;
-      }
-      agent.instructions += '\n' + botPrompts.instructions.join('\n');
-    }
-    if (isUserSession(session)) agent.instructions += recallInstructions();
+    if (context && botSettings(store).mode === 'chat') return;
     if (!session.knowledgeJob) attachEnvironmentTools(scope);
     if (!session.knowledgeJob) await scope.prepare(store, agent, computer, project ?? undefined);
     else if (session.contentContext) scope.prepareSkills(store);
@@ -51,8 +39,6 @@ export function taskToolPreparation(
         () => changed(),
         agent.permission === 'read-only',
       );
-      if (agent.permission !== 'read-only')
-        agent.instructions += '\n' + artifactPrompts.instructions.join('\n');
       scope.add(
         {
           name: 'read_attachment',

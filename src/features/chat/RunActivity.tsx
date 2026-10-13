@@ -1,8 +1,11 @@
 import { useEffect, useId, useState, type ReactNode } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { Check, ChevronDown, Circle } from 'lucide-react';
 import type { Run, RunEvent, Snapshot, TongzhouAPI } from '../../shared/types';
 import { formatDuration } from '../../shared/turns';
 import { Spinner } from '../../components/components';
+import { agentPlan, parseAgentPlan } from '../../shared/agent-plan';
+import { AgentActivity } from './AgentActivity';
+import type { ChildAgent, ExecutionObservation } from '../../shared/agent-execution';
 
 export function useRunEvents(api: TongzhouAPI, sessionId: string) {
   const [hasEarlier, setHasEarlier] = useState(false);
@@ -76,6 +79,7 @@ export function TurnProcess({
   hasContent,
   children,
   collapsedContent,
+  onAgentControl,
 }: {
   events: RunEvent[];
   run?: Run;
@@ -83,10 +87,31 @@ export function TurnProcess({
   hasContent: boolean;
   children: ReactNode;
   collapsedContent?: ReactNode;
+  onAgentControl?: (id: string, action: 'interrupt' | 'resume') => Promise<void>;
 }) {
   const [now, setNow] = useState(Date.now());
   const [manual, setManual] = useState<{ phase: string; open: boolean }>();
   const contentId = useId();
+  const eventPlan = events
+    .filter((e) => e.type === 'plan')
+    .map((e) => parseAgentPlan(e.text))
+    .findLast(Boolean);
+  const savedPlan = agentPlan(run?.plan);
+  const plan = active ? (eventPlan ?? savedPlan) : (savedPlan ?? eventPlan);
+  const snapshot = <T,>(type: RunEvent['type']): T | undefined => {
+    try {
+      return JSON.parse(events.filter((e) => e.type === type).at(-1)?.text ?? 'null') ?? undefined;
+    } catch {
+      return;
+    }
+  };
+  const agents =
+    (active
+      ? (snapshot<ChildAgent[]>('agents') ?? run?.agents)
+      : (run?.agents ?? snapshot<ChildAgent[]>('agents'))) ?? [];
+  const observation = active
+    ? (snapshot<ExecutionObservation>('observation') ?? run?.observation)
+    : (run?.observation ?? snapshot<ExecutionObservation>('observation'));
   useEffect(() => {
     if (!active) return;
     setNow(Date.now());
@@ -96,7 +121,10 @@ export function TurnProcess({
   const phase = events.filter((e) => e.type === 'phase').at(-1)?.text ?? run?.phase ?? '准备上下文';
   const phaseKey = active ? 'active' : 'finished';
   const explicitlyExpanded = manual?.phase === phaseKey && manual.open;
-  const expanded = manual?.phase === phaseKey ? manual.open : active && hasContent;
+  const expanded =
+    manual?.phase === phaseKey
+      ? manual.open
+      : active && (hasContent || !!plan || agents.length > 0);
   const labels: Record<string, string> = {
     准备上下文: '准备中',
     准备工具: '准备中',
@@ -113,7 +141,7 @@ export function TurnProcess({
   const output = ordered.find(
     (e) =>
       (!waiting || e.time >= waiting.time) &&
-      (e.text === '正在回复' || e.text === '思考中' || e.text === '调用工具'),
+      ['正在回复', '正在说明进度', '思考中', '调用工具'].includes(e.text),
   );
   const timing =
     run && waiting
@@ -137,8 +165,51 @@ export function TurnProcess({
           <ChevronDown size={13} className={expanded ? 'rotate' : ''} />
         </button>
         <div id={contentId} className="process-timeline" hidden={!expanded}>
+          {observation && (
+            <small className="execution-meta muted">
+              执行模型：{observation.actualModel}
+              {run?.config?.reasoningEffort ? ` · 思考 ${run.config.reasoningEffort}` : ''}
+              {observation.compactions > 0 ? ` · 上下文整理 ${observation.compactions} 次` : ''}
+              {run?.usageReported
+                ? ` · ${observation.usageIncomplete ? '已上报 ' : ''}Tokens ${run.inputTokens + run.outputTokens}${observation.usageIncomplete ? '（部分未上报）' : ''}`
+                : ' · 用量未上报'}
+            </small>
+          )}
+          {observation && observation.reroutes.length > 0 && (
+            <small className="muted">
+              模型调整：
+              {observation.reroutes.map((r) => `${r.fromModel} → ${r.toModel}`).join('；')}
+            </small>
+          )}
+          <AgentActivity agents={agents} active={active} onControl={onAgentControl} />
           {timing && explicitlyExpanded && (
             <small className="muted">{timing}（包含网络与服务端等待）</small>
+          )}
+          {plan && plan.plan.length > 0 && (
+            <section className="agent-plan" aria-label="任务计划">
+              <small className="muted">
+                任务计划 · {plan.plan.filter((s) => s.status === 'completed').length}/
+                {plan.plan.length}
+              </small>
+              <ol>
+                {plan.plan.map((step, index) => (
+                  <li key={index} data-status={step.status}>
+                    {step.status === 'completed' ? (
+                      <Check size={13} aria-label="已完成" />
+                    ) : step.status === 'inProgress' && active ? (
+                      <Spinner />
+                    ) : (
+                      <Circle
+                        size={11}
+                        aria-label={step.status === 'inProgress' ? '未完成' : '待处理'}
+                      />
+                    )}
+                    <span>{step.step}</span>
+                  </li>
+                ))}
+              </ol>
+              {plan.explanation && <small className="muted">{plan.explanation}</small>}
+            </section>
           )}
           {children}
           {active && (
