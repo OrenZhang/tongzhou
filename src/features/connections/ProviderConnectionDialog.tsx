@@ -428,15 +428,26 @@ function ModelPoolFields({
   return (
     <details className="model-pool-settings" open={pool.length > 0 || undefined}>
       <summary>自动模型路由{pool.length ? ` · ${pool.length} 项` : ' · 未配置'}</summary>
-      <p className="muted">
-        配置后可在会话选择“自动路由”。按场景与阶段匹配，越具体的规则越优先，同优先级按列表顺序。通用默认处理未匹配请求；不可用连接会跳过。每轮开始选择一次，工具执行中保持模型与思考强度。
-      </p>
-      {pool.map((entry, index) => {
-        const target = connections.find((p) => p.id === entry.providerId);
-        return (
-          <div className="model-pool-entry" key={index}>
-            <Field label={`连接 · ${index + 1}`}>
+      <p className="muted">具体规则优先，未匹配时使用通用默认；每轮开始选择，执行中保持不变。</p>
+      <div className="model-pool-table">
+        {!!pool.length && (
+          <div className="model-pool-header" aria-hidden="true">
+            <span>连接</span>
+            <span>模型</span>
+            <span>场景</span>
+            <span>阶段</span>
+            <span>思考</span>
+            <span>图片</span>
+            <span />
+          </div>
+        )}
+        {pool.map((entry, index) => {
+          const target = connections.find((p) => p.id === entry.providerId);
+          return (
+            <div className="model-pool-entry" key={index}>
               <select
+                aria-label={`路由 ${index + 1} 连接`}
+                title={target?.name}
                 value={entry.providerId}
                 onChange={(e) =>
                   update(index, {
@@ -453,9 +464,9 @@ function ModelPoolFields({
                   </option>
                 ))}
               </select>
-            </Field>
-            <Field label="模型">
               <select
+                aria-label={`路由 ${index + 1} 模型`}
+                title={entry.model}
                 value={entry.model}
                 onChange={(e) => update(index, { model: e.target.value })}
               >
@@ -470,9 +481,8 @@ function ModelPoolFields({
                     </option>
                   ))}
               </select>
-            </Field>
-            <Field label="场景">
               <select
+                aria-label={`路由 ${index + 1} 场景`}
                 value={entry.scene}
                 onChange={(e) =>
                   update(index, { scene: e.target.value as ModelPoolEntry['scene'] })
@@ -485,9 +495,8 @@ function ModelPoolFields({
                   </option>
                 ))}
               </select>
-            </Field>
-            <Field label="阶段">
               <select
+                aria-label={`路由 ${index + 1} 阶段`}
                 value={entry.stage}
                 onChange={(e) =>
                   update(index, { stage: e.target.value as ModelPoolEntry['stage'] })
@@ -500,9 +509,8 @@ function ModelPoolFields({
                   </option>
                 ))}
               </select>
-            </Field>
-            <Field label="思考强度">
               <select
+                aria-label={`路由 ${index + 1} 思考强度`}
                 value={entry.reasoningEffort ?? ''}
                 onChange={(e) =>
                   update(index, {
@@ -518,15 +526,13 @@ function ModelPoolFields({
                   </option>
                 ))}
               </select>
-            </Field>
-            <div className="row">
-              <label className="check">
+              <label className="model-pool-images" title="按模型实际能力启用图片支持">
                 <input
                   type="checkbox"
+                  aria-label={`路由 ${index + 1} 支持图片`}
                   checked={!!entry.images}
                   onChange={(e) => update(index, { images: e.target.checked })}
                 />
-                支持图片
               </label>
               <button
                 className="icon-button"
@@ -536,9 +542,9 @@ function ModelPoolFields({
                 <Trash2 size={14} />
               </button>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
       {!!pool.length && !pool.some((e) => e.scene === 'any' && e.stage === 'any') && (
         <p className="danger">请保留至少一项通用默认模型。</p>
       )}
@@ -560,9 +566,7 @@ function ModelPoolFields({
       >
         添加模型到池
       </button>
-      <p className="muted">
-        场景与阶段使用本地规则识别，可在会话中指定阶段。图片支持需按服务实际能力勾选；模型目录不代表账号有访问权限。思考档位由各协议适配，不支持的模型沿用服务默认。
-      </p>
+      <p className="muted">保存后在会话选择“自动路由”。图片支持按模型实际能力勾选。</p>
     </details>
   );
 }

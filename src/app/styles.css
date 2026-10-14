@@ -2263,29 +2263,59 @@ svg {
   grid-template-columns: 1fr 1fr;
   gap: 16px;
 }
+.model-pool-table {
+  overflow-x: auto;
+}
+.model-pool-header,
 .model-pool-entry {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  padding: 12px 0;
+  grid-template-columns: minmax(120px, 1.25fr) minmax(132px, 1.4fr) minmax(86px, 0.8fr) minmax(
+      86px,
+      0.8fr
+    ) minmax(106px, 0.9fr) 28px 28px;
+  gap: 6px;
+  min-width: 622px;
+  align-items: center;
+}
+.model-pool-header {
+  color: var(--muted);
+  font-size: 11px;
+  padding-bottom: 4px;
+}
+.model-pool-header > :nth-last-child(2) {
+  text-align: center;
+}
+.model-pool-entry {
+  padding: 5px 0;
   border-bottom: 1px solid var(--border);
 }
-.model-pool-entry .field {
-  margin: 0;
+.modal .model-pool-entry > select {
   min-width: 0;
+  width: 100%;
+  min-height: 28px;
+  height: 28px;
+  padding: 3px 6px;
+  font-size: 12px;
+  text-overflow: ellipsis;
 }
-.model-pool-entry > .row {
-  align-self: end;
-  min-height: 32px;
-  justify-content: space-between;
+.model-pool-images {
+  display: flex;
+  justify-content: center;
+}
+.model-pool-images input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+.model-pool-entry > .icon-button {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
 }
 .model-pool-settings > .secondary {
-  margin-top: 12px;
-}
-@media (max-width: 640px) {
-  .model-pool-entry {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+  margin-top: 8px;
 }
 .preset-row {
   display: flex;
