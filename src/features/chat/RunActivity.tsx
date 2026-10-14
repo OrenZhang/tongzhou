@@ -6,6 +6,7 @@ import { Spinner } from '../../components/components';
 import { agentPlan, parseAgentPlan } from '../../shared/agent-plan';
 import { AgentActivity } from './AgentActivity';
 import type { ChildAgent, ExecutionObservation } from '../../shared/agent-execution';
+import { modelScenes, modelStages } from '../../shared/model-protocol';
 
 export function useRunEvents(api: TongzhouAPI, sessionId: string) {
   const [hasEarlier, setHasEarlier] = useState(false);
@@ -165,6 +166,14 @@ export function TurnProcess({
           <ChevronDown size={13} className={expanded ? 'rotate' : ''} />
         </button>
         <div id={contentId} className="process-timeline" hidden={!expanded}>
+          {run?.routing && (
+            <small className="execution-meta muted">
+              自动路由：{modelScenes[run.routing.scene]} · {modelStages[run.routing.stage]} ·{' '}
+              {run.model}
+              {run.config?.reasoningEffort ? ` · 思考 ${run.config.reasoningEffort}` : ''}
+              {run.routing.fallback ? ' · 首选不可用，使用后备' : ''}
+            </small>
+          )}
           {observation && (
             <small className="execution-meta muted">
               执行模型：{observation.actualModel}

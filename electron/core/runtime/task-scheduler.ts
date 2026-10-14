@@ -44,6 +44,7 @@ import { ToolScope } from '../tools/extensions';
 import { projectInstructions, commandResult } from '../tools/workspace';
 import { nativeEngine } from '../../services/accounts/native-engine';
 import { redact } from '../../services/storage/validation';
+import { automaticModel, routeModel } from '../../../src/shared/model-protocol';
 
 export interface TaskResources extends DomainServices {
   events: ApplicationEvents;
@@ -330,9 +331,40 @@ export class TaskScheduler implements TaskService {
     input = { ...input };
     if (session.memoryJob || (session.automationJob && session.contentContext))
       agent.permission = 'read-only';
-    const provider = this.store.get<Provider>('provider', input.providerId);
+    const requested = { providerId: input.providerId, model: input.model };
+    let provider = this.store.get<Provider>('provider', input.providerId);
     if (provider.enabled === false)
       throw new Error('此连接已停用，请在模型中启用，或选择其他连接。');
+    let routing: Run['routing'];
+    if (input.model === automaticModel) {
+      const previous = this.store.sessionObjects<Run>('run', session.id, 1)[0]?.routing;
+      // Earlier user images are replayed when a model changes, so they also constrain routing.
+      const images =
+        attachments.some((a) => a.mimeType.startsWith('image/')) ||
+        this.store
+          .messages(session.id)
+          .some(
+            (m) =>
+              m.role === 'user' &&
+              (!!m.images?.length || m.attachments?.some((a) => a.mimeType.startsWith('image/'))),
+          );
+      const selected = routeModel(
+        provider,
+        this.store.providers(),
+        {
+          prompt: input.prompt,
+          images,
+          stage: input.routingStage,
+          previous,
+        },
+        (p) =>
+          ['codex', 'kimi', 'minimax'].includes(p.protocol) ||
+          (!!p.baseUrl && (p.auth === 'none' || (!p.secretNeedsUpdate && p.hasSecret === true))),
+      );
+      provider = selected.provider;
+      routing = selected.routing;
+      input = { ...input, providerId: provider.id, model: selected.model };
+    }
     const project =
       session.projectId && !session.knowledgeJob
         ? this.store.get<Project>('project', session.projectId)
@@ -352,6 +384,7 @@ export class TaskScheduler implements TaskService {
     )
       throw new Error('请先配置此连接的 API 密钥。');
     const run: Run = {
+      ...(routing ? { routing } : {}),
       botContext: input.botContext,
       ...(replaced ? { retryOf: replaced.runId } : {}),
       id: randomUUID(),
@@ -377,8 +410,8 @@ export class TaskScheduler implements TaskService {
     this.ledger.progress(run, 'phase', '准备上下文');
     this.store.put('session', {
       ...session,
-      providerId: provider.id,
-      model: input.model,
+      providerId: requested.providerId,
+      model: requested.model,
       agentId: agent.id,
       title:
         session.title === '新会话'
@@ -397,11 +430,14 @@ export class TaskScheduler implements TaskService {
       };
       this.ledger.replaceUnanswered(message, replaced.runId!);
     }
-    if (session.model && (session.model !== input.model || session.providerId !== provider.id))
+    if (
+      session.model &&
+      (session.model !== requested.model || session.providerId !== requested.providerId)
+    )
       this.ledger.add(
         session.id,
         'system',
-        `已切换至 ${provider.name} / ${input.model}。可移植历史将交接给新模型。`,
+        `已切换至 ${routing ? '自动路由' : `${provider.name} / ${input.model}`}。可移植历史将交接给新模型。`,
         replaced ? { runId: run.id } : {},
       );
     if (!replaced)

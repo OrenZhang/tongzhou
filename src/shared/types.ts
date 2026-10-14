@@ -25,6 +25,8 @@ export type Protocol =
   | 'codex';
 export type AuthMode = 'api-key' | 'bearer' | 'none' | 'chatgpt' | 'native';
 export interface Provider {
+  /** Optional automatic routing pool. Fixed model selections ignore it. */
+  modelPool?: import('./model-protocol').ModelPoolEntry[];
   /** Missing on older connections means enabled. */
   thinkingEnabled?: boolean;
   /** Missing means use the model's default; only supported reasoning models apply it. */
@@ -235,6 +237,7 @@ export interface Session {
   archived: boolean;
 }
 export interface Run {
+  routing?: import('./model-protocol').ModelRouting;
   agents?: import('./agent-execution').ChildAgent[];
   observation?: import('./agent-execution').ExecutionObservation;
   plan?: import('./agent-plan').AgentPlan;
@@ -351,6 +354,7 @@ export type AppEvent =
   | { type: 'message'; message: Message }
   | { type: 'approval'; approval: Approval };
 export interface RunInput {
+  routingStage?: import('./model-protocol').ModelStage;
   /** Internal origin, never accepted from client tool arguments. */
   botContext?: BotExecutionContext;
   attachmentIds?: string[];

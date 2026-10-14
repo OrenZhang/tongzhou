@@ -244,3 +244,15 @@ describe('connection-level model thinking', () => {
     ).not.toContain('opaque');
   });
 });
+
+describe('automatic routing reasoning compatibility', () => {
+  it('maps automatic effort to actual catalog capabilities without relaxing fixed selections', () => {
+    const model = {
+      supportedReasoningEfforts: [{ reasoningEffort: 'low' }, { reasoningEffort: 'high' }],
+    };
+    expect(codexThinking(model, true, 'max', false)).toMatchObject({ effort: 'high' });
+    expect(codexThinking(model, true, 'medium', false)).toMatchObject({ effort: 'low' });
+    expect(codexThinking({}, true, 'high', false)).toEqual({});
+    expect(() => codexThinking(model, true, 'max')).toThrow('不支持思考强度');
+  });
+});

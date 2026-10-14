@@ -15,6 +15,12 @@ import { protocolLabels, presets } from './provider-presets';
 import { ProviderSecretField } from './ProviderSecretField';
 import { ModelProtocolFields } from './ModelProtocolFields';
 import { reasoningEfforts, reasoningLabels } from '../../shared/model-reasoning';
+import {
+  automaticModel,
+  modelScenes,
+  modelStages,
+  type ModelPoolEntry,
+} from '../../shared/model-protocol';
 
 interface Props {
   data: Snapshot;
@@ -231,6 +237,11 @@ export function ProviderConnectionDialog({
           provider={providerEdit}
           onChange={(modelProtocols) => setProviderEdit({ ...providerEdit, modelProtocols })}
         />
+        <ModelPoolFields
+          provider={providerEdit}
+          providers={data.providers}
+          onChange={(modelPool) => setProviderEdit({ ...providerEdit, modelPool })}
+        />
         <details className="thinking-settings">
           <summary>
             高级：模型思考 ·{' '}
@@ -398,5 +409,160 @@ export function ProviderConnectionDialog({
         </button>
       </div>
     </Modal>
+  );
+}
+
+function ModelPoolFields({
+  provider,
+  providers,
+  onChange,
+}: {
+  provider: ProviderInput;
+  providers: Snapshot['providers'];
+  onChange(entries: ModelPoolEntry[]): void;
+}) {
+  const pool = provider.modelPool ?? [];
+  const connections = [provider, ...providers.filter((p) => p.id !== provider.id)];
+  const update = (index: number, patch: Partial<ModelPoolEntry>) =>
+    onChange(pool.map((entry, i) => (i === index ? { ...entry, ...patch } : entry)));
+  return (
+    <details className="model-pool-settings" open={pool.length > 0 || undefined}>
+      <summary>自动模型路由{pool.length ? ` · ${pool.length} 项` : ' · 未配置'}</summary>
+      <p className="muted">
+        配置后可在会话选择“自动路由”。按场景与阶段匹配，越具体的规则越优先，同优先级按列表顺序。通用默认处理未匹配请求；不可用连接会跳过。每轮开始选择一次，工具执行中保持模型与思考强度。
+      </p>
+      {pool.map((entry, index) => {
+        const target = connections.find((p) => p.id === entry.providerId);
+        return (
+          <div className="model-pool-entry" key={index}>
+            <Field label={`连接 · ${index + 1}`}>
+              <select
+                value={entry.providerId}
+                onChange={(e) =>
+                  update(index, {
+                    providerId: e.target.value,
+                    model: connections.find((p) => p.id === e.target.value)?.models[0] ?? '',
+                  })
+                }
+              >
+                {!target && <option value={entry.providerId}>连接已删除</option>}
+                {connections.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                    {p.enabled === false ? '（已停用）' : ''}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="模型">
+              <select
+                value={entry.model}
+                onChange={(e) => update(index, { model: e.target.value })}
+              >
+                {!target?.models.includes(entry.model) && (
+                  <option value={entry.model}>{entry.model || '请先获取模型'}（不可用）</option>
+                )}
+                {target?.models
+                  .filter((m) => m.trim() && m !== automaticModel)
+                  .map((m) => (
+                    <option key={m} value={m}>
+                      {target.modelLabels?.[m] ?? m}
+                    </option>
+                  ))}
+              </select>
+            </Field>
+            <Field label="场景">
+              <select
+                value={entry.scene}
+                onChange={(e) =>
+                  update(index, { scene: e.target.value as ModelPoolEntry['scene'] })
+                }
+              >
+                <option value="any">通用默认</option>
+                {Object.entries(modelScenes).map(([v, label]) => (
+                  <option key={v} value={v}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="阶段">
+              <select
+                value={entry.stage}
+                onChange={(e) =>
+                  update(index, { stage: e.target.value as ModelPoolEntry['stage'] })
+                }
+              >
+                <option value="any">所有阶段</option>
+                {Object.entries(modelStages).map(([v, label]) => (
+                  <option key={v} value={v}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="思考强度">
+              <select
+                value={entry.reasoningEffort ?? ''}
+                onChange={(e) =>
+                  update(index, {
+                    reasoningEffort: (e.target.value ||
+                      undefined) as ModelPoolEntry['reasoningEffort'],
+                  })
+                }
+              >
+                <option value="">跟随连接</option>
+                {reasoningEfforts.map((v) => (
+                  <option key={v} value={v}>
+                    {reasoningLabels[v]} · {v}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <div className="row">
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={!!entry.images}
+                  onChange={(e) => update(index, { images: e.target.checked })}
+                />
+                支持图片
+              </label>
+              <button
+                className="icon-button"
+                aria-label={`删除路由 ${index + 1}`}
+                onClick={() => onChange(pool.filter((_, i) => i !== index))}
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          </div>
+        );
+      })}
+      {!!pool.length && !pool.some((e) => e.scene === 'any' && e.stage === 'any') && (
+        <p className="danger">请保留至少一项通用默认模型。</p>
+      )}
+      <button
+        className="secondary"
+        disabled={pool.length >= 32 || !connections.some((p) => p.models.some((m) => m.trim()))}
+        onClick={() => {
+          const p = connections.find((p) => p.models.some((m) => m.trim()))!;
+          onChange([
+            ...pool,
+            {
+              providerId: p.id,
+              model: p.models.find((m) => m.trim())!,
+              scene: 'any',
+              stage: 'any',
+            },
+          ]);
+        }}
+      >
+        添加模型到池
+      </button>
+      <p className="muted">
+        场景与阶段使用本地规则识别，可在会话中指定阶段。图片支持需按服务实际能力勾选；模型目录不代表账号有访问权限。思考档位由各协议适配，不支持的模型沿用服务默认。
+      </p>
+    </details>
   );
 }

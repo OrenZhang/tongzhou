@@ -137,10 +137,10 @@ export class Store {
   }
   saveProvider(input: ProviderInput): Provider {
     const { secret, clearSecret, hasSecret: _, secretNeedsUpdate: _update, ...provider } = input;
-    provider.thinkingEnabled ??=
-      this.list<Provider>('provider').find((p) => p.id === input.id)?.thinkingEnabled ?? true;
-    provider.enabled ??=
-      this.list<Provider>('provider').find((p) => p.id === input.id)?.enabled ?? true;
+    const before = this.list<Provider>('provider').find((p) => p.id === input.id);
+    provider.modelPool ??= before?.modelPool;
+    provider.thinkingEnabled ??= before?.thinkingEnabled ?? true;
+    provider.enabled ??= before?.enabled ?? true;
     const encrypted = secret ? this.codec.encrypt(secret) : null;
     this.db.exec('BEGIN');
     try {

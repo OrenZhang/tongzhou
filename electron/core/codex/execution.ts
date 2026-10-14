@@ -34,7 +34,7 @@ import { AgentThreads } from './agent-threads';
 import { nativeToolReceipt } from './native-events';
 import { agentPlan } from '../../../src/shared/agent-plan';
 import { networkKey } from '../../../src/shared/provider-network';
-import { modelProvider } from '../../../src/shared/model-protocol';
+import { modelProvider, routedProvider } from '../../../src/shared/model-protocol';
 import path from 'node:path';
 import { mkdir } from 'node:fs/promises';
 import type { ProviderNetwork } from '../../../src/shared/provider-network';
@@ -100,7 +100,10 @@ export class CodexExecution implements ExecutionAdapter {
     prepareScope?: (signal: AbortSignal, threadId: string) => Promise<ToolScope>,
     checkCompletion?: () => Promise<string | undefined>,
   ) {
-    const provider = this.ports.store.get<Provider>('provider', input.providerId);
+    const provider = routedProvider(
+      this.ports.store.get<Provider>('provider', input.providerId),
+      run.routing,
+    );
     const network = this.ports.resolveNetwork
       ? await this.ports.resolveNetwork(provider.network, run.id)
       : provider.network;
@@ -129,6 +132,7 @@ export class CodexExecution implements ExecutionAdapter {
       provider.thinkingEnabled !== false,
       provider.reasoningEffort,
       provider.thinkingBudgetTokens,
+      ...(run.routing ? ['automatic-model'] : []),
       input.model,
       cwd,
       agent.instructions,
@@ -178,7 +182,7 @@ export class CodexExecution implements ExecutionAdapter {
                     engineHome(this.ports.dataDir, provider.protocol, provider.id),
                   )
                 : {
-                    provider: modelProvider(current, input.model),
+                    provider: modelProvider(run.routing ? provider : current, input.model),
                     model: input.model,
                     secret: this.ports.store.secret(provider.id),
                   };
@@ -663,7 +667,12 @@ export class CodexExecution implements ExecutionAdapter {
               requestThinking.body.output_config?.effort,
             note: requestThinking.note,
           }
-        : codexThinking(modelInfo, provider.thinkingEnabled !== false, provider.reasoningEffort);
+        : codexThinking(
+            modelInfo,
+            provider.thinkingEnabled !== false,
+            provider.reasoningEffort,
+            !run.routing,
+          );
       if (thinking.note) this.ports.progress(run, 'notice', thinking.note);
       if (run.config) {
         run.config.reasoningEffort = thinking.effort;

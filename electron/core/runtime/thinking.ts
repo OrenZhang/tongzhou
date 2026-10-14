@@ -108,19 +108,27 @@ export function codexThinking(
   model: any,
   enabled = true,
   requested?: Provider['reasoningEffort'],
+  strict = true,
 ): { effort?: string; note?: string } {
   const options: string[] = (model?.supportedReasoningEfforts ?? []).map(
     (o: any) => o.reasoningEffort,
   );
   if (!options.length) {
-    if (enabled && requested)
+    if (enabled && requested && strict)
       throw new Error('模型目录未提供思考强度，无法确认所选档位；请选择模型默认。');
     return {};
   }
   if (enabled && requested) {
-    if (!options.includes(requested))
+    if (!options.includes(requested) && strict)
       throw new Error(`当前模型不支持思考强度 ${requested}；支持：${options.join('、')}`);
-    return { effort: requested };
+    if (options.includes(requested)) return { effort: requested };
+    const levels = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
+    const effort =
+      levels
+        .slice(0, levels.indexOf(requested) + 1)
+        .reverse()
+        .find((v) => options.includes(v)) ?? options[0];
+    return { effort, note: `自动路由所选模型不支持 ${requested}，已使用 ${effort}。` };
   }
   if (!enabled && options.includes('none')) return { effort: 'none' };
   const positive = options.filter((v) => v !== 'none');

@@ -2263,6 +2263,30 @@ svg {
   grid-template-columns: 1fr 1fr;
   gap: 16px;
 }
+.model-pool-entry {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.model-pool-entry .field {
+  margin: 0;
+  min-width: 0;
+}
+.model-pool-entry > .row {
+  align-self: end;
+  min-height: 32px;
+  justify-content: space-between;
+}
+.model-pool-settings > .secondary {
+  margin-top: 12px;
+}
+@media (max-width: 640px) {
+  .model-pool-entry {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
 .preset-row {
   display: flex;
   gap: 6px;

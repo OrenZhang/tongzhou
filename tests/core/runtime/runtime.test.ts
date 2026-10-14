@@ -21,7 +21,8 @@ import { KNOWLEDGE_ORGANIZER_ID } from '../../../src/shared/builtin-agents';
 import { Attachments } from '../../../electron/modules/artifacts/attachments';
 import type { ComputerAdapter } from '../../../electron/core/tools/extensions';
 import { mcpName } from '../../../electron/core/tools/extensions';
-import type { AppEvent, Run } from '../../../src/shared/types';
+import { automaticModel } from '../../../src/shared/model-protocol';
+import type { AppEvent, Run, Provider, Session } from '../../../src/shared/types';
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
@@ -1369,4 +1370,125 @@ it('rejects new runs and queued inputs once shutdown starts', async () => {
   await expect(runtime.enqueue(input, 'next')).rejects.toThrow('应用正在退出');
   await expect(runtime.team(input, ['builder'])).rejects.toThrow('应用正在退出');
   await runtime.waitForIdle();
+});
+
+describe('automatic model routing through the real Codex execution loop', () => {
+  it('retains legacy user image constraints when switching providers', async () => {
+    const f = await fixture(() => [text('Done')]);
+    const owner = f.store.get<Provider>('provider', 'fixture');
+    f.store.saveProvider({
+      ...owner,
+      modelPool: [{ providerId: owner.id, model: 'mock', scene: 'any', stage: 'any' }],
+    });
+    f.store.message({
+      id: 'old-image',
+      sessionId: f.input.sessionId,
+      role: 'user',
+      content: '图片资料',
+      images: [{ mimeType: 'image/png', data: 'legacy-image' }],
+      createdAt: Date.now(),
+    });
+    expect(() => f.runtime.start({ ...f.input, model: automaticModel, prompt: '继续' })).toThrow(
+      '没有可用的图片模型',
+    );
+    expect(f.requests).toHaveLength(0);
+    expect(f.store.list<Run>('run')).toHaveLength(0);
+  });
+  it('pins cross-connection model and effort through tools, re-evaluates next turn and leaves fixed requests unchanged', async () => {
+    let round = 0;
+    const f = await fixture((body) => {
+      round++;
+      if (round === 1) {
+        const p = f.store.get<Provider>('provider', 'other');
+        f.store.saveProvider({ ...p, reasoningEffort: 'low', models: ['mock'] });
+        const owner = f.store.get<Provider>('provider', 'fixture');
+        f.store.saveProvider({
+          ...owner,
+          modelPool: [{ providerId: 'fixture', model: 'mock', scene: 'any', stage: 'any' }],
+        });
+        return [
+          {
+            choices: [
+              {
+                delta: {
+                  tool_calls: [
+                    {
+                      index: 0,
+                      id: 'read',
+                      function: {
+                        name: body.tools
+                          .map((t: any) => t.function?.name ?? t.name)
+                          .find((name: string) => name.endsWith('_exec')),
+                        arguments: JSON.stringify({ input: "text('routing tool receipt');" }),
+                      },
+                    },
+                  ],
+                },
+                finish_reason: 'tool_calls',
+              },
+            ],
+          },
+        ];
+      }
+      return [text('Done')];
+    });
+    await writeFile(path.join(f.root, 'existing.txt'), 'original');
+    const owner = f.store.get<Provider>('provider', 'fixture');
+    f.store.saveProvider({
+      ...owner,
+      id: 'other',
+      models: ['gpt-6-sol'],
+      reasoningEffort: 'medium',
+    });
+    f.store.saveProvider({
+      ...owner,
+      modelPool: [
+        { providerId: 'fixture', model: 'mock', scene: 'any', stage: 'any' },
+        {
+          providerId: 'other',
+          model: 'gpt-6-sol',
+          scene: 'coding',
+          stage: 'execute',
+          reasoningEffort: 'high',
+        },
+      ],
+    });
+    f.runtime.setSessionPermission(f.input.sessionId, 'full-access');
+    const id = f.runtime.start({
+      ...f.input,
+      model: automaticModel,
+      prompt: '请修复代码并读取 existing.txt',
+    });
+    await f.runtime.waitForIdle();
+    expect(f.store.get<Run>('run', id).error).toBeUndefined();
+    expect(f.store.get<Run>('run', id)).toMatchObject({
+      status: 'completed',
+      providerId: 'other',
+      model: 'gpt-6-sol',
+      routing: { scene: 'coding', stage: 'execute', reasoningEffort: 'high' },
+    });
+    expect(f.store.get<Session>('session', f.input.sessionId)).toMatchObject({
+      providerId: 'fixture',
+      model: automaticModel,
+    });
+    expect(f.requests).toHaveLength(2);
+    expect(JSON.stringify(f.requests[1].messages)).toContain('routing tool receipt');
+    for (const body of f.requests)
+      expect(body).toMatchObject({ model: 'gpt-6-sol', reasoning_effort: 'high' });
+    expect(await readFile(path.join(f.root, 'existing.txt'), 'utf8')).toBe('original');
+    const next = f.runtime.start({ ...f.input, model: automaticModel, prompt: '继续' });
+    await f.runtime.waitForIdle();
+    expect(f.store.get<Run>('run', next)).toMatchObject({
+      status: 'completed',
+      providerId: 'fixture',
+      model: 'mock',
+      routing: { stage: 'execute' },
+    });
+    expect(f.requests.at(-1).model).toBe('mock');
+    const fixed = f.runtime.start({ ...f.input, prompt: '规划代码方案' });
+    await f.runtime.waitForIdle();
+    expect(f.store.get<Run>('run', fixed)).toMatchObject({ status: 'completed', model: 'mock' });
+    expect(f.store.get<Run>('run', fixed).routing).toBeUndefined();
+    expect(f.requests.at(-1).model).toBe('mock');
+  }, 30000);
 });

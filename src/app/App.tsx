@@ -4,6 +4,8 @@ import { useNavigation } from './useNavigation';
 import { protocolLabels } from '../features/connections/provider-presets';
 import { AccountLoginPanel } from '../features/connections/AccountLoginPanel';
 import { ProviderConnectionDialog } from '../features/connections/ProviderConnectionDialog';
+import { automaticModel, modelStages, type ModelStage } from '../shared/model-protocol';
+import type { Provider } from '../shared/types';
 import { FilePreviewContext } from '../components/files/FilePreviewContext';
 import { AttachmentPreview } from '../components/files/Attachments';
 import { AutomationCenter } from '../features/automation/AutomationCenter';
@@ -145,6 +147,7 @@ export default function App() {
   );
   const [providerId, setProviderId] = useState('');
   const [model, setModel] = useState('');
+  const [routingStage, setRoutingStage] = useState<ModelStage | ''>('');
   const [agentId, setAgentId] = useState('');
   const [inputMode, setInputMode] = useState<'supplement' | 'next' | 'restart'>('supplement');
   const [deleteId, setDeleteId] = useState('');
@@ -194,11 +197,29 @@ export default function App() {
   const session = data.sessions.find((s) => s.id === sessionId);
   const project = data.projects.find((p) => p.id === session?.projectId);
   const provider = data.providers.find((p) => p.id === providerId);
+  const poolReady = (p: Provider) =>
+    p.enabled !== false &&
+    p.modelPool?.some((entry) => {
+      const target = data.providers.find((v) => v.id === entry.providerId);
+      return (
+        target &&
+        target.models.includes(entry.model) &&
+        !providerUnavailableReason(target, accountStates[target.id])
+      );
+    });
   const availableProviders = data.providers.filter(
-    (p) => !providerUnavailableReason(p, accountStates[p.id]),
+    (p) => !providerUnavailableReason(p, accountStates[p.id]) || poolReady(p),
   );
+  const firstModel = (p: Provider) =>
+    providerUnavailableReason(p, accountStates[p.id]) || !p.models[0]
+      ? p.modelPool?.length
+        ? automaticModel
+        : ''
+      : p.models[0];
   const unavailableReason = provider
-    ? providerUnavailableReason(provider, accountStates[provider.id])
+    ? model === automaticModel && poolReady(provider)
+      ? ''
+      : providerUnavailableReason(provider, accountStates[provider.id])
     : '请选择连接';
   const providerReady = !!provider && !unavailableReason;
   const selectedAgent = data.agents.find((a) => a.id === agentId);
@@ -259,6 +280,7 @@ export default function App() {
     setInputMode('supplement');
     setProviderId(selected.providerId);
     setModel(selected.model);
+    setRoutingStage('');
     setAgentId(data.agents.some((a) => a.id === selected.agentId) ? selected.agentId : '');
     setView('workspace');
   };
@@ -274,7 +296,7 @@ export default function App() {
   useEffect(() => {
     if (!sessionRef.current && !sessionId && !providerId && availableProviders.length) {
       setProviderId(availableProviders[0].id);
-      setModel(availableProviders[0].models[0] ?? '');
+      setModel(firstModel(availableProviders[0]));
     }
   }, [sessionId, providerId, availableProviders]);
   useEffect(() => {
@@ -287,13 +309,13 @@ export default function App() {
       activateSession({
         ...s,
         providerId: preferred?.id ?? '',
-        model: preferred?.id === providerId ? model : (preferred?.models[0] ?? ''),
+        model: preferred?.id === providerId ? model : preferred ? firstModel(preferred) : '',
         agentId: '',
       });
       if (preferred)
         await api.updateSession(s.id, {
           providerId: preferred.id,
-          model: preferred.id === providerId ? model : (preferred.models[0] ?? ''),
+          model: preferred.id === providerId ? model : firstModel(preferred),
         });
       await refresh();
     });
@@ -325,6 +347,7 @@ export default function App() {
         activateSession({ ...created, providerId, model, agentId });
       }
       const input = {
+        ...(model === automaticModel && routingStage ? { routingStage } : {}),
         sessionId: targetId,
         prompt: draft,
         providerId,
@@ -423,6 +446,7 @@ export default function App() {
   const selectModel = (connection: string, selectedModel: string) => {
     setProviderId(connection);
     setModel(selectedModel);
+    setRoutingStage('');
     if (sessionId)
       void perform(() =>
         api.updateSession(sessionId, { providerId: connection, model: selectedModel }),
@@ -871,6 +895,9 @@ export default function App() {
                               setBusy(true);
                               try {
                                 await api.resendMessage(message.id, {
+                                  ...(model === automaticModel && routingStage
+                                    ? { routingStage }
+                                    : {}),
                                   sessionId,
                                   prompt: text,
                                   providerId,
@@ -1116,7 +1143,11 @@ export default function App() {
                           title={`${provider?.name ?? '未连接'} · ${model || '选择模型'}`}
                         >
                           <span>
-                            {providerReady ? (provider?.modelLabels?.[model] ?? model) : '选择模型'}
+                            {providerReady
+                              ? model === automaticModel
+                                ? '自动路由'
+                                : (provider?.modelLabels?.[model] ?? model)
+                              : '选择模型'}
                           </span>
                           <small>{provider?.name ?? '未连接'}</small>
                           <ChevronDown size={13} />
@@ -1137,7 +1168,7 @@ export default function App() {
                               onChange={(id) =>
                                 selectModel(
                                   id,
-                                  data.providers.find((p) => p.id === id)?.models[0] ?? '',
+                                  firstModel(data.providers.find((p) => p.id === id)!),
                                 )
                               }
                               disabled={!!running}
@@ -1147,8 +1178,18 @@ export default function App() {
                               label="当前模型"
                               compact
                               value={providerReady ? model : ''}
-                              models={providerReady ? (provider?.models ?? []) : []}
-                              modelLabels={provider?.modelLabels}
+                              models={
+                                providerReady
+                                  ? [
+                                      ...(provider?.modelPool?.length ? [automaticModel] : []),
+                                      ...(provider?.models ?? []),
+                                    ]
+                                  : []
+                              }
+                              modelLabels={{
+                                ...provider?.modelLabels,
+                                [automaticModel]: '自动路由',
+                              }}
                               load={
                                 providerReady && provider
                                   ? () => api.models(provider.id)
@@ -1157,6 +1198,21 @@ export default function App() {
                               onChange={(m) => selectModel(providerId, m)}
                               disabled={!!running || !providerReady}
                             />
+                            {model === automaticModel && (
+                              <select
+                                aria-label="路由阶段"
+                                value={routingStage}
+                                disabled={!!running}
+                                onChange={(e) => setRoutingStage(e.target.value as ModelStage | '')}
+                              >
+                                <option value="">自动识别阶段</option>
+                                {Object.entries(modelStages).map(([v, label]) => (
+                                  <option key={v} value={v}>
+                                    {label}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
                           </div>
                         </div>
                       </details>
