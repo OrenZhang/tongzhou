@@ -32,7 +32,9 @@ export function registerContentServices(
       workspaceOperation(
         store,
         '内容库',
-        ['contentState', 'contentConversation'].includes(name) ? 'query' : 'change',
+        ['contentState', 'contentConversation', 'contentPreview'].includes(name)
+          ? 'query'
+          : 'change',
         description,
         args,
         name === 'contentWrite'
@@ -94,12 +96,19 @@ export function registerContentServices(
     c.document(id);
     return conversation(id);
   });
+  define(
+    'contentPreview',
+    '预览内容库的图片原件；其他格式返回文件类型，正文仍用 content_read 读取',
+    [z.string().uuid()],
+    (id) => c.preview(id),
+  );
   define('contentRun', '在当前文档侧边发起内容处理', [contentRunSchema], (raw) => {
     const p = contentRunSchema.parse(raw),
       doc = c.document(p.documentId);
     k.get(doc.id);
     if (doc.version !== p.version) throw new Error('文档已更新，请先保存或重新载入正文');
-    if (doc.indexed === false) throw new Error('原件尚未提取正文，请先导入文本版本');
+    if (doc.indexed === false && c.preview(doc.id).type !== 'image')
+      throw new Error('原件尚未提取正文，请先导入文本版本；图片分析支持 3 MB 内 PNG/JPEG/WebP');
     if (p.agentId && builtinAgent(p.agentId)) throw new Error('请选择通用助手或自定义 Agent');
     if (
       p.selection &&
@@ -180,23 +189,27 @@ export function registerContentServices(
   );
   define(
     'contentExport',
-    '导出正文到指定绝对路径；省略路径打开保存对话框，覆盖已有文件需当前 SHA-256',
+    '导出正文到指定绝对路径；第四个参数 original 为 true 时导出完整导入原件（图片、音视频等），不会导出占位文字。省略路径打开保存对话框，覆盖已有文件需当前 SHA-256',
     [
       z.string().uuid(),
-      absolutePathSchema.optional(),
+      absolutePathSchema.nullish().transform((v) => v ?? undefined),
       z
         .string()
         .regex(/^[a-f0-9]{64}$/)
-        .optional(),
+        .nullish()
+        .transform((v) => v ?? undefined),
+      z.boolean().optional(),
     ],
-    async (id, targetPath, expectedSha256) => {
+    async (id, targetPath, expectedSha256, original = false) => {
       const doc = c.document(id);
-      if (targetPath)
-        return services.files.writeTo(targetPath, Buffer.from(doc.content, 'utf8'), expectedSha256);
+      const bytes = original ? k.originalBytes(id) : Buffer.from(doc.content, 'utf8');
+      if (targetPath) return services.files.writeTo(targetPath, bytes, expectedSha256);
       return services.files.saveCopy(
-        Buffer.from(doc.content, 'utf8'),
-        '导出正文',
-        doc.title.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').slice(0, 100) + '.md',
+        bytes,
+        original ? '导出原件' : '导出正文',
+        original
+          ? doc.fileName!
+          : doc.title.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').slice(0, 100) + '.md',
       );
     },
   );

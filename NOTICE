@@ -16,6 +16,16 @@ Electron, React, Lucide, remark, react-markdown, Zod, @iarna/toml and other depe
 
 The Tongzhou sail mark is an original vector asset created for this project.
 
+AI-drwa: https://github.com/ricciL194/AI-drwa
+ricciL194 / AI-drwa contributors, CC BY-NC 4.0.
+The optional manju-production skill includes the upstream's five production
+templates, execution specifications and an adapted structural checker from commit
+027eb6af743dd5393cf83da6495996fd5e333ea2. This skill package retains the upstream's
+Attribution-NonCommercial license; it is not relicensed under Tongzhou's Apache-2.0
+license. See skills/manju-production/LICENSE and references/sources.md (bundled
+under dist-electron/skills/manju-production) for attribution and modification details.
+Upstream private stories and generated media are not included.
+
 Office bot and mail integrations use the unmodified runtime packages:
 @wecom/aibot-node-sdk 1.0.7 (MIT), dingtalk-stream 2.1.6-beta.1 (MIT),
 @larksuiteoapi/node-sdk 1.74.0 (MIT), and nodemailer 10.0.13 (MIT-0).

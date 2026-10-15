@@ -558,12 +558,15 @@ export class ToolScope {
       this.add(
         {
           name: 'read_skill_file',
-          description: '按需读取启用的 Skill。先读 SKILL.md 获取使用说明，再读需要的附属文件。',
+          description:
+            '按需读取启用的 Skill。先读 SKILL.md，再读相关资料。长文件可用 startLine/endLine 读取，行号从1开始，每次最多400行；省略范围则返回全文。',
           parameters: {
             type: 'object',
             properties: {
               skillId: { type: 'string', enum: skills.map((s) => s.id) },
               path: { type: 'string' },
+              startLine: { type: 'integer', minimum: 1 },
+              endLine: { type: 'integer', minimum: 1 },
             },
             required: ['skillId', 'path'],
             additionalProperties: false,
@@ -574,10 +577,34 @@ export class ToolScope {
           const skill = skills.find((s) => s.id === args.skillId);
           if (!store.list<SkillRecord>('skill').find((s) => s.id === args.skillId)?.enabled)
             throw new Error('Skill 已停用');
-          if (skill && args.path === 'SKILL.md') return { text: skill.instructions };
-          if (!skill || typeof args.path !== 'string' || !Object.hasOwn(skill.files, args.path))
+          if (
+            !skill ||
+            typeof args.path !== 'string' ||
+            (args.path !== 'SKILL.md' && !Object.hasOwn(skill.files, args.path))
+          )
             throw new Error('Skill 文件不存在或未授权');
-          return { text: skill.files[args.path] };
+          const text = args.path === 'SKILL.md' ? skill.instructions : skill.files[args.path];
+          if (args.startLine === undefined && args.endLine === undefined) return { text };
+          const start = args.startLine ?? 1;
+          const end = args.endLine ?? start + 199;
+          if (
+            !Number.isInteger(start) ||
+            !Number.isInteger(end) ||
+            start < 1 ||
+            end < start ||
+            end - start >= 400
+          )
+            throw new Error('Skill 行号范围无效：从1开始，每次最多400行');
+          const lines = text.split('\n');
+          if (start > lines.length) throw new Error(`Skill 文件仅有 ${lines.length} 行`);
+          return {
+            text:
+              `第 ${start}—${Math.min(end, lines.length)} 行 / 共 ${lines.length} 行\n` +
+              lines
+                .slice(start - 1, end)
+                .map((line, i) => `${start + i}: ${line}`)
+                .join('\n'),
+          };
         },
         false,
       );

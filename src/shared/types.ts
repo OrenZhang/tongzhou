@@ -435,7 +435,13 @@ export interface TongzhouAPI {
     libraryId: string,
     folderId?: string,
   ): Promise<{ imported: KnowledgeDocument[]; errors: string[] }>;
-  contentExport(documentId: string): Promise<string | null>;
+  contentExport(
+    documentId: string,
+    targetPath?: string,
+    expectedSha256?: string,
+    original?: boolean,
+  ): Promise<string | null | { path: string; persisted: boolean; bytes: number; sha256: string }>;
+  contentPreview(documentId: string): Promise<import('./artifacts').ArtifactPreview>;
   personalizationState(): Promise<import('./personalization').PersonalizationState>;
   savePersonalization(
     value: import('./personalization').Personalization,

@@ -1,4 +1,9 @@
-import { FileRecords, managedDirectory, atomicWrite } from '../../services/storage/local-files';
+import {
+  FileRecords,
+  managedDirectory,
+  atomicWrite,
+  assertLocalPath,
+} from '../../services/storage/local-files';
 import type { ContentLibrary } from '../../../src/shared/content';
 import { assertionInput, buildKnowledgeGraph } from './knowledge-graph';
 import {
@@ -9,7 +14,7 @@ import {
 import { entityTypes, relationTypes } from '../../../src/shared/ontology';
 import { knowledgeLinks } from '../../../src/shared/knowledge-links';
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdirSync, existsSync, lstatSync, unlinkSync } from 'node:fs';
+import { mkdirSync, existsSync, lstatSync, readFileSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
 import type { Store } from '../../services/storage/store';
@@ -409,6 +414,18 @@ export class Knowledge {
         indexed: text,
       },
     );
+  }
+  originalBytes(docId: string) {
+    const doc = this.get(docId);
+    if (!doc.blob || !doc.hash) throw new Error('该文档没有导入原件');
+    if (!/^[0-9a-f-]{36}\.[a-z0-9]{1,8}$/.test(doc.blob)) throw new Error('无效的知识原件路径');
+    const file = path.join(this.root, 'files', doc.blob);
+    assertLocalPath(this.root, file);
+    const info = lstatSync(file);
+    if (!info.isFile() || info.size > 25 * 1024 * 1024) throw new Error('原件不可用或超过 25 MB');
+    const bytes = readFileSync(file);
+    if (hash(bytes) !== doc.hash) throw new Error('原件内容校验失败');
+    return bytes;
   }
   read(docId: string) {
     const document = this.get(docId);

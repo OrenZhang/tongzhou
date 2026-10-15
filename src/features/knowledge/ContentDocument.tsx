@@ -14,6 +14,7 @@ import type { Message, Snapshot, TongzhouAPI } from '../../shared/types';
 import { ChoicePicker } from '../../components/controls/ChoicePicker';
 import { Markdown, Modal } from '../../components/components';
 import { knowledgeFolderPath } from '../../shared/knowledge';
+import type { ArtifactPreview } from '../../shared/artifacts';
 
 type Draft = { title: string; content: string; version: number };
 export function ContentDocument({
@@ -47,6 +48,7 @@ export function ContentDocument({
   const [error, setError] = useState('');
   const [status, setStatus] = useState('正在读取…');
   const [preview, setPreview] = useState(true);
+  const [originalPreview, setOriginalPreview] = useState<ArtifactPreview>();
   const menu = useRef<HTMLDetailsElement>(null);
   const [history, setHistory] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -200,6 +202,22 @@ export function ContentDocument({
     return () => clearTimeout(timer);
   }, [draft?.title, draft?.content, draft?.version]);
   useEffect(() => {
+    let live = true;
+    setOriginalPreview(undefined);
+    if (read?.document.blob)
+      void api
+        .contentPreview(documentId)
+        .then((value) => {
+          if (live) setOriginalPreview(value);
+        })
+        .catch((e) => {
+          if (live) setError(String(e));
+        });
+    return () => {
+      live = false;
+    };
+  }, [documentId, read?.document.version]);
+  useEffect(() => {
     if (!sessionId) return;
     let live = true;
     void api.messages(sessionId, { limit: 200 }).then((value) => {
@@ -351,8 +369,20 @@ export function ContentDocument({
                           })
                         }
                       >
-                        导出
+                        导出正文
                       </button>
+                      {read.document.blob && (
+                        <button
+                          className="text-button"
+                          onClick={() =>
+                            void perform(async () => {
+                              await api.contentExport(documentId, undefined, undefined, true);
+                            })
+                          }
+                        >
+                          下载原件
+                        </button>
+                      )}
                       <button className="text-button danger" onClick={() => setDeleting(true)}>
                         删除
                       </button>
@@ -420,7 +450,13 @@ export function ContentDocument({
             )}
             {preview ? (
               <article className="content-body-preview" aria-label="文档内容" tabIndex={0}>
-                {draft.content ? (
+                {originalPreview?.type === 'image' ? (
+                  <img
+                    className="content-asset-preview"
+                    src={originalPreview.content}
+                    alt={read.document.fileName ?? draft.title}
+                  />
+                ) : draft.content ? (
                   <Markdown
                     text={draft.content}
                     onKnowledgeLink={(target) => {

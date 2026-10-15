@@ -30,6 +30,7 @@ const api: TongzhouAPI = {
   contentRun: (...args) => call('contentRun', ...args),
   contentImport: (...args) => call('contentImport', ...args),
   contentExport: (...args) => call('contentExport', ...args),
+  contentPreview: (...args) => call('contentPreview', ...args),
   personalizationState: () => call('personalizationState'),
   savePersonalization: (value) => call('savePersonalization', value),
   updateStatus: () => call('updateStatus'),
