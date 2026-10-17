@@ -16,6 +16,8 @@
     "start": "node scripts/start.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:canvas": "node scripts/testing/canvas-smoke.mjs",
+    "test:canvas-chat": "node scripts/testing/canvas-chat-smoke.mjs",
     "test:desktop": "node scripts/testing/smoke.mjs",
     "test:tray": "node scripts/testing/tray-smoke.mjs",
     "test:power": "node scripts/testing/power-smoke.mjs",

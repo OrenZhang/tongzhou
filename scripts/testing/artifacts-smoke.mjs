@@ -188,10 +188,9 @@ try {
   assert.equal(await page.locator('.artifact-strip .artifact-card').count(), 2);
   await page.screenshot({ path: path.join(root, 'chat-file-links.png'), animations: 'disabled' });
   assert.equal(await page.locator('.workspace-navigation').count(), 0);
-  await page.locator('.sidebar-bottom [data-nav-expand]').click();
   for (const name of ['Agent', '智库', '插件', '运行记录', '定时任务', '设置'])
     assert.equal(
-      await page.locator('.sidebar-bottom').getByRole('button', { name, exact: true }).count(),
+      await page.locator('.sidebar-rail').getByRole('button', { name, exact: true }).count(),
       1,
     );
   await page.getByRole('button', { name: '会话作品', exact: true }).click();
@@ -239,10 +238,7 @@ try {
   await page.getByRole('tab', { name: /^作品/ }).click();
   assert.equal(await page.getByRole('tab', { name: '资料整理', exact: true }).count(), 0);
   assert.equal(
-    await page
-      .locator('.sidebar-bottom')
-      .getByRole('button', { name: '作品', exact: true })
-      .count(),
+    await page.locator('.sidebar-rail').getByRole('button', { name: '作品', exact: true }).count(),
     0,
   );
   await page

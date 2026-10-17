@@ -17,6 +17,7 @@ export interface ContentWrite {
   title: string;
   content: string;
   contentType?: string;
+  tags?: string[];
   sourceIds?: string[];
 }
 export interface ContentRun {

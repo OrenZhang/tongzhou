@@ -209,7 +209,7 @@ textarea:focus {
 
 /* Lists use spacing and selection, instead of a separate card for every row. */
 .sidebar {
-  padding: 18px 12px 12px;
+  padding: 0;
   border-right-color: var(--hairline);
 }
 .sidebar nav > button {

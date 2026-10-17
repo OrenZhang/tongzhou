@@ -38,6 +38,59 @@ export interface CompletionInput {
   onContextRetry?(targetChars: number, messages: Message[]): Message[];
 }
 
+/** Raised only after a successful end marker, before any tool call is released. */
+export class InvalidToolArgumentsError extends Error {
+  constructor(
+    readonly completion: Completion,
+    name: string,
+  ) {
+    super(`工具 ${name} 参数不完整，未执行。`);
+  }
+}
+
+/** Regenerate a malformed canvas edit once; never replay network failures or executed tools. */
+export async function completeCanvasRequest(input: CompletionInput): Promise<Completion> {
+  let text = '';
+  const onDelta = (delta: string) => {
+    text += delta;
+    input.onDelta(delta);
+  };
+  try {
+    return await completeRequest({ ...input, onDelta });
+  } catch (error) {
+    if (
+      !(error instanceof InvalidToolArgumentsError) ||
+      input.signal.aborted ||
+      !input.tools.some((tool) => tool.name === 'canvas_apply') ||
+      !error.completion.toolCalls.length ||
+      !error.completion.toolCalls.every((call) => call.name === 'canvas_apply')
+    )
+      throw error;
+    input.onReasoning?.('画布修改参数格式不完整，尚未执行；正在重新生成一次。');
+    let separated = !text;
+    const repaired = await completeRequest({
+      ...input,
+      instructions:
+        input.instructions +
+        '\n上次 canvas_apply 的 JSON 参数不完整，整批调用均未执行。请重新生成合法 JSON，严格遵循工具 schema；只提交当前任务所需的少量操作，节点仅填写必需字段和确有需要的配置，不要输出空的可选字段或重复已完成操作。',
+      onDelta: (delta) => {
+        if (!separated && delta) {
+          onDelta('\n\n');
+          separated = true;
+        }
+        onDelta(delta);
+      },
+    });
+    return {
+      ...repaired,
+      text,
+      inputTokens: repaired.inputTokens + error.completion.inputTokens,
+      outputTokens: repaired.outputTokens + error.completion.outputTokens,
+      usageReported: repaired.usageReported || error.completion.usageReported,
+    };
+  }
+}
+
 export function headers(provider: Provider, secret: string): Record<string, string> {
   const h: Record<string, string> = { 'Content-Type': 'application/json' };
   if (provider.protocol === 'anthropic') h['anthropic-version'] = '2023-06-01';
@@ -633,7 +686,7 @@ export async function completeRequest(input: CompletionInput): Promise<Completio
       try {
         JSON.parse(call.arguments);
       } catch {
-        throw new Error(`工具 ${call.name} 参数不完整，未执行。`);
+        throw new InvalidToolArgumentsError(result, call.name);
       }
     }
     if (input.provider.protocol === 'anthropic') {

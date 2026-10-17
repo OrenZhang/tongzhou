@@ -151,7 +151,7 @@ export function CanvasResourceOutput({
       void api
         .canvasResourcePreview(node.resource)
         .then((p) => {
-          if (live) setMedia(p.type === 'image' || p.type === 'video');
+          if (live) setMedia(p.type === 'image' || p.type === 'video' || p.type === 'audio');
         })
         .catch(onError);
     return () => {
@@ -197,7 +197,7 @@ export function CanvasMediaFields({
   onError(e: unknown): void;
 }) {
   const m = node.media ?? {},
-    kind = node.kind === 'video' ? 'video' : 'image',
+    kind = node.kind === 'audio' ? 'audio' : node.kind === 'video' ? 'video' : 'image',
     modelId = useId();
   const [checking, setChecking] = useState(false),
     [frame, setFrame] = useState<'firstFrame' | 'lastFrame' | 'references' | 'existing'>();
@@ -235,6 +235,9 @@ export function CanvasMediaFields({
       aspectRatio: undefined,
       resolution: undefined,
       duration: undefined,
+      voice: undefined,
+      speed: undefined,
+      parameters: undefined,
       model: key ? (p[key].default ?? p[key].enum?.[0]) : undefined,
     });
   };
@@ -243,12 +246,17 @@ export function CanvasMediaFields({
       <label>
         生成模式
         <select
+          aria-label="生成模式"
           value={m.mode ?? 'text'}
           onChange={(e) => update({ mode: e.target.value as CanvasMedia['mode'] })}
         >
-          <option value="text">{kind === 'image' ? '文生图' : '文生视频'}</option>
-          <option value="reference">参考图生成</option>
-          {kind === 'image' && <option value="existing">选择已有图片</option>}
+          <option value="text">
+            {kind === 'audio' ? '文本生成音频' : kind === 'image' ? '文生图' : '文生视频'}
+          </option>
+          {kind !== 'audio' && <option value="reference">参考图生成</option>}
+          <option value="existing">
+            选择已有{kind === 'audio' ? '音频' : kind === 'video' ? '视频' : '图片'}
+          </option>
           {kind === 'video' && (
             <>
               <option
@@ -284,7 +292,7 @@ export function CanvasMediaFields({
         <>
           <ResourceThumbnail api={api} resource={node.resource} />
           <button onClick={() => setFrame('existing')}>
-            {node.resource ? '更换已有图片' : '选择已有图片'}
+            {node.resource ? '更换已有素材' : '选择已有素材'}
           </button>
         </>
       ) : (
@@ -305,6 +313,9 @@ export function CanvasMediaFields({
                   aspectRatio: undefined,
                   resolution: undefined,
                   duration: undefined,
+                  voice: undefined,
+                  speed: undefined,
+                  parameters: undefined,
                   model: fields.model?.default ?? fields.model?.enum?.[0],
                 });
               }}
@@ -352,10 +363,10 @@ export function CanvasMediaFields({
               {checking ? '检查中…' : '刷新工具'}
             </button>
           </div>
-          {!tools.length && <small>先在插件页面启用并检查图片／视频生成工具。</small>}
+          {!tools.length && <small>先在插件页面启用并检查媒体生成工具。</small>}
           <div className="canvas-media-grid">
             <label>
-              {kind === 'image' ? '图片数量' : '视频数量'}
+              {kind === 'audio' ? '音频数量' : kind === 'image' ? '图片数量' : '视频数量'}
               <select
                 aria-label="生成数量"
                 value={m.count ?? 1}
@@ -432,40 +443,78 @@ export function CanvasMediaFields({
               ))}
             </datalist>
           </label>
-          <div className="canvas-media-grid">
-            <label>
-              画面比例
-              <input
-                aria-label="画面比例"
-                disabled={!!tool && !props.aspect_ratio && !props.ratio}
-                list={modelId + '-ratio'}
-                value={m.aspectRatio ?? ''}
-                placeholder="工具默认，如 16:9"
-                onChange={(e) => update({ aspectRatio: e.target.value || undefined })}
-              />
-              <datalist id={modelId + '-ratio'}>
-                {ratios.map((v) => (
-                  <option key={v} value={v} />
-                ))}
-              </datalist>
-            </label>
-            <label>
-              分辨率
-              <input
-                aria-label="分辨率"
-                disabled={!!tool && !props.resolution}
-                list={modelId + '-resolution'}
-                value={m.resolution ?? ''}
-                placeholder="工具默认"
-                onChange={(e) => update({ resolution: e.target.value || undefined })}
-              />
-              <datalist id={modelId + '-resolution'}>
-                {resolutions.map((v) => (
-                  <option key={v} value={v} />
-                ))}
-              </datalist>
-            </label>
-          </div>
+          {kind !== 'audio' && (
+            <div className="canvas-media-grid">
+              <label>
+                画面比例
+                <input
+                  aria-label="画面比例"
+                  disabled={!!tool && !props.aspect_ratio && !props.ratio}
+                  list={modelId + '-ratio'}
+                  value={m.aspectRatio ?? ''}
+                  placeholder="工具默认，如 16:9"
+                  onChange={(e) => update({ aspectRatio: e.target.value || undefined })}
+                />
+                <datalist id={modelId + '-ratio'}>
+                  {ratios.map((v) => (
+                    <option key={v} value={v} />
+                  ))}
+                </datalist>
+              </label>
+              <label>
+                分辨率
+                <input
+                  aria-label="分辨率"
+                  disabled={!!tool && !props.resolution}
+                  list={modelId + '-resolution'}
+                  value={m.resolution ?? ''}
+                  placeholder="工具默认"
+                  onChange={(e) => update({ resolution: e.target.value || undefined })}
+                />
+                <datalist id={modelId + '-resolution'}>
+                  {resolutions.map((v) => (
+                    <option key={v} value={v} />
+                  ))}
+                </datalist>
+              </label>
+            </div>
+          )}
+          {kind === 'audio' && (
+            <>
+              <label>
+                音色 ID
+                <input
+                  aria-label="音色 ID"
+                  value={m.voice ?? ''}
+                  disabled={!!tool && !props.voice_id && !props.voice}
+                  placeholder="使用插件默认音色"
+                  onChange={(e) => update({ voice: e.target.value || undefined })}
+                  list={modelId + '-voices'}
+                />
+                <datalist id={modelId + '-voices'}>
+                  {(options(['voice_id', 'voice']) ?? []).map((v) => (
+                    <option key={v} value={v} />
+                  ))}
+                </datalist>
+              </label>
+              <label>
+                语速
+                <input
+                  aria-label="语速"
+                  type="number"
+                  min={(props.speed ?? props.speech_rate)?.minimum ?? 0.25}
+                  max={(props.speed ?? props.speech_rate)?.maximum ?? 4}
+                  step="0.1"
+                  value={m.speed ?? ''}
+                  disabled={!!tool && !props.speed && !props.speech_rate}
+                  placeholder="工具默认"
+                  onChange={(e) =>
+                    update({ speed: e.target.value ? Number(e.target.value) : undefined })
+                  }
+                />
+              </label>
+            </>
+          )}
           {kind === 'video' && (
             <label>
               时长（秒）
@@ -496,6 +545,10 @@ export function CanvasMediaFields({
                           'description',
                           'model',
                           'model_name',
+                          'voice_id',
+                          'voice',
+                          'speed',
+                          'speech_rate',
                           'aspect_ratio',
                           'ratio',
                           'resolution',
@@ -537,13 +590,14 @@ export function CanvasMediaFields({
         <CanvasSourcePicker
           api={api}
           data={data}
-          imageOnly
+          mediaOnly={frame === 'existing' ? kind : 'image'}
           onClose={() => setFrame(undefined)}
           onSelect={(_title, resource) => {
             void api
               .canvasResourcePreview(resource)
               .then((p) => {
-                if (p.type !== 'image') throw new Error('请选择可用的图片原件');
+                if (p.type !== (frame === 'existing' ? kind : 'image'))
+                  throw new Error('请选择可用的媒体原件');
                 if (frame === 'existing') patch({ resource });
                 else if (frame === 'references') {
                   const refs = [

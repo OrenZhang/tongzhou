@@ -1,3 +1,7 @@
+import { createHash } from 'node:crypto';
+import { readFile, stat } from 'node:fs/promises';
+import { writeLocalFile } from '../../services/storage/file-transfer';
+import { CanvasTransfer, MAX_CANVAS_PACKAGE } from '../../modules/canvas/transfer';
 import { dialog } from 'electron';
 import type { Plugin } from 'cordis';
 import { z } from 'zod';
@@ -20,12 +24,17 @@ export const canvasPlugin: Plugin.Object<void> = {
     'tzContent',
     'tzKnowledge',
     'tzArtifacts',
+    'tzChannels',
   ],
   apply(ctx) {
     const register = ctx.tzIpc.scoped(ctx),
       store = ctx.tzStore,
       canvases = ctx.tzCanvases,
       workflows = ctx.tzCanvasWorkflows;
+    workflows.configureNotifications((target, text, session, key, signal) =>
+      ctx.tzChannels.send(target, text, session, key, undefined, signal),
+    );
+    ctx.effect(() => () => workflows.configureNotifications());
     const define = (
       name: string,
       description: string,
@@ -44,6 +53,135 @@ export const canvasPlugin: Plugin.Object<void> = {
         ),
         fn,
       );
+    const transfer = new CanvasTransfer(
+      canvases,
+      workflows.resources,
+      ctx.tzContent,
+      ctx.tzKnowledge,
+      ctx.tzArtifacts,
+    );
+    const versionSchema = z.number().int().positive();
+    const folder = (name: string) =>
+      ctx.tzKnowledge
+        .folders()
+        .find((f) => (f.libraryId ?? 'default') === 'default' && !f.parentId && f.name === name) ??
+      ctx.tzKnowledge.saveFolder({ name, libraryId: 'default' });
+    define(
+      'canvasExport',
+      '导出工作流模板或含引用素材的项目 JSON',
+      [z.uuid(), versionSchema, z.enum(['template', 'project'])],
+      false,
+      async (id, version, mode) => {
+        const title = canvases.get(id).title.replace(/[<>:"/\\|?*]/g, '_');
+        const result = await dialog.showSaveDialog({
+          title: mode === 'project' ? '导出含素材的画布项目' : '导出工作流模板',
+          defaultPath: title + (mode === 'project' ? '.canvas.json' : '.template.json'),
+          filters: [{ name: '同舟画布', extensions: ['json'] }],
+        });
+        if (result.canceled || !result.filePath) return null;
+        const original = await readFile(result.filePath).catch((e: NodeJS.ErrnoException) => {
+          if (e.code === 'ENOENT') return undefined;
+          throw e;
+        });
+        const expected = original ? createHash('sha256').update(original).digest('hex') : undefined;
+        const text = await transfer.encode(id, version, mode);
+        await writeLocalFile(result.filePath, Buffer.from(text), expected);
+        return result.filePath;
+      },
+    );
+    define('canvasImport', '导入画布项目或模板到新画布', [], true, async () => {
+      const result = await dialog.showOpenDialog({
+        title: '导入画布',
+        properties: ['openFile'],
+        filters: [{ name: '同舟画布', extensions: ['json'] }],
+      });
+      if (result.canceled || !result.filePaths[0]) return null;
+      if ((await stat(result.filePaths[0])).size > MAX_CANVAS_PACKAGE)
+        throw new Error('画布项目包超过 96 MB');
+      const next = await transfer.decode(await readFile(result.filePaths[0], 'utf8'));
+      ctx.tzEvents.changed();
+      return next;
+    });
+    define(
+      'canvasSaveTemplate',
+      '将可复用工作流保存到内容库',
+      [z.uuid(), versionSchema],
+      true,
+      async (id, version) => {
+        const text = await transfer.encode(id, version, 'template');
+        ctx.tzContent.write({
+          libraryId: 'default',
+          folderId: folder('画布模板').id,
+          title: canvases.get(id).title,
+          content: text,
+          contentType: 'canvas-template',
+          tags: ['画布模板'],
+        });
+        ctx.tzEvents.changed();
+      },
+    );
+    define(
+      'canvasLoadTemplate',
+      '从内容库模板创建画布',
+      [z.uuid(), versionSchema],
+      true,
+      async (id, version) => {
+        const doc = ctx.tzContent.document(id);
+        if (doc.version !== version || doc.contentType !== 'canvas-template')
+          throw new Error('模板已变化，请重新选择');
+        const next = await transfer.decode(doc.content);
+        ctx.tzEvents.changed();
+        return next;
+      },
+    );
+    define(
+      'canvasLibrary',
+      '读取内容库中的画布模板或提示词',
+      [z.enum(['prompt', 'template'])],
+      false,
+      (mode) =>
+        ctx.tzKnowledge
+          .all()
+          .filter(
+            (d) =>
+              d.kind !== 'memory' &&
+              d.contentType === (mode === 'prompt' ? 'canvas-prompt' : 'canvas-template'),
+          )
+          .map(({ id, version, title, content, tags }) => ({
+            id,
+            version,
+            title,
+            content: mode === 'template' ? '' : content,
+            tags,
+          })),
+    );
+    define(
+      'canvasSavePrompt',
+      '保存带标签和变量的提示词到内容库',
+      [
+        z
+          .object({
+            id: z.uuid().optional(),
+            version: versionSchema.optional(),
+            title: z.string().trim().min(1).max(180),
+            content: z.string().min(1).max(32000),
+            tags: z.array(z.string().trim().min(1).max(40)).max(20),
+          })
+          .strict(),
+      ],
+      true,
+      (input) => {
+        const old = input.id ? ctx.tzContent.document(input.id) : undefined;
+        if (old && old.contentType !== 'canvas-prompt') throw new Error('请选择提示词文档');
+        ctx.tzContent.write({
+          ...input,
+          libraryId: old?.libraryId ?? 'default',
+          folderId: old?.folderId ?? folder('画布提示词').id,
+          contentType: 'canvas-prompt',
+        });
+        ctx.tzEvents.changed();
+      },
+    );
     define('canvasChooseOutputDirectory', '选择生成结果的本地保存目录', [], true, async () => {
       const result = await dialog.showOpenDialog({
         title: '选择生成结果保存目录',
@@ -106,7 +244,7 @@ export const canvasPlugin: Plugin.Object<void> = {
         z
           .object({
             kind: z.enum(['content', 'artifact', 'message']),
-            media: z.enum(['image', 'video']).optional(),
+            media: z.enum(['image', 'video', 'audio']).optional(),
             query: z.string().max(200).optional(),
             sessionId: z.uuid().optional(),
           })
@@ -117,7 +255,7 @@ export const canvasPlugin: Plugin.Object<void> = {
         const p = z
           .object({
             kind: z.enum(['content', 'artifact', 'message']),
-            media: z.enum(['image', 'video']).optional(),
+            media: z.enum(['image', 'video', 'audio']).optional(),
             query: z.string().max(200).default(''),
             sessionId: z.uuid().optional(),
           })
@@ -132,9 +270,12 @@ export const canvasPlugin: Plugin.Object<void> = {
                     d.kind !== 'memory' &&
                     matches(d.title) &&
                     (!p.media ||
-                      (p.media === 'image' ? /\.(png|jpe?g|webp)$/i : /\.(mp4|webm)$/i).test(
-                        d.fileName ?? '',
-                      )),
+                      (p.media === 'audio'
+                        ? /\.(mp3|wav|m4a|ogg|flac)$/i
+                        : p.media === 'image'
+                          ? /\.(png|jpe?g|webp)$/i
+                          : /\.(mp4|webm)$/i
+                      ).test(d.fileName ?? '')),
                 )
                 .slice(0, 150)
                 .map((d) => ({

@@ -26,6 +26,16 @@ export interface AutomationHandler {
   allowBuiltinAgent?: string;
   allowEmptyResult?: boolean;
   committed?(job: AutomationJob): boolean;
+  /** Deterministic domain workflows share the scheduler without an extra model turn. */
+  execution?: {
+    start(job: AutomationJob): { runId: string; sessionId: string };
+    read(job: AutomationJob): {
+      status: 'running' | 'completed' | 'failed';
+      result?: string;
+      error?: string;
+    };
+    cancel(job: AutomationJob): Promise<void>;
+  };
   validate(rule: AutomationRule): void;
   inputIds(rule: AutomationRule, manual?: boolean): (string | undefined)[];
   capture(rule: AutomationRule, sourceId?: string): Pick<AutomationJob, 'flow' | 'source'>;

@@ -56,6 +56,15 @@ export const automationSchema = z.object({
   kind: z.string().regex(/^[a-z][a-z0-9-]{0,79}$/),
   trigger: z.enum(['manual', 'import', 'ready', 'schedule', 'idle']),
   flowId: z.string().uuid().optional(),
+  canvas: z
+    .object({
+      id: z.uuid(),
+      version: z.number().int().positive(),
+      nodeId: text.max(120),
+      sessionId: z.uuid(),
+    })
+    .strict()
+    .optional(),
   libraryId: libraryIdSchema.optional(),
   folderId: z.string().uuid().optional(),
   documentId: z.string().uuid().optional(),
@@ -137,6 +146,20 @@ export class Automations {
     }
     // Running work is never blindly replayed after a crash; queued snapshots remain resumable.
     for (const job of this.jobs().filter((j) => j.status === 'running')) {
+      if (this.handlers.get(job.rule.kind).execution) {
+        try {
+          const result = this.handlers.get(job.rule.kind).execution!.read(job);
+          this.finishExecution(
+            job,
+            result.status === 'running'
+              ? { status: 'failed', error: '应用退出导致工作流中断，请检查结果后重试' }
+              : result,
+          );
+        } catch (e) {
+          this.finishExecution(job, { status: 'failed', error: String(e) });
+        }
+        continue;
+      }
       const run = job.runId ? store.list<Run>('run').find((r) => r.id === job.runId) : undefined;
       if (run?.status === 'completed' || this.handlers.get(job.rule.kind).committed?.(job))
         this.finish(job, run);
@@ -255,6 +278,20 @@ export class Automations {
     };
     const handler = this.handlers.get(r.kind);
     if (old && old.kind !== r.kind) throw new Error('不能更改任务类型');
+    if (
+      r.kind === 'canvas' &&
+      r.canvas &&
+      this.store
+        .list<AutomationRule>('automation')
+        .some(
+          (v) =>
+            v.id !== r.id &&
+            v.kind === 'canvas' &&
+            v.canvas?.id === r.canvas!.id &&
+            v.canvas.nodeId === r.canvas!.nodeId,
+        )
+    )
+      throw new Error('此定时触发节点已发布，请更新现有任务');
     if (handler.capability?.builtinRuleId && handler.capability.builtinRuleId !== r.id)
       throw new Error('请编辑现有内置任务，不能重复创建');
     if (handler.capability?.builtinRuleId) handler.validate(r);
@@ -373,7 +410,9 @@ export class Automations {
     const j = this.store.get<AutomationJob>('automationJob', id);
     if (!['queued', 'running'].includes(j.status)) return;
     this.fail({ ...j, status: 'cancelled', endedAt: this.now() });
-    if (j.sessionId) await this.runtime.cancel(j.sessionId);
+    const execution = this.handlers.get(j.rule.kind).execution;
+    if (execution) await execution.cancel(j);
+    else if (j.sessionId) await this.runtime.cancel(j.sessionId);
     this.runtime.changed();
   }
   retry(id: string) {
@@ -440,10 +479,52 @@ export class Automations {
       this.fail({ ...job, status: 'failed', error: String(e), endedAt: this.now() });
     }
   }
+  private finishExecution(
+    job: AutomationJob,
+    result: { status: string; result?: string; error?: string },
+  ) {
+    if (result.status === 'running') return;
+    if (result.status === 'completed')
+      this.putJob({
+        ...job,
+        status: 'completed',
+        result: result.result ?? '工作流已完成',
+        endedAt: this.now(),
+      });
+    else
+      this.fail({
+        ...job,
+        status: 'failed',
+        error: result.error ?? '工作流已中断',
+        endedAt: this.now(),
+      });
+  }
   tick() {
     if (this.stopped) return;
     let changed = false;
     for (const j of this.jobs().filter((j) => j.status === 'running')) {
+      const execution = this.handlers.get(j.rule.kind).execution;
+      if (execution) {
+        try {
+          const result = execution.read(j);
+          if (result.status !== 'running') {
+            this.finishExecution(j, result);
+            changed = true;
+          } else if (
+            this.now() - j.startedAt! >
+            (this.handlers.get(j.rule.kind).timeoutMs ?? 30 * 60000)
+          ) {
+            void execution.cancel(j).catch(() => {});
+            this.finishExecution(j, { status: 'failed', error: '工作流执行超时，已停止' });
+            changed = true;
+          }
+        } catch (e) {
+          void execution.cancel(j).catch(() => {});
+          this.finishExecution(j, { status: 'failed', error: String(e) });
+          changed = true;
+        }
+        continue;
+      }
       const r = this.store.list<Run>('run').find((r) => r.id === j.runId);
       if (r && r.status !== 'running') {
         this.finish(j, r);
@@ -513,6 +594,13 @@ export class Automations {
       if (j) {
         try {
           const handler = this.handlers.get(j.rule.kind);
+          if (handler.execution) {
+            j = { ...j, status: 'running', startedAt: this.now() };
+            this.putJob(j);
+            this.putJob({ ...j, ...handler.execution.start(j) });
+            this.runtime.changed();
+            return;
+          }
           const prepared = handler.prepare(j);
           if (!prepared) {
             // No new input is a quiet skip, not a model run or a failed task.

@@ -396,6 +396,22 @@ export interface ImportPreview {
   warnings: string[];
 }
 export interface TongzhouAPI {
+  /** Resolve only a browser File supplied by a user drop; virtual files return an empty string. */
+  droppedFilePath(file: File): string;
+  canvasExport(id: string, version: number, mode: 'template' | 'project'): Promise<string | null>;
+  canvasImport(): Promise<import('./canvas').Canvas | null>;
+  canvasSaveTemplate(id: string, version: number): Promise<void>;
+  canvasLoadTemplate(id: string, version: number): Promise<import('./canvas').Canvas>;
+  canvasLibrary(
+    mode: 'prompt' | 'template',
+  ): Promise<{ id: string; version: number; title: string; content: string; tags: string[] }[]>;
+  canvasSavePrompt(input: {
+    id?: string;
+    version?: number;
+    title: string;
+    content: string;
+    tags: string[];
+  }): Promise<void>;
   canvasChooseOutputDirectory(): Promise<string | null>;
   canvasState(id?: string): Promise<import('./canvas').CanvasState>;
   canvasSave(input: import('./canvas').CanvasWrite): Promise<import('./canvas').Canvas>;
@@ -408,7 +424,7 @@ export interface TongzhouAPI {
   ): Promise<import('./artifacts').ArtifactPreview>;
   canvasSources(query: {
     kind: 'content' | 'artifact' | 'message';
-    media?: 'image' | 'video';
+    media?: 'image' | 'video' | 'audio';
     query?: string;
     sessionId?: string;
   }): Promise<{

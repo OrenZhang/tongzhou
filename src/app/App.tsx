@@ -1,3 +1,4 @@
+import { flushCanvasDraft } from '../features/canvas/draft-sync';
 import { CanvasWorkspace } from '../features/canvas/CanvasWorkspace';
 import { SidebarNavGroup } from '../components/SidebarNavGroup';
 import { ServiceIcon, providerService } from '../components/ServiceIcon';
@@ -48,6 +49,8 @@ import {
   GitBranch,
   Layers3,
   LayoutPanelLeft,
+  PanelLeftClose,
+  PanelLeftOpen,
   MessageSquare,
   Network,
   Plus,
@@ -86,6 +89,7 @@ import { ConnectionsPage } from '../features/connections/ConnectionsPage';
 import { NetworkProfilesPanel } from '../features/connections/NetworkProfilesPanel';
 import { Appearance, useAppearance } from '../features/settings/Appearance';
 import { useDraft } from '../hooks/useDraft';
+import { useComposerDrop } from '../features/chat/useComposerDrop';
 import { AttachmentCards, useAttachmentDraft } from '../components/files/Attachments';
 import { longPaste } from '../shared/attachments';
 import { useConversationFollow } from '../hooks/useConversationFollow';
@@ -197,6 +201,15 @@ export default function App() {
     input.style.height = `${Math.min(200, input.scrollHeight)}px`;
   }, [draft, view]);
   const session = data.sessions.find((s) => s.id === sessionId);
+  const composerDrop = useComposerDrop({
+    api,
+    input: composerInput,
+    setDraft,
+    addFiles: attachments.addFiles,
+    disabled: !!session?.archived,
+    sessionId,
+    report,
+  });
   const project = data.projects.find((p) => p.id === session?.projectId);
   const provider = data.providers.find((p) => p.id === providerId);
   const poolReady = (p: Provider) =>
@@ -348,6 +361,7 @@ export default function App() {
         attachments.clear(sessionId, attachments.items);
         activateSession({ ...created, providerId, model, agentId });
       }
+      await flushCanvasDraft(targetId, api);
       const input = {
         ...(model === automaticModel && routingStage ? { routingStage } : {}),
         sessionId: targetId,
@@ -476,85 +490,114 @@ export default function App() {
       }}
     >
       <div className={`app-shell ${sidebarOpen ? '' : 'sidebar-collapsed'}`} data-view={view}>
-        <aside className="sidebar" aria-label="主导航" inert={!sidebarOpen}>
-          <button
-            className="brand"
-            aria-label="返回会话"
-            title="返回当前会话"
-            onClick={() => setView('workspace')}
-          >
-            <Mark />
-            <div>
-              <strong>同舟</strong>
-              <span>TONGZHOU</span>
-            </div>
-            <span className="version">{version}</span>
-          </button>
-          <button className="new-chat" onClick={() => newSession()}>
-            <Plus size={17} />
-            开启新会话<span>↗</span>
-          </button>
-          <div className="sidebar-divider" />
-          <SessionNavigator
-            data={data}
-            sessionId={sessionId}
-            workspace={view === 'workspace'}
-            archived={archived}
-            query={query}
-            onArchive={() => setArchived(!archived)}
-            onQuery={setQuery}
-            onOpenProject={openProject}
-            onNew={(id) => void newSession(id)}
-            onSelect={activateSession}
-            onToggleArchive={(target) =>
-              void perform(() => api.updateSession(target.id, { archived: !target.archived }))
-            }
-            onDelete={(target) => target.archived && setDeleteId(target.id)}
-            onDeleteProject={(target) => {
-              setNotice('');
-              setDeleteProjectId(target.id);
-              setDeleteProjectError('');
-              setDeleteProjectSessions(undefined);
-              setDeleteProjectAcknowledged(false);
-              void api
-                .projectDeletionPreview(target.id)
-                .then(setDeleteProjectSessions)
-                .catch((e) => setDeleteProjectError(errorMessage(e)));
-            }}
-          />
-          <div className="sidebar-bottom">
-            <nav aria-label="管理与工具">
-              {navGroups.map((group) => (
-                <SidebarNavGroup
-                  key={group.label}
-                  label={group.label}
-                  items={group.items}
-                  view={view}
-                  onNavigate={(nextView) => {
-                    if (nextView === 'knowledge') {
-                      setKnowledgeSection('workspace');
-                      setArtifactSession(undefined);
-                    }
-                    setView(nextView);
-                  }}
-                />
-              ))}
-            </nav>
-            <div className="local-status">
-              <span className="live-dot" />
-              本地优先<span>你的数据，你掌控</span>
-            </div>
-            <div className="sidebar-settings-row">
+        <aside className="sidebar" aria-label="主导航">
+          <nav className="sidebar-rail" aria-label="管理与工具">
+            <button
+              className="rail-button"
+              aria-label={sidebarOpen ? '收起会话列表' : '展开会话列表'}
+              aria-expanded={sidebarOpen}
+              aria-controls="sidebar-sessions"
+              onClick={() => setSidebarOpen((open) => !open)}
+            >
+              {sidebarOpen ? (
+                <PanelLeftClose size={19} aria-hidden="true" />
+              ) : (
+                <PanelLeftOpen size={19} aria-hidden="true" />
+              )}
+              <span className="rail-tooltip" aria-hidden="true">
+                {sidebarOpen ? '收起会话列表' : '展开会话列表'}
+              </span>
+            </button>
+            <button
+              className={`rail-button ${view === 'workspace' ? 'active' : ''}`}
+              aria-label="会话"
+              aria-current={view === 'workspace' ? 'page' : undefined}
+              onClick={() => {
+                setView('workspace');
+                setSidebarOpen(true);
+              }}
+            >
+              <MessageSquare size={19} aria-hidden="true" />
+              <span className="rail-tooltip" aria-hidden="true">
+                会话
+              </span>
+            </button>
+            {navGroups.map((group) => (
+              <SidebarNavGroup
+                key={group.label}
+                label={group.label}
+                items={group.items}
+                view={view}
+                onNavigate={(nextView) => {
+                  if (nextView === 'knowledge') {
+                    setKnowledgeSection('workspace');
+                    setArtifactSession(undefined);
+                  }
+                  setView(nextView);
+                }}
+              />
+            ))}
+            <div className="rail-footer">
+              <UpdateControl api={api} />
               <button
+                aria-label="设置"
                 onClick={() => setView('settings')}
                 aria-current={['settings', 'network'].includes(view) ? 'page' : undefined}
-                className={['settings', 'network'].includes(view) ? 'active' : ''}
+                className={`rail-button ${['settings', 'network'].includes(view) ? 'active' : ''}`}
               >
-                <Settings2 size={16} />
-                <span className="sidebar-nav-text">设置</span>
+                <Settings2 size={19} aria-hidden="true" />
+                <span className="rail-tooltip" aria-hidden="true">
+                  设置
+                </span>
               </button>
-              <UpdateControl api={api} />
             </div>
+          </nav>
+          <div id="sidebar-sessions" className="sidebar-sessions" inert={!sidebarOpen}>
+            <button
+              className="brand"
+              aria-label="返回会话"
+              title="返回当前会话"
+              onClick={() => setView('workspace')}
+            >
+              <Mark />
+              <div>
+                <strong>同舟</strong>
+                <span>TONGZHOU</span>
+              </div>
+              <span className="version">{version}</span>
+            </button>
+            <button className="new-chat" onClick={() => newSession()}>
+              <Plus size={17} />
+              开启新会话<span>↗</span>
+            </button>
+            <div className="sidebar-divider" />
+            <SessionNavigator
+              data={data}
+              sessionId={sessionId}
+              workspace={view === 'workspace'}
+              archived={archived}
+              query={query}
+              onArchive={() => setArchived(!archived)}
+              onQuery={setQuery}
+              onOpenProject={openProject}
+              onNew={(id) => void newSession(id)}
+              onSelect={activateSession}
+              onToggleArchive={(target) =>
+                void perform(() => api.updateSession(target.id, { archived: !target.archived }))
+              }
+              onDelete={(target) => target.archived && setDeleteId(target.id)}
+              onDeleteProject={(target) => {
+                setNotice('');
+                setDeleteProjectId(target.id);
+                setDeleteProjectError('');
+                setDeleteProjectSessions(undefined);
+                setDeleteProjectAcknowledged(false);
+                void api
+                  .projectDeletionPreview(target.id)
+                  .then(setDeleteProjectSessions)
+                  .catch((e) => setDeleteProjectError(errorMessage(e)));
+              }}
+            />
           </div>
         </aside>
         <div className="main-shell">
@@ -900,6 +943,7 @@ export default function App() {
                             onResend={async (message, text) => {
                               setBusy(true);
                               try {
+                                await flushCanvasDraft(sessionId, api);
                                 await api.resendMessage(message.id, {
                                   ...(model === automaticModel && routingStage
                                     ? { routingStage }
@@ -1081,7 +1125,19 @@ export default function App() {
                       </button>
                     </div>
                   )}
-                  <div className={'composer ' + (running ? 'is-running' : '')}>
+                  <div
+                    {...composerDrop.handlers}
+                    className={
+                      'composer ' +
+                      (running ? 'is-running ' : '') +
+                      (composerDrop.dragging ? 'is-file-drag' : '')
+                    }
+                  >
+                    {composerDrop.dragging && (
+                      <p className="composer-drop-hint" role="status">
+                        松开以插入文件路径
+                      </p>
+                    )}
                     <AttachmentCards
                       items={attachments.items}
                       onRemove={busy ? undefined : attachments.remove}

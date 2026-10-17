@@ -730,6 +730,11 @@ export function AutomationCenter({
                   每次在独立会话中执行。需要批准操作时，在执行会话中处理；项目任务使用原项目目录。
                 </p>
               </>
+            ) : rule.kind === 'canvas' ? (
+              <p className="muted">
+                画布工作流 · 发布版本 v{rule.canvas?.version}
+                。在画布的“定时触发”节点修改并重新发布流程；这里可调整时间或暂停。工具操作沿用需确认权限。
+              </p>
             ) : (
               <p className="muted">{capability(rule.kind)?.description} 整理会消耗所选模型额度。</p>
             )}

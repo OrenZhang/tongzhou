@@ -1,4 +1,5 @@
 import { CanvasNodePlugins } from './node-plugins';
+import { validateCanvasPorts } from '../../../src/shared/canvas-ports';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -25,7 +26,7 @@ export const resourceSchema = z.discriminatedUnion('kind', [
 export const nodeSchema = z
   .object({
     id,
-    kind: z.enum(['text', 'resource', 'agent', 'image', 'video', 'save', 'plugin']),
+    kind: z.enum(['text', 'resource', 'agent', 'image', 'video', 'audio', 'save', 'plugin']),
     pluginId: id.optional(),
     config: z
       .record(z.string(), z.json())
@@ -36,6 +37,7 @@ export const nodeSchema = z
     y: z.number().finite().min(-100000).max(100000),
     width: z.number().min(160).max(1600).optional(),
     height: z.number().min(120).max(1600).optional(),
+    group: z.string().trim().min(1).max(80).optional(),
     text: z.string().max(32000).optional(),
     resource: resourceSchema.optional(),
     media: z
@@ -51,6 +53,8 @@ export const nodeSchema = z
         aspectRatio: z.string().max(20).optional(),
         resolution: z.string().max(40).optional(),
         duration: z.number().min(1).max(120).optional(),
+        voice: z.string().max(120).optional(),
+        speed: z.number().min(0.25).max(4).optional(),
         parameters: z.record(z.string(), z.json()).optional(),
         destination: z
           .discriminatedUnion('kind', [
@@ -74,7 +78,14 @@ export const nodeSchema = z
   })
   .strict();
 export const edgeSchema = z
-  .object({ id, from: id, to: id, kind: z.enum(['reference', 'dependency']) })
+  .object({
+    id,
+    from: id,
+    to: id,
+    kind: z.enum(['reference', 'dependency']),
+    fromPort: id.optional(),
+    toPort: id.optional(),
+  })
   .strict();
 export const canvasWriteSchema = z
   .object({
@@ -214,6 +225,14 @@ export class Canvases {
       old = p.id ? this.get(p.id) : undefined;
     if (old && p.version !== old.version) throw new Error('画布已更新，请重新载入后保存');
     executionOrder(p);
+    const definitions = this.plugins.list();
+    for (const edge of p.edges) {
+      const source = p.nodes.find((n) => n.id === edge.from)!,
+        target = p.nodes.find((n) => n.id === edge.to)!;
+      const from = definitions.find((d) => d.id === (source.pluginId ?? source.kind)),
+        to = definitions.find((d) => d.id === (target.pluginId ?? target.kind));
+      if (from && to) validateCanvasPorts(edge, source, target, from, to);
+    }
     if (p.selection.some((v) => !p.nodes.some((n) => n.id === v)))
       throw new Error('选区包含不存在的节点');
     const next = {

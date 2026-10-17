@@ -112,6 +112,33 @@ describe('connection and channel services', () => {
     c.save({ id: 'f', name: '飞书', kind: 'feishu', enabled: false });
     await expect(c.send('f', 'test')).rejects.toThrow('停用');
   });
+  it('cancels a workflow delivery request and preserves an unknown receipt without replay', async () => {
+    const s = store(),
+      controller = new AbortController();
+    const transport = vi.fn(
+      (_url: unknown, init: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init.signal!.addEventListener('abort', () => reject(new Error('aborted')), {
+            once: true,
+          });
+        }),
+    );
+    const c = new Channels(s, () => {}, transport as any);
+    c.save({ id: 'f', name: '飞书', kind: 'feishu', enabled: true, webhook });
+    const pending = c.send('f', '摘要', undefined, 'canvas:job:node', undefined, controller.signal);
+    await vi.waitFor(() => expect(transport).toHaveBeenCalledTimes(1));
+    controller.abort();
+    expect((await pending).status).toBe('unknown');
+    expect((await c.send('f', '摘要', undefined, 'canvas:job:node')).status).toBe('unknown');
+    expect(transport).toHaveBeenCalledTimes(1);
+    const stopped = new AbortController();
+    stopped.abort();
+    await expect(
+      c.send('f', '摘要', undefined, 'new-key', undefined, stopped.signal),
+    ).rejects.toThrow();
+    expect(transport).toHaveBeenCalledTimes(1);
+    c.dispose();
+  });
   it('validates identities per connector and does not send tokens through redirects', async () => {
     const s = store(),
       c = new Connectors(s, () => {});

@@ -55,7 +55,9 @@ export function CanvasPreview({
       setMedia(
         results.filter(
           (item): item is NonNullable<typeof item> =>
-            !!item && ['image', 'video'].includes(item.preview.type) && !!item.preview.content,
+            !!item &&
+            ['image', 'video', 'audio'].includes(item.preview.type) &&
+            !!item.preview.content,
         ),
       );
       setLoading(false);
@@ -94,11 +96,11 @@ export function CanvasPreview({
     return () => document.removeEventListener('keydown', handle, true);
   }, [media, index]);
   return createPortal(
-    <Modal title="画布图片与视频预览" onClose={onClose} wide>
+    <Modal title="画布媒体预览" onClose={onClose} wide>
       {loading ? (
         <p role="status">正在读取原件…</p>
       ) : !current ? (
-        <p>没有可预览的图片或视频，原件可能已移除。</p>
+        <p>没有可预览的媒体，原件可能已移除。</p>
       ) : (
         <>
           <div className="canvas-preview-controls">
@@ -119,7 +121,14 @@ export function CanvasPreview({
               <ChevronRight size={16} />
             </button>
           </div>
-          {current.preview.type === 'video' ? (
+          {current.preview.type === 'audio' ? (
+            <audio
+              key={resourceKey(current.resource)}
+              src={current.preview.content}
+              controls
+              autoPlay
+            />
+          ) : current.preview.type === 'video' ? (
             <video
               key={resourceKey(current.resource)}
               className="canvas-media-lightbox"
@@ -146,7 +155,9 @@ export function CanvasPreview({
                   {item.preview.type === 'image' ? (
                     <img src={item.preview.content} alt="" />
                   ) : (
-                    <span>视频 {i + 1}</span>
+                    <span>
+                      {item.preview.type === 'audio' ? '音频' : '视频'} {i + 1}
+                    </span>
                   )}
                 </button>
               ))}

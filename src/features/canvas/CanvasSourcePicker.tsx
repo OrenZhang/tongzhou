@@ -11,6 +11,7 @@ export function CanvasSourcePicker({
   onSelect,
   onClose,
   imageOnly = false,
+  mediaOnly,
 }: {
   api: TongzhouAPI;
   data: Snapshot;
@@ -18,6 +19,7 @@ export function CanvasSourcePicker({
   onSelect(title: string, resource: CanvasResource): void;
   onClose(): void;
   imageOnly?: boolean;
+  mediaOnly?: 'image' | 'video' | 'audio';
 }) {
   const [kind, setKind] = useState<'content' | 'artifact' | 'message' | 'file'>('content'),
     [query, setQuery] = useState(''),
@@ -50,7 +52,7 @@ export function CanvasSourcePicker({
                 kind,
                 query,
                 sessionId: sourceSession || undefined,
-                media: imageOnly ? 'image' : undefined,
+                media: mediaOnly ?? (imageOnly ? 'image' : undefined),
               })
               .then((value) => {
                 if (current) setResult(value);
@@ -67,7 +69,7 @@ export function CanvasSourcePicker({
       current = false;
       clearTimeout(timer);
     };
-  }, [api, kind, query, sourceSession, project, path]);
+  }, [api, kind, query, sourceSession, project, path, imageOnly, mediaOnly]);
   return (
     <Modal title="选择画布资源" subtitle="引用已有内容；原件仍由来源模块管理。" onClose={onClose}>
       <div className="canvas-source-controls">
@@ -78,7 +80,7 @@ export function CanvasSourcePicker({
         >
           <option value="content">内容库</option>
           <option value="artifact">会话作品</option>
-          {!imageOnly && (
+          {!imageOnly && !mediaOnly && (
             <>
               <option value="message">会话消息</option>
               <option value="file">工作区文件</option>

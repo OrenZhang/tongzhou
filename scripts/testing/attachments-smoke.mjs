@@ -86,6 +86,48 @@ try {
     `http://127.0.0.1:${server.address().port}/v1`,
   );
   await chooseOption(page, '当前连接', 'attachment-fixture');
+  // Real disk-backed Files must cross the isolated preload bridge without losing their paths.
+  const droppedPaths = [path.join(root, '中文 文件.md'), path.join(root, 'second.txt')];
+  for (const file of droppedPaths) await writeFile(file, 'drop fixture');
+  await page.evaluate(() => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = true;
+    input.id = 'drop-fixture';
+    document.body.append(input);
+  });
+  await page.locator('#drop-fixture').setInputFiles(droppedPaths);
+  await page.getByLabel('消息', { exact: true }).fill('前文后文');
+  await page.evaluate(() => {
+    const input = document.querySelector('textarea[aria-label="消息"]');
+    input.focus();
+    input.setSelectionRange(2, 2);
+    const transfer = new DataTransfer();
+    for (const file of document.querySelector('#drop-fixture').files) transfer.items.add(file);
+    const composer = document.querySelector('.composer');
+    composer.dispatchEvent(
+      new DragEvent('dragover', { dataTransfer: transfer, bubbles: true, cancelable: true }),
+    );
+  });
+  await page.getByText('松开以插入文件路径', { exact: true }).waitFor();
+  await page.evaluate(() => {
+    const transfer = new DataTransfer();
+    for (const file of document.querySelector('#drop-fixture').files) transfer.items.add(file);
+    document
+      .querySelector('.composer')
+      .dispatchEvent(
+        new DragEvent('drop', { dataTransfer: transfer, bubbles: true, cancelable: true }),
+      );
+    document.querySelector('#drop-fixture').remove();
+  });
+  assert.equal(
+    await page.getByLabel('消息', { exact: true }).inputValue(),
+    '前文\n' + droppedPaths.join('\n') + '\n后文',
+  );
+  assert.equal(await page.locator('.composer .attachment-card').count(), 0);
+  assert.equal(await page.locator('.composer.is-file-drag').count(), 0);
+  await page.screenshot({ path: path.join(root, 'dropped-paths.png') });
+  await page.getByLabel('消息', { exact: true }).fill('');
   await page.getByLabel('消息', { exact: true }).focus();
   await app.evaluate(async ({ clipboard, ClipboardItem, nativeImage }) => {
     clipboard.clear();
@@ -182,6 +224,7 @@ try {
         passed: true,
         requests: requests.length,
         checks: [
+          'native file drop inserts full paths at cursor, preserving Chinese names and spaces',
           'clipboard image',
           'upload image',
           'image-only send',

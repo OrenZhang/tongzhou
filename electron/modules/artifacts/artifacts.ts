@@ -42,6 +42,8 @@ const formats: Record<string, [ArtifactKind, string]> = {
   '.mp3': ['audio', 'audio/mpeg'],
   '.wav': ['audio', 'audio/wav'],
   '.m4a': ['audio', 'audio/mp4'],
+  '.ogg': ['audio', 'audio/ogg'],
+  '.flac': ['audio', 'audio/flac'],
   '.mp4': ['video', 'video/mp4'],
   '.webm': ['video', 'video/webm'],
   '.json': ['file', 'application/json'],
@@ -290,7 +292,7 @@ export class Artifacts {
   preview(id: string): ArtifactPreview {
     const a = this.read(id);
     if (a.remoteUrl) return { type: 'external' };
-    if (a.kind === 'image' || a.kind === 'video')
+    if (a.kind === 'image' || a.kind === 'video' || a.kind === 'audio')
       return {
         type: a.kind,
         content: `data:${a.mimeType};base64,${this.bytes(id).toString('base64')}`,

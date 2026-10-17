@@ -10,17 +10,37 @@ export const canvasNodeKinds = {
   agent: 'Agent 处理',
   image: '图片生成',
   video: '视频生成',
+  audio: '音频生成',
   save: '保存到内容库',
   plugin: '工具调用',
 } as const;
 export type CanvasNodeKind = keyof typeof canvasNodeKinds;
+export type CanvasValueType = 'text' | 'image' | 'video' | 'audio' | 'resource';
+export interface CanvasPort {
+  id: string;
+  label: string;
+  types: CanvasValueType[];
+  description?: string;
+}
 export interface CanvasNodePluginDefinition {
   id: string;
   name: string;
   kind: CanvasNodeKind;
   version: number;
-  inputs: ('text' | 'image' | 'video' | 'resource')[];
-  outputs: ('text' | 'image' | 'video' | 'resource')[];
+  /** SDK contract version; omitted by legacy registrations (v1). */
+  apiVersion?: 1;
+  adapter?: 'native' | 'mcp' | 'visual';
+  description?: string;
+  ports?: { inputs: CanvasPort[]; outputs: CanvasPort[] };
+  dynamicOutputs?: 'categories';
+  /** Static sources can be consumed by reference without running a task. */
+  source?: boolean;
+  /** External effects and time-dependent nodes must execute on every run. */
+  cache?: 'never';
+  view?: { renderer: string; textLabel?: string; resource?: 'image' };
+  defaults?: Pick<CanvasNode, 'text' | 'config' | 'width' | 'height'>;
+  inputs: ('text' | 'image' | 'video' | 'audio' | 'resource')[];
+  outputs: ('text' | 'image' | 'video' | 'audio' | 'resource')[];
   configKey?: 'config' | 'media';
   configSchema: Record<string, any>;
 }
@@ -37,6 +57,8 @@ export interface CanvasMedia {
   aspectRatio?: string;
   resolution?: string;
   duration?: number;
+  voice?: string;
+  speed?: number;
   parameters?: Record<string, unknown>;
   destination?:
     | { kind: 'artifacts' }
@@ -66,6 +88,7 @@ export interface CanvasNode {
   y: number;
   width?: number;
   height?: number;
+  group?: string;
   text?: string;
   resource?: CanvasResource;
   media?: CanvasMedia;
@@ -80,6 +103,8 @@ export interface CanvasEdge {
   from: string;
   to: string;
   kind: 'reference' | 'dependency';
+  fromPort?: string;
+  toPort?: string;
 }
 export interface Canvas {
   id: string;
@@ -99,6 +124,11 @@ export interface CanvasOutput {
   text: string;
   prompt?: string;
   resources: CanvasResource[];
+  inputPort?: string;
+  ports?: Record<
+    string,
+    { text: string; resources: CanvasResource[]; items?: { name: string; description: string }[] }
+  >;
 }
 export interface CanvasNodeRun {
   plugin?: { id: string; version: number };
@@ -157,13 +187,19 @@ export interface CanvasOperation {
 }
 
 /** Only generation tools appear in media pickers; query and image-understanding tools do not. */
-export function canvasMediaTools(plugin: import('./types').PluginConfig, kind: 'image' | 'video') {
+export function canvasMediaTools(
+  plugin: import('./types').PluginConfig,
+  kind: 'image' | 'video' | 'audio',
+) {
   return (plugin.catalog ?? []).filter(
     (t) =>
       !t.annotations?.readOnlyHint &&
       !/(query|status|search|understand|describe|read|list|inspect)/i.test(t.name) &&
-      (kind === 'image' ? /image|picture|绘图|生图/i : /video|视频/i).test(
-        t.name + ' ' + t.description,
-      ),
+      (kind === 'image'
+        ? /image|picture|绘图|生图/i
+        : kind === 'audio'
+          ? /audio|speech|tts|music|语音|配音|音乐/i
+          : /video|视频/i
+      ).test(t.name + ' ' + t.description),
   );
 }

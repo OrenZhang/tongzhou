@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import type { Store } from '../../services/storage/store';
 import type { ToolScope } from '../../core/tools/extensions';
-import type { Session } from '../../../src/shared/types';
+import type { Session, PluginConfig } from '../../../src/shared/types';
+import { canvasMediaTools } from '../../../src/shared/canvas';
 import type { Canvases } from './canvas';
 import { operationsSchema } from './canvas';
 import type { CanvasWorkflows } from './workflow';
@@ -48,7 +49,24 @@ export function attachCanvasTools(
         .state()
         .canvases.filter((c) => !session.canvasContext || c.id === session.canvasContext.canvasId),
       activeCanvasId: store.get<Session>('session', session.id).activeCanvasId,
-      nodePlugins: canvases.plugins.list().map(({ configSchema: _, ...p }) => p),
+      nodePlugins: canvases.plugins
+        .list()
+        .map(({ id, name, kind, description, ports }) => ({ id, name, kind, description, ports })),
+      mediaTools: store
+        .list<PluginConfig>('plugin')
+        .filter((p) => p.enabled)
+        .flatMap((plugin) =>
+          (['image', 'video', 'audio'] as const).flatMap((kind) =>
+            canvasMediaTools(plugin, kind).map((tool) => ({
+              kind,
+              pluginId: plugin.id,
+              pluginName: plugin.name,
+              tool: tool.name,
+              description: tool.description,
+              inputSchema: tool.inputSchema,
+            })),
+          ),
+        ),
     }),
   );
   define(
@@ -94,6 +112,14 @@ export function attachCanvasTools(
                 output: n.output && {
                   text: n.output.text.slice(0, 300),
                   resources: n.output.resources,
+                  ports:
+                    n.output.ports &&
+                    Object.fromEntries(
+                      Object.entries(n.output.ports).map(([key, value]) => [
+                        key,
+                        { text: value.text.slice(0, 300), count: value.items?.length },
+                      ]),
+                    ),
                 },
               },
             ]),
@@ -104,7 +130,7 @@ export function attachCanvasTools(
   );
   define(
     'canvas_apply',
-    '创建画布或按当前版本批量修改节点、连线和选区。createTitle 仅新建时使用；返回画布 ID 与版本。连线 reference 表示资料引用，dependency 决定执行顺序。',
+    '创建画布或按当前版本批量修改节点、连线和选区。修改已有画布必须传 canvasId、version、ops。每次只提交少量必要操作。最小 ops 示例：[{"type":"put_node","node":{"id":"cat","kind":"image","title":"小猫","x":40,"y":40,"text":"一只小猫"}}]。put_node 是完整替换，更新前先读原节点并保留未修改字段。createTitle 仅新建时使用。连线 reference 表示资料引用，dependency 决定执行顺序；fromPort/toPort 使用插件声明的端口 ID。',
     z
       .object({
         canvasId: z.uuid().optional(),

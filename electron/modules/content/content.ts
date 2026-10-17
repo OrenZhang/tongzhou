@@ -30,6 +30,7 @@ export const contentWriteSchema = z.object({
   content: z.string().max(200000),
   contentType: z.string().trim().max(80).optional(),
   sourceIds: z.array(z.string().uuid()).max(20).optional(),
+  tags: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
 });
 export const contentRunSchema = z.object({
   documentId: z.string().uuid(),
@@ -149,6 +150,19 @@ export class ContentWorkspace {
     const doc = this.document(id, sessionId);
     if (!doc.blob) return { type: 'text', content: doc.content };
     const ext = path.extname(doc.fileName ?? '').toLowerCase();
+    if (['.mp3', '.wav', '.m4a', '.ogg', '.flac'].includes(ext)) {
+      const bytes = this.knowledge.originalBytes(id);
+      const mime = {
+        '.mp3': 'audio/mpeg',
+        '.wav': 'audio/wav',
+        '.m4a': 'audio/mp4',
+        '.ogg': 'audio/ogg',
+        '.flac': 'audio/flac',
+      }[ext];
+      return bytes.length <= 25 * 1024 * 1024
+        ? { type: 'audio', content: `data:${mime};base64,${bytes.toString('base64')}` }
+        : { type: 'file' };
+    }
     if (['.mp4', '.webm'].includes(ext)) {
       const bytes = this.knowledge.originalBytes(id);
       return bytes.length <= 25 * 1024 * 1024
@@ -196,7 +210,7 @@ export class ContentWorkspace {
         projectId: old
           ? old.projectId
           : projectFamilyId(this.store.list('project'), session?.projectId),
-        tags: old?.tags ?? [],
+        tags: p.tags ?? old?.tags ?? [],
         sourceIds: p.sourceIds ?? old?.sources.filter((s) => s.version).map((s) => s.id) ?? [],
         status: sessionId ? 'draft' : old?.status === 'draft' ? 'draft' : 'ready',
       },

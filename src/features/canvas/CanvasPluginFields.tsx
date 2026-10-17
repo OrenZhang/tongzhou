@@ -144,13 +144,22 @@ export function CanvasPluginFields({
         输入：{definition?.inputs.join(' / ') || '无'} · 输出：
         {definition?.outputs.join(' / ') || '无'}
       </small>
-      {(node.pluginId ?? node.kind) === 'plugin' ? (
+      {definition?.adapter === 'mcp' || (node.pluginId ?? node.kind) === 'plugin' ? (
         <>
           <label>
             服务插件
             <select
               value={String(config.pluginId ?? '')}
-              onChange={(e) => update({ pluginId: e.target.value })}
+              onChange={(e) => {
+                const next = data.plugins?.find((p) => p.id === e.target.value);
+                const tool = next?.catalog?.some((t) => t.name === config.tool)
+                  ? config.tool
+                  : undefined;
+                update({
+                  pluginId: e.target.value,
+                  ...(tool ? { tool, arguments: config.arguments ?? {} } : {}),
+                });
+              }}
             >
               <option value="">选择已启用的插件</option>
               {data.plugins

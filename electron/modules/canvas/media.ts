@@ -40,7 +40,9 @@ export function mediaResponse(result: ToolOutput) {
       if (/^(status|state|task_status)$/.test(key) && typeof v === 'string')
         status = v.toLowerCase();
       if (
-        /^(url|image_url|video_url|download_url|file_download_url|image_urls|video_urls)$/.test(key)
+        /^(url|image_url|video_url|download_url|file_download_url|image_urls|video_urls|audio_url|audio_urls)$/.test(
+          key,
+        )
       ) {
         for (const item of Array.isArray(v) ? v : [v])
           if (typeof item === 'string' && item.startsWith('https://')) {
@@ -66,7 +68,21 @@ export async function mediaArguments(
 ) {
   const properties = tool.inputSchema.properties ?? {},
     args: Record<string, unknown> = { ...node.media?.parameters },
-    m = node.media ?? {};
+    m = { ...node.media };
+  const portRefs = (port: string) =>
+    inputs.filter((i) => i.inputPort === port).flatMap((i) => i.resources);
+  const first = portRefs('firstFrame'),
+    last = portRefs('lastFrame'),
+    references = portRefs('reference');
+  if (first.length > 1 || last.length > 1) throw new Error('首帧与尾帧端口各只能连接一张图片');
+  if (first.length || last.length) {
+    m.firstFrame = first[0] ?? m.firstFrame;
+    m.lastFrame = last[0] ?? m.lastFrame;
+    m.mode = m.lastFrame ? 'frames' : 'first-frame';
+  } else if (references.length) {
+    m.referenceImages = references;
+    m.mode = 'reference';
+  }
   for (const key of Object.keys(args))
     if (!properties[key]) throw new Error('插件不支持扩展参数：' + key);
   await mkdir(root, { recursive: true });
@@ -74,6 +90,7 @@ export async function mediaArguments(
   const promptKey = field(['prompt', 'text', 'description']);
   if (!promptKey) throw new Error('所选工具未提供提示词参数，请选择生成工具');
   const textInputs = inputs
+    .filter((o) => !['reference', 'firstFrame', 'lastFrame'].includes(o.inputPort ?? ''))
     .filter(
       (o) =>
         o.prompt ||
@@ -93,6 +110,8 @@ export async function mediaArguments(
   if (!args[promptKey]) throw new Error('请填写生成提示词，或连接文本节点');
   for (const [value, names] of [
     [m.model, ['model', 'model_name']],
+    [m.voice, ['voice_id', 'voice']],
+    [m.speed, ['speed', 'speech_rate']],
     [m.aspectRatio, ['aspect_ratio', 'ratio']],
     [m.resolution, ['resolution']],
     [node.kind === 'video' ? (m.duration ?? 6) : undefined, ['duration', 'seconds']],
@@ -218,7 +237,14 @@ export async function mediaArguments(
     if (properties[name])
       args[name] = /directory|dir$/.test(name)
         ? root
-        : path.join(root, node.kind === 'video' ? 'generated.mp4' : 'generated.png');
+        : path.join(
+            root,
+            node.kind === 'audio'
+              ? 'generated.mp3'
+              : node.kind === 'video'
+                ? 'generated.mp4'
+                : 'generated.png',
+          );
   for (const key of tool.inputSchema.required ?? [])
     if (args[key] === undefined && properties[key]?.default !== undefined)
       args[key] = properties[key].default;
@@ -243,15 +269,24 @@ export async function executeMedia(
 ) {
   const pluginId = node.media!.pluginId!,
     tool = node.media!.tool!,
-    kind = node.kind === 'video' ? 'video' : 'image';
+    kind = node.kind === 'audio' ? 'audio' : node.kind === 'video' ? 'video' : 'image';
+  const label = kind === 'audio' ? '音频' : kind === 'video' ? '视频' : '图片';
   const collect = async (result: ToolOutput) => {
     const response = mediaResponse(result),
       ids = [...(result.artifactIds ?? [])];
     for (const [i, url] of (ids.length ? [] : response.urls).entries()) {
+      const audioExtension = path.extname(new URL(url).pathname).slice(1).toLowerCase();
+      const extension =
+        kind === 'audio'
+          ? ['mp3', 'wav', 'm4a', 'ogg', 'flac'].includes(audioExtension)
+            ? audioExtension
+            : 'mp3'
+          : kind === 'image'
+            ? 'png'
+            : 'mp4';
       const a = await owners.artifacts.save(
         {
-          name: `${node.title}-${item.index + 1}-${i + 1}.${kind === 'image' ? 'png' : 'mp4'}`,
-          mimeType: kind === 'image' ? 'image/png' : 'video/mp4',
+          name: `${node.title.slice(0, 150)}-${item.index + 1}-${i + 1}.${extension}`,
           url,
         },
         origin,
@@ -261,7 +296,12 @@ export async function executeMedia(
     if (!ids.length && !response.taskId && outputRoot) {
       const files = (await readdir(outputRoot).catch(() => []))
         .filter((name) =>
-          (kind === 'image' ? /\.(png|jpe?g|webp|gif)$/i : /\.(mp4|webm)$/i).test(name),
+          (kind === 'audio'
+            ? /\.(mp3|wav|m4a|ogg|flac)$/i
+            : kind === 'image'
+              ? /\.(png|jpe?g|webp|gif)$/i
+              : /\.(mp4|webm)$/i
+          ).test(name),
         )
         .slice(0, 8);
       for (const name of files) {
@@ -282,7 +322,7 @@ export async function executeMedia(
     ? { taskId: item.remoteTaskId, urls: [], status: '' }
     : await collect(await scope.callPlugin(pluginId, tool, args));
   if (!item.resources.length && response.taskId) {
-    const pollName = kind === 'video' ? 'query_video_generation' : 'query_image_generation';
+    const pollName = `query_${kind}_generation`;
     const poll = await scope.describePlugin(pluginId, pollName),
       p = poll.inputSchema.properties ?? {};
     const taskKey = ['task_id', 'taskId', 'id'].find((k) => p[k]);
@@ -290,7 +330,7 @@ export async function executeMedia(
     const pollArgs: Record<string, unknown> = { [taskKey]: response.taskId };
     if (p.model && node.media?.model) pollArgs.model = node.media.model;
     for (let attempt = 0; attempt < 120 && !item.resources.length; attempt++) {
-      progress(`第 ${item.index + 1} 项：等待${kind === 'video' ? '视频' : '图片'}生成`);
+      progress(`第 ${item.index + 1} 项：等待${label}生成`);
       if (attempt) await delay(5000, undefined, { signal });
       response = await collect(await scope.callPlugin(pluginId, pollName, pollArgs));
       signal.throwIfAborted();
@@ -300,9 +340,9 @@ export async function executeMedia(
     throw new Error(
       kind === 'video'
         ? '视频尚未返回可用产物；已有任务 ID 可继续查询'
-        : '插件没有返回真实图片产物',
+        : `插件没有返回真实${label}产物`,
     );
-  return `${kind === 'video' ? '视频' : '图片'}生成完成`;
+  return `${label}生成完成`;
 }
 
 export async function saveMedia(

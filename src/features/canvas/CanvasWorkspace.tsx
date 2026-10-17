@@ -1,3 +1,13 @@
+import { Modal } from '../../components/components';
+import { CanvasLibrary } from './CanvasLibrary';
+import { CanvasWorkflowFields } from './CanvasWorkflowFields';
+import { CanvasSplitFields, CanvasSplitResults } from './CanvasSplit';
+import { CanvasConnections } from './CanvasConnections';
+import { splitPluginId, splitCategories } from '../../shared/canvas-ports';
+import { registerCanvasDraft } from './draft-sync';
+import { CanvasAssistant } from './CanvasAssistant';
+import { mergeCanvasChanges } from '../../shared/canvas-collaboration';
+import { duplicateSelection, alignSelection } from '../../shared/canvas-editing';
 import {
   CanvasMediaFields,
   CanvasMediaResults,
@@ -15,7 +25,8 @@ import {
   Redo2,
   Copy,
   X,
-  PanelRightClose,
+  Settings2,
+  MessageSquare,
 } from 'lucide-react';
 import type {
   Canvas,
@@ -55,13 +66,16 @@ export function CanvasWorkspace({
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
     [picker, setPicker] = useState<'add' | 'replace' | false>(false),
-    [inspector, setInspector] = useState(!compact),
+    [inspector, setInspector] = useState<string>(),
+    [settingsOpen, setSettingsOpen] = useState(false),
+    [chatOpen, setChatOpen] = useState(false),
+    [conflict, setConflict] = useState<Canvas>(),
     [kind, setKind] = useState<string>('text'),
-    [target, setTarget] = useState(''),
-    [edgeKind, setEdgeKind] = useState<'dependency' | 'reference'>('dependency'),
     [reuse, setReuse] = useState(true),
     [owner, setOwner] = useState(sessionId ?? ''),
-    [runId, setRunId] = useState('');
+    [runId, setRunId] = useState(''),
+    [library, setLibrary] = useState<'prompt' | 'template'>(),
+    [notice, setNotice] = useState('');
   const [libraries, setLibraries] = useState<{ id: string; name: string }[]>([
     { id: 'default', name: '我的内容' },
   ]);
@@ -77,6 +91,10 @@ export function CanvasWorkspace({
       active = false;
     };
   }, [api]);
+  useEffect(() => {
+    setInspector(undefined);
+    setSettingsOpen(false);
+  }, [canvas?.id]);
   const workspace = useRef<HTMLElement>(null);
   const validateConfig = () => {
     const invalid = workspace.current?.querySelector<HTMLInputElement | HTMLTextAreaElement>(
@@ -90,6 +108,8 @@ export function CanvasWorkspace({
   const boundCanvas = useRef<string | undefined>(undefined);
   boundCanvas.current = data.sessions.find((s) => s.id === owner)?.activeCanvasId;
   const current = useRef(canvas),
+    savedBase = useRef<Canvas | null>(null),
+    conflictRef = useRef<Canvas | undefined>(undefined),
     dirtyRef = useRef(dirty),
     request = useRef(0),
     undo = useRef<Canvas[]>([]),
@@ -130,6 +150,36 @@ export function CanvasWorkspace({
         result = await api.canvasState(id);
       if (seq !== request.current) return;
       setState(result);
+      const local = current.current,
+        remote = result.canvas,
+        base = savedBase.current;
+      if (
+        !force &&
+        local &&
+        remote &&
+        base?.id === local.id &&
+        remote.id === local.id &&
+        remote.version > base.version &&
+        dirtyRef.current
+      ) {
+        const merged = mergeCanvasChanges(base, local, remote);
+        if (merged.conflicts.length) {
+          conflictRef.current = remote;
+          setConflict(remote);
+          return;
+        }
+        undo.current = [local];
+        redo.current = [];
+        current.current = merged.canvas;
+        savedBase.current = remote;
+        dirtyRef.current = merged.dirty;
+        setCanvas(merged.canvas);
+        setDirty(merged.dirty);
+        conflictRef.current = undefined;
+        setConflict(undefined);
+        setNotice('已同步 AI／其他窗口的修改，并保留你的本地编辑。');
+        return;
+      }
       if (force || !dirtyRef.current) {
         let next = result.canvas,
           restored = false;
@@ -145,6 +195,15 @@ export function CanvasWorkspace({
           } catch {
             /* Ignore malformed browser drafts. */
           }
+        if (!force && local && next?.id === local.id && next.version > local.version) {
+          undo.current.push(local);
+          redo.current = [];
+          if (undo.current.length > 80) undo.current.shift();
+          setNotice('画布已更新，可撤销本次修改。');
+        }
+        savedBase.current = result.canvas;
+        conflictRef.current = undefined;
+        setConflict(undefined);
         current.current = next;
         dirtyRef.current = restored;
         setCanvas(next);
@@ -157,6 +216,7 @@ export function CanvasWorkspace({
     void load(data.sessions.find((s) => s.id === sessionId)?.activeCanvasId, true, true).catch(
       (e) => setError(errorMessage(e)),
     );
+    setOwner(sessionId ?? '');
   }, [api, sessionId]);
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -195,7 +255,7 @@ export function CanvasWorkspace({
   );
   const activeRun = state.runs.find((r) => r.status === 'running'),
     shownRun = state.runs.find((r) => r.id === runId) ?? state.runs[0];
-  const node = canvas?.nodes.find((n) => n.id === canvas.selection[0]);
+  const node = canvas?.nodes.find((n) => n.id === (inspector ?? canvas.selection[0]));
   const ownerSession = data.sessions.find((s) => s.id === owner),
     readOnly =
       effectivePermission(
@@ -203,16 +263,37 @@ export function CanvasWorkspace({
         data.defaultPermission,
         data.agents.find((a) => a.id === ownerSession?.agentId),
       ) === 'read-only';
-  const save = async () => {
+  const saving = useRef<Promise<Canvas | undefined> | null>(null);
+  const save = (): Promise<Canvas | undefined> => {
+    if (saving.current) return saving.current;
+    const pending = saveOnce();
+    saving.current = pending;
+    void pending
+      .finally(() => {
+        if (saving.current === pending) saving.current = null;
+      })
+      .catch(() => {});
+    return pending;
+  };
+  const saveOnce = async () => {
+    if (current.current) await load(current.current.id);
+    if (conflictRef.current) throw new Error('请先处理画布修改冲突');
     const c = current.current;
     if (!c) return;
+    if (!dirtyRef.current) return c;
     const { updatedAt: _, ...input } = c,
       next = await api.canvasSave(input);
-    localStorage.removeItem(draftKey(c.id));
+    try {
+      localStorage.removeItem(draftKey(c.id));
+    } catch {}
+    if (owner) await api.canvasBind(owner, next.id);
+    if (current.current?.id !== c.id) return next;
+    savedBase.current = next;
     if (current.current !== c && current.current?.id === c.id) {
       const edited = { ...current.current, version: next.version };
       current.current = edited;
       setCanvas(edited);
+      dirtyRef.current = true;
       setDirty(true);
       return next;
     }
@@ -220,9 +301,32 @@ export function CanvasWorkspace({
     dirtyRef.current = false;
     setCanvas(next);
     setDirty(false);
-    if (owner) await api.canvasBind(owner, next.id);
     await load(next.id);
     return next;
+  };
+  const flush = useRef(async () => {});
+  flush.current = async () => {
+    for (let i = 0; i < 8 && (dirtyRef.current || saving.current); i++) await save();
+    if (dirtyRef.current) throw new Error('画布仍在编辑，请稍后发送');
+    if (owner && current.current) await api.canvasBind(owner, current.current.id);
+  };
+  useEffect(() => (owner ? registerCanvasDraft(owner, () => flush.current()) : undefined), [owner]);
+  const bindOwner = async (id: string) => {
+    if (dirtyRef.current) await flush.current();
+    if (id && current.current) await api.canvasBind(id, current.current.id);
+    setOwner(id);
+  };
+  const createChat = async () => {
+    if (!current.current) return;
+    await flush.current();
+    const created = await api.createSession(ownerSession?.projectId ?? null);
+    await api.setSessionPermission(created.id, 'full-access');
+    await api.updateSession(created.id, {
+      title: `${current.current.title} · 画布聊天`,
+      ...(ownerSession ? { providerId: ownerSession.providerId, model: ownerSession.model } : {}),
+    });
+    await api.canvasBind(created.id, current.current.id);
+    setOwner(created.id);
   };
   const create = async () => {
     const next = await api.canvasSave({
@@ -247,6 +351,23 @@ export function CanvasWorkspace({
     if (!c) return;
     const id = crypto.randomUUID(),
       i = c.nodes.length;
+    const defaults = structuredClone(state.plugins?.find((p) => p.id === pluginId)?.defaults ?? {});
+    const width = defaults.width ?? 240,
+      height = defaults.height ?? 180;
+    const column = Math.max(width, ...c.nodes.map((n) => n.width ?? 240)) + 40;
+    const row = Math.max(height, ...c.nodes.map((n) => n.height ?? 180)) + 40;
+    const x = (i % 4) * column;
+    let y = Math.floor(i / 4) * row;
+    while (
+      c.nodes.some(
+        (n) =>
+          x < n.x + (n.width ?? 240) + 20 &&
+          x + width + 20 > n.x &&
+          y < n.y + (n.height ?? 180) + 20 &&
+          y + height + 20 > n.y,
+      )
+    )
+      y += row;
     change({
       ...c,
       nodes: [
@@ -254,13 +375,14 @@ export function CanvasWorkspace({
         {
           id,
           kind: type,
+          ...defaults,
           ...(pluginId ? { pluginId } : {}),
           title: title ?? canvasNodeKinds[type],
-          x: (i % 4) * 300,
-          y: Math.floor(i / 4) * 240,
+          x,
+          y,
           ...(resource ? { resource } : {}),
           ...(type === 'save' ? { libraryId: 'default' } : {}),
-          ...(['image', 'video'].includes(type)
+          ...(['image', 'video', 'audio'].includes(type)
             ? {
                 media: {
                   count: 1,
@@ -273,13 +395,21 @@ export function CanvasWorkspace({
       ],
       selection: [id],
     });
-    setInspector(true);
   };
   const patch = (patch: Partial<CanvasNode>) => {
     if (canvas && node)
       change({
         ...canvas,
         nodes: canvas.nodes.map((n) => (n.id === node.id ? { ...n, ...patch } : n)),
+        edges:
+          node.pluginId === splitPluginId && patch.config
+            ? canvas.edges.filter(
+                (e) =>
+                  e.from !== node.id ||
+                  !e.fromPort ||
+                  splitCategories({ ...node, ...patch }).some((c) => c.id === e.fromPort),
+              )
+            : canvas.edges,
       });
   };
   const history = (direction: 'undo' | 'redo') => {
@@ -295,22 +425,24 @@ export function CanvasWorkspace({
       setDirty(true);
     }
   };
-  const remove = () => {
-    if (canvas)
-      change({
-        ...canvas,
-        nodes: canvas.nodes.filter((n) => !canvas.selection.includes(n.id)),
-        edges: canvas.edges.filter(
-          (e) => !canvas.selection.includes(e.from) && !canvas.selection.includes(e.to),
-        ),
-        selection: [],
-      });
+  const remove = (ids?: string[]) => {
+    const c = current.current;
+    if (!c) return;
+    const removed = new Set(ids ?? c.selection);
+    if (!c.nodes.some((n) => removed.has(n.id))) return;
+    change({
+      ...c,
+      nodes: c.nodes.filter((n) => !removed.has(n.id)),
+      edges: c.edges.filter((e) => !removed.has(e.from) && !removed.has(e.to)),
+      selection: c.selection.filter((id) => !removed.has(id)),
+    });
   };
   const execute = (selected = false) =>
     void perform(async () => {
       validateConfig();
       if (!owner) throw new Error('请选择执行会话');
-      const c = dirtyRef.current ? await save() : current.current;
+      await flush.current();
+      const c = current.current;
       if (!c) return;
       const r = await api.canvasExecute({
         canvasId: c.id,
@@ -324,8 +456,9 @@ export function CanvasWorkspace({
     });
   const saveReferenced = () =>
     void perform(async () => {
-      if (!owner || !node) throw new Error('请选择执行会话和图片节点');
-      const c = dirtyRef.current ? await save() : current.current;
+      if (!owner || !node) throw new Error('请选择执行会话和媒体节点');
+      await flush.current();
+      const c = current.current;
       if (!c) return;
       const run = await api.canvasExecute({
         canvasId: c.id,
@@ -347,7 +480,8 @@ export function CanvasWorkspace({
     void perform(async () => {
       validateConfig();
       if (!owner) throw new Error('请选择执行会话');
-      const c = dirtyRef.current ? await save() : current.current;
+      await flush.current();
+      const c = current.current;
       if (!c) return;
       const r = await api.canvasExecute({
         canvasId: c.id,
@@ -371,7 +505,17 @@ export function CanvasWorkspace({
       ref={workspace}
       aria-label="画布与工作流"
       onKeyDown={(e) => {
+        if (e.target instanceof Element && e.target.closest('[role="dialog"],.canvas-chat-float'))
+          return;
         if (e.target instanceof Element && e.target.closest('input,textarea,select')) return;
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a' && canvas) {
+          e.preventDefault();
+          select(canvas.nodes.map((n) => n.id));
+        }
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd' && canvas) {
+          e.preventDefault();
+          void perform(async () => change(duplicateSelection(canvas)));
+        }
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
           e.preventDefault();
           void perform(save);
@@ -386,6 +530,52 @@ export function CanvasWorkspace({
         }
       }}
     >
+      {library && (
+        <CanvasLibrary
+          api={api}
+          mode={library}
+          initialText={node?.text}
+          onClose={() => setLibrary(undefined)}
+          onTemplate={async (id, version) => {
+            await flush.current();
+            const next = await api.canvasLoadTemplate(id, version);
+            if (owner) await api.canvasBind(owner, next.id);
+            undo.current = [];
+            redo.current = [];
+            await load(next.id, true);
+            setNotice('模板已创建。请重新选择素材、插件连接和执行会话。');
+          }}
+          onPrompt={(text, title, replace) => {
+            const c = current.current;
+            if (!c) throw new Error('请先创建画布');
+            if (replace) {
+              if (c.selection.length !== 1) throw new Error('请选择一个节点后填入提示词');
+              change({
+                ...c,
+                nodes: c.nodes.map((n) => (n.id === c.selection[0] ? { ...n, text } : n)),
+              });
+            } else {
+              if (c.nodes.length >= 200) throw new Error('画布最多支持 200 个节点');
+              const id = crypto.randomUUID();
+              change({
+                ...c,
+                nodes: [
+                  ...c.nodes,
+                  {
+                    id,
+                    kind: 'text',
+                    title,
+                    text,
+                    x: (c.nodes.length % 4) * 300,
+                    y: Math.floor(c.nodes.length / 4) * 240,
+                  },
+                ],
+                selection: [id],
+              });
+            }
+          }}
+        />
+      )}
       <header className="canvas-toolbar">
         <select
           aria-label="选择画布"
@@ -428,7 +618,7 @@ export function CanvasWorkspace({
               {dirty ? '保存' : '已保存'}
             </button>
             <button
-              title="另存为工作流模板"
+              title="复制画布"
               disabled={busy}
               onClick={() =>
                 void perform(async () => {
@@ -452,13 +642,74 @@ export function CanvasWorkspace({
             </span>
           </>
         )}
+        <button
+          disabled={busy}
+          onClick={() =>
+            void perform(async () => {
+              if (dirtyRef.current) await flush.current();
+              const next = await api.canvasImport();
+              if (next) {
+                if (owner) await api.canvasBind(owner, next.id);
+                undo.current = [];
+                redo.current = [];
+                await load(next.id, true);
+                setNotice('已导入。请重新选择模型／插件连接，并检查素材和输出位置。');
+              }
+            })
+          }
+        >
+          导入
+        </button>
+        <select
+          aria-label="导出画布"
+          value=""
+          disabled={busy || !canvas}
+          onChange={(e) => {
+            const mode = e.target.value as 'template' | 'project';
+            if (mode)
+              void perform(async () => {
+                await flush.current();
+                const c = current.current!;
+                const path = await api.canvasExport(c.id, c.version, mode);
+                if (path) setNotice('已导出到：' + path);
+              });
+          }}
+        >
+          <option value="">导出…</option>
+          <option value="template">工作流模板 JSON</option>
+          <option value="project">项目 JSON（含素材与结果）</option>
+        </select>
+        <button
+          disabled={busy || !canvas}
+          onClick={() =>
+            void perform(async () => {
+              await flush.current();
+              const c = current.current!;
+              await api.canvasSaveTemplate(c.id, c.version);
+              setNotice('已保存到内容库的“画布模板”目录。');
+            })
+          }
+        >
+          保存为模板
+        </button>
+        <button onClick={() => setLibrary('template')}>模板库</button>
+        <button onClick={() => setLibrary('prompt')} disabled={!canvas}>
+          提示词库
+        </button>
         <span className="canvas-toolbar-spacer" />
         <button
-          aria-label="切换节点配置"
-          aria-pressed={inspector}
-          onClick={() => setInspector((v) => !v)}
+          aria-label="切换画布聊天"
+          aria-pressed={chatOpen}
+          onClick={() => setChatOpen((v) => !v)}
         >
-          <PanelRightClose size={15} />
+          <MessageSquare size={15} /> 聊天
+        </button>
+        <button
+          aria-label="画布设置"
+          disabled={busy || !canvas}
+          onClick={() => setSettingsOpen(true)}
+        >
+          <Settings2 size={15} /> 画布设置
         </button>
         {onClose && (
           <button
@@ -476,10 +727,48 @@ export function CanvasWorkspace({
           </button>
         )}
       </header>
+      {notice && (
+        <div className="canvas-notice" role="status">
+          {notice}
+          <button aria-label="关闭提示" onClick={() => setNotice('')}>
+            ×
+          </button>
+        </div>
+      )}
       {error && (
         <div className="canvas-alert" role="alert">
           {error}
           <button onClick={() => void perform(() => load(canvas?.id, true))}>重新载入</button>
+        </div>
+      )}
+      {conflict && (
+        <div className="canvas-alert" role="alert">
+          你和 AI／其他窗口修改了同一处内容，已暂停同步。
+          <button
+            onClick={() =>
+              void perform(async () => {
+                const id = current.current?.id;
+                await load(id, true);
+                if (id) localStorage.removeItem(draftKey(id));
+                setNotice('已采用最新版本，可以继续编辑和对话。');
+              })
+            }
+          >
+            使用最新版本
+          </button>
+          <button
+            onClick={() => {
+              const local = current.current;
+              if (!local) return;
+              savedBase.current = conflict;
+              change({ ...local, version: conflict.version });
+              conflictRef.current = undefined;
+              setConflict(undefined);
+              setNotice('已保留本地草稿；保存后将覆盖该版本的远端修改。');
+            }}
+          >
+            保留本地草稿
+          </button>
         </div>
       )}
       {canvas && (
@@ -510,9 +799,41 @@ export function CanvasWorkspace({
           <button title="重做" disabled={!redo.current.length} onClick={() => history('redo')}>
             <Redo2 size={14} />
           </button>
-          <button title="移除所选节点" disabled={!canvas.selection.length} onClick={remove}>
+          <button title="移除所选节点" disabled={!canvas.selection.length} onClick={() => remove()}>
             <Trash2 size={14} />
           </button>
+          <button
+            disabled={!canvas.selection.length}
+            onClick={() => void perform(async () => change(duplicateSelection(canvas)))}
+          >
+            复制选中
+          </button>
+          <select
+            aria-label="批量操作"
+            value=""
+            disabled={!canvas.selection.length}
+            onChange={(e) => {
+              const action = e.target.value;
+              if (action === 'group' || action === 'ungroup') {
+                const group =
+                  action === 'group' ? `分组 ${crypto.randomUUID().slice(0, 8)}` : undefined;
+                change({
+                  ...canvas,
+                  nodes: canvas.nodes.map((n) =>
+                    canvas.selection.includes(n.id) ? { ...n, group } : n,
+                  ),
+                });
+              } else if (action)
+                change(alignSelection(canvas, action as 'left' | 'top' | 'horizontal'));
+            }}
+          >
+            <option value="">批量操作</option>
+            <option value="group">编组</option>
+            <option value="ungroup">取消编组</option>
+            <option value="left">左对齐</option>
+            <option value="top">顶对齐</option>
+            <option value="horizontal">水平分布</option>
+          </select>
           <span className="canvas-toolbar-spacer" />
           {activeRun ? (
             <button
@@ -554,378 +875,485 @@ export function CanvasWorkspace({
       ) : (
         <div className="canvas-body">
           <CanvasBoard
+            onError={(e) => setError(errorMessage(e))}
+            plugins={state.plugins}
             api={api}
             canvas={canvas}
             steps={shownRun?.nodes ?? {}}
             onChange={change}
             onSelect={select}
+            onRemove={remove}
             onConfigure={(id) => {
               select([id]);
-              setInspector(true);
+              setInspector(id);
             }}
           />
-          {inspector && (
-            <aside className="canvas-inspector" aria-label="节点与执行配置">
-              <label>
-                画布名称
-                <input
-                  value={canvas.title}
-                  onChange={(e) => change({ ...canvas, title: e.target.value })}
-                />
-              </label>
-              <label>
-                执行会话
+          {settingsOpen && (
+            <Modal title="画布设置" onClose={() => setSettingsOpen(false)}>
+              <div className="canvas-inspector canvas-config-form">
+                <label>
+                  画布名称
+                  <input
+                    value={canvas.title}
+                    onChange={(e) => change({ ...canvas, title: e.target.value })}
+                  />
+                </label>
+                <label>
+                  执行会话
+                  <select
+                    aria-label="执行会话"
+                    value={owner}
+                    onChange={(e) => void perform(() => bindOwner(e.target.value))}
+                  >
+                    <option value="">请选择</option>
+                    {data.sessions
+                      .filter((s) => isUserSession(s) && !s.archived)
+                      .map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.title}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <label className="canvas-check">
+                  <input
+                    type="checkbox"
+                    checked={reuse}
+                    onChange={(e) => setReuse(e.target.checked)}
+                  />
+                  复用输入未变化的结果
+                </label>
+                <small>
+                  节点沿用执行会话的模型、思考设置、工具与权限。媒体节点需选择对应生成插件。
+                </small>
+                <h3>执行记录</h3>
                 <select
-                  aria-label="执行会话"
-                  value={owner}
-                  onChange={(e) => {
-                    setOwner(e.target.value);
-                    if (e.target.value)
-                      void perform(() => api.canvasBind(e.target.value, canvas.id));
-                  }}
+                  aria-label="执行记录"
+                  value={shownRun?.id ?? ''}
+                  onChange={(e) => setRunId(e.target.value)}
                 >
-                  <option value="">请选择</option>
-                  {data.sessions
-                    .filter((s) => isUserSession(s) && !s.archived)
-                    .map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.title}
-                      </option>
-                    ))}
+                  <option value="">暂无记录</option>
+                  {state.runs.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {new Date(r.startedAt).toLocaleString()} · v{r.definition.version} ·{' '}
+                      {
+                        {
+                          running: '运行中',
+                          completed: '已完成',
+                          failed: '失败',
+                          cancelled: '已停止',
+                          interrupted: '已中断',
+                        }[r.status]
+                      }
+                    </option>
+                  ))}
                 </select>
-              </label>
-              <label className="canvas-check">
-                <input
-                  type="checkbox"
-                  checked={reuse}
-                  onChange={(e) => setReuse(e.target.checked)}
-                />
-                复用输入未变化的结果
-              </label>
-              <small>
-                节点沿用执行会话的模型、思考设置、工具与权限。图片节点需可用的生图工具。
-              </small>
-              {node ? (
-                <>
-                  <h3>
-                    {state.plugins?.find((p) => p.id === (node.pluginId ?? node.kind))?.name ??
-                      canvasNodeKinds[node.kind]}
-                  </h3>
-                  <label>
-                    节点名称
-                    <input value={node.title} onChange={(e) => patch({ title: e.target.value })} />
-                  </label>
-                  {['image', 'video'].includes(node.kind) && (
-                    <CanvasOutputLocation
-                      api={api}
-                      destination={node.media?.destination}
-                      onChange={(destination) => patch({ media: { ...node.media, destination } })}
+                {shownRun?.error && <p role="alert">{shownRun.error}</p>}
+              </div>
+            </Modal>
+          )}
+          {inspector && node && (
+            <Modal title="节点配置" subtitle={node.title} onClose={() => setInspector(undefined)}>
+              <div className="canvas-inspector canvas-config-form">
+                {node ? (
+                  <>
+                    <h3>
+                      {state.plugins?.find((p) => p.id === (node.pluginId ?? node.kind))?.name ??
+                        canvasNodeKinds[node.kind]}
+                    </h3>
+                    {state.plugins?.find((p) => p.id === (node.pluginId ?? node.kind))
+                      ?.description && (
+                      <small>
+                        {
+                          state.plugins.find((p) => p.id === (node.pluginId ?? node.kind))
+                            ?.description
+                        }
+                      </small>
+                    )}
+                    <label>
+                      节点名称
+                      <input
+                        value={node.title}
+                        onChange={(e) => patch({ title: e.target.value })}
+                      />
+                    </label>
+                    {['image', 'video', 'audio'].includes(node.kind) && (
+                      <CanvasOutputLocation
+                        api={api}
+                        destination={node.media?.destination}
+                        onChange={(destination) => patch({ media: { ...node.media, destination } })}
+                        onError={(e) => setError(errorMessage(e))}
+                      />
+                    )}
+                    {node.kind === 'resource' ? (
+                      <>
+                        <CanvasResourceOutput
+                          api={api}
+                          node={node}
+                          patch={patch}
+                          busy={busy || !!activeRun || readOnly}
+                          onError={(e) => setError(errorMessage(e))}
+                          onSave={saveReferenced}
+                        />
+                        <label>
+                          自定义提示词
+                          <textarea
+                            aria-label="自定义提示词"
+                            rows={3}
+                            value={node.text ?? ''}
+                            placeholder="补充生成要求，随引用内容传给下游媒体节点"
+                            onChange={(e) => patch({ text: e.target.value })}
+                          />
+                        </label>
+                        <button onClick={() => setPicker('replace')}>更换引用资源</button>
+                        <small>
+                          {node.resource
+                            ? {
+                                content: '内容库',
+                                artifact: '会话作品',
+                                message: '会话消息',
+                                file: '项目文件',
+                              }[node.resource.kind]
+                            : '尚未选择资源'}
+                          {node.resource?.kind === 'content'
+                            ? ' · v' + node.resource.version
+                            : node.resource?.kind === 'file'
+                              ? ' · ' + node.resource.path
+                              : ''}
+                        </small>
+                      </>
+                    ) : (
+                      node.kind !== 'save' && (
+                        <label>
+                          {state.plugins?.find((p) => p.id === node.pluginId)?.view?.textLabel ??
+                            (node.kind === 'text'
+                              ? '正文'
+                              : ['image', 'video', 'audio'].includes(node.kind)
+                                ? '生成提示词'
+                                : '处理要求')}
+                          <textarea
+                            aria-label={
+                              state.plugins?.find((p) => p.id === node.pluginId)?.view?.textLabel ??
+                              (node.kind === 'text'
+                                ? '正文'
+                                : ['image', 'video', 'audio'].includes(node.kind)
+                                  ? '生成提示词'
+                                  : '处理要求')
+                            }
+                            value={node.text ?? ''}
+                            rows={5}
+                            onChange={(e) => patch({ text: e.target.value })}
+                          />
+                        </label>
+                      )
+                    )}
+                    {['workflow.schedule', 'workflow.notify'].includes(node.pluginId ?? '') && (
+                      <CanvasWorkflowFields
+                        key={'workflow:' + node.id}
+                        api={api}
+                        canvas={canvas}
+                        node={node}
+                        owner={ownerSession}
+                        patch={patch}
+                        save={save}
+                      />
+                    )}
+                    {node.kind === 'plugin' &&
+                      !['workflow.schedule', 'workflow.notify'].includes(node.pluginId ?? '') && (
+                        <CanvasPluginFields
+                          data={data}
+                          definition={state.plugins?.find(
+                            (p) => p.id === (node.pluginId ?? node.kind),
+                          )}
+                          node={node}
+                          patch={patch}
+                        />
+                      )}
+                    {state.plugins?.find((p) => p.id === node.pluginId)?.view?.resource ===
+                      'image' && (
+                      <button onClick={() => setPicker('replace')}>
+                        {node.resource ? '更换全景图片' : '选择全景图片'}
+                      </button>
+                    )}
+                    {node.kind === 'agent' && (
+                      <>
+                        <label>
+                          模型连接
+                          <select
+                            value={node.providerId ?? ''}
+                            onChange={(e) =>
+                              patch({
+                                providerId: e.target.value || undefined,
+                                model: data.providers.find((p) => p.id === e.target.value)
+                                  ?.models[0],
+                              })
+                            }
+                          >
+                            <option value="">跟随执行会话</option>
+                            {data.providers
+                              .filter((p) => p.enabled !== false)
+                              .map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.name}
+                                </option>
+                              ))}
+                          </select>
+                        </label>
+                        <label>
+                          模型
+                          <select
+                            value={node.model ?? ''}
+                            onChange={(e) => patch({ model: e.target.value || undefined })}
+                          >
+                            <option value="">跟随执行会话</option>
+                            {data.providers
+                              .find((p) => p.id === (node.providerId || ownerSession?.providerId))
+                              ?.models.map((m) => (
+                                <option key={m}>{m}</option>
+                              ))}
+                          </select>
+                        </label>
+                        <label>
+                          Agent
+                          <select
+                            value={node.agentId ?? ''}
+                            onChange={(e) => patch({ agentId: e.target.value || undefined })}
+                          >
+                            <option value="">跟随执行会话</option>
+                            {data.agents
+                              .filter(
+                                (a) => !['knowledge-organizer', 'memory-organizer'].includes(a.id),
+                              )
+                              .map((a) => (
+                                <option key={a.id} value={a.id}>
+                                  {a.name}
+                                </option>
+                              ))}
+                          </select>
+                        </label>
+                      </>
+                    )}
+                    {node.pluginId === splitPluginId && (
+                      <CanvasSplitFields node={node} patch={patch} />
+                    )}
+                    {node.pluginId === splitPluginId && (
+                      <CanvasSplitResults
+                        canvas={canvas}
+                        node={node}
+                        output={shownRun?.nodes[node.id]?.output}
+                        onChange={change}
+                        onError={(e) => setError(errorMessage(e))}
+                      />
+                    )}
+                    {['image', 'video', 'audio'].includes(node.kind) && (
+                      <CanvasMediaFields
+                        api={api}
+                        data={data}
+                        node={node}
+                        patch={patch}
+                        onError={(e) => setError(errorMessage(e))}
+                      />
+                    )}
+                    {node.kind === 'save' && (
+                      <label>
+                        目标内容库
+                        <select
+                          value={node.libraryId ?? 'default'}
+                          onChange={(e) =>
+                            patch({ libraryId: e.target.value, folderId: undefined })
+                          }
+                        >
+                          {libraries.map((l) => (
+                            <option key={l.id} value={l.id}>
+                              {l.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                    <CanvasConnections
+                      key={node.id}
+                      canvas={canvas}
+                      node={node}
+                      plugins={state.plugins ?? []}
+                      onChange={change}
                       onError={(e) => setError(errorMessage(e))}
                     />
-                  )}
-                  {node.kind === 'resource' ? (
-                    <>
+                    {['image', 'video', 'audio'].includes(node.kind) &&
+                      node.media?.mode !== 'existing' && (
+                        <>
+                          <button
+                            className="primary"
+                            disabled={busy || !!activeRun || readOnly}
+                            onClick={() => regenerate(node.id)}
+                          >
+                            生成
+                            {node.kind === 'audio'
+                              ? '音频'
+                              : node.kind === 'image'
+                                ? '图片'
+                                : '视频'}{' '}
+                            · {node.media?.count ?? 1}
+                            {node.kind === 'image' ? '张' : '条'}
+                          </button>
+                          <CanvasMediaResults
+                            api={api}
+                            key={node.id}
+                            previewKey={`tongzhou.canvas.preview.${canvas.id}.${node.id}.${shownRun?.id ?? 'new'}`}
+                            step={shownRun?.nodes[node.id]}
+                            disabled={busy || !!activeRun || readOnly}
+                            onRegenerate={(index, action) => regenerate(node.id, index, action)}
+                            onError={(e) => setError(errorMessage(e))}
+                          />
+                        </>
+                      )}
+                    {node.media?.mode === 'existing' && (
                       <CanvasResourceOutput
                         api={api}
                         node={node}
                         patch={patch}
+                        showLocation={false}
                         busy={busy || !!activeRun || readOnly}
-                        onError={(e) => setError(errorMessage(e))}
                         onSave={saveReferenced}
-                      />
-                      <label>
-                        自定义提示词
-                        <textarea
-                          aria-label="自定义提示词"
-                          rows={3}
-                          value={node.text ?? ''}
-                          placeholder="补充生成要求，随引用内容传给下游图片或视频节点"
-                          onChange={(e) => patch({ text: e.target.value })}
-                        />
-                      </label>
-                      <button onClick={() => setPicker('replace')}>更换引用资源</button>
-                      <small>
-                        {node.resource
-                          ? {
-                              content: '内容库',
-                              artifact: '会话作品',
-                              message: '会话消息',
-                              file: '项目文件',
-                            }[node.resource.kind]
-                          : '尚未选择资源'}
-                        {node.resource?.kind === 'content'
-                          ? ' · v' + node.resource.version
-                          : node.resource?.kind === 'file'
-                            ? ' · ' + node.resource.path
-                            : ''}
-                      </small>
-                    </>
-                  ) : (
-                    node.kind !== 'save' && (
-                      <label>
-                        {node.kind === 'text'
-                          ? '正文'
-                          : ['image', 'video'].includes(node.kind)
-                            ? '生成提示词'
-                            : '处理要求'}
-                        <textarea
-                          value={node.text ?? ''}
-                          rows={5}
-                          onChange={(e) => patch({ text: e.target.value })}
-                        />
-                      </label>
-                    )
-                  )}
-                  {node.kind === 'plugin' && (
-                    <CanvasPluginFields
-                      data={data}
-                      definition={state.plugins?.find((p) => p.id === (node.pluginId ?? node.kind))}
-                      node={node}
-                      patch={patch}
-                    />
-                  )}
-                  {node.kind === 'agent' && (
-                    <>
-                      <label>
-                        模型连接
-                        <select
-                          value={node.providerId ?? ''}
-                          onChange={(e) =>
-                            patch({
-                              providerId: e.target.value || undefined,
-                              model: data.providers.find((p) => p.id === e.target.value)?.models[0],
-                            })
-                          }
-                        >
-                          <option value="">跟随执行会话</option>
-                          {data.providers
-                            .filter((p) => p.enabled !== false)
-                            .map((p) => (
-                              <option key={p.id} value={p.id}>
-                                {p.name}
-                              </option>
-                            ))}
-                        </select>
-                      </label>
-                      <label>
-                        模型
-                        <select
-                          value={node.model ?? ''}
-                          onChange={(e) => patch({ model: e.target.value || undefined })}
-                        >
-                          <option value="">跟随执行会话</option>
-                          {data.providers
-                            .find((p) => p.id === (node.providerId || ownerSession?.providerId))
-                            ?.models.map((m) => (
-                              <option key={m}>{m}</option>
-                            ))}
-                        </select>
-                      </label>
-                      <label>
-                        Agent
-                        <select
-                          value={node.agentId ?? ''}
-                          onChange={(e) => patch({ agentId: e.target.value || undefined })}
-                        >
-                          <option value="">跟随执行会话</option>
-                          {data.agents
-                            .filter(
-                              (a) => !['knowledge-organizer', 'memory-organizer'].includes(a.id),
-                            )
-                            .map((a) => (
-                              <option key={a.id} value={a.id}>
-                                {a.name}
-                              </option>
-                            ))}
-                        </select>
-                      </label>
-                    </>
-                  )}
-                  {['image', 'video'].includes(node.kind) && (
-                    <CanvasMediaFields
-                      api={api}
-                      data={data}
-                      node={node}
-                      patch={patch}
-                      onError={(e) => setError(errorMessage(e))}
-                    />
-                  )}
-                  {node.kind === 'save' && (
-                    <label>
-                      目标内容库
-                      <select
-                        value={node.libraryId ?? 'default'}
-                        onChange={(e) => patch({ libraryId: e.target.value, folderId: undefined })}
-                      >
-                        {libraries.map((l) => (
-                          <option key={l.id} value={l.id}>
-                            {l.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-                  <h3>连线</h3>
-                  <div className="canvas-connect">
-                    <select
-                      aria-label="连线类型"
-                      value={edgeKind}
-                      onChange={(e) => setEdgeKind(e.target.value as typeof edgeKind)}
-                    >
-                      <option value="dependency">执行依赖 →</option>
-                      <option value="reference">资料引用 ⇢</option>
-                    </select>
-                    <select
-                      aria-label="目标节点"
-                      value={target}
-                      onChange={(e) => setTarget(e.target.value)}
-                    >
-                      <option value="">选择目标</option>
-                      {canvas.nodes
-                        .filter((n) => n.id !== node.id)
-                        .map((n) => (
-                          <option key={n.id} value={n.id}>
-                            {n.title}
-                          </option>
-                        ))}
-                    </select>
-                    <button
-                      disabled={!target}
-                      onClick={() => {
-                        change({
-                          ...canvas,
-                          edges: [
-                            ...canvas.edges,
-                            { id: crypto.randomUUID(), from: node.id, to: target, kind: edgeKind },
-                          ],
-                        });
-                        setTarget('');
-                      }}
-                    >
-                      连接
-                    </button>
-                  </div>
-                  {canvas.edges
-                    .filter((e) => e.from === node.id || e.to === node.id)
-                    .map((e) => (
-                      <div className="canvas-edge-row" key={e.id}>
-                        <span>
-                          {e.from === node.id ? '→ ' : '← '}
-                          {
-                            canvas.nodes.find((n) => n.id === (e.from === node.id ? e.to : e.from))
-                              ?.title
-                          }
-                          <small>{e.kind === 'dependency' ? '执行依赖' : '引用'}</small>
-                        </span>
-                        <button
-                          aria-label="删除连线"
-                          onClick={() =>
-                            change({ ...canvas, edges: canvas.edges.filter((v) => v.id !== e.id) })
-                          }
-                        >
-                          <X size={13} />
-                        </button>
-                      </div>
-                    ))}
-                  {['image', 'video'].includes(node.kind) && node.media?.mode !== 'existing' && (
-                    <>
-                      <button
-                        className="primary"
-                        disabled={busy || !!activeRun || readOnly}
-                        onClick={() => regenerate(node.id)}
-                      >
-                        生成{node.kind === 'image' ? '图片' : '视频'} · {node.media?.count ?? 1}
-                        {node.kind === 'image' ? '张' : '条'}
-                      </button>
-                      <CanvasMediaResults
-                        api={api}
-                        key={node.id}
-                        previewKey={`tongzhou.canvas.preview.${canvas.id}.${node.id}.${shownRun?.id ?? 'new'}`}
-                        step={shownRun?.nodes[node.id]}
-                        disabled={busy || !!activeRun || readOnly}
-                        onRegenerate={(index, action) => regenerate(node.id, index, action)}
                         onError={(e) => setError(errorMessage(e))}
                       />
-                    </>
-                  )}
-                  {node.media?.mode === 'existing' && (
-                    <CanvasResourceOutput
-                      api={api}
-                      node={node}
-                      patch={patch}
-                      showLocation={false}
-                      busy={busy || !!activeRun || readOnly}
-                      onSave={saveReferenced}
-                      onError={(e) => setError(errorMessage(e))}
-                    />
-                  )}
-                  {shownRun?.nodes[node.id] && !['image', 'video'].includes(node.kind) && (
-                    <>
-                      <h3>所选运行结果</h3>
-                      <p className="canvas-result">
-                        {shownRun.nodes[node.id].error ||
-                          shownRun.nodes[node.id].output?.text ||
-                          shownRun.nodes[node.id].status}
-                      </p>
-                      {shownRun.nodes[node.id].taskSessionId && (
-                        <button
-                          onClick={() => {
-                            const s = data.sessions.find(
-                              (s) => s.id === shownRun.nodes[node.id].taskSessionId,
-                            );
-                            if (s) onSession(s);
-                          }}
-                        >
-                          查看执行过程／处理审批
-                        </button>
+                    )}
+                    {shownRun?.nodes[node.id] &&
+                      !['image', 'video', 'audio'].includes(node.kind) && (
+                        <>
+                          <h3>所选运行结果</h3>
+                          <p className="canvas-result">
+                            {shownRun.nodes[node.id].error ||
+                              shownRun.nodes[node.id].output?.text ||
+                              shownRun.nodes[node.id].status}
+                          </p>
+                          {shownRun.nodes[node.id].taskSessionId && (
+                            <button
+                              onClick={() => {
+                                const s = data.sessions.find(
+                                  (s) => s.id === shownRun.nodes[node.id].taskSessionId,
+                                );
+                                if (s) onSession(s);
+                              }}
+                            >
+                              查看执行过程／处理审批
+                            </button>
+                          )}
+                        </>
                       )}
-                    </>
-                  )}
-                </>
-              ) : (
-                <p>选中节点以编辑；Shift 点击可多选。</p>
-              )}
-              <h3>执行记录</h3>
-              <select
-                aria-label="执行记录"
-                value={shownRun?.id ?? ''}
-                onChange={(e) => setRunId(e.target.value)}
-              >
-                <option value="">暂无记录</option>
-                {state.runs.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {new Date(r.startedAt).toLocaleString()} · v{r.definition.version} ·{' '}
-                    {
-                      {
-                        running: '运行中',
-                        completed: '已完成',
-                        failed: '失败',
-                        cancelled: '已停止',
-                        interrupted: '已中断',
-                      }[r.status]
-                    }
-                  </option>
-                ))}
-              </select>
-              {shownRun?.error && <p role="alert">{shownRun.error}</p>}
-            </aside>
+                  </>
+                ) : (
+                  <p>选中节点以编辑；Shift 点击可多选。</p>
+                )}
+              </div>
+            </Modal>
+          )}
+          <div className="canvas-chat-float" hidden={!chatOpen}>
+            <CanvasAssistant
+              key={canvas.id}
+              open={chatOpen}
+              workflowRuns={state.runs}
+              onCollapse={() => setChatOpen(false)}
+              api={api}
+              canvas={canvas}
+              session={ownerSession}
+              data={data}
+              blocked={!!conflict}
+              onPrepare={async () => {
+                validateConfig();
+                await load(current.current?.id);
+                await flush.current();
+              }}
+              onBind={bindOwner}
+              onCreate={createChat}
+              onSession={onSession}
+              onInsert={(message, replace) => {
+                void perform(async () => {
+                  const c = current.current!;
+                  if (replace && c.selection.length !== 1) throw new Error('请选择一个节点');
+                  const selected = c.nodes.find((n) => n.id === c.selection[0]);
+                  if (!message.artifactIds?.length && message.content.length > 32000)
+                    throw new Error('回答超过节点上限，请先拆分内容');
+                  if ((message.artifactIds?.length ?? 0) > 8)
+                    throw new Error('回答包含超过 8 个产物，请通过资源选择器分批插入');
+                  if (replace && (message.artifactIds?.length ?? 0) > 1)
+                    throw new Error('多个产物请使用插入画布，或单独选择一个产物替换');
+                  const items: CanvasNode[] = message.artifactIds?.length
+                    ? message.artifactIds.slice(0, 8).map((id, i) => ({
+                        id: crypto.randomUUID(),
+                        kind: 'resource',
+                        title: `助手产物 ${i + 1}`,
+                        x: (selected?.x ?? 0) + 300 + i * 280,
+                        y: selected?.y ?? 0,
+                        resource: { kind: 'artifact', id },
+                      }))
+                    : [
+                        {
+                          id: crypto.randomUUID(),
+                          kind: 'text',
+                          title: '助手建议',
+                          text: message.content,
+                          x: (selected?.x ?? 0) + 300,
+                          y: selected?.y ?? 0,
+                        },
+                      ];
+                  if (replace && selected) {
+                    const first = items[0];
+                    change({
+                      ...c,
+                      nodes: c.nodes.map((n) =>
+                        n.id !== selected.id
+                          ? n
+                          : first.kind === 'text'
+                            ? { ...n, text: first.text }
+                            : { ...first, id: n.id, x: n.x, y: n.y, group: n.group },
+                      ),
+                    });
+                  } else {
+                    if (c.nodes.length + items.length > 200)
+                      throw new Error('画布最多支持 200 个节点');
+                    change({
+                      ...c,
+                      nodes: [...c.nodes, ...items],
+                      selection: items.map((n) => n.id),
+                    });
+                  }
+                });
+              }}
+            />
+          </div>
+          {!chatOpen && (
+            <button
+              className="canvas-chat-launcher"
+              aria-label="展开画布聊天"
+              title="AI 助手"
+              aria-expanded={false}
+              onClick={() => setChatOpen(true)}
+            >
+              <MessageSquare size={22} />
+            </button>
           )}
         </div>
       )}
       {canvas && (
         <footer className="canvas-footer">
           {canvas.nodes.length} 个节点 · {canvas.edges.length} 条连线
-          <span>实线：执行依赖　虚线：资料引用 · ⌘/Ctrl S 保存</span>
+          <span>右键配置节点 · Shift 框选 · ⌘/Ctrl A 全选 · ⌘/Ctrl D 复制 · ⌘/Ctrl S 保存</span>
         </footer>
       )}
       {picker && (
         <CanvasSourcePicker
           api={api}
           data={data}
+          imageOnly={
+            picker === 'replace' &&
+            state.plugins?.find((p) => p.id === node?.pluginId)?.view?.resource === 'image'
+          }
           sessionId={owner}
           onClose={() => setPicker(false)}
           onSelect={(title, resource) => {
-            if (picker === 'replace' && node?.kind === 'resource') patch({ resource, title });
+            if (picker === 'replace' && node)
+              patch({ resource, ...(node.kind === 'resource' ? { title } : {}) });
             else add('resource', title, resource);
             setPicker(false);
           }}

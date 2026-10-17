@@ -20,12 +20,20 @@ export function registerAutomationServices(
     id = z.string().uuid();
   const interactive = (sessionId: string) => {
     const s = services.store.get<Session>('session', sessionId);
-    if (s.automationJob || s.memoryJob || s.parentId || s.knowledgeJob || s.contentContext)
+    if (
+      s.automationJob ||
+      s.memoryJob ||
+      s.parentId ||
+      s.knowledgeJob ||
+      s.contentContext ||
+      s.canvasContext
+    )
       throw new Error('请在普通会话中管理自动化，后台任务不能递归创建或触发其他任务');
     return s;
   };
   const accessibleRule = (rule: AutomationRule, sessionId: string) => {
     const s = services.store.get<Session>('session', sessionId);
+    if (rule.kind === 'canvas' && rule.canvas?.sessionId !== sessionId) return false;
     if (
       rule.projectId &&
       projectFamilyId(services.store.list('project'), rule.projectId) !==

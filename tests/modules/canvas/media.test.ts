@@ -57,6 +57,20 @@ const tools: PluginTool[] = [
     },
     annotations: { readOnlyHint: true },
   },
+  {
+    name: 'text_to_audio',
+    description: '语音生成',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        text: { type: 'string' },
+        voice_id: { type: 'string' },
+        speed: { type: 'number', minimum: 0.5, maximum: 2 },
+      },
+      required: ['text'],
+    },
+    annotations: { readOnlyHint: false },
+  },
 ];
 async function fixture() {
   const root = await mkdtemp(path.join(os.tmpdir(), 'tongzhou-media-'));
@@ -67,7 +81,7 @@ async function fixture() {
     log = path.join(root, 'calls.jsonl');
   await writeFile(
     script,
-    `const fs=require('node:fs'),readline=require('node:readline');const tools=${JSON.stringify(tools)};readline.createInterface({input:process.stdin}).on('line',line=>{const r=JSON.parse(line);if(r.id===undefined)return;let result={};if(r.method==='initialize')result={protocolVersion:'2025-11-25',capabilities:{tools:{}},serverInfo:{name:'media-test',version:'1'}};if(r.method==='tools/list')result={tools};if(r.method==='tools/call'){fs.appendFileSync(${JSON.stringify(log)},JSON.stringify(r.params)+'\\n');const name=r.params.name,args=r.params.arguments;if(name==='text_to_image'){const calls=fs.readFileSync(${JSON.stringify(log)},'utf8').trim().split('\\n').map(JSON.parse).filter(c=>c.name==='text_to_image').length;result=args.prompt.includes('partial')&&calls===2?{isError:true,content:[{type:'text',text:'fixture failure'}]}:{content:[{type:'image',mimeType:'image/png',data:'${png}'}]};}else if(name==='generate_video')result={content:[{type:'text',text:JSON.stringify({task_id:'video-job-1',status:'processing'})}]};else {const calls=fs.readFileSync(${JSON.stringify(log)},'utf8').trim().split('\\n').map(JSON.parse),prompt=calls.find(c=>c.name==='generate_video')?.arguments.prompt ?? ''; if(prompt==='hold')result={content:[{type:'text',text:JSON.stringify({task_id:'video-job-1',status:'processing'})}]};else if(prompt==='resume'&&calls.filter(c=>c.name==='query_video_generation').length===1)result={isError:true,content:[{type:'text',text:'query disconnected'}]};else result={content:[{type:'resource',resource:{uri:'result.mp4',mimeType:'video/mp4',blob:'AAAAGGZ0eXBpc29tAAACAGlzb21pc28y'}}]};}}process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:r.id,result})+'\\n');});`,
+    `const fs=require('node:fs'),readline=require('node:readline');const tools=${JSON.stringify(tools)};readline.createInterface({input:process.stdin}).on('line',line=>{const r=JSON.parse(line);if(r.id===undefined)return;let result={};if(r.method==='initialize')result={protocolVersion:'2025-11-25',capabilities:{tools:{}},serverInfo:{name:'media-test',version:'1'}};if(r.method==='tools/list')result={tools};if(r.method==='tools/call'){fs.appendFileSync(${JSON.stringify(log)},JSON.stringify(r.params)+'\\n');const name=r.params.name,args=r.params.arguments;if(name==='text_to_image'){const calls=fs.readFileSync(${JSON.stringify(log)},'utf8').trim().split('\\n').map(JSON.parse).filter(c=>c.name==='text_to_image').length;result=args.prompt.includes('partial')&&calls===2?{isError:true,content:[{type:'text',text:'fixture failure'}]}:{content:[{type:'image',mimeType:'image/png',data:'${png}'}]};}else if(name==='text_to_audio')result={content:[{type:'resource',resource:{uri:'speech.wav',mimeType:'audio/wav',blob:Buffer.from('RIFFfixture-audio').toString('base64')}}]};else if(name==='generate_video')result={content:[{type:'text',text:JSON.stringify({task_id:'video-job-1',status:'processing'})}]};else {const calls=fs.readFileSync(${JSON.stringify(log)},'utf8').trim().split('\\n').map(JSON.parse),prompt=calls.find(c=>c.name==='generate_video')?.arguments.prompt ?? ''; if(prompt==='hold')result={content:[{type:'text',text:JSON.stringify({task_id:'video-job-1',status:'processing'})}]};else if(prompt==='resume'&&calls.filter(c=>c.name==='query_video_generation').length===1)result={isError:true,content:[{type:'text',text:'query disconnected'}]};else result={content:[{type:'resource',resource:{uri:'result.mp4',mimeType:'video/mp4',blob:'AAAAGGZ0eXBpc29tAAACAGlzb21pc28y'}}]};}}process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:r.id,result})+'\\n');});`,
   );
   store.put('plugin', {
     id: 'media',
@@ -141,6 +155,41 @@ const image = (count = 3): CanvasNode => ({
 });
 
 describe('media plugin nodes', () => {
+  it('runs audio batches through the real MCP task pipeline, saves originals and reuses unchanged output', async () => {
+    const f = await fixture();
+    const c = f.canvas({
+      id: 'voice',
+      kind: 'audio',
+      title: '旁白',
+      x: 0,
+      y: 0,
+      text: '欢迎来到同舟',
+      media: {
+        pluginId: 'media',
+        tool: 'text_to_audio',
+        voice: 'narrator',
+        speed: 1.1,
+        count: 2,
+        mode: 'text',
+        destination: { kind: 'content', libraryId: 'default' },
+      },
+    });
+    const first = await f.run(c);
+    expect(first.status).toBe('completed');
+    expect(first.nodes.voice.generation).toHaveLength(2);
+    expect(first.nodes.voice.output!.resources.some((r) => r.kind === 'content')).toBe(true);
+    const calls = await f.calls();
+    expect(calls.filter((c) => c.name === 'text_to_audio')).toHaveLength(2);
+    expect(calls[0].arguments).toEqual({ text: '欢迎来到同舟', voice_id: 'narrator', speed: 1.1 });
+    const again = await f.run(c);
+    expect(again.nodes.voice.status).toBe('cached');
+    expect((await f.calls()).filter((c) => c.name === 'text_to_audio')).toHaveLength(2);
+    const changed = f.system.domains.canvases.apply(c.id, c.version, [
+      { type: 'put_node', node: { ...c.nodes[0], media: { ...c.nodes[0].media, speed: 1.4 } } },
+    ]);
+    expect((await f.run(changed)).status).toBe('completed');
+    expect((await f.calls()).filter((c) => c.name === 'text_to_audio')).toHaveLength(4);
+  });
   it('previews larger canvas image originals without changing the content-library thumbnail limit', async () => {
     const f = await fixture(),
       doc = f.system.domains.knowledge.importFile(
@@ -298,6 +347,20 @@ describe('media plugin nodes', () => {
       },
     };
     const args = await mediaArguments(n, tool, [], f.system.domains, path.join(f.root, 'frames'));
+    const wired = await mediaArguments(
+      { ...n, media: { ...n.media, mode: 'text', firstFrame: undefined, lastFrame: undefined } },
+      tool,
+      [
+        { text: '尾帧说明不会混入提示词', resources: [b], inputPort: 'lastFrame' },
+        { text: '首帧说明不会混入提示词', resources: [a], inputPort: 'firstFrame' },
+        { text: '保持镜头稳定', resources: [], inputPort: 'prompt' },
+      ],
+      f.system.domains,
+      path.join(f.root, 'wired-frames'),
+    );
+    expect(wired.first_frame_image_url).toBe('https://example.com/first.png');
+    expect(wired.last_frame_image_url).toBe('https://example.com/last.png');
+    expect(wired.prompt).toBe('镜头缓慢向前\n\n保持镜头稳定');
     expect(args).toMatchObject({
       prompt: '镜头缓慢向前',
       first_frame_image_url: 'https://example.com/first.png',

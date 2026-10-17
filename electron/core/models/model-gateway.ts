@@ -3,7 +3,12 @@ import { randomBytes, randomUUID, timingSafeEqual, createHash } from 'node:crypt
 import type { AddressInfo } from 'node:net';
 import { isDeepStrictEqual } from 'node:util';
 import type { Message, Provider } from '../../../src/shared/types';
-import { completeRequest, type CompletionInput, type Completion, type ToolSpec } from './providers';
+import {
+  completeCanvasRequest,
+  type CompletionInput,
+  type Completion,
+  type ToolSpec,
+} from './providers';
 import { redact } from '../../services/storage/validation';
 import { isContextOverflow } from '../runtime/history';
 import { modelProvider } from '../../../src/shared/model-protocol';
@@ -339,7 +344,7 @@ export async function modelGateway(options: {
           delta,
         });
       };
-      const result = await (options.complete ?? completeRequest)({
+      const result = await (options.complete ?? completeCanvasRequest)({
         ...connection,
         transport: options.transport,
         instructions: decoded.instructions,

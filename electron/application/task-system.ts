@@ -5,6 +5,8 @@ import { Terminals } from '../services/desktop/terminals';
 import type { DomainServices } from '../modules/domain-services';
 import { SessionLifecycle } from '../modules/sessions/session-lifecycle';
 import { Automations } from '../modules/automation/automations';
+import { builtinAutomationHandlers } from '../modules/automation/automation-handlers';
+import { canvasAutomationHandler } from '../modules/canvas/canvas-automation';
 import { ApprovalQueue } from '../core/runtime/approval-queue';
 import { TaskScheduler } from '../core/runtime/task-scheduler';
 import { CodexExecution } from '../core/codex/execution';
@@ -130,13 +132,20 @@ export async function createTaskSystem(
         })),
     });
     domains.canvasWorkflows.configure(tasks, events);
-    automations = new Automations(store, {
-      content: domains.content,
-      knowledge: domains.knowledge,
-      start: (...args) => tasks!.start(...args),
-      cancel: (id) => tasks!.cancel(id),
-      changed: events.changed,
-    });
+    automations = new Automations(
+      store,
+      {
+        content: domains.content,
+        knowledge: domains.knowledge,
+        start: (...args) => tasks!.start(...args),
+        cancel: (id) => tasks!.cancel(id),
+        changed: events.changed,
+      },
+      undefined,
+      builtinAutomationHandlers(store, domains).register(
+        canvasAutomationHandler(store, domains.canvasWorkflows),
+      ),
+    );
     events.once('shutdown', stopProducers);
     events.on('engineInvalidated', invalidate);
     automations.start();

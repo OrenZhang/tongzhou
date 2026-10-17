@@ -1,7 +1,13 @@
 import { sessionWorkspace } from '../sessions/session-workspace';
 import path from 'node:path';
+import { readFile, stat } from 'node:fs/promises';
 import { z } from 'zod';
 import type { CanvasNodeContext, CanvasNodePlugin } from './node-plugins';
+import { registerVisualPlugins } from './visual-plugins';
+import { splitPlugin } from './split-plugin';
+import { registerWorkflowPlugins, type CanvasNotify } from './workflow-plugins';
+import { routeCanvasOutput } from '../../../src/shared/canvas-ports';
+import { createMcpNodePlugin, type McpNodeOptions } from './plugin-sdk';
 import { canvasNodeKinds } from '../../../src/shared/canvas';
 import type { TaskOperation } from '../../core/task-contracts';
 import { mediaArguments, executeMedia, saveMedia } from './media';
@@ -25,7 +31,7 @@ import type { Provider, Run, Session, Project } from '../../../src/shared/types'
 import type { ArtifactPreview } from '../../../src/shared/artifacts';
 import { effectivePermission } from '../../../src/shared/permissions';
 import { agentProfile } from '../agents/agents';
-import { read } from '../../core/tools/workspace';
+import { read, within } from '../../core/tools/workspace';
 import { Canvases, executeSchema, executionOrder, nodeSchema } from './canvas';
 
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -88,11 +94,21 @@ export class CanvasResources {
       throw new Error('文件内容已变化，请重新选择：' + ref.path);
     return { text, resources: [{ ...ref, sha256 }] };
   }
+  async fileBytes(ref: Extract<CanvasResource, { kind: 'file' }>) {
+    this.validate(ref);
+    const project = this.store.get<Project>('project', ref.projectId);
+    const file = await within(project.path, ref.path);
+    if ((await stat(file)).size > 25 * 1024 * 1024) throw new Error('文件素材超过 25 MB');
+    const bytes = await readFile(file);
+    if (ref.sha256 && createHash('sha256').update(bytes).digest('hex') !== ref.sha256)
+      throw new Error('文件内容已变化，请重新选择：' + ref.path);
+    return bytes;
+  }
   async resolveNode(node: CanvasNode) {
     const output = await this.resolve(node.resource!);
     if (node.text?.trim()) {
       output.prompt = [
-        ['image', 'video'].includes(this.preview(node.resource!).type) ? '' : output.text,
+        ['image', 'video', 'audio'].includes(this.preview(node.resource!).type) ? '' : output.text,
         node.text,
       ]
         .filter(Boolean)
@@ -131,6 +147,7 @@ export class CanvasWorkflows {
   private pending = new Map<string, Promise<void>>();
   private tasks?: TaskService;
   private events?: ApplicationEvents;
+  private notify?: CanvasNotify;
   readonly resources: CanvasResources;
   constructor(
     private store: Store,
@@ -149,7 +166,16 @@ export class CanvasWorkflows {
       configKey?: CanvasNodePlugin['configKey'],
     ) =>
       canvases.plugins.register({
-        definition: { id: kind, name: canvasNodeKinds[kind], kind, version: 1, inputs, outputs },
+        definition: {
+          id: kind,
+          name: kind === 'plugin' ? 'MCP 工具' : canvasNodeKinds[kind],
+          kind,
+          version: 1,
+          inputs,
+          outputs,
+          apiVersion: 1,
+          adapter: kind === 'plugin' ? 'mcp' : 'native',
+        },
         execute,
         schema,
         configKey,
@@ -167,8 +193,22 @@ export class CanvasWorkflows {
       return c.run.nodes[c.node.id].output!;
     };
     register('text', [], ['text'], ({ node }) => ({ text: node.text ?? '', resources: [] }));
+    registerVisualPlugins(canvases.plugins, (node) => {
+      if (this.resources.preview(node.resource!).type !== 'image')
+        throw new Error('全景节点需要图片素材');
+      return this.resources.resolveNode(node);
+    });
     register('resource', [], ['text', 'resource'], referenced);
     register('agent', ['text', 'image', 'resource'], ['text', 'resource'], (c) => c.task());
+    canvases.plugins.register(splitPlugin);
+    registerWorkflowPlugins(
+      canvases.plugins,
+      (...args) => {
+        if (!this.notify) throw new Error('渠道服务尚未就绪');
+        return this.notify(...args);
+      },
+      (sessionId, runId) => this.store.get<Session>('session', sessionId).automationJob ?? runId,
+    );
     register(
       'image',
       ['text', 'image'],
@@ -185,20 +225,20 @@ export class CanvasWorkflows {
       nodeSchema.shape.media.unwrap(),
       'media',
     );
+    register('audio', ['text'], ['audio'], media, nodeSchema.shape.media.unwrap(), 'media');
     register('save', ['text', 'resource'], ['resource'], (c) => this.saveContent(c));
-    register(
-      'plugin',
-      ['text', 'resource'],
-      ['text', 'resource'],
-      (c) => this.callTool(c),
-      z
-        .object({
-          pluginId: z.string().min(1),
-          tool: z.string().min(1),
-          arguments: z.record(z.string(), z.json()).optional(),
-        })
-        .strict(),
-    );
+    this.registerMcpNode({
+      id: 'plugin',
+      name: 'MCP 工具',
+      version: 1,
+      description: '调用已连接的 MCP 工具，沿用服务认证与会话权限',
+    });
+  }
+  registerMcpNode(options: McpNodeOptions) {
+    return this.canvases.plugins.register(createMcpNodePlugin(options, (c) => this.callTool(c)));
+  }
+  configureNotifications(notify?: CanvasNotify) {
+    this.notify = notify;
   }
   private syncPermission = (sessionId?: string) => {
     for (const id of this.active.keys()) {
@@ -228,6 +268,25 @@ export class CanvasWorkflows {
     this.changed();
   }
   start(raw: CanvasExecute) {
+    return this.startInternal(raw);
+  }
+  startScheduled(raw: CanvasExecute, jobId: string) {
+    const job = this.store.get<import('../../../src/shared/automation').AutomationJob>(
+      'automationJob',
+      jobId,
+    );
+    const session = this.store.get<Session>('session', raw.sessionId);
+    if (
+      job.status !== 'running' ||
+      job.rule.kind !== 'canvas' ||
+      session.automationJob !== jobId ||
+      job.rule.canvas?.id !== raw.canvasId ||
+      job.rule.canvas.version !== raw.version
+    )
+      throw new Error('定时画布执行上下文无效');
+    return this.startInternal(raw, jobId);
+  }
+  private startInternal(raw: CanvasExecute, jobId?: string) {
     if (!this.tasks || !this.events) throw new Error('任务服务尚未就绪');
     const p = executeSchema.parse(raw),
       canvas = this.canvases.get(p.canvasId);
@@ -238,7 +297,7 @@ export class CanvasWorkflows {
       session.canvasContext ||
       session.knowledgeJob ||
       session.memoryJob ||
-      session.automationJob ||
+      (session.automationJob && session.automationJob !== jobId) ||
       session.parentId
     )
       throw new Error('请从普通会话执行工作流');
@@ -255,28 +314,29 @@ export class CanvasWorkflows {
         !canvas.nodes.some(
           (n) =>
             n.id === order[0] &&
-            (n.kind === 'resource' || (n.kind === 'image' && n.media?.mode === 'existing')) &&
+            (n.kind === 'resource' ||
+              (['image', 'video', 'audio'].includes(n.kind) && n.media?.mode === 'existing')) &&
             n.resource &&
-            ['image', 'video'].includes(this.resources.preview(n.resource).type),
+            ['image', 'video', 'audio'].includes(this.resources.preview(n.resource).type),
         ))
     )
-      throw new Error('请选择一个可预览的图片或视频资源节点');
+      throw new Error('请选择一个可预览的图片、视频或音频资源节点');
     if (!order.length || order.length > 50) throw new Error('每次请选择 1 至 50 个执行节点');
     for (const nodeId of order) {
       const node = canvas.nodes.find((n) => n.id === nodeId)!;
       this.canvases.plugins.validate(node);
       if (
         node.media?.mode === 'existing' &&
-        (node.kind !== 'image' ||
+        (!['image', 'video', 'audio'].includes(node.kind) ||
           !node.resource ||
-          this.resources.preview(node.resource).type !== 'image')
+          this.resources.preview(node.resource).type !== node.kind)
       )
-        throw new Error('请为图片节点选择可用的图片原件');
+        throw new Error('请为媒体节点选择对应类型的原件');
       if ((node.kind === 'resource' || node.media?.mode === 'existing') && !node.resource)
         throw new Error('请为资源节点选择内容：' + node.title);
       if (
-        (node.kind === 'image' || node.kind === 'video') &&
-        (node.media || node.kind === 'video') &&
+        (node.kind === 'image' || node.kind === 'video' || node.kind === 'audio') &&
+        (node.media || node.kind === 'video' || node.kind === 'audio') &&
         node.media?.mode !== 'existing'
       ) {
         const plugin = node.media?.pluginId
@@ -311,8 +371,8 @@ export class CanvasWorkflows {
     }
     if (p.regenerate) {
       const n = canvas.nodes.find((n) => n.id === p.regenerate!.nodeId);
-      if (!n || !order.includes(n.id) || !['image', 'video'].includes(n.kind))
-        throw new Error('只能重新生成图片或视频节点');
+      if (!n || !order.includes(n.id) || !['image', 'video', 'audio'].includes(n.kind))
+        throw new Error('只能重新生成图片、视频或音频节点');
       if (p.regenerate.indices?.some((i) => i >= (n.media?.count ?? 1)))
         throw new Error('重新生成序号超出数量');
     }
@@ -380,17 +440,31 @@ export class CanvasWorkflows {
         for (const edge of options.saveResource
           ? []
           : run.definition.edges.filter((e) => e.to === id)) {
+          const push = (value: CanvasOutput) => inputs.push(routeCanvasOutput(value, edge));
           const output = run.nodes[edge.from]?.output;
-          if (output) inputs.push(output);
+          if (output) push(output);
           else if (edge.kind === 'reference') {
             const source = run.definition.nodes.find((n) => n.id === edge.from)!;
             if (
               (source.kind === 'resource' || source.media?.mode === 'existing') &&
               source.resource
             )
-              inputs.push(await this.resources.resolveNode(source));
-            else if (source.kind === 'text')
-              inputs.push({ text: source.text ?? '', resources: [] });
+              push(await this.resources.resolveNode(source));
+            else if (source.kind === 'text') push({ text: source.text ?? '', resources: [] });
+            else if (this.canvases.plugins.get(source).definition.source)
+              push(
+                await this.canvases.plugins.execute({
+                  node: source,
+                  run,
+                  inputs: [],
+                  options,
+                  permission: 'read-only',
+                  signal,
+                  task: async () => {
+                    throw new Error('静态来源不能执行任务');
+                  },
+                }),
+              );
             else throw new Error('引用节点尚无本次结果，请添加执行依赖：' + source.title);
           }
         }
@@ -425,7 +499,7 @@ export class CanvasWorkflows {
           this.store.defaultPermission(),
           agentId ? agentProfile(this.store, agentId) : undefined,
         );
-        const { x: _x, y: _y, width: _width, height: _height, ...config } = node;
+        const { x: _x, y: _y, width: _width, height: _height, group: _group, ...config } = node;
         step.inputs = inputs;
         const provider =
           node.kind === 'agent' || (node.kind === 'image' && !node.media)
@@ -447,7 +521,10 @@ export class CanvasWorkflows {
             .map((s: any) => ({ id: s.id, enabled: s.enabled, files: s.files })),
         });
         const cached =
-          options.reuse && !options.saveResource && options.regenerate?.nodeId !== id
+          options.reuse &&
+          this.canvases.plugins.get(node).definition.cache !== 'never' &&
+          !options.saveResource &&
+          options.regenerate?.nodeId !== id
             ? this.canvases.runs
                 .list()
                 .filter(
@@ -487,9 +564,9 @@ export class CanvasWorkflows {
             options,
             permission,
             signal,
-            task: (operation, connection) =>
+            task: (operation, connection, prompt) =>
               this.task(
-                node,
+                prompt === undefined ? node : { ...node, text: prompt },
                 run,
                 inputs,
                 connection ??
@@ -723,6 +800,7 @@ export class CanvasWorkflows {
               await scope.prepare(this.store, agent, undefined, project ?? undefined, m.pluginId, [
                 'query_video_generation',
                 'query_image_generation',
+                'query_audio_generation',
               ]);
               const tool = await scope.describePlugin(m.pluginId!, m.tool!);
               outputRoot = path.join(
@@ -855,10 +933,12 @@ export class CanvasWorkflows {
       .list({ sessionId: worker.id })
       .items.filter((a) => a.runId === completed.id);
     if (
-      (node.kind === 'image' || node.kind === 'video') &&
+      (node.kind === 'image' || node.kind === 'video' || node.kind === 'audio') &&
       !artifacts.some((a) => a.kind === node.kind)
     )
-      throw new Error('图片节点未返回图片产物，请配置可用的图片生成插件后重试');
+      throw new Error(
+        `${node.kind === 'audio' ? '音频' : node.kind === 'video' ? '视频' : '图片'}节点未返回${node.kind === 'audio' ? '音频' : node.kind === 'video' ? '视频' : '图片'}产物，请检查生成插件后重试`,
+      );
     const text = this.store
       .messages(worker.id)
       .filter((m) => m.runId === completed.id && m.role === 'assistant' && m.status === 'complete')

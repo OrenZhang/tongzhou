@@ -8,6 +8,421 @@
   color: var(--ink);
   overflow: hidden;
 }
+.canvas-minimap {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  width: 170px;
+  height: 110px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: crosshair;
+  touch-action: none;
+}
+.minimap-background {
+  fill: var(--surface);
+}
+.minimap-node {
+  fill: var(--muted);
+  opacity: 0.45;
+}
+.canvas-minimap .selected {
+  fill: #6c82b4;
+}
+.minimap-viewport {
+  fill: #6c82b418;
+  stroke: #6c82b4;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+.canvas-marquee {
+  position: absolute;
+  background: #6c82b422;
+  border: 1px solid #6c82b4;
+  pointer-events: none;
+}
+.canvas-group {
+  position: absolute;
+  border: 1px dashed #6c82b4;
+  border-radius: 14px;
+  background: #6c82b408;
+  pointer-events: none;
+}
+.canvas-group > button {
+  pointer-events: auto;
+  position: absolute;
+  top: 2px;
+  left: 8px;
+  max-width: 90%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.canvas-node audio,
+.canvas-media-results audio {
+  width: 100%;
+  min-height: 38px;
+  max-height: 46px;
+}
+.canvas-assistant {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+}
+.canvas-assistant article {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+}
+.canvas-assistant article img,
+.canvas-assistant article video,
+.canvas-assistant article audio {
+  max-width: 100%;
+}
+.canvas-assistant article p {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.canvas-chat-float {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  width: min(420px, calc(100% - 32px));
+  height: min(680px, calc(100% - 32px));
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 12px 40px #0002;
+  z-index: 10;
+  overflow: hidden;
+}
+.canvas-chat-float[hidden] {
+  display: none;
+}
+.canvas-workspace button.canvas-chat-launcher {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  min-height: 48px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #2563eb;
+  color: #fff;
+  box-shadow: 0 4px 16px #2563eb55;
+}
+.canvas-workspace button.canvas-chat-launcher:hover {
+  background: #1d4ed8;
+}
+.canvas-workspace button.canvas-chat-launcher > svg {
+  color: #fff;
+}
+.canvas-workspace button.canvas-chat-launcher:focus-visible {
+  outline: 3px solid #93c5fd;
+  outline-offset: 3px;
+}
+.canvas-body > .canvas-board .canvas-minimap {
+  bottom: 80px;
+}
+.canvas-workspace .canvas-config-form.canvas-inspector {
+  width: 100%;
+  min-height: 0;
+  border-left: 0;
+  padding: 16px 20px 24px;
+  flex-shrink: 1;
+}
+.canvas-chat-heading,
+.canvas-chat-session,
+.canvas-chat-send {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.canvas-chat-session select {
+  flex: 1;
+  min-width: 0;
+}
+.canvas-assistant > select {
+  width: 100%;
+  min-width: 0;
+  flex-shrink: 0;
+}
+.canvas-assistant small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.canvas-chat-messages {
+  flex: 1;
+  min-height: 60px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  scrollbar-gutter: stable;
+}
+.canvas-chat-message {
+  flex-shrink: 0;
+}
+.canvas-chat-turn {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.canvas-assistant .canvas-chat-message.assistant {
+  border: 0;
+  padding: 4px 2px 12px;
+}
+.canvas-chat-message.user {
+  background: var(--surface-muted);
+  margin-left: 24px;
+  border-color: transparent;
+}
+.canvas-chat-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 170px;
+  overflow: auto;
+  padding: 10px;
+  background: var(--surface-muted);
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+.canvas-chat-steps,
+.canvas-chat-actions {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.canvas-chat-steps summary,
+.canvas-chat-actions summary,
+.canvas-chat-error summary {
+  cursor: pointer;
+}
+.canvas-chat-steps > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 8px;
+}
+.canvas-chat-steps small {
+  margin-left: auto;
+}
+.canvas-chat-error {
+  flex-shrink: 0;
+  max-height: 180px;
+  overflow: auto;
+  background: color-mix(in srgb, #f59e0b 10%, var(--surface));
+  border: 1px solid color-mix(in srgb, #f59e0b 35%, var(--border));
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.canvas-chat-error p {
+  margin: 6px 0;
+}
+.canvas-chat-error .canvas-inline-actions {
+  margin-top: 8px;
+}
+.canvas-chat-workflow {
+  font-size: 12px;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+}
+.canvas-chat-workflow small {
+  display: block;
+  margin-top: 6px;
+}
+.canvas-chat-empty strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+.canvas-chat-empty button {
+  display: block;
+  margin-top: 8px;
+  text-align: left;
+}
+.canvas-chat-message .markdown {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.canvas-chat-message .markdown pre {
+  max-width: 100%;
+  overflow: auto;
+}
+.canvas-chat-message .canvas-inline-actions {
+  margin-top: 8px;
+}
+.canvas-chat-empty {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.8;
+  padding: 8px 0;
+}
+.canvas-chat-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  max-height: 48px;
+  overflow: auto;
+  flex-shrink: 0;
+}
+.canvas-assistant > textarea {
+  width: 100%;
+  min-height: 64px;
+  max-height: 160px;
+  resize: vertical;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.canvas-assistant .approval-queue {
+  max-height: 190px;
+  margin: 0;
+}
+.canvas-assistant .approval-row {
+  flex-wrap: wrap;
+}
+.canvas-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.canvas-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.canvas-notice button {
+  margin-left: auto;
+}
+.canvas-library {
+  padding: 16px;
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(0, 2fr);
+  gap: 20px;
+  min-height: 360px;
+  max-height: 70vh;
+}
+.canvas-library aside {
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.canvas-library aside button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 10px;
+  text-align: left;
+  gap: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.canvas-library aside button[aria-pressed='true'] {
+  border-color: #6c82b4;
+  background: #6c82b410;
+}
+.canvas-library small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.canvas-library-detail {
+  overflow: auto;
+  padding-right: 6px;
+}
+.canvas-library-detail label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0;
+  font-size: 12px;
+}
+.canvas-library input,
+.canvas-library textarea {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: 7px;
+}
+.canvas-library pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 12px;
+  background: var(--surface-muted);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.canvas-library .canvas-prompt-content {
+  max-height: 36vh;
+  overflow: auto;
+}
+.canvas-prompt-source {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.canvas-library aside label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0;
+  font-size: 12px;
+}
+.canvas-library aside select {
+  width: 100%;
+  min-width: 0;
+}
+@media (max-width: 760px) {
+  .canvas-minimap {
+    width: 115px;
+    height: 75px;
+    bottom: 54px;
+  }
+  .canvas-library {
+    grid-template-columns: minmax(110px, 1fr) minmax(0, 2fr);
+    gap: 10px;
+  }
+}
 .canvas-toolbar,
 .canvas-actionbar {
   display: flex;
@@ -57,6 +472,7 @@
   color: var(--muted);
 }
 .canvas-body {
+  position: relative;
   flex: 1;
   display: flex;
   min-height: 0;
@@ -117,6 +533,90 @@
   flex-direction: column;
   gap: 7px;
 }
+
+.canvas-plugin-view {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  cursor: auto;
+  user-select: text;
+  border-radius: 6px;
+}
+.canvas-plugin-view iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: white;
+  /* These sandboxed previews must not swallow the node's context menu. */
+  pointer-events: none;
+}
+.canvas-markdown {
+  padding: 4px 8px;
+  font-size: 13px;
+}
+.canvas-node .canvas-markdown p {
+  color: var(--text);
+  white-space: normal;
+  overflow: visible;
+  display: block;
+}
+.canvas-node .canvas-markdown strong {
+  white-space: normal;
+}
+.canvas-markdown pre {
+  overflow: auto;
+}
+.canvas-markdown table {
+  border-collapse: collapse;
+}
+.canvas-markdown td,
+.canvas-markdown th {
+  border: 1px solid var(--border);
+  padding: 4px;
+}
+.canvas-sticky-note {
+  padding: 14px;
+  height: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  color: #373325;
+}
+.note-yellow {
+  background: #fff1ae;
+}
+.note-pink {
+  background: #ffd9e6;
+}
+.note-blue {
+  background: #d9eaff;
+}
+.note-green {
+  background: #ddf2ce;
+}
+.canvas-panorama {
+  height: 100%;
+  position: relative;
+  background: #17202b;
+  color: white;
+}
+.canvas-panorama canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+.canvas-panorama canvas:active {
+  cursor: grabbing;
+}
+.canvas-panorama > span {
+  position: absolute;
+  inset: 20px;
+  pointer-events: none;
+  font-size: 12px;
+}
 .canvas-node.selected {
   outline: 2px solid #6c82b4;
   outline-offset: 2px;
@@ -173,6 +673,72 @@
 }
 .canvas-node-port.output {
   right: -4px;
+}
+.canvas-node > button.canvas-node-port {
+  background: var(--muted);
+  width: 12px;
+  height: 12px;
+  min-height: 12px;
+  min-width: 12px;
+  padding: 0;
+  border: 2px solid var(--surface);
+  cursor: crosshair;
+  z-index: 5;
+}
+.canvas-node > button.canvas-node-port:hover,
+.canvas-node > button.canvas-node-port:focus-visible {
+  background: #678ed1;
+  outline: 2px solid #678ed1;
+}
+.canvas-node-port span {
+  position: absolute;
+  top: -5px;
+  white-space: nowrap;
+  font-size: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 1px 4px;
+  border-radius: 3px;
+  opacity: 0;
+  pointer-events: none;
+}
+.canvas-node-port.output span {
+  right: 15px;
+}
+.canvas-node-port.input span {
+  left: 15px;
+}
+.canvas-node:hover .canvas-node-port span,
+.canvas-node.selected .canvas-node-port span,
+.canvas-node-port:focus-visible span {
+  opacity: 1;
+}
+.canvas-edges path.pending {
+  stroke-dasharray: 5 4;
+}
+.canvas-split-fields,
+.canvas-split-results,
+.canvas-connections {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.canvas-split-fields fieldset,
+.canvas-split-results section {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.canvas-split-results details p {
+  white-space: pre-wrap;
+  font-size: 12px;
+}
+.canvas-split-results summary {
+  cursor: pointer;
 }
 .canvas-empty,
 .canvas-welcome {
@@ -537,21 +1103,26 @@
 }
 .canvas-node-resize {
   position: absolute;
-  right: -4px;
-  bottom: -4px;
+  right: 6px;
+  bottom: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 2px !important;
-  min-height: 18px !important;
-  width: 18px;
+  min-height: 20px !important;
+  width: 20px;
+  height: 20px;
   border-radius: 4px !important;
   cursor: nwse-resize;
   opacity: 0;
+  pointer-events: none;
   z-index: 2;
   touch-action: none;
 }
 .canvas-node:hover .canvas-node-resize,
-.canvas-node.selected .canvas-node-resize,
 .canvas-node-resize:focus-visible {
   opacity: 1;
+  pointer-events: auto;
 }
 .canvas-node-save {
   position: absolute;
@@ -562,6 +1133,88 @@
   padding: 1px 5px !important;
   font-size: 10px !important;
   opacity: 0;
+}
+.canvas-node-menu {
+  position: fixed;
+  z-index: 1000;
+  width: 200px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 6px 20px #0002;
+}
+.canvas-node-menu > button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+}
+.canvas-node-menu > button:hover,
+.canvas-node-menu > button:focus-visible {
+  background: var(--surface-muted);
+}
+.canvas-port-menu {
+  position: fixed;
+  z-index: 1000;
+  width: 300px;
+  max-width: calc(100vw - 16px);
+  max-height: min(400px, calc(100vh - 16px));
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 8px 28px #0002;
+}
+.canvas-port-menu header,
+.canvas-port-menu-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.canvas-port-menu header {
+  justify-content: space-between;
+}
+.canvas-port-menu-tabs button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 1;
+}
+.canvas-port-menu-tabs button[aria-pressed='true'] {
+  background: var(--surface-muted);
+  border-color: var(--accent);
+}
+.canvas-port-menu small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.canvas-port-menu-options {
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.canvas-port-menu-options > button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  flex-shrink: 0;
+  padding: 7px 10px;
+  text-align: left;
 }
 .canvas-node:hover .canvas-node-save,
 .canvas-node.selected .canvas-node-save,

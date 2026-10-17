@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { defaultCanvasPorts } from '../../../src/shared/canvas-ports';
 import type { TaskOperation } from '../../core/task-contracts';
 import type { Session } from '../../../src/shared/types';
 import type {
@@ -20,6 +21,7 @@ export interface CanvasNodeContext {
   task(
     operation?: TaskOperation,
     connection?: { providerId: string; model: string; agentId: string },
+    prompt?: string,
   ): Promise<CanvasOutput>;
 }
 export interface CanvasNodePlugin {
@@ -38,6 +40,10 @@ export class CanvasNodePlugins {
     if (!/^[a-z][a-z0-9_.-]{0,119}$/.test(id)) throw new Error('节点插件 ID 无效');
     if (!Number.isInteger(plugin.definition.version) || plugin.definition.version < 1)
       throw new Error('节点插件版本无效');
+    if (plugin.definition.apiVersion !== undefined && plugin.definition.apiVersion !== 1)
+      throw new Error('不支持的节点插件 API 版本');
+    if (plugin.definition.source && plugin.definition.adapter === 'mcp')
+      throw new Error('MCP 工具不能声明为静态来源');
     if (plugin.schema) z.toJSONSchema(plugin.schema);
     if (this.entries.has(id)) throw new Error('节点插件已注册：' + id);
     this.entries.set(id, plugin);
@@ -62,6 +68,9 @@ export class CanvasNodePlugins {
   list(): CanvasNodePluginDefinition[] {
     return [...this.entries.values()].map(({ definition, schema, configKey }) => ({
       ...definition,
+      apiVersion: definition.apiVersion ?? 1,
+      adapter: definition.adapter ?? 'native',
+      ports: definition.ports ?? defaultCanvasPorts(definition),
       configKey: configKey ?? 'config',
       configSchema: schema ? z.toJSONSchema(schema) : { type: 'object', properties: {} },
     }));

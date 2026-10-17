@@ -288,7 +288,9 @@ export class Channels {
     sessionId?: string,
     key: string = randomUUID(),
     ruleId?: string,
+    signal?: AbortSignal,
   ) {
+    signal?.throwIfAborted();
     z.string().min(1).max(4000).parse(text);
     if (sessionId) this.store.get('session', sessionId);
     const external = this.targets?.list().find((t) => t.id === id);
@@ -326,6 +328,9 @@ export class Channels {
       if (rule.once) this.store.put('notificationRule', { ...rule, enabled: false });
     }
     const controller = new AbortController();
+    const abort = () => controller.abort();
+    signal?.addEventListener('abort', abort, { once: true });
+    if (signal?.aborted) controller.abort();
     this.controllers.set(d.id, controller);
     this.changed();
     let dispatched = false;
@@ -452,6 +457,7 @@ export class Channels {
       d.error =
         e instanceof Error && /^(平台)/.test(e.message) ? e.message : '发送未获得确认，未自动重试';
     } finally {
+      signal?.removeEventListener('abort', abort);
       this.controllers.delete(d.id);
       if (!this.disposed) {
         if (!sessionId || this.store.list<Session>('session').some((s) => s.id === sessionId))

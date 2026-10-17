@@ -12,6 +12,15 @@ import { attachCanvasTools } from '../../../electron/modules/canvas/canvas-tools
 import { ToolScope } from '../../../electron/core/tools/extensions';
 import type { CanvasNode, CanvasRun, CanvasWrite } from '../../../src/shared/canvas';
 import type { Run } from '../../../src/shared/types';
+import { CanvasTransfer } from '../../../electron/modules/canvas/transfer';
+import {
+  executeMedia,
+  mediaArguments,
+  mediaResponse,
+  saveMedia,
+} from '../../../electron/modules/canvas/media';
+import { minimaxPlanTools } from '../../../electron/modules/plugins/minimax-plan';
+import { canvasVisualPlugins } from '../../../src/shared/canvas-plugins';
 
 const cleanups: (() => unknown)[] = [];
 afterEach(() => {
@@ -32,7 +41,7 @@ const graph = (nodes: CanvasNode[]): CanvasWrite => ({
   selection: [],
   viewport: { x: 40, y: 40, zoom: 1 },
 });
-function fixture() {
+function fixture(reply = '根据人物、场景与剧本完成分镜建议。') {
   const root = mkdtempSync(path.join(tmpdir(), 'tongzhou-canvas-'));
   cleanups.push(() => rmSync(root, { recursive: true, force: true }));
   const store = new Store(':memory:', { encrypt: (v) => v, decrypt: (v) => v });
@@ -80,7 +89,7 @@ function fixture() {
           sessionId: run.sessionId,
           runId: run.id,
           role: 'assistant',
-          content: '根据人物、场景与剧本完成分镜建议。',
+          content: reply,
           status: 'complete',
           createdAt: Date.now(),
         });
@@ -113,6 +122,225 @@ async function done(f: ReturnType<typeof fixture>, id: string) {
 }
 
 describe('generic canvas and workflow', () => {
+  it('extracts categories with the existing task system and routes only the selected category downstream', async () => {
+    const f = fixture(
+      JSON.stringify({
+        characters: [{ name: '林舟', description: '穿蓝色长衫的少年' }],
+        scenes: [{ name: '竹林', description: '雾气弥漫的山间竹林' }],
+        props: [],
+      }),
+    );
+    const c = f.domains.canvases.save({
+      ...graph([
+        node('novel', 'text', '林舟身穿蓝色长衫，走进雾气弥漫的竹林。'),
+        { ...node('split', 'agent', '按原文提取人物外观'), pluginId: 'content.split' },
+        { ...node('save', 'save'), libraryId: 'default' },
+      ]),
+      edges: [
+        {
+          id: 'a',
+          from: 'novel',
+          to: 'split',
+          kind: 'dependency',
+          fromPort: 'result',
+          toPort: 'context',
+        },
+        {
+          id: 'b',
+          from: 'split',
+          to: 'save',
+          kind: 'dependency',
+          fromPort: 'characters',
+          toPort: 'context',
+        },
+      ],
+    });
+    const started = f.domains.canvasWorkflows.start({
+      canvasId: c.id,
+      version: c.version,
+      sessionId: f.session.id,
+      nodeIds: ['save'],
+    });
+    await expect.poll(() => f.tasks.start.mock.calls.length).toBe(1);
+    const request = f.tasks.start.mock.calls[0][0];
+    expect(request.prompt).toContain('只返回一个 JSON 对象');
+    expect(request.prompt).toContain('按原文提取人物外观');
+    expect(request.prompt).toContain('蓝色长衫');
+    f.finish();
+    const run = await done(f, started.id);
+    expect(run.status).toBe('completed');
+    expect(run.nodes.split.output?.ports?.props.items).toEqual([]);
+    expect(run.nodes.save.inputs?.[0].text).toBe('林舟\n穿蓝色长衫的少年');
+    expect(run.nodes.save.output?.text).not.toContain('竹林');
+    const cached = f.domains.canvasWorkflows.start({
+      canvasId: c.id,
+      version: c.version,
+      sessionId: f.session.id,
+      nodeIds: ['save'],
+      reuse: true,
+    });
+    expect((await done(f, cached.id)).nodes.split.status).toBe('cached');
+    expect(f.tasks.start).toHaveBeenCalledTimes(1);
+    expect(() =>
+      f.domains.canvases.apply(c.id, c.version, [
+        {
+          type: 'put_edge',
+          edge: {
+            id: 'invalid',
+            from: 'split',
+            to: 'save',
+            kind: 'dependency',
+            fromPort: 'missing',
+            toPort: 'context',
+          },
+        },
+      ]),
+    ).toThrow('输出端口不存在');
+  });
+  it('round trips portable assets and groups across installations without copying account bindings', async () => {
+    const f = fixture(),
+      target = fixture();
+    const make = (f: ReturnType<typeof fixture>) =>
+      new CanvasTransfer(
+        f.domains.canvases,
+        f.domains.canvasWorkflows.resources,
+        f.domains.content,
+        f.domains.knowledge,
+        f.domains.artifacts,
+      );
+    const doc = f.domains.content.write({
+      libraryId: 'default',
+      title: '人物',
+      content: '旅行者，穿蓝色外套',
+    });
+    const c = f.domains.canvases.save(
+      graph([
+        {
+          ...node('source', 'resource'),
+          group: '角色',
+          resource: { kind: 'content', id: doc.id, version: doc.version },
+        },
+        {
+          ...node('image', 'image'),
+          providerId: 'account-local',
+          agentId: 'local-agent',
+          media: {
+            pluginId: 'connection-local',
+            tool: 'image_generation',
+            parameters: { token: 'do-not-export' },
+            referenceImages: [{ kind: 'content', id: doc.id, version: doc.version }],
+            destination: { kind: 'directory', path: f.root },
+          },
+        },
+      ]),
+    );
+    const text = await make(f).encode(c.id, 1, 'project');
+    expect(text).not.toContain('do-not-export');
+    expect(text).not.toContain('connection-local');
+    expect(JSON.parse(text).assets).toHaveLength(1);
+    const imported = await make(target).decode(text);
+    expect(imported.id).not.toBe(c.id);
+    expect(imported.nodes[0].group).toBe('角色');
+    const ref = imported.nodes[0].resource!;
+    expect(ref.kind).toBe('content');
+    expect(target.domains.knowledge.originalBytes((ref as any).id).toString()).toBe(doc.content);
+    expect(imported.nodes[1].media?.referenceImages).toEqual([ref]);
+    expect(imported.nodes[1].media?.destination).toEqual({ kind: 'artifacts' });
+    expect(target.domains.canvases.state(imported.id).runs).toEqual([]);
+    const template = await make(f).encode(c.id, 1, 'template');
+    expect(template).not.toContain(doc.id);
+    const templateCanvas = await make(target).decode(template);
+    expect(templateCanvas.nodes[0].resource).toBeUndefined();
+    expect(templateCanvas.nodes[1].media?.referenceImages).toEqual([]);
+    await expect(make(f).encode(c.id, 9, 'project')).rejects.toThrow('已更新');
+  });
+  it('rejects tampered or foreign resource packages before creating any local records', async () => {
+    const f = fixture(),
+      transfer = new CanvasTransfer(
+        f.domains.canvases,
+        f.domains.canvasWorkflows.resources,
+        f.domains.content,
+        f.domains.knowledge,
+        f.domains.artifacts,
+      );
+    const doc = f.domains.content.write({ libraryId: 'default', title: '素材', content: '正文' });
+    const c = f.domains.canvases.save(
+      graph([
+        { ...node('source', 'resource'), resource: { kind: 'content', id: doc.id, version: 1 } },
+      ]),
+    );
+    const pack = JSON.parse(await transfer.encode(c.id, 1, 'project'));
+    const before = f.domains.knowledge.all().length;
+    pack.assets[0].data = Buffer.from('corrupted').toString('base64');
+    await expect(transfer.decode(JSON.stringify(pack))).rejects.toThrow('校验失败');
+    const foreign = JSON.parse(await transfer.encode(c.id, 1, 'project'));
+    foreign.canvas.nodes[0].resource = { kind: 'content', id: doc.id, version: 1 };
+    await expect(transfer.decode(JSON.stringify(foreign))).rejects.toThrow('外部素材');
+    const traversal = JSON.parse(await transfer.encode(c.id, 1, 'project'));
+    traversal.assets[0].name = '../escape.md';
+    await expect(transfer.decode(JSON.stringify(traversal))).rejects.toThrow('文件名');
+    expect(f.domains.knowledge.all()).toHaveLength(before);
+    expect(f.domains.canvases.state().canvases).toHaveLength(1);
+  });
+  it('maps MiniMax audio options, collects real audio and previews saved originals', async () => {
+    const f = fixture(),
+      tool = minimaxPlanTools('minimax-multimedia').find((t) => t.name === 'text_to_audio')!;
+    const n: CanvasNode = {
+      ...node('voice', 'audio', '你好，同舟'),
+      media: {
+        pluginId: 'minimax-multimedia',
+        tool: 'text_to_audio',
+        voice: 'fixture-voice',
+        speed: 1.2,
+        destination: { kind: 'content', libraryId: 'default' },
+      },
+    };
+    const args = await mediaArguments(n, tool, [], f.domains, path.join(f.root, 'audio'));
+    expect(args).toEqual({ text: '你好，同舟', voice_id: 'fixture-voice', speed: 1.2 });
+    await expect(
+      mediaArguments(
+        { ...n, media: { ...n.media, speed: 3 } },
+        tool,
+        [],
+        f.domains,
+        path.join(f.root, 'invalid'),
+      ),
+    ).rejects.toThrow('范围');
+    expect(mediaResponse({ text: '{"audio_url":"https://example.org/audio.mp3"}' }).urls).toEqual([
+      'https://example.org/audio.mp3',
+    ]);
+    const runId = f.tasks.start({ sessionId: f.session.id, providerId: 'test', model: 'model' });
+    const wav = Buffer.alloc(48);
+    wav.write('RIFF');
+    wav.writeUInt32LE(40, 4);
+    wav.write('WAVE', 8);
+    const a = await f.domains.artifacts.save(
+      { name: '配音.wav', data: wav.toString('base64') },
+      { sessionId: f.session.id, runId },
+    );
+    const item: import('../../../src/shared/canvas').CanvasGenerationItem = {
+      index: 0,
+      status: 'running',
+      resources: [],
+    };
+    await executeMedia(
+      { callPlugin: async () => ({ text: 'ok', artifactIds: [a.id] }) } as any,
+      n,
+      item,
+      args,
+      new AbortController().signal,
+      () => {},
+      () => {},
+      f.domains,
+      { sessionId: f.session.id, runId },
+    );
+    expect(item.resources).toEqual([{ kind: 'artifact', id: a.id }]);
+    await saveMedia(n, item, f.domains, new AbortController().signal);
+    const contentRef = item.resources.find((r) => r.kind === 'content')!;
+    expect(f.domains.canvasWorkflows.resources.preview(contentRef).type).toBe('audio');
+    expect(f.domains.artifacts.preview(a.id).type).toBe('audio');
+    expect(f.domains.canvases.plugins.list().some((p) => p.kind === 'audio')).toBe(true);
+  });
   it('saves across instances, rejects conflicts, cleans dangling edges, and rejects dependency cycles atomically', () => {
     const f = fixture(),
       c = f.domains.canvases.save({
@@ -138,6 +366,133 @@ describe('generic canvas and workflow', () => {
       }),
     ).toThrow('连线');
   });
+  it('runs visual sources without model tasks and sends their content through reference edges', async () => {
+    const f = fixture();
+    const sources = canvasVisualPlugins
+      .filter((p) => p.id !== 'visual.panorama')
+      .map((p, i) => ({
+        ...node('visual-' + i, 'plugin'),
+        ...p.defaults,
+        pluginId: p.id,
+      }));
+    const output = { ...node('save', 'save'), libraryId: 'default' };
+    const c = f.domains.canvases.save({
+      ...graph([...sources, output]),
+      edges: sources.map((n, i) => ({
+        id: 'ref-' + i,
+        from: n.id,
+        to: output.id,
+        kind: 'reference' as const,
+      })),
+    });
+    const run = f.domains.canvasWorkflows.start({
+      canvasId: c.id,
+      version: c.version,
+      sessionId: f.session.id,
+      nodeIds: ['save'],
+    });
+    const completed = await done(f, run.id);
+    expect(completed.status).toBe('completed');
+    for (const source of sources)
+      expect(completed.nodes.save.inputs?.some((o) => o.text === source.text)).toBe(true);
+    expect(f.tasks.start).not.toHaveBeenCalled();
+    const exported = await new CanvasTransfer(
+      f.domains.canvases,
+      f.domains.canvasWorkflows.resources,
+      f.domains.content,
+      f.domains.knowledge,
+      f.domains.artifacts,
+    ).encode(c.id, c.version, 'project');
+    const imported = await new CanvasTransfer(
+      f.domains.canvases,
+      f.domains.canvasWorkflows.resources,
+      f.domains.content,
+      f.domains.knowledge,
+      f.domains.artifacts,
+    ).decode(exported);
+    expect(
+      imported.nodes.slice(0, sources.length).map((n) => [n.pluginId, n.text, n.config]),
+    ).toEqual(sources.map((n) => [n.pluginId, n.text, n.config]));
+    expect(() =>
+      f.domains.canvases.plugins.validate({ ...sources[3], config: { color: 'bad' } }),
+    ).toThrow();
+  });
+
+  it('passes panorama original images downstream and requires a valid image', async () => {
+    const f = fixture();
+    const image = f.domains.knowledge.importFile(
+      '全景.png',
+      Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j2k0AAAAASUVORK5CYII=',
+        'base64',
+      ),
+    );
+    const ref = { kind: 'content' as const, id: image.id, version: image.version };
+    const source = {
+      ...node('panorama', 'plugin'),
+      pluginId: 'visual.panorama',
+      resource: ref,
+      config: { yaw: 25, pitch: 10, fov: 60 },
+    };
+    const c = f.domains.canvases.save(graph([source]));
+    const r = f.domains.canvasWorkflows.start({
+      canvasId: c.id,
+      version: c.version,
+      sessionId: f.session.id,
+    });
+    expect((await done(f, r.id)).nodes.panorama.output?.resources).toEqual([ref]);
+    expect(f.tasks.start).not.toHaveBeenCalled();
+    const text = f.domains.content.write({
+      libraryId: 'default',
+      title: 'text',
+      content: 'no image',
+    });
+    const invalid = f.domains.canvases.apply(c.id, c.version, [
+      {
+        type: 'put_node',
+        node: { ...source, resource: { kind: 'content', id: text.id, version: text.version } },
+      },
+    ]);
+    const failed = f.domains.canvasWorkflows.start({
+      canvasId: c.id,
+      version: invalid.version,
+      sessionId: f.session.id,
+    });
+    expect((await done(f, failed.id)).nodes.panorama.error).toContain('图片素材');
+  });
+
+  it('registers MCP presets through the same validated connection contract', () => {
+    const f = fixture(),
+      registry = f.domains.canvases.plugins;
+    const dispose = f.domains.canvasWorkflows.registerMcpNode({
+      id: 'example.search',
+      name: '搜索',
+      version: 1,
+      tool: 'search',
+    });
+    expect(registry.list().find((p) => p.id === 'example.search')).toMatchObject({
+      adapter: 'mcp',
+      apiVersion: 1,
+      defaults: { config: { tool: 'search' } },
+    });
+    expect(() =>
+      registry.validate({
+        ...node('mcp', 'plugin'),
+        pluginId: 'example.search',
+        config: { tool: 'search' },
+      }),
+    ).toThrow();
+    registry.validate({
+      ...node('mcp', 'plugin'),
+      pluginId: 'example.search',
+      config: { pluginId: 'connection', tool: 'search', arguments: { query: 'example' } },
+    });
+    dispose();
+    expect(() => registry.get({ ...node('mcp', 'plugin'), pluginId: 'example.search' })).toThrow(
+      '不可用',
+    );
+  });
+
   it('registers and disposes node plugins, validates configuration, supplies defaults and passes upstream inputs', async () => {
     const f = fixture(),
       plugins = f.domains.canvases.plugins;
@@ -517,6 +872,34 @@ describe('generic canvas and workflow', () => {
       false,
       () => {},
     );
+    f.store.put('plugin', {
+      id: 'image-fixture',
+      name: '图片生成',
+      enabled: true,
+      command: 'private-command',
+      catalog: [
+        {
+          name: 'generate_image',
+          description: '生成图片',
+          inputSchema: { type: 'object', properties: { prompt: { type: 'string' } } },
+        },
+      ],
+    });
+    f.store.put('plugin', {
+      id: 'disabled-fixture',
+      name: '未启用',
+      enabled: false,
+      catalog: [{ name: 'generate_image', description: '生成图片', inputSchema: {} }],
+    });
+    const catalog = JSON.parse((await scope.call('canvas_list', {})).text!);
+    expect(catalog.mediaTools).toHaveLength(1);
+    expect(catalog.mediaTools[0]).toMatchObject({
+      kind: 'image',
+      pluginId: 'image-fixture',
+      tool: 'generate_image',
+    });
+    expect(JSON.stringify(catalog)).not.toContain('private-command');
+    expect(JSON.stringify(catalog)).not.toContain('disabled-fixture');
     const created = await scope.call('canvas_apply', {
       createTitle: '会话直操作',
       ops: [{ type: 'put_node', node: node('text') }],

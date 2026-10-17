@@ -25,6 +25,13 @@ Attribution-NonCommercial license; it is not relicensed under Tongzhou's Apache-
 license. See skills/manju-production/LICENSE and references/sources.md (bundled
 under dist-electron/skills/manju-production) for attribution and modification details.
 Upstream private stories and generated media are not included.
+The canvas prompt library also displays these same five complete original
+templates, five execution specifications and two production/continuity guides.
+It reuses the attributed skill resources (no separate upstream copy), groups
+them for browsing, and retains source/version metadata and this upstream notice.
+Inserted prompts and personal copies keep the original text without an added
+license footer. The repository owner authorized their integration into Tongzhou;
+the upstream license files are preserved as provenance, not relicensed Apache-2.0.
 
 Office bot and mail integrations use the unmodified runtime packages:
 @wecom/aibot-node-sdk 1.0.7 (MIT), dingtalk-stream 2.1.6-beta.1 (MIT),

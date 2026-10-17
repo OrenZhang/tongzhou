@@ -32,6 +32,7 @@ export interface AutomationRule {
   kind: string;
   trigger: AutomationTrigger;
   flowId?: string;
+  canvas?: { id: string; version: number; nodeId: string; sessionId: string };
   libraryId?: string;
   folderId?: string;
   documentId?: string;

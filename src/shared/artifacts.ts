@@ -54,7 +54,7 @@ export interface ArtifactPage {
   nextOffset: number | null;
 }
 export interface ArtifactPreview {
-  type: 'image' | 'video' | 'text' | 'external' | 'file';
+  type: 'image' | 'video' | 'audio' | 'text' | 'external' | 'file';
   content?: string;
 }
 

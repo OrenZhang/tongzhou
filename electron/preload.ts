@@ -1,8 +1,15 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type { TongzhouAPI } from '../src/shared/types';
 const call = (method: string, ...args: unknown[]) =>
   ipcRenderer.invoke('tongzhou:' + method, ...args);
 const api: TongzhouAPI = {
+  droppedFilePath: (file) => webUtils.getPathForFile(file),
+  canvasExport: (...args) => call('canvasExport', ...args),
+  canvasImport: () => call('canvasImport'),
+  canvasSaveTemplate: (...args) => call('canvasSaveTemplate', ...args),
+  canvasLoadTemplate: (...args) => call('canvasLoadTemplate', ...args),
+  canvasLibrary: (...args) => call('canvasLibrary', ...args),
+  canvasSavePrompt: (...args) => call('canvasSavePrompt', ...args),
   canvasChooseOutputDirectory: () => call('canvasChooseOutputDirectory'),
   canvasState: (...args) => call('canvasState', ...args),
   canvasSave: (...args) => call('canvasSave', ...args),
