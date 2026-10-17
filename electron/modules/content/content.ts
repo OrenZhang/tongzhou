@@ -1,4 +1,5 @@
 import { randomUUID, createHash } from 'node:crypto';
+import path from 'node:path';
 import { z } from 'zod';
 import type { Store } from '../../services/storage/store';
 import type { Knowledge } from '../knowledge/knowledge';
@@ -7,6 +8,7 @@ import type { ContentLibrary, ContentWrite, ContentState } from '../../../src/sh
 import type { KnowledgeDocument, KnowledgeSummary } from '../../../src/shared/knowledge';
 import { knowledgeFolderForTool } from '../../../src/shared/knowledge';
 import type { Session } from '../../../src/shared/types';
+import type { ArtifactPreview } from '../../../src/shared/artifacts';
 import { projectFamilyId } from '../../../src/shared/projects';
 
 export const libraryIdSchema = z.union([z.literal('default'), z.string().uuid()]);
@@ -142,6 +144,32 @@ export class ContentWorkspace {
     if (sessionId && !this.knowledge.accessible(doc, sessionId))
       throw new Error('文档不在当前内容范围');
     return doc;
+  }
+  preview(id: string, sessionId?: string, maxImageBytes = 3_000_000): ArtifactPreview {
+    const doc = this.document(id, sessionId);
+    if (!doc.blob) return { type: 'text', content: doc.content };
+    const ext = path.extname(doc.fileName ?? '').toLowerCase();
+    if (['.mp4', '.webm'].includes(ext)) {
+      const bytes = this.knowledge.originalBytes(id);
+      return bytes.length <= 25 * 1024 * 1024
+        ? {
+            type: 'video',
+            content: `data:${ext === '.mp4' ? 'video/mp4' : 'video/webm'};base64,${bytes.toString('base64')}`,
+          }
+        : { type: 'file' };
+    }
+    if (!['.png', '.jpg', '.jpeg', '.webp'].includes(ext)) return { type: 'file' };
+    const bytes = this.knowledge.originalBytes(id);
+    if (bytes.length > maxImageBytes) return { type: 'file' };
+    const mimeType = bytes.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex'))
+      ? 'image/png'
+      : bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255
+        ? 'image/jpeg'
+        : bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP'
+          ? 'image/webp'
+          : undefined;
+    if (!mimeType) throw new Error('图片原件格式无效');
+    return { type: 'image', content: `data:${mimeType};base64,${bytes.toString('base64')}` };
   }
   write(raw: ContentWrite, sessionId?: string, workspace = false) {
     const p = contentWriteSchema.parse(raw);
@@ -322,20 +350,50 @@ export class ContentWorkspace {
         };
       },
     );
-    add(
-      'content_read',
-      '分段读取内容正文与当前版本；编辑前必须读取。',
-      z.object({ id: z.string().uuid(), offset: z.number().int().nonnegative().default(0) }),
-      (p) => {
+    const readSchema = z.object({
+      id: z.string().uuid(),
+      offset: z.number().int().nonnegative().default(0),
+      includeImage: z.boolean().default(false),
+    });
+    scope.add(
+      {
+        name: 'content_read',
+        description:
+          '分段读取内容正文与当前版本；编辑前必须读取。includeImage 为 true 时额外读取导入图片原件，支持 3 MB 内 PNG/JPEG/WebP；其他媒体只返回记录，不代表已查看画面或听取声音。',
+        parameters: z.toJSONSchema(readSchema),
+      },
+      '读取内容与资产',
+      async (raw) => {
+        if (context) this.knowledge.get(context.documentId);
+        const p = readSchema.parse(raw);
         const d = this.document(p.id, sessionId);
+        const preview = p.includeImage ? this.preview(p.id, sessionId) : undefined;
+        const image =
+          preview?.type === 'image'
+            ? /^data:(image\/(?:png|jpeg|webp));base64,(.+)$/.exec(preview.content!)
+            : null;
         used?.(d.id);
         return {
-          ...summarize(d),
-          content: d.content.slice(p.offset, p.offset + 12000),
-          totalChars: d.content.length,
-          nextOffset: p.offset + 12000 < d.content.length ? p.offset + 12000 : null,
+          text: JSON.stringify({
+            ...summarize(d),
+            content: d.content.slice(p.offset, p.offset + 12000),
+            totalChars: d.content.length,
+            nextOffset: p.offset + 12000 < d.content.length ? p.offset + 12000 : null,
+            ...(preview ? { media: { type: preview.type, imageIncluded: !!image } } : {}),
+          }),
+          ...(image
+            ? {
+                images: [
+                  {
+                    mimeType: image[1] as 'image/png' | 'image/jpeg' | 'image/webp',
+                    data: image[2],
+                  },
+                ],
+              }
+            : {}),
         };
       },
+      false,
     );
     add(
       'content_write',

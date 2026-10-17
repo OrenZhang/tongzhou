@@ -11,6 +11,15 @@ import {
 } from '../../../electron/core/models/providers';
 import type { Message, Protocol } from '../../../src/shared/types';
 import { userAgent } from '../../../electron/services/network/request-identity';
+import { providerSchema } from '../../../electron/services/storage/validation';
+import {
+  automaticModel,
+  modelProvider,
+  routeModel,
+  routedProvider,
+  type ModelPoolEntry,
+} from '../../../src/shared/model-protocol';
+import { Store } from '../../../electron/services/storage/store';
 const message: Message = { id: 'm', sessionId: 's', role: 'user', content: '你好', createdAt: 1 };
 function input(protocol: Protocol, baseUrl = 'http://127.0.0.1:1234/v1'): CompletionInput {
   return {
@@ -56,6 +65,51 @@ async function serve(events: string[], fn: (base: string, requests: any[]) => Pr
 }
 const event = (d: any) => 'data: ' + JSON.stringify(d) + '\n\n';
 describe('streaming protocol adapters', () => {
+  it.each(['openai-chat', 'openai-responses'] as const)(
+    'uses the selected model protocol for both the request and stream decoder: %s',
+    async (protocol) => {
+      const events =
+        protocol === 'openai-chat'
+          ? [
+              event({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }),
+              'data: [DONE]\n\n',
+            ]
+          : [
+              event({ type: 'response.output_text.delta', delta: 'ok' }),
+              event({ type: 'response.completed', response: {} }),
+            ];
+      await serve(events, async (base, requests) => {
+        const request = input(
+          protocol === 'openai-chat' ? 'openai-responses' : 'openai-chat',
+          base,
+        );
+        request.provider.modelProtocols = { test: protocol };
+        expect((await complete(request)).text).toBe('ok');
+        expect(requests[0].path).toBe(
+          protocol === 'openai-chat' ? '/v1/chat/completions' : '/v1/responses',
+        );
+        expect(modelProvider(request.provider, 'other')).toBe(request.provider);
+        expect(request.provider.protocol).not.toBe(protocol);
+      });
+    },
+  );
+  it('validates per-model protocols and rejects mappings on native account connections', () => {
+    const provider = input('openai-responses').provider;
+    expect(
+      providerSchema.parse({ ...provider, modelProtocols: { test: 'openai-chat' } }).modelProtocols,
+    ).toEqual({ test: 'openai-chat' });
+    expect(
+      providerSchema.safeParse({ ...provider, modelProtocols: { test: 'invalid' } }).success,
+    ).toBe(false);
+    expect(
+      providerSchema.safeParse({
+        ...provider,
+        protocol: 'codex',
+        auth: 'chatgpt',
+        modelProtocols: { test: 'openai-chat' },
+      }).success,
+    ).toBe(false);
+  });
   it.each(['openai-chat', 'openai-responses'] as const)(
     'retains %s reasoning across a streamed tool roundtrip',
     async (protocol) => {
@@ -716,5 +770,125 @@ describe('portable history and protocol mapping', () => {
     expect(headers({ ...p, auth: 'api-key' }, 'key')['x-api-key']).toBe('key');
     expect(headers({ ...p, auth: 'bearer' }, 'key').Authorization).toBe('Bearer key');
     expect(() => headers({ ...p, auth: 'api-key' }, '')).toThrow('保存');
+  });
+});
+
+describe('model pools', () => {
+  const entry = (patch: Partial<ModelPoolEntry> = {}): ModelPoolEntry => ({
+    providerId: 'p',
+    model: 'test',
+    scene: 'any',
+    stage: 'any',
+    ...patch,
+  });
+  const provider = () => ({
+    ...input('openai-chat').provider,
+    models: ['test', 'strong', 'vision'],
+    reasoningEffort: 'medium' as const,
+  });
+  it('prioritizes specific rules and keeps ties in configured order', () => {
+    const p = {
+      ...provider(),
+      modelPool: [
+        entry(),
+        entry({ model: 'strong', scene: 'coding' }),
+        entry({ model: 'vision', scene: 'coding', stage: 'plan', reasoningEffort: 'high' }),
+        entry({ model: 'test', scene: 'coding', stage: 'plan' }),
+      ],
+    };
+    const r = routeModel(p, [p], { prompt: '规划代码开发方案', images: false });
+    expect(r).toMatchObject({
+      model: 'vision',
+      routing: { scene: 'coding', stage: 'plan', rule: 2, reasoningEffort: 'high' },
+    });
+    expect(p.reasoningEffort).toBe('medium');
+    expect(routedProvider(p, r.routing).reasoningEffort).toBe('high');
+    expect(routedProvider(p)).toBe(p);
+  });
+  it('uses an explicit stage and inherits short continuations only within the same pool', () => {
+    const p = { ...provider(), modelPool: [entry(), entry({ model: 'strong', stage: 'review' })] };
+    const r = routeModel(p, [p], { prompt: '开发方案', stage: 'review', images: false });
+    expect(r.model).toBe('strong');
+    expect(
+      routeModel(p, [p], { prompt: '继续', images: false, previous: r.routing }).routing,
+    ).toMatchObject({ scene: 'coding', stage: 'review' });
+    expect(
+      routeModel(p, [p], { prompt: '继续实现吧', images: false, previous: r.routing }).routing,
+    ).toMatchObject({ scene: 'coding', stage: 'execute' });
+    expect(
+      routeModel(p, [p], { prompt: '你好', images: false, previous: r.routing }).routing.stage,
+    ).toBe('respond');
+    expect(
+      routeModel(p, [p], {
+        prompt: '继续',
+        images: false,
+        previous: { ...r.routing, requestedProviderId: 'other' },
+      }).routing.stage,
+    ).toBe('respond');
+  });
+  it('skips deleted, disabled, removed-model and unready connections before default fallback', () => {
+    const p = {
+      ...provider(),
+      modelPool: [
+        entry(),
+        entry({ providerId: 'deleted', scene: 'coding' }),
+        entry({ providerId: 'disabled', scene: 'coding' }),
+        entry({ model: 'removed', scene: 'coding' }),
+        entry({ providerId: 'noauth', scene: 'coding' }),
+      ],
+    };
+    const providers = [
+      p,
+      { ...provider(), id: 'disabled', enabled: false },
+      { ...provider(), id: 'noauth' },
+    ];
+    expect(
+      routeModel(p, providers, { prompt: '修复代码', images: false }, (v) => v.id !== 'noauth'),
+    ).toMatchObject({ model: 'test', routing: { rule: 0, fallback: true } });
+    expect(() => routeModel(p, [], { prompt: '普通问答', images: false })).toThrow('没有可用模型');
+  });
+  it('never routes user images to an unconfirmed text-only model', () => {
+    const p = {
+      ...provider(),
+      modelPool: [entry(), entry({ model: 'vision', scene: 'vision', images: true })],
+    };
+    expect(routeModel(p, [p], { prompt: '总结图片', images: true }).model).toBe('vision');
+    expect(() =>
+      routeModel({ ...p, modelPool: [entry()] }, [p], { prompt: '看图', images: true }),
+    ).toThrow('没有可用的图片模型');
+  });
+  it.each([
+    ['你好', 'general', 'respond'],
+    ['请审查代码', 'coding', 'review'],
+    ['请总结文档', 'writing', 'summarize'],
+    ['请修复程序', 'coding', 'execute'],
+    ['规划开发方案', 'coding', 'plan'],
+  ])('routes %s deterministically', (prompt, scene, stage) => {
+    const p = { ...provider(), modelPool: [entry()] };
+    expect(routeModel(p, [p], { prompt, images: false }).routing).toMatchObject({ scene, stage });
+  });
+  it('validates bounded pools with a default, rejects recursion and preserves pools through partial saves', () => {
+    const p = {
+      ...provider(),
+      modelPool: [entry(), entry({ stage: 'plan', reasoningEffort: 'high' })],
+    };
+    expect(providerSchema.parse(p).modelPool).toEqual(p.modelPool);
+    expect(() => providerSchema.parse({ ...p, modelPool: [entry({ stage: 'plan' })] })).toThrow(
+      '默认模型',
+    );
+    expect(() =>
+      providerSchema.parse({ ...p, modelPool: [entry({ model: automaticModel })] }),
+    ).toThrow('自动路由');
+    expect(() =>
+      providerSchema.parse({ ...p, modelPool: Array.from({ length: 33 }, () => entry()) }),
+    ).toThrow();
+    const store = new Store(':memory:', { encrypt: (s) => s, decrypt: (s) => s });
+    try {
+      store.saveProvider(p);
+      expect(store.saveProvider(provider()).modelPool).toEqual(p.modelPool);
+      expect(store.saveProvider({ ...provider(), modelPool: [] }).modelPool).toEqual([]);
+    } finally {
+      store.close();
+    }
   });
 });

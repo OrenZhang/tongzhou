@@ -12,7 +12,14 @@ import type {
 } from '../../src/shared/types';
 import type { ToolScope } from './tools/extensions';
 
+/** Internal deterministic operation; public run schemas never accept executable callbacks. */
+export interface TaskOperation {
+  prepare(scope: ToolScope, agent: AgentProfile, project: Project | null): Promise<void>;
+  execute(scope: ToolScope, signal: AbortSignal, progress: (text: string) => void): Promise<string>;
+}
 export interface TaskService {
+  startOperation(input: RunInput, operation: TaskOperation): string;
+  controlAgent(sessionId: string, threadId: string, action: 'interrupt' | 'resume'): Promise<void>;
   start(input: RunInput, resendMessageId?: string): string;
   enqueue(input: RunInput, mode: PendingInput['mode']): Promise<void>;
   cancel(sessionId: string): Promise<void>;
@@ -33,6 +40,8 @@ export interface ChangePublisher {
   changed(): void;
 }
 export interface ExecutionAdapter {
+  deliverAnswer?(sessionId: string, threadId: string, text: string): Promise<string | undefined>;
+  controlAgent?(sessionId: string, threadId: string, action: 'interrupt' | 'resume'): Promise<void>;
   run(
     input: RunInput,
     project: Project | null,
@@ -40,6 +49,8 @@ export interface ExecutionAdapter {
     run: Run,
     signal: AbortSignal,
     scope: ToolScope,
+    prepareScope?: (signal: AbortSignal, threadId: string) => Promise<ToolScope>,
+    checkCompletion?: () => Promise<string | undefined>,
   ): Promise<void>;
   hasSteering(sessionId: string): boolean;
   steer(
@@ -53,6 +64,12 @@ export interface ExecutionAdapter {
   close(): Promise<void>;
 }
 export interface ExecutionCallbacks {
+  question?(
+    sessionId: string,
+    runId: string,
+    params: import('../../src/shared/agent-execution').QuestionRequest,
+    signal: AbortSignal,
+  ): Promise<import('../../src/shared/agent-execution').QuestionAnswers | null>;
   isStopping(): boolean;
   ask(
     sessionId: string,

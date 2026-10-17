@@ -266,7 +266,7 @@ export class Bots {
         reply = s
           ? describe(s) +
             (this.runtime.snapshot().approvals.some((a) => a.sessionId === s.id)
-              ? '\n等待本机批准。'
+              ? '\n等待本机回答或批准。'
               : '')
           : '请先 /use 会话ID，或 /sessions 查看可见会话。';
       } else if (['use', '切换'].includes(name ?? '')) {

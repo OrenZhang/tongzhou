@@ -1,4 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { desktopPlugin } from '../../../electron/application/features/desktop';
+import type { ClientOperation } from '../../../electron/core/tools/client-commands';
+vi.mock('electron', () => ({ clipboard: {}, shell: {} }));
 import path from 'node:path';
 import { Store } from '../../../electron/services/storage/store';
 import {
@@ -139,6 +142,129 @@ describe('built-in skill creator and personal skills', () => {
       ).toBe(true);
     } finally {
       await Promise.all(scopes.map((scope) => scope.close()));
+      store.close();
+    }
+  });
+});
+
+describe('unified drama skill resources', () => {
+  it('bundles all five templates and reads selected resources on demand while preserving disable/upgrade behavior', async () => {
+    const store = openStore();
+    const scope = new ToolScope(
+      new AbortController().signal,
+      async () => true,
+      () => {},
+    );
+    try {
+      ensureBuiltinSkills(store, path.resolve('skills'));
+      const skill = store.get<SkillRecord>('skill', 'tongzhou-manju-production');
+      const templates = Object.keys(skill.files).filter((file) => file.endsWith('.txt'));
+      expect(templates).toHaveLength(5);
+      expect(skill.name).toBe('manju-production');
+      expect(skill.files['scripts/check_project.py']).toBeTruthy();
+      expect(skill.files.LICENSE).toContain('CC BY-NC 4.0');
+      const summary = skillInstructions(store);
+      expect(summary).toContain(skill.id);
+      expect(summary).not.toContain(skill.instructions);
+      await scope.prepare(store, { ...agent, permission: 'read-only' });
+      expect(await scope.call('read_skill_file', { skillId: skill.id, path: 'SKILL.md' })).toEqual({
+        text: skill.instructions,
+      });
+      const file = templates.find((p) => p.includes('2. '))!;
+      const result = await scope.call('read_skill_file', {
+        skillId: skill.id,
+        path: file,
+        startLine: 2,
+        endLine: 4,
+      });
+      expect(result.isError).toBeUndefined();
+      expect(
+        result
+          .text!.split('\n')
+          .slice(1)
+          .map((line) => line.replace(/^\d+: /, ''))
+          .join('\n'),
+      ).toBe(skill.files[file].split('\n').slice(1, 4).join('\n'));
+      for (const bounds of [
+        { startLine: 0 },
+        { startLine: 4, endLine: 2 },
+        { startLine: 1, endLine: 402 },
+        { startLine: 100000 },
+      ]) {
+        expect(
+          (await scope.call('read_skill_file', { skillId: skill.id, path: file, ...bounds }))
+            .isError,
+        ).toBe(true);
+      }
+      expect(
+        (await scope.call('read_skill_file', { skillId: skill.id, path: '../LICENSE' })).isError,
+      ).toBe(true);
+      expect(() =>
+        saveExistingSkill(store, { ...skill, files: { ...skill.files, [file]: 'changed' } }),
+      ).toThrow('不可覆盖');
+      saveExistingSkill(store, { ...skill, enabled: false });
+      expect((await scope.call('read_skill_file', { skillId: skill.id, path: file })).isError).toBe(
+        true,
+      );
+      store.put('skill', { ...skill, enabled: false, files: {} });
+      ensureBuiltinSkills(store, path.resolve('skills'));
+      expect(store.get<SkillRecord>('skill', skill.id)).toEqual({ ...skill, enabled: false });
+    } finally {
+      await scope.close();
+      store.close();
+    }
+  });
+  it('keeps complete resources in desktop IPC while chat discovery stays small and existing personal skills remain unchanged', async () => {
+    const store = openStore();
+    const commands = new ClientCommands();
+    const registrations = new Map<
+      string,
+      { definition: ClientOperation; handler: (...args: any[]) => any }
+    >();
+    const scope = new ToolScope(
+      new AbortController().signal,
+      async () => true,
+      () => {},
+    );
+    try {
+      ensureBuiltinSkills(store, path.resolve('skills'));
+      const personal = createPersonalSkill(store, {
+        instructions,
+        files: { 'references/format.md': 'Personal rules' },
+      });
+      const snapshot = { skills: store.list<SkillRecord>('skill') };
+      desktopPlugin.apply(
+        {
+          tzIpc: {
+            scoped:
+              () =>
+              (name: string, definition: ClientOperation, handler: (...args: any[]) => any) => {
+                registrations.set(name, { definition, handler });
+                commands.register(name, definition, handler);
+              },
+          },
+          tzStore: store,
+          tzTasks: { snapshot: () => snapshot },
+          tzCommands: commands,
+          tzDesktop: { emit() {} },
+        } as any,
+        undefined,
+      );
+      expect(registrations.get('snapshot')!.handler()).toEqual(snapshot);
+      commands.attach(scope, false, () => true, 'session');
+      const response = await scope.call('client_query', { method: 'snapshot' });
+      const chat = JSON.parse(response.text!);
+      const drama = chat.skills.find((s: SkillRecord) => s.id === 'tongzhou-manju-production');
+      expect(drama.files).toBeUndefined();
+      expect(drama.resourcePaths).toContain('scripts/check_project.py');
+      expect(response.text!.length).toBeLessThan(JSON.stringify(snapshot).length / 3);
+      expect(chat.skills.find((s: SkillRecord) => s.id === personal.id)).toEqual(personal);
+      saveExistingSkill(store, { ...drama, enabled: false });
+      const saved = store.get<SkillRecord>('skill', drama.id);
+      expect(saved.enabled).toBe(false);
+      expect(saved.files['scripts/check_project.py']).toBeTruthy();
+    } finally {
+      await scope.close();
       store.close();
     }
   });

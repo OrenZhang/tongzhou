@@ -28,6 +28,7 @@ export interface Artifact {
   model: string;
   toolName?: string;
   remoteUrl?: string;
+  sourceUrl?: string;
 }
 /** Transient tool result. Bytes are copied into managed storage, never persisted in chat JSON. */
 export interface ArtifactOutput {
@@ -53,7 +54,7 @@ export interface ArtifactPage {
   nextOffset: number | null;
 }
 export interface ArtifactPreview {
-  type: 'image' | 'text' | 'external' | 'file';
+  type: 'image' | 'video' | 'text' | 'external' | 'file';
   content?: string;
 }
 

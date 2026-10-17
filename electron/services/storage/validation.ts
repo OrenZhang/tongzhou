@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { normalizeProxyUrl } from '../../../src/shared/provider-network';
+import { apiProtocols, automaticModel } from '../../../src/shared/model-protocol';
+import { reasoningEfforts } from '../../../src/shared/model-reasoning';
 const id = z
   .string()
   .min(1)
@@ -10,6 +12,8 @@ export const providerSchema = z
     id,
     enabled: z.boolean().optional(),
     thinkingEnabled: z.boolean().optional(),
+    reasoningEffort: z.enum(reasoningEfforts).optional(),
+    thinkingBudgetTokens: z.number().int().min(1024).max(1000000).optional(),
     name: z.string().trim().min(1).max(100),
     protocol: z.enum([
       'openai-chat',
@@ -41,7 +45,33 @@ export const providerSchema = z
       }, '服务地址必须是 HTTPS，或本机 HTTP 地址，且不包含密钥、查询参数或片段'),
     auth: z.enum(['api-key', 'bearer', 'none', 'chatgpt', 'native']),
     models: z.array(z.string().trim().min(1).max(200)).max(200),
+    modelPool: z
+      .array(
+        z.object({
+          providerId: id,
+          model: z
+            .string()
+            .trim()
+            .min(1)
+            .max(200)
+            .refine((m) => m !== automaticModel, '模型池不能包含自动路由'),
+          scene: z.enum(['any', 'general', 'coding', 'writing', 'vision']),
+          stage: z.enum(['any', 'respond', 'plan', 'execute', 'review', 'summarize']),
+          reasoningEffort: z.enum(reasoningEfforts).optional(),
+          images: z.boolean().optional(),
+        }),
+      )
+      .max(32)
+      .refine(
+        (entries) => !entries.length || entries.some((e) => e.scene === 'any' && e.stage === 'any'),
+        '请保留至少一项通用默认模型',
+      )
+      .optional(),
     modelLabels: z.record(z.string().max(200), z.string().max(200)).optional(),
+    modelProtocols: z
+      .record(z.string().trim().min(1).max(200), z.enum(apiProtocols))
+      .refine((value) => Object.keys(value).length <= 200, '单个连接最多配置 200 个模型协议')
+      .optional(),
     maxOutputTokens: z.number().int().min(256).max(131072),
     contextChars: z.union([z.literal(0), z.number().int().min(4000).max(1000000)]),
     secret: z.string().max(16000).optional(),
@@ -77,6 +107,16 @@ export const providerSchema = z
       .optional(),
   })
   .superRefine((p, ctx) => {
+    if (
+      p.modelProtocols &&
+      Object.keys(p.modelProtocols).length &&
+      !apiProtocols.includes(p.protocol as any)
+    )
+      ctx.addIssue({
+        code: 'custom',
+        message: '只有 API 连接支持单独配置模型协议',
+        path: ['modelProtocols'],
+      });
     if (p.network && p.protocol !== 'codex')
       ctx.addIssue({
         code: 'custom',
@@ -184,6 +224,7 @@ export const pluginSchema = z
   });
 export const runSchema = z
   .object({
+    routingStage: z.enum(['respond', 'plan', 'execute', 'review', 'summarize']).optional(),
     attachmentIds: z.array(z.uuid()).max(6).optional(),
     sessionId: id,
     prompt: z.string().trim().max(100000),

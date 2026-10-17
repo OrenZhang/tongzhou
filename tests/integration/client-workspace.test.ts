@@ -127,6 +127,46 @@ it('imports and exports explicit absolute paths without a file picker', async ()
     call('client_change', { method: 'contentImport', args: ['default', null, ['relative.md']] }),
   ).rejects.toThrow('绝对路径');
 });
+it('previews and exports media originals byte for byte while keeping default text export compatible', async () => {
+  const f = fixture(),
+    { call } = f.attach();
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jN1kAAAAASUVORK5CYII=',
+    'base64',
+  );
+  const file = path.join(f.root, '人物.png');
+  writeFileSync(file, png);
+  const { imported } = await call('client_change', {
+    method: 'contentImport',
+    args: ['default', null, [file]],
+  });
+  const preview = await call('client_query', { method: 'contentPreview', args: [imported[0].id] });
+  expect(preview).toEqual({
+    type: 'image',
+    content: `data:image/png;base64,${png.toString('base64')}`,
+  });
+  const target = path.join(f.root, 'export', '人物.png');
+  await call('client_change', {
+    method: 'contentExport',
+    args: [imported[0].id, target, null, true],
+  });
+  expect(readFileSync(target)).toEqual(png);
+  const textTarget = path.join(f.root, 'export', '记录.md');
+  await call('client_change', { method: 'contentExport', args: [imported[0].id, textTarget] });
+  expect(readFileSync(textTarget, 'utf8')).toBe(imported[0].content);
+  await expect(
+    call('client_change', { method: 'contentExport', args: [imported[0].id, target, null, true] }),
+  ).rejects.toThrow('EEXIST');
+  const catalog = await call('client_catalog', { method: 'contentExport' });
+  expect(catalog.methods[0].arguments).toBeTruthy();
+  const doc = f.content.write({ libraryId: 'default', title: '无原件', content: '正文' });
+  await expect(
+    call('client_change', {
+      method: 'contentExport',
+      args: [doc.id, path.join(f.root, 'bad.md'), null, true],
+    }),
+  ).rejects.toThrow('没有导入原件');
+});
 it('edits personalization and rejects stale versions through chat', async () => {
   const f = fixture(),
     { call } = f.attach();

@@ -4,7 +4,7 @@ import './prepare-pty.mjs';
 import './prepare-x11.mjs';
 await rm('dist-electron', { recursive: true, force: true });
 await mkdir('dist-electron/skills', { recursive: true });
-await cp('skills/skill-creator', 'dist-electron/skills/skill-creator', { recursive: true });
+await cp('skills', 'dist-electron/skills', { recursive: true });
 await build({
   entryPoints: ['electron/services/network/node-request-identity.ts'],
   outfile: 'dist-electron/node-request-identity.cjs',

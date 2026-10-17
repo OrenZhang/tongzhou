@@ -1,6 +1,6 @@
 import { createDomainServices } from '../modules/domain-services';
 import { createTaskSystem } from './task-system';
-import { app, powerMonitor, powerSaveBlocker, safeStorage, session, shell } from 'electron';
+import { app, powerMonitor, powerSaveBlocker, session, shell } from 'electron';
 import { PowerSettings } from '../services/desktop/power';
 import { LidProcess } from '../services/desktop/lid-process';
 import type { PowerPreferences } from '../../src/shared/power';
@@ -28,6 +28,7 @@ import { userAgent } from '../services/network/request-identity';
 import { setServiceTransport } from '../services/network/service-network';
 import { applyPendingRestore } from '../services/storage/data-maintenance';
 import { Store } from '../services/storage/store';
+import { createSecretCodec } from '../services/desktop/secret-store';
 import type { Plugin } from 'cordis';
 import type { ApplicationKernel } from './kernel';
 import './context';
@@ -48,26 +49,15 @@ export function applicationServices(kernel: ApplicationKernel): Plugin.Object<vo
         );
         kernel.own(ctx, () => setServiceTransport());
         applyPendingRestore(dataDir);
-        const store = new Store(path.join(dataDir, 'tongzhou.db'), {
-          encrypt(value) {
-            if (
-              !safeStorage.isEncryptionAvailable() ||
-              (process.platform === 'linux' &&
-                safeStorage.getSelectedStorageBackend() === 'basic_text')
-            )
-              throw new Error('系统安全存储不可用，拒绝明文保存密钥');
-            return safeStorage.encryptString(value).toString('base64');
-          },
-          decrypt(value) {
-            if (!safeStorage.isEncryptionAvailable()) throw new Error('系统安全存储不可用');
-            return safeStorage.decryptString(Buffer.from(value, 'base64'));
-          },
-        });
+        const require = createRequire(path.join(bundleDir, '../package.json'));
+        const store = new Store(
+          path.join(dataDir, 'tongzhou.db'),
+          createSecretCodec(dataDir, process.platform, () => require('electron').safeStorage),
+        );
         kernel.own(ctx, async () => {
           store.close();
         });
         ctx.provide('tzStore', store);
-        const require = createRequire(path.join(bundleDir, '../package.json'));
         const nodeRoot = path
           .dirname(require.resolve('node/package.json'))
           .replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep);
@@ -151,6 +141,8 @@ export function applicationServices(kernel: ApplicationKernel): Plugin.Object<vo
         const domains = createDomainServices(ctx.tzStore, ctx.tzDesktop.dataDir);
         ctx.provide('tzKnowledge', domains.knowledge);
         ctx.provide('tzContent', domains.content);
+        ctx.provide('tzCanvases', domains.canvases);
+        ctx.provide('tzCanvasWorkflows', domains.canvasWorkflows);
         ctx.provide('tzArtifacts', domains.artifacts);
         ctx.provide('tzAttachments', domains.attachments);
         ctx.provide('tzMemories', domains.memories);
@@ -302,6 +294,8 @@ export function applicationServices(kernel: ApplicationKernel): Plugin.Object<vo
         'tzProjectTools',
         'tzKnowledge',
         'tzContent',
+        'tzCanvases',
+        'tzCanvasWorkflows',
         'tzArtifacts',
         'tzAttachments',
         'tzMemories',
@@ -316,6 +310,8 @@ export function applicationServices(kernel: ApplicationKernel): Plugin.Object<vo
           {
             knowledge: ctx.tzKnowledge,
             content: ctx.tzContent,
+            canvases: ctx.tzCanvases,
+            canvasWorkflows: ctx.tzCanvasWorkflows,
             artifacts: ctx.tzArtifacts,
             attachments: ctx.tzAttachments,
             memories: ctx.tzMemories,

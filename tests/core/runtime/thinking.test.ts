@@ -64,7 +64,10 @@ describe('connection-level model thinking', () => {
         reasoningEffort,
       })),
     };
-    expect(codexThinking(model).effort).toBe('medium');
+    expect(codexThinking(model).effort).toBe('high');
+    expect(codexThinking(model, true, 'medium').effort).toBe('medium');
+    expect(() => codexThinking(model, true, 'max')).toThrow('不支持思考强度');
+    expect(() => codexThinking({}, true, 'high')).toThrow('未提供思考强度');
     expect(codexThinking(model, false)).toMatchObject({
       effort: 'low',
       note: expect.stringContaining('不能关闭'),
@@ -79,6 +82,40 @@ describe('connection-level model thinking', () => {
       ).effort,
     ).toBe('none');
   });
+  it.each(['openai-chat', 'openai-responses'] as const)(
+    'retains the requested GPT-6 effort across validation, storage and %s serialization',
+    (protocol) => {
+      const store = new Store(':memory:', { encrypt: (value) => value, decrypt: (value) => value });
+      try {
+        const saved = store.saveProvider(
+          providerSchema.parse({ ...provider, protocol, reasoningEffort: 'high' }),
+        );
+        const body: any = requestBody(input(saved, 'gpt-6-sol')).body;
+        expect(protocol === 'openai-chat' ? body.reasoning_effort : body.reasoning.effort).toBe(
+          'high',
+        );
+        expect(providerSchema.safeParse({ ...provider, reasoningEffort: 'invented' }).success).toBe(
+          false,
+        );
+        expect(
+          thinkingRequest({ ...saved, thinkingEnabled: false }, 'gpt-6-sol').body,
+        ).toMatchObject(
+          protocol === 'openai-chat'
+            ? { reasoning_effort: 'none' }
+            : { reasoning: { effort: 'none' } },
+        );
+        expect(
+          thinkingRequest({ ...saved, thinkingEnabled: false }, 'gpt-6.1-sol').body,
+        ).toMatchObject(
+          protocol === 'openai-chat'
+            ? { reasoning_effort: 'low' }
+            : { reasoning: { effort: 'low' } },
+        );
+      } finally {
+        store.close();
+      }
+    },
+  );
   it('handles Claude adaptive/manual thinking and enforces an adequate output budget', () => {
     const p = { ...provider, protocol: 'anthropic' as const };
     expect(thinkingRequest(p, 'claude-sonnet-4-6').body.thinking.type).toBe('adaptive');
@@ -92,6 +129,57 @@ describe('connection-level model thinking', () => {
     expect(() => thinkingRequest({ ...p, maxOutputTokens: 1024 }, 'claude-sonnet-4-5')).toThrow(
       '2048',
     );
+  });
+  it.each(['low', 'medium', 'high', 'xhigh', 'max'] as const)(
+    'serializes Claude adaptive effort %s without changing defaults',
+    (reasoningEffort) => {
+      const p = {
+        ...provider,
+        protocol: 'anthropic' as const,
+        reasoningEffort,
+        thinkingBudgetTokens: 2048,
+      };
+      const body: any = requestBody(input(p, 'claude-opus-4-8')).body;
+      expect(body.output_config).toEqual({ effort: reasoningEffort });
+      expect(body.thinking).toEqual({ type: 'adaptive', display: 'summarized' });
+      expect(
+        thinkingRequest({ ...p, reasoningEffort: undefined }, 'claude-sonnet-4-6').body,
+      ).toEqual({ thinking: { type: 'adaptive', display: 'summarized' } });
+      expect(thinkingRequest(p, 'claude-sonnet-4-6').body.output_config.effort).toBe(
+        reasoningEffort === 'xhigh' ? 'high' : reasoningEffort,
+      );
+    },
+  );
+  it('retains explicit manual budgets through storage and leaves off/unknown models unchanged', () => {
+    const store = new Store(':memory:', { encrypt: (s) => s, decrypt: (s) => s });
+    try {
+      const p = store.saveProvider(
+        providerSchema.parse({
+          ...provider,
+          protocol: 'anthropic',
+          thinkingBudgetTokens: 6144,
+          reasoningEffort: 'high',
+        }),
+      );
+      const body: any = requestBody(input(p, 'claude-opus-4-5')).body;
+      expect(body.thinking.budget_tokens).toBe(6144);
+      expect(body.output_config.effort).toBe('high');
+      expect(thinkingRequest(p, 'claude-sonnet-4-5').body.output_config).toBeUndefined();
+      expect(thinkingRequest({ ...p, thinkingEnabled: false }, 'claude-sonnet-4-5').body).toEqual({
+        thinking: { type: 'disabled' },
+      });
+      expect(
+        thinkingRequest({ ...p, thinkingEnabled: false }, 'claude-opus-5-5').body.output_config
+          .effort,
+      ).toBe('low');
+      expect(thinkingRequest(p, 'custom-claude').body).toEqual({});
+      expect(() =>
+        thinkingRequest({ ...p, thinkingBudgetTokens: 8192 }, 'claude-sonnet-4-5'),
+      ).toThrow('小于');
+      expect(providerSchema.safeParse({ ...p, thinkingBudgetTokens: 512 }).success).toBe(false);
+    } finally {
+      store.close();
+    }
   });
   it('enables DeepSeek/Kimi chat thinking and Gemini budgets while leaving unknown gateways unchanged', () => {
     expect(thinkingRequest(provider, 'deepseek-chat').body).toEqual({
@@ -154,5 +242,17 @@ describe('connection-level model thinking', () => {
         requestBody({ ...responses, provider: { ...responses.provider, id: 'other' } }).body,
       ),
     ).not.toContain('opaque');
+  });
+});
+
+describe('automatic routing reasoning compatibility', () => {
+  it('maps automatic effort to actual catalog capabilities without relaxing fixed selections', () => {
+    const model = {
+      supportedReasoningEfforts: [{ reasoningEffort: 'low' }, { reasoningEffort: 'high' }],
+    };
+    expect(codexThinking(model, true, 'max', false)).toMatchObject({ effort: 'high' });
+    expect(codexThinking(model, true, 'medium', false)).toMatchObject({ effort: 'low' });
+    expect(codexThinking({}, true, 'high', false)).toEqual({});
+    expect(() => codexThinking(model, true, 'max')).toThrow('不支持思考强度');
   });
 });

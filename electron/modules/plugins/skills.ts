@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { parse } from 'yaml';
@@ -104,8 +104,18 @@ export function saveExistingSkill(store: Store, input: unknown) {
 /** Refresh bundled instructions on upgrade while preserving the user's switch. */
 export function ensureBuiltinSkills(store: Store, root: string) {
   for (const definition of builtinSkills) {
+    const directory = path.join(root, definition.directory);
+    const files: Record<string, string> = {};
+    for (const entry of readdirSync(directory, { recursive: true, withFileTypes: true })) {
+      if (entry.isSymbolicLink()) throw new Error('内置技能不能包含符号链接');
+      if (!entry.isFile()) continue;
+      const file = path.join(entry.parentPath, entry.name);
+      const relative = path.relative(directory, file).split(path.sep).join('/');
+      if (relative !== 'SKILL.md') files[relative] = readFileSync(file, 'utf8');
+    }
     const content = parseSkill({
-      instructions: readFileSync(path.join(root, definition.directory, 'SKILL.md'), 'utf8'),
+      instructions: readFileSync(path.join(directory, 'SKILL.md'), 'utf8'),
+      files,
     });
     const old = store.list<SkillRecord>('skill').find((s) => s.id === definition.id);
     store.put('skill', { ...content, id: definition.id, enabled: old?.enabled ?? true });

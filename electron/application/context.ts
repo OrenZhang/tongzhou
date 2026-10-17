@@ -50,6 +50,8 @@ declare module 'cordis' {
     tzModelNetwork: ExecutionNetwork;
     tzKnowledge: DomainServices['knowledge'];
     tzContent: DomainServices['content'];
+    tzCanvases: DomainServices['canvases'];
+    tzCanvasWorkflows: DomainServices['canvasWorkflows'];
     tzArtifacts: DomainServices['artifacts'];
     tzAttachments: DomainServices['attachments'];
     tzAutomations: Automations;

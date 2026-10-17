@@ -67,7 +67,7 @@ export function turnEntries(turn: ConversationTurn): TurnEntry[] {
     }
   }
   for (const event of turn.events) {
-    if (event.type !== 'phase' && event.text.trim())
+    if (!['phase', 'plan', 'agents', 'observation'].includes(event.type) && event.text.trim())
       entries.push({ key: event.id, time: event.time, seq: event.seq, event });
   }
   // Run entries share a sequence; copied conversation messages use their timestamps.
@@ -78,6 +78,11 @@ export function turnEntries(turn: ConversationTurn): TurnEntry[] {
 
 export function finalTurnEntry(entries: TurnEntry[], active: boolean): TurnEntry | undefined {
   if (active) return;
+  const marked = entries.filter(
+    (entry) => 'message' in entry && entry.message.role === 'assistant' && entry.message.phase,
+  );
+  if (marked.length)
+    return marked.findLast((entry) => 'message' in entry && entry.message.phase === 'final_answer');
   const last = entries.filter((entry) => 'message' in entry).at(-1);
   return last &&
     'message' in last &&

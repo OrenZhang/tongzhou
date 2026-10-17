@@ -128,6 +128,44 @@
   max-height: 440px;
   overflow: auto;
 }
+.mcp-connection-info,
+.mcp-permissions {
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.mcp-connection-info p,
+.mcp-permissions p {
+  margin: 6px 0;
+}
+.mcp-connection-info small,
+.mcp-permission-note {
+  display: block;
+  color: var(--muted);
+}
+.mcp-permissions [role='alert'] {
+  color: var(--danger);
+}
+.mcp-permission-status {
+  margin: 0 0 12px;
+}
+.mcp-permission-status > div {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+}
+.mcp-permission-status dt {
+  color: var(--muted);
+}
+.mcp-permission-status dd {
+  margin: 0;
+}
+.plugin-tool-list .mcp-tool-access {
+  font-size: 11px;
+  color: var(--muted);
+}
 @media (max-width: 760px) {
   .extensions-page .plugin-library-grid {
     grid-template-columns: 1fr;

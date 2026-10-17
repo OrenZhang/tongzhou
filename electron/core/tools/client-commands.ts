@@ -57,7 +57,12 @@ export function workspaceOperation(
     ...options,
     unavailable: (id) => {
       const s = store.get<Session>('session', id);
-      return s.automationJob || s.memoryJob || s.parentId || s.knowledgeJob || s.contentContext
+      return s.canvasContext ||
+        s.automationJob ||
+        s.memoryJob ||
+        s.parentId ||
+        s.knowledgeJob ||
+        s.contentContext
         ? '后台或文档任务使用当前范围的专用工具；工作台管理请在普通会话中调用'
         : undefined;
     },

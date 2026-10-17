@@ -1,9 +1,12 @@
+import { CanvasWorkspace } from '../features/canvas/CanvasWorkspace';
 import { SidebarNavGroup } from '../components/SidebarNavGroup';
 import { ServiceIcon, providerService } from '../components/ServiceIcon';
 import { useNavigation } from './useNavigation';
 import { protocolLabels } from '../features/connections/provider-presets';
 import { AccountLoginPanel } from '../features/connections/AccountLoginPanel';
 import { ProviderConnectionDialog } from '../features/connections/ProviderConnectionDialog';
+import { automaticModel, modelStages, type ModelStage } from '../shared/model-protocol';
+import type { Provider } from '../shared/types';
 import { FilePreviewContext } from '../components/files/FilePreviewContext';
 import { AttachmentPreview } from '../components/files/Attachments';
 import { AutomationCenter } from '../features/automation/AutomationCenter';
@@ -90,6 +93,7 @@ import { SessionNotification } from '../features/chat/NotificationControls';
 import { AuthBadge, Mark, Modal, Spinner, ModelPicker } from '../components/components';
 
 export default function App() {
+  const [canvasOpen, setCanvasOpen] = useState(false);
   const [activityTab, setActivityTab] = useState<'runs' | 'review'>('runs');
   const [reviewSession, setReviewSession] = useState('');
   const [reviewRun, setReviewRun] = useState('');
@@ -145,6 +149,7 @@ export default function App() {
   );
   const [providerId, setProviderId] = useState('');
   const [model, setModel] = useState('');
+  const [routingStage, setRoutingStage] = useState<ModelStage | ''>('');
   const [agentId, setAgentId] = useState('');
   const [inputMode, setInputMode] = useState<'supplement' | 'next' | 'restart'>('supplement');
   const [deleteId, setDeleteId] = useState('');
@@ -194,11 +199,29 @@ export default function App() {
   const session = data.sessions.find((s) => s.id === sessionId);
   const project = data.projects.find((p) => p.id === session?.projectId);
   const provider = data.providers.find((p) => p.id === providerId);
+  const poolReady = (p: Provider) =>
+    p.enabled !== false &&
+    p.modelPool?.some((entry) => {
+      const target = data.providers.find((v) => v.id === entry.providerId);
+      return (
+        target &&
+        target.models.includes(entry.model) &&
+        !providerUnavailableReason(target, accountStates[target.id])
+      );
+    });
   const availableProviders = data.providers.filter(
-    (p) => !providerUnavailableReason(p, accountStates[p.id]),
+    (p) => !providerUnavailableReason(p, accountStates[p.id]) || poolReady(p),
   );
+  const firstModel = (p: Provider) =>
+    providerUnavailableReason(p, accountStates[p.id]) || !p.models[0]
+      ? p.modelPool?.length
+        ? automaticModel
+        : ''
+      : p.models[0];
   const unavailableReason = provider
-    ? providerUnavailableReason(provider, accountStates[provider.id])
+    ? model === automaticModel && poolReady(provider)
+      ? ''
+      : providerUnavailableReason(provider, accountStates[provider.id])
     : '请选择连接';
   const providerReady = !!provider && !unavailableReason;
   const selectedAgent = data.agents.find((a) => a.id === agentId);
@@ -259,6 +282,7 @@ export default function App() {
     setInputMode('supplement');
     setProviderId(selected.providerId);
     setModel(selected.model);
+    setRoutingStage('');
     setAgentId(data.agents.some((a) => a.id === selected.agentId) ? selected.agentId : '');
     setView('workspace');
   };
@@ -274,7 +298,7 @@ export default function App() {
   useEffect(() => {
     if (!sessionRef.current && !sessionId && !providerId && availableProviders.length) {
       setProviderId(availableProviders[0].id);
-      setModel(availableProviders[0].models[0] ?? '');
+      setModel(firstModel(availableProviders[0]));
     }
   }, [sessionId, providerId, availableProviders]);
   useEffect(() => {
@@ -287,13 +311,13 @@ export default function App() {
       activateSession({
         ...s,
         providerId: preferred?.id ?? '',
-        model: preferred?.id === providerId ? model : (preferred?.models[0] ?? ''),
+        model: preferred?.id === providerId ? model : preferred ? firstModel(preferred) : '',
         agentId: '',
       });
       if (preferred)
         await api.updateSession(s.id, {
           providerId: preferred.id,
-          model: preferred.id === providerId ? model : (preferred.models[0] ?? ''),
+          model: preferred.id === providerId ? model : firstModel(preferred),
         });
       await refresh();
     });
@@ -325,6 +349,7 @@ export default function App() {
         activateSession({ ...created, providerId, model, agentId });
       }
       const input = {
+        ...(model === automaticModel && routingStage ? { routingStage } : {}),
         sessionId: targetId,
         prompt: draft,
         providerId,
@@ -406,6 +431,7 @@ export default function App() {
       items: [
         { id: 'agents', label: 'Agent', icon: Users },
         { id: 'knowledge', label: '智库', icon: BookOpen },
+        { id: 'canvas', label: '画布', icon: Layers3 },
         { id: 'connections', label: '渠道', icon: Network },
         { id: 'extensions', label: '插件', icon: Puzzle },
         { id: 'providers', label: '模型', icon: Cpu },
@@ -423,6 +449,7 @@ export default function App() {
   const selectModel = (connection: string, selectedModel: string) => {
     setProviderId(connection);
     setModel(selectedModel);
+    setRoutingStage('');
     if (sessionId)
       void perform(() =>
         api.updateSession(sessionId, { providerId: connection, model: selectedModel }),
@@ -566,6 +593,7 @@ export default function App() {
                       settings: '设置',
                       extensions: '插件',
                       knowledge: '智库',
+                      canvas: '画布',
                       automations: '定时任务',
                     }[view]}
               </strong>
@@ -582,7 +610,7 @@ export default function App() {
                     if (target) activateSession(target);
                   }}
                 >
-                  待批准 ·{' '}
+                  待处理 ·{' '}
                   {
                     data.approvals.filter((a) => view !== 'workspace' || a.sessionId !== sessionId)
                       .length
@@ -640,7 +668,9 @@ export default function App() {
             </div>
           </header>
           {view === 'workspace' && (
-            <div className={`workspace-layout ${workspace.open && session ? 'has-context' : ''}`}>
+            <div
+              className={`workspace-layout ${canvasOpen && session ? 'has-canvas' : workspace.open && session ? 'has-context' : ''}`}
+            >
               <main className="conversation">
                 {session && (
                   <div className="conversation-header">
@@ -871,6 +901,9 @@ export default function App() {
                               setBusy(true);
                               try {
                                 await api.resendMessage(message.id, {
+                                  ...(model === automaticModel && routingStage
+                                    ? { routingStage }
+                                    : {}),
                                   sessionId,
                                   prompt: text,
                                   providerId,
@@ -919,6 +952,9 @@ export default function App() {
                                 </div>
                               ) : undefined
                             }
+                            onAgentControl={(threadId, action) =>
+                              api.controlAgent(sessionId, threadId, action)
+                            }
                             onCopy={(message) =>
                               void perform(async () => {
                                 await api.copyText(message.content);
@@ -948,6 +984,10 @@ export default function App() {
                 <div className="composer-wrap">
                   <ApprovalQueue
                     approvals={data.approvals.filter((a) => a.sessionId === sessionId)}
+                    onAnswer={async (id, answers) => {
+                      await api.answerQuestions(id, answers);
+                      await refresh();
+                    }}
                     onDecide={async (id, allow) => {
                       await api.approve(id, allow);
                       await refresh();
@@ -1002,6 +1042,14 @@ export default function App() {
                           <span>{taskContext.branch ?? '读取分支…'}</span>
                         </button>
                       )}
+                      <button
+                        className="context-chip"
+                        onClick={() => setCanvasOpen((v) => !v)}
+                        aria-expanded={canvasOpen}
+                      >
+                        <Layers3 size={13} />
+                        画布{session.activeCanvasId ? ' · 已关联' : ''}
+                      </button>
                       {session && (
                         <SessionPermission
                           session={session}
@@ -1109,7 +1157,11 @@ export default function App() {
                           title={`${provider?.name ?? '未连接'} · ${model || '选择模型'}`}
                         >
                           <span>
-                            {providerReady ? (provider?.modelLabels?.[model] ?? model) : '选择模型'}
+                            {providerReady
+                              ? model === automaticModel
+                                ? '自动路由'
+                                : (provider?.modelLabels?.[model] ?? model)
+                              : '选择模型'}
                           </span>
                           <small>{provider?.name ?? '未连接'}</small>
                           <ChevronDown size={13} />
@@ -1130,7 +1182,7 @@ export default function App() {
                               onChange={(id) =>
                                 selectModel(
                                   id,
-                                  data.providers.find((p) => p.id === id)?.models[0] ?? '',
+                                  firstModel(data.providers.find((p) => p.id === id)!),
                                 )
                               }
                               disabled={!!running}
@@ -1140,8 +1192,18 @@ export default function App() {
                               label="当前模型"
                               compact
                               value={providerReady ? model : ''}
-                              models={providerReady ? (provider?.models ?? []) : []}
-                              modelLabels={provider?.modelLabels}
+                              models={
+                                providerReady
+                                  ? [
+                                      ...(provider?.modelPool?.length ? [automaticModel] : []),
+                                      ...(provider?.models ?? []),
+                                    ]
+                                  : []
+                              }
+                              modelLabels={{
+                                ...provider?.modelLabels,
+                                [automaticModel]: '自动路由',
+                              }}
                               load={
                                 providerReady && provider
                                   ? () => api.models(provider.id)
@@ -1150,6 +1212,21 @@ export default function App() {
                               onChange={(m) => selectModel(providerId, m)}
                               disabled={!!running || !providerReady}
                             />
+                            {model === automaticModel && (
+                              <select
+                                aria-label="路由阶段"
+                                value={routingStage}
+                                disabled={!!running}
+                                onChange={(e) => setRoutingStage(e.target.value as ModelStage | '')}
+                              >
+                                <option value="">自动识别阶段</option>
+                                {Object.entries(modelStages).map(([v, label]) => (
+                                  <option key={v} value={v}>
+                                    {label}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
                           </div>
                         </div>
                       </details>
@@ -1249,7 +1326,7 @@ export default function App() {
                         <>
                           <span className="live-dot" />
                           {data.approvals.some((approval) => approval.sessionId === sessionId)
-                            ? '等待你处理审批'
+                            ? '有问题或审批需要你处理'
                             : `${running.agentName} · ${running.phase || '正在工作'}`}
                         </>
                       ) : (
@@ -1276,7 +1353,18 @@ export default function App() {
                   />
                 )}
               </main>
-              {session && workspace.open && !artifactId && !attachmentPreview && (
+              {session && canvasOpen && (
+                <CanvasWorkspace
+                  key={session.id}
+                  compact
+                  api={api}
+                  data={data}
+                  sessionId={session.id}
+                  onSession={activateSession}
+                  onClose={() => setCanvasOpen(false)}
+                />
+              )}
+              {session && !canvasOpen && workspace.open && !artifactId && !attachmentPreview && (
                 <WorkspacePanel
                   key={session.id}
                   fileRequest={fileRequest?.sessionId === session.id ? fileRequest : undefined}
@@ -1297,6 +1385,14 @@ export default function App() {
               )}
             </div>
           )}
+          {view === 'canvas' && (
+            <CanvasWorkspace
+              api={api}
+              data={data}
+              sessionId={sessionId}
+              onSession={activateSession}
+            />
+          )}
           {view === 'providers' && (
             <main className="page">
               <div className="page-heading">
@@ -1311,7 +1407,7 @@ export default function App() {
                 <div className="info-strip">
                   <ShieldCheck size={17} />
                   <span>
-                    API 密钥通过操作系统加密保存。每次运行使用独立配置，切换连接不会覆盖已有会话。
+                    API 密钥加密保存在本机。每次运行使用独立配置，切换连接不会覆盖已有会话。
                   </span>
                 </div>
                 <div className="collection-toolbar">

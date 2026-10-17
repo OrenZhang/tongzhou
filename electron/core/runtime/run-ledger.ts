@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { AppEvent, Message, Run, RunEvent } from '../../../src/shared/types';
 import type { Store } from '../../services/storage/store';
+import { parseAgentPlan } from '../../../src/shared/agent-plan';
 
 /** Owns ordered messages and progress persistence for concurrent runs. */
 export class RunLedger {
@@ -58,6 +59,14 @@ export class RunLedger {
   }
   progress(run: Run, type: RunEvent['type'], text: string) {
     if (!text || this.isStopping()) return;
+    if (type === 'agents' || type === 'observation') this.store.put('run', run);
+    if (type === 'plan') {
+      const plan = parseAgentPlan(text);
+      if (!plan) return;
+      run.plan = plan;
+      text = JSON.stringify(plan);
+      this.store.put('run', run);
+    }
     if (type === 'phase') {
       if (run.phase === text) return;
       this.flushProgress(run.id);

@@ -25,8 +25,14 @@ export type Protocol =
   | 'codex';
 export type AuthMode = 'api-key' | 'bearer' | 'none' | 'chatgpt' | 'native';
 export interface Provider {
+  /** Optional automatic routing pool. Fixed model selections ignore it. */
+  modelPool?: import('./model-protocol').ModelPoolEntry[];
   /** Missing on older connections means enabled. */
   thinkingEnabled?: boolean;
+  /** Missing means use the model's default; only supported reasoning models apply it. */
+  reasoningEffort?: import('./model-reasoning').ReasoningEffort;
+  /** Explicit budget for Claude models using manual extended thinking. */
+  thinkingBudgetTokens?: number;
   /** Existing connections without this field remain enabled. */
   enabled?: boolean;
   network?: import('./provider-network').ProviderNetwork;
@@ -37,7 +43,11 @@ export interface Provider {
   auth: AuthMode;
   models: string[];
   modelLabels?: Record<string, string>;
+  /** Explicit wire protocol overrides for mixed-model API gateways. */
+  modelProtocols?: Record<string, 'openai-chat' | 'openai-responses' | 'anthropic' | 'gemini'>;
   hasSecret?: boolean;
+  /** Saved legacy ciphertext is preserved but needs a user-supplied replacement. */
+  secretNeedsUpdate?: boolean;
   maxOutputTokens: number;
   /** 0 = automatic compaction; positive = manual character target (never a turn limit). */
   contextChars: number;
@@ -75,6 +85,8 @@ export interface PluginConfig {
   oauthStatus?: 'none' | 'starting' | 'waiting' | 'authorized' | 'error' | 'cancelled';
   oauthError?: string;
   oauthAccount?: string;
+  /** Scope names reported by the token endpoint, never access or refresh tokens. */
+  oauthScopes?: string[];
   hasOAuthClientSecret?: boolean;
   id: string;
   name: string;
@@ -179,6 +191,8 @@ export interface WorktreeInfo {
   unsharedCommits: boolean;
 }
 export interface Message {
+  sourceThreadId?: string;
+  phase?: 'commentary' | 'final_answer';
   artifactIds?: string[];
   attachments?: Attachment[];
   // Presentation order within a run; protocol content remains unchanged.
@@ -204,6 +218,9 @@ export interface Message {
   visibleTool?: boolean;
 }
 export interface Session {
+  canvasIds?: string[];
+  activeCanvasId?: string;
+  canvasContext?: { canvasId: string; workflowRunId: string; nodeId: string };
   botConversation?: BotConversationContext;
   automationJob?: string;
   contentContext?: { libraryId: string; documentId: string };
@@ -223,11 +240,25 @@ export interface Session {
   archived: boolean;
 }
 export interface Run {
+  routing?: import('./model-protocol').ModelRouting;
+  agents?: import('./agent-execution').ChildAgent[];
+  observation?: import('./agent-execution').ExecutionObservation;
+  plan?: import('./agent-plan').AgentPlan;
   botContext?: BotExecutionContext;
   retryOf?: string;
   knowledgeReferences?: import('./knowledge').KnowledgeReference[];
   usageReported?: boolean;
   workspace?: { before: string; after?: string };
+  completionChecks?: {
+    attempts: number;
+    checks: {
+      command: string;
+      description: string;
+      timeoutMs: number;
+      status: 'pending' | 'passed' | 'failed' | 'blocked';
+      output?: string;
+    }[];
+  };
   id: string;
   sessionId: string;
   providerId: string;
@@ -242,14 +273,23 @@ export interface Run {
   phase?: string;
   config?: {
     executionCore?: 'codex';
+    reasoningEffort?: string;
     protocol: Protocol;
     baseUrl: string;
     instructions: string;
+    instructionSources?: { source: string; chars: number }[];
+    taskMemory?: import('./task').TaskMemory;
     permission: AgentProfile['permission'];
     maxSteps: number;
   };
 }
 export interface Approval {
+  kind?: 'question';
+  questions?: import('./agent-execution').UserQuestion[];
+  runId?: string;
+  threadId?: string;
+  expiresAt?: number;
+  isBlocking?: boolean;
   id: string;
   sessionId: string;
   title: string;
@@ -308,7 +348,8 @@ export type AppEvent =
         | 'network'
         | 'connections'
         | 'extensions'
-        | 'knowledge';
+        | 'knowledge'
+        | 'canvas';
     }
   | { type: 'run-event'; event: RunEvent }
   | { type: 'native-auth'; state: NativeAuthState }
@@ -317,6 +358,7 @@ export type AppEvent =
   | { type: 'message'; message: Message }
   | { type: 'approval'; approval: Approval };
 export interface RunInput {
+  routingStage?: import('./model-protocol').ModelStage;
   /** Internal origin, never accepted from client tool arguments. */
   botContext?: BotExecutionContext;
   attachmentIds?: string[];
@@ -332,7 +374,7 @@ export interface RunEvent {
   runId: string;
   seq: number;
   time: number;
-  type: 'phase' | 'reasoning' | 'tool' | 'input' | 'notice';
+  type: 'phase' | 'reasoning' | 'tool' | 'input' | 'notice' | 'plan' | 'agents' | 'observation';
   text: string;
 }
 export interface PendingInput {
@@ -354,6 +396,26 @@ export interface ImportPreview {
   warnings: string[];
 }
 export interface TongzhouAPI {
+  canvasChooseOutputDirectory(): Promise<string | null>;
+  canvasState(id?: string): Promise<import('./canvas').CanvasState>;
+  canvasSave(input: import('./canvas').CanvasWrite): Promise<import('./canvas').Canvas>;
+  canvasDelete(id: string, version: number): Promise<void>;
+  canvasBind(sessionId: string, canvasId: string | null): Promise<void>;
+  canvasExecute(input: import('./canvas').CanvasExecute): Promise<import('./canvas').CanvasRun>;
+  canvasCancel(runId: string): Promise<void>;
+  canvasResourcePreview(
+    resource: import('./canvas').CanvasResource,
+  ): Promise<import('./artifacts').ArtifactPreview>;
+  canvasSources(query: {
+    kind: 'content' | 'artifact' | 'message';
+    media?: 'image' | 'video';
+    query?: string;
+    sessionId?: string;
+  }): Promise<{
+    choices: { title: string; resource: import('./canvas').CanvasResource }[];
+    sessions: { id: string; title: string }[];
+  }>;
+
   artifactList(
     query?: import('./artifacts').ArtifactQuery,
   ): Promise<import('./artifacts').ArtifactPage>;
@@ -397,7 +459,13 @@ export interface TongzhouAPI {
     libraryId: string,
     folderId?: string,
   ): Promise<{ imported: KnowledgeDocument[]; errors: string[] }>;
-  contentExport(documentId: string): Promise<string | null>;
+  contentExport(
+    documentId: string,
+    targetPath?: string,
+    expectedSha256?: string,
+    original?: boolean,
+  ): Promise<string | null | { path: string; persisted: boolean; bytes: number; sha256: string }>;
+  contentPreview(documentId: string): Promise<import('./artifacts').ArtifactPreview>;
   personalizationState(): Promise<import('./personalization').PersonalizationState>;
   savePersonalization(
     value: import('./personalization').Personalization,
@@ -576,6 +644,7 @@ export interface TongzhouAPI {
   taskSnapshot(): Promise<TaskSnapshot>;
   messages(sessionId: string, options?: { before?: string; limit?: number }): Promise<Message[]>;
   saveProvider(provider: ProviderInput): Promise<Provider>;
+  revealProviderSecret(id: string): Promise<string>;
   deleteProvider(id: string): Promise<void>;
   testProvider(id: string, model: string): Promise<string>;
   testProviderNetwork(id: string): Promise<string>;
@@ -605,6 +674,11 @@ export interface TongzhouAPI {
   team(input: RunInput, agentIds: string[]): Promise<string>;
   cancel(sessionId: string): Promise<void>;
   approve(id: string, allow: boolean): Promise<void>;
+  answerQuestions(
+    id: string,
+    answers: import('./agent-execution').QuestionAnswers | null,
+  ): Promise<void>;
+  controlAgent(sessionId: string, threadId: string, action: 'interrupt' | 'resume'): Promise<void>;
   listFiles(projectId: string, path: string): Promise<FileEntry[]>;
   readFile(projectId: string, path: string): Promise<string>;
   diff(projectId: string): Promise<string>;

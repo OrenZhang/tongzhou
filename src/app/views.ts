@@ -8,4 +8,5 @@ export type View =
   | 'connections'
   | 'extensions'
   | 'knowledge'
+  | 'canvas'
   | 'automations';

@@ -35,6 +35,9 @@ import {
   pluginSecret,
 } from '../../modules/plugins/code-hosting';
 import { GitlabApiConnection, gitlabApiTools } from '../../modules/plugins/gitlab-api';
+import { isReadOnlyTool } from '../../../src/shared/plugin-permissions';
+import { figmaConnection } from '../../../src/shared/figma';
+export { isReadOnlyTool } from '../../../src/shared/plugin-permissions';
 
 export function pluginTool(tool: any): PluginTool {
   return {
@@ -44,27 +47,16 @@ export function pluginTool(tool: any): PluginTool {
     ...(tool.annotations
       ? {
           annotations: {
-            readOnlyHint: tool.annotations.readOnlyHint === true,
-            destructiveHint: tool.annotations.destructiveHint === true,
+            ...(typeof tool.annotations.readOnlyHint === 'boolean'
+              ? { readOnlyHint: tool.annotations.readOnlyHint }
+              : {}),
+            ...(typeof tool.annotations.destructiveHint === 'boolean'
+              ? { destructiveHint: tool.annotations.destructiveHint }
+              : {}),
           },
         }
       : {}),
   };
-}
-
-export function isReadOnlyTool(config: PluginConfig, tool: PluginTool) {
-  if (
-    codeHost(config) === 'gitlab' &&
-    config.authMode === 'headers' &&
-    tool.name === 'gitlab_api_write'
-  )
-    return false;
-  return (
-    config.readOnlyTools.includes(tool.name) ||
-    (!!codeHost(config) &&
-      tool.annotations?.readOnlyHint === true &&
-      tool.annotations.destructiveHint === false)
-  );
 }
 
 export interface ComputerAdapter {
@@ -335,14 +327,23 @@ export class ToolScope {
     this.specs.push(spec);
     this.handlers.set(spec.name, { title, execute, approval, allowed });
   }
-  async prepare(store: Store, agent: AgentProfile, computer?: ComputerAdapter, project?: Project) {
+  async prepare(
+    store: Store,
+    agent: AgentProfile,
+    computer?: ComputerAdapter,
+    project?: Project,
+    onlyPluginId?: string,
+    captureResults: readonly string[] = [],
+  ) {
     const abort = () => {
       void this.close();
     };
     this.signal.addEventListener('abort', abort, { once: true });
     this.detach = () => this.signal.removeEventListener('abort', abort);
     try {
-      const plugins = store.list<PluginConfig>('plugin').filter((p) => p.enabled);
+      const plugins = store
+        .list<PluginConfig>('plugin')
+        .filter((p) => p.enabled && (!onlyPluginId || p.id === onlyPluginId));
       const largeCatalog = plugins.reduce((total, p) => total + (p.catalog?.length ?? 1), 0) > 64;
       if (plugins.some((p) => codeHost(p)))
         this.add(
@@ -397,7 +398,7 @@ export class ToolScope {
             await connection.connect(this.signal);
           })());
         let catalog = config.catalog;
-        if (!catalog || codeHost(config) || largeCatalog) {
+        if (!catalog || codeHost(config) || figmaConnection(config) || largeCatalog) {
           // A compact gateway keeps the complete server catalog available to every engine.
           // Refresh once per run; saved catalogs are for UI display, not authority to execute.
           let discovered: Promise<PluginTool[]> | undefined;
@@ -488,6 +489,7 @@ export class ToolScope {
               )
                 throw new Error('工具参数必须是对象');
               if (
+                !(onlyPluginId && isReadOnlyTool(config, tool)) &&
                 !(await this.ask(
                   `${config.name} · ${tool.name}`,
                   JSON.stringify(args.arguments ?? {}, null, 2),
@@ -500,7 +502,7 @@ export class ToolScope {
                 args.tool,
                 args.arguments ?? {},
                 this.signal,
-                !isReadOnlyTool(config, tool),
+                !isReadOnlyTool(config, tool) || captureResults.includes(args.tool),
               );
             },
             false,
@@ -508,6 +510,7 @@ export class ToolScope {
           );
           continue;
         }
+        let currentCatalog: Promise<PluginTool[]> | undefined;
         for (const tool of catalog) {
           if (agent.permission === 'read-only' && !isReadOnlyTool(config, tool)) continue;
           const name = mcpName(id, tool.name);
@@ -525,9 +528,22 @@ export class ToolScope {
               await connect();
               this.signal.throwIfAborted();
               if (this.closed || !allowed()) throw new Error('工具已停止、停用或配置已改变');
-              return connection.call(tool.name, args, this.signal, !isReadOnlyTool(config, tool));
+              currentCatalog ??= connection
+                .tools(this.signal)
+                .then((tools) => tools.map(pluginTool));
+              const fresh = (await currentCatalog).find((t) => t.name === tool.name);
+              if (!fresh || (agent.permission === 'read-only' && !isReadOnlyTool(config, fresh)))
+                throw new Error('工具已移除或只读权限已变化，请重新检查插件');
+              this.signal.throwIfAborted();
+              if (this.closed || !allowed()) throw new Error('工具已停止、停用或配置已改变');
+              return connection.call(
+                tool.name,
+                args,
+                this.signal,
+                !isReadOnlyTool(config, fresh) || captureResults.includes(tool.name),
+              );
             },
-            true,
+            onlyPluginId ? !isReadOnlyTool(config, tool) : true,
             allowed,
           );
         }
@@ -557,12 +573,15 @@ export class ToolScope {
       this.add(
         {
           name: 'read_skill_file',
-          description: '按需读取启用的 Skill。先读 SKILL.md 获取使用说明，再读需要的附属文件。',
+          description:
+            '按需读取启用的 Skill。先读 SKILL.md，再读相关资料。长文件可用 startLine/endLine 读取，行号从1开始，每次最多400行；省略范围则返回全文。',
           parameters: {
             type: 'object',
             properties: {
               skillId: { type: 'string', enum: skills.map((s) => s.id) },
               path: { type: 'string' },
+              startLine: { type: 'integer', minimum: 1 },
+              endLine: { type: 'integer', minimum: 1 },
             },
             required: ['skillId', 'path'],
             additionalProperties: false,
@@ -573,10 +592,34 @@ export class ToolScope {
           const skill = skills.find((s) => s.id === args.skillId);
           if (!store.list<SkillRecord>('skill').find((s) => s.id === args.skillId)?.enabled)
             throw new Error('Skill 已停用');
-          if (skill && args.path === 'SKILL.md') return { text: skill.instructions };
-          if (!skill || typeof args.path !== 'string' || !Object.hasOwn(skill.files, args.path))
+          if (
+            !skill ||
+            typeof args.path !== 'string' ||
+            (args.path !== 'SKILL.md' && !Object.hasOwn(skill.files, args.path))
+          )
             throw new Error('Skill 文件不存在或未授权');
-          return { text: skill.files[args.path] };
+          const text = args.path === 'SKILL.md' ? skill.instructions : skill.files[args.path];
+          if (args.startLine === undefined && args.endLine === undefined) return { text };
+          const start = args.startLine ?? 1;
+          const end = args.endLine ?? start + 199;
+          if (
+            !Number.isInteger(start) ||
+            !Number.isInteger(end) ||
+            start < 1 ||
+            end < start ||
+            end - start >= 400
+          )
+            throw new Error('Skill 行号范围无效：从1开始，每次最多400行');
+          const lines = text.split('\n');
+          if (start > lines.length) throw new Error(`Skill 文件仅有 ${lines.length} 行`);
+          return {
+            text:
+              `第 ${start}—${Math.min(end, lines.length)} 行 / 共 ${lines.length} 行\n` +
+              lines
+                .slice(start - 1, end)
+                .map((line, i) => `${start + i}: ${line}`)
+                .join('\n'),
+          };
         },
         false,
       );
@@ -585,6 +628,25 @@ export class ToolScope {
   has(name: string) {
     return this.handlers.has(name);
   }
+  assertAvailable(name: string) {
+    const handler = this.handlers.get(name);
+    if (!handler) throw new Error('工具未启用或没有权限：' + name);
+    if (!handler.allowed()) throw new Error('工具已停用或配置已改变，请在下一轮使用新配置');
+    if (this.closed || this.signal.aborted) throw new Error('工具执行已停止');
+  }
+  async describePlugin(pluginId: string, tool: string): Promise<PluginTool> {
+    const direct = this.specs.find((s) => s.name === mcpName(pluginId, tool));
+    if (direct)
+      return { name: tool, description: direct.description, inputSchema: direct.parameters };
+    const result = await this.call(mcpName(pluginId, 'discover'), { action: 'describe', tool });
+    if (result.isError) throw new Error(result.text);
+    return JSON.parse(result.text);
+  }
+  async callPlugin(pluginId: string, tool: string, args: Record<string, unknown>) {
+    return this.specs.some((s) => s.name === mcpName(pluginId, tool))
+      ? this.call(mcpName(pluginId, tool), args)
+      : this.call(mcpName(pluginId, 'discover'), { action: 'call', tool, arguments: args });
+  }
   call(name: string, args: any, callId: string = randomUUID()): Promise<ToolOutput> {
     if (this.seen.has(callId)) return this.seen.get(callId)!;
     const pending = this.execute(name, args);
@@ -592,10 +654,8 @@ export class ToolScope {
     return pending;
   }
   private async execute(name: string, args: any): Promise<ToolOutput> {
-    const handler = this.handlers.get(name);
-    if (!handler) throw new Error('工具未启用或没有权限：' + name);
-    if (!handler.allowed()) throw new Error('工具已停用或配置已改变，请在下一轮使用新配置');
-    if (this.closed || this.signal.aborted) throw new Error('工具执行已停止');
+    this.assertAvailable(name);
+    const handler = this.handlers.get(name)!;
     let result: ToolOutput;
     try {
       if (!args || Array.isArray(args) || typeof args !== 'object')
@@ -634,14 +694,14 @@ export class ToolScope {
 }
 
 export function skillInstructions(store: Store) {
-  return store
+  const summaries = store
     .list<SkillRecord>('skill')
     .filter((s) => s.enabled)
-    .map(
-      (s) =>
-        `\n[可用 Skill：${s.name}；ID：${s.id}] ${s.description}\n任务相关时调用 read_skill_file 读取 SKILL.md，按需使用；不自动扩大工具权限。`,
-    )
+    .map((s) => `[${s.name}；ID：${s.id}] ${s.description}`)
     .join('\n');
+  return summaries
+    ? '相关任务才用 read_skill_file 读取 SKILL.md，技能不扩大权限。\n' + summaries
+    : '';
 }
 export async function importSkillDirectory(root: string): Promise<SkillRecord> {
   const instructions = await readFile(await within(root, 'SKILL.md'), 'utf8');

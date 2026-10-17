@@ -6,6 +6,15 @@ import { MarkdownLink } from '../../components/markdown/RichMarkdown';
 import { errorMessage } from '../../lib/feedback';
 import { LocalGithub } from './LocalGithub';
 import { LocalGitlab } from './LocalGitlab';
+import { FigmaConnectionInfo, McpPermissions, PluginToolList } from './McpPermissions';
+import { pluginPermissionState } from '../../shared/plugin-permissions';
+import {
+  configureFigmaPlugin,
+  figmaConnection,
+  figmaDesktopUrl,
+  figmaRemoteUrl,
+  figmaDocsUrl,
+} from '../../shared/figma';
 import type { PluginConfig, PluginInput, Snapshot, TongzhouAPI } from '../../shared/types';
 import {
   codeHost,
@@ -13,7 +22,6 @@ import {
   githubMcpUrl,
   gitlabMcpUrl,
 } from '../../shared/code-hosting';
-export const figmaDesktopUrl = 'http://127.0.0.1:3845/mcp';
 export const workPluginCatalog = [
   {
     id: 'github',
@@ -39,10 +47,11 @@ export const workPluginCatalog = [
     id: 'figma',
     name: 'Figma',
     category: '设计',
-    description: '读取设计上下文、组件与布局，辅助实现界面。',
-    url: 'https://mcp.figma.com/mcp',
+    description:
+      '连接 Figma 设计工具。桌面服务可读取设计；远程服务支持设计读写与 FigJam 图表，需获准接入。',
+    url: figmaRemoteUrl,
     authMode: 'oauth' as const,
-    docs: 'https://developers.figma.com/docs/figma-mcp-server/remote-server-installation/',
+    docs: figmaDocsUrl,
   },
   {
     id: 'notion',
@@ -69,7 +78,7 @@ export function workPluginDefinition(plugin: PluginConfig) {
         (p) =>
           plugin.url === p.url ||
           p.id === codeHost(plugin) ||
-          (p.id === 'figma' && plugin.url === figmaDesktopUrl),
+          (p.id === 'figma' && !!figmaConnection(plugin)),
       )
     : undefined;
 }
@@ -84,13 +93,12 @@ export function OAuthFields({
 }) {
   const github = codeHost(edit) === 'github';
   const provider = codeHost(edit);
+  if (figmaConnection(edit)) return null;
   const issuer = github
     ? 'https://github.com/login/oauth'
-    : edit.url === 'https://mcp.figma.com/mcp'
-      ? 'https://api.figma.com'
-      : codeHost(edit) === 'gitlab'
-        ? new URL(edit.url).origin
-        : '';
+    : codeHost(edit) === 'gitlab'
+      ? new URL(edit.url).origin
+      : '';
   return (
     <>
       {showAuthentication && (
@@ -206,51 +214,6 @@ export function PluginAuthStatus({ plugin }: { plugin?: PluginConfig }) {
   );
 }
 
-function PluginToolList({ plugin }: { plugin: PluginConfig }) {
-  const [query, setQuery] = useState('');
-  const [page, setPage] = useState(0);
-  const tools = (plugin.catalog ?? []).filter((t) =>
-    (t.name + ' ' + t.description).toLowerCase().includes(query.toLowerCase()),
-  );
-  const last = Math.max(0, Math.ceil(tools.length / 20) - 1);
-  const current = Math.min(page, last);
-  return (
-    <details>
-      <summary>{plugin.catalog?.length ?? 0} 个已发现工具 · Agent 按需搜索调用</summary>
-      <input
-        aria-label={`${plugin.name} 工具搜索`}
-        placeholder="搜索工具名称或用途"
-        value={query}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          setPage(0);
-        }}
-      />
-      <div className="plugin-tool-list">
-        {tools.slice(current * 20, (current + 1) * 20).map((t) => (
-          <p key={t.name}>
-            <strong>{t.name}</strong>
-            <span>{t.description.slice(0, 180)}</span>
-          </p>
-        ))}
-        {!tools.length && <p>没有匹配的工具</p>}
-      </div>
-      {tools.length > 20 && (
-        <div className="row">
-          <button disabled={current === 0} onClick={() => setPage(current - 1)}>
-            上一页
-          </button>
-          <span>
-            {current + 1} / {last + 1}
-          </span>
-          <button disabled={current === last} onClick={() => setPage(current + 1)}>
-            下一页
-          </button>
-        </div>
-      )}
-    </details>
-  );
-}
 export function WorkPlugins({
   data,
   api,
@@ -352,19 +315,21 @@ export function WorkPlugins({
     setLoginCode('');
     setEditingService(p.id);
     setEdit(
-      installed
-        ? { ...installed, secret: '', authMode: installed.authMode ?? p.authMode }
-        : {
-            id: crypto.randomUUID(),
-            name: p.name,
-            transport: 'http',
-            url: p.url,
-            command: '',
-            args: [],
-            enabled: false,
-            readOnlyTools: [],
-            authMode: p.authMode,
-          },
+      configureFigmaPlugin(
+        installed
+          ? { ...installed, secret: '', authMode: installed.authMode ?? p.authMode }
+          : {
+              id: crypto.randomUUID(),
+              name: p.name,
+              transport: 'http',
+              url: p.url,
+              command: '',
+              args: [],
+              enabled: false,
+              readOnlyTools: [],
+              authMode: p.authMode,
+            },
+      ),
     );
     setToken('');
     setSource(
@@ -534,38 +499,37 @@ export function WorkPlugins({
                   工具将在会话中按需发现，也可点击「保存并检查」预览完整目录。
                 </p>
               )}
-              {(edit.url === 'https://mcp.figma.com/mcp' || edit.url === figmaDesktopUrl) && (
+              {figmaConnection(edit) && (
                 <>
                   <label>
                     Figma 连接方式
                     <select
                       aria-label="Figma 连接方式"
+                      disabled={busy}
                       value={edit.url}
                       onChange={(e) => {
-                        setEdit({
-                          ...edit,
-                          url: e.target.value,
-                          authMode: e.target.value === figmaDesktopUrl ? 'headers' : 'oauth',
-                          clearSecret: true,
-                          oauthClientId: '',
-                          oauthIssuer: '',
-                          oauthClientSecret: '',
-                        });
+                        setEdit(
+                          configureFigmaPlugin({
+                            ...edit,
+                            url: e.target.value,
+                            authMode: e.target.value === figmaDesktopUrl ? 'headers' : 'oauth',
+                            clearSecret: true,
+                            oauthClientId: '',
+                            oauthIssuer: '',
+                            oauthClientSecret: '',
+                          }),
+                        );
                         setToken('');
                         setLoginUrl('');
                         setLoginCode('');
                         setNotice('');
                       }}
                     >
-                      <option value="https://mcp.figma.com/mcp">远程服务 · 浏览器授权</option>
+                      <option value={figmaRemoteUrl}>远程服务 · 浏览器授权（接入待批准）</option>
                       <option value={figmaDesktopUrl}>桌面服务 · 本机连接</option>
                     </select>
                   </label>
-                  <p>
-                    {edit.url === figmaDesktopUrl
-                      ? '在 Figma 桌面应用打开文件，进入 Dev Mode 并启用 MCP Server，然后点击「保存并检查」。无需在同舟登录。'
-                      : 'Figma 远程 MCP 要求服务方认可的客户端。注册被拒绝时可配置已获准的 OAuth 应用，或选择桌面服务。'}
-                  </p>
+                  <FigmaConnectionInfo plugin={edit} />
                 </>
               )}
               {codeHost(edit) && (
@@ -674,7 +638,9 @@ export function WorkPlugins({
                       ? '使用 GitHub 登录'
                       : codeHost(edit) === 'gitlab'
                         ? '使用 GitLab 登录'
-                        : '浏览器授权'}
+                        : figmaConnection(edit) === 'remote'
+                          ? '使用 Figma 登录'
+                          : '浏览器授权'}
                   </button>
                   {loginCode && authCurrent?.oauthStatus === 'waiting' && (
                     <p className="info-strip">
@@ -710,7 +676,7 @@ export function WorkPlugins({
                 />
                 在会话中启用此插件
               </label>
-              <p>凭据使用系统加密保存。工具能访问的范围取决于服务端授权，执行遵循同舟会话权限。</p>
+              <p>凭据加密保存在本机。工具能访问的范围取决于服务端授权，执行遵循同舟会话权限。</p>
               <div className="row">
                 <button className="primary" disabled={busy}>
                   保存连接
@@ -722,7 +688,7 @@ export function WorkPlugins({
                     void act(async () => {
                       await save();
                       await api.testPlugin(edit.id);
-                    }, '✓ 插件连接检查通过')
+                    }, '✓ 认证、工具目录及只读配置检查通过；未执行写操作')
                   }
                 >
                   保存并检查
@@ -808,11 +774,14 @@ export function WorkPlugins({
               />
             </PluginDetailSection>
           )}
-          {current?.catalog && (
+          {edit && pluginPermissionState(edit, current).catalog && (
             <PluginDetailSection title="可用工具">
-              <PluginToolList plugin={current} />
+              <PluginToolList plugin={pluginPermissionState(edit, current)} />
             </PluginDetailSection>
           )}
+          <PluginDetailSection title="权限与连接校验">
+            <McpPermissions plugin={pluginPermissionState(edit, current)} />
+          </PluginDetailSection>
           <PluginDetailSection title="使用说明">
             <a
               href={workPluginCatalog.find((p) => p.id === editingService)?.docs}

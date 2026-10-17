@@ -106,6 +106,12 @@ export class CodexClient extends EventEmitter {
         'cli_auth_credentials_store="keyring"',
         '-c',
         'analytics.enabled=false',
+        '-c',
+        'features.apps=false',
+        '-c',
+        'features.plugins=false',
+        '-c',
+        'project_doc_max_bytes=0',
         ...codexTransportArgs(this.network?.transport),
         ...(this.modelTransport
           ? Object.entries({

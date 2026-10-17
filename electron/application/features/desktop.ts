@@ -6,6 +6,7 @@ import { writeClipboardText } from '../../services/desktop/clipboard';
 import { idSchema } from '../../services/storage/validation';
 import type { Plugin } from 'cordis';
 import '../context';
+import { isBuiltinSkill } from '../../../src/shared/builtin-skills';
 
 export const desktopPlugin: Plugin.Object<void> = {
   name: 'tongzhou-desktop',
@@ -23,6 +24,19 @@ export const desktopPlugin: Plugin.Object<void> = {
         'query',
         '查询所有模块的真实配置、ID、会话、机器人、渠道、运行和认证记录',
         [],
+        {
+          chat: () => {
+            const snapshot = services.snapshot();
+            return {
+              ...snapshot,
+              skills: snapshot.skills?.map((skill) => {
+                if (!isBuiltinSkill(skill.id) || !Object.keys(skill.files).length) return skill;
+                const { files, ...summary } = skill;
+                return { ...summary, resourcePaths: Object.keys(files) };
+              }),
+            };
+          },
+        },
       ),
       () => services.snapshot(),
     );

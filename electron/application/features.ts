@@ -1,3 +1,4 @@
+import { canvasPlugin } from './features/canvas';
 import { botsPlugin } from './features/bots';
 import { updatesPlugin } from './features/updates';
 import { powerPlugin } from './features/power';
@@ -40,6 +41,7 @@ export const applicationFeatures = [
   tasksPlugin,
   knowledgePlugin,
   contentPlugin,
+  canvasPlugin,
   automationPlugin,
   artifactsPlugin,
   pluginsPlugin,

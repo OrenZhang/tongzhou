@@ -14,13 +14,59 @@ export function renderDiagram(
     // Diagram directives are not application configuration. Keep rendering policy host-owned.
     if (/%%\s*\{|^\s*---\s*\r?\n/.test(text)) throw new Error('请移除图表中的配置指令后查看图形。');
     const { default: mermaid } = await import('mermaid');
+    const colors = dark
+      ? {
+          canvas: '#1e2128',
+          node: '#27364a',
+          secondary: '#2d3947',
+          text: '#e2ebf7',
+          border: '#526a89',
+          line: '#9aaec8',
+          group: '#222a36',
+          groupBorder: '#3d4a5d',
+        }
+      : {
+          canvas: '#ffffff',
+          node: '#edf4ff',
+          secondary: '#f1f6fc',
+          text: '#263a54',
+          border: '#b7cbe5',
+          line: '#7c8fa9',
+          group: '#f8fafd',
+          groupBorder: '#dce5f0',
+        };
     mermaid.initialize({
       startOnLoad: false,
       securityLevel: 'strict',
       htmlLabels: false,
       suppressErrorRendering: true,
       look: 'classic',
-      theme: dark ? 'dark' : 'neutral',
+      theme: 'base',
+      themeVariables: {
+        darkMode: dark,
+        background: colors.canvas,
+        primaryColor: colors.node,
+        primaryTextColor: colors.text,
+        primaryBorderColor: colors.border,
+        secondaryColor: colors.secondary,
+        secondaryTextColor: colors.text,
+        secondaryBorderColor: colors.border,
+        tertiaryColor: colors.group,
+        tertiaryTextColor: colors.text,
+        tertiaryBorderColor: colors.groupBorder,
+        lineColor: colors.line,
+        arrowheadColor: colors.line,
+        clusterBkg: colors.group,
+        clusterBorder: colors.groupBorder,
+        edgeLabelBackground: 'transparent',
+        noteBkgColor: colors.secondary,
+        noteTextColor: colors.text,
+        noteBorderColor: colors.border,
+        gridColor: colors.groupBorder,
+        altSectionBkgColor: colors.canvas,
+        doneTaskBkgColor: colors.secondary,
+        doneTaskBorderColor: colors.border,
+      },
       maxTextSize: 50000,
       maxEdges: 300,
       fontFamily: '"Noto Sans SC", "PingFang SC", "Microsoft YaHei UI", sans-serif',
@@ -45,6 +91,8 @@ export function renderDiagram(
       });
       const document = new DOMParser().parseFromString(svg, 'image/svg+xml');
       const element = document.documentElement;
+      // Keep the image canvas consistent with its surrounding page in every app style.
+      element.style.backgroundColor = 'transparent';
       const bounds = element
         .getAttribute('viewBox')
         ?.split(/[\s,]+/)

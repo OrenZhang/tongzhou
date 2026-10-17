@@ -62,6 +62,65 @@ describe('Codex model protocol gateway', () => {
       ),
     ).toThrow('不支持输入类型');
   });
+  it('loads staged tools without treating definitions as messages and preserves namespace call identities', () => {
+    const namespace = {
+      type: 'namespace',
+      name: 'files',
+      tools: [{ type: 'function', name: 'read', parameters: { type: 'object' } }],
+    };
+    const decoded = decodeModelRequest(
+      {
+        tools: [namespace],
+        input: [
+          { role: 'user', content: 'Read the file.' },
+          {
+            type: 'additional_tools',
+            role: 'developer',
+            tools: [namespace, { type: 'custom', name: 'patch' }],
+          },
+          {
+            type: 'function_call',
+            namespace: 'files',
+            name: 'read',
+            call_id: 'staged-call',
+            arguments: '{}',
+          },
+          { type: 'function_call_output', call_id: 'staged-call', output: 'contents' },
+        ],
+      },
+      's',
+    );
+    expect(decoded.tools).toHaveLength(2);
+    expect(decoded.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'tool']);
+    expect(decoded.messages[1].toolCalls?.[0].name).toBe(decoded.tools[0].name);
+    expect(decoded.messages[2]).toMatchObject({
+      toolCallId: 'staged-call',
+      toolName: decoded.tools[0].name,
+    });
+    expect(decoded.names.get(decoded.tools[1].name)?.type).toBe('custom_tool_call');
+  });
+  it('rejects malformed or conflicting staged tools instead of silently dropping or replacing them', () => {
+    for (const item of [
+      { type: 'additional_tools', role: 'user', tools: [] },
+      { type: 'additional_tools', role: 'developer', tools: {} },
+    ])
+      expect(() => decodeModelRequest({ input: [item] }, 's')).toThrow('additional_tools');
+    expect(() =>
+      decodeModelRequest(
+        {
+          tools: [{ type: 'function', name: 'read', parameters: { type: 'object' } }],
+          input: [
+            {
+              type: 'additional_tools',
+              role: 'developer',
+              tools: [{ type: 'function', name: 'read', parameters: { type: 'string' } }],
+            },
+          ],
+        },
+        's',
+      ),
+    ).toThrow('conflicting definition');
+  });
   it('closes interleaved text and reasoning items without repeating final text', async () => {
     const gateway = await modelGateway({
       sessionId: 's',

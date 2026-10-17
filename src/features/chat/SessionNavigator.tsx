@@ -67,6 +67,7 @@ export function SessionNavigator({
     const project = data.projects.find((p) => p.id === s.projectId);
     const source = data.projects.find((p) => p.id === projectFamilyId(data.projects, s.projectId));
     return (
+      !s.canvasContext &&
       s.archived === archived &&
       `${s.title} ${project?.name ?? ''} ${project?.path ?? ''} ${source?.name ?? ''} ${source?.path ?? ''}`
         .toLowerCase()

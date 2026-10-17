@@ -1,6 +1,6 @@
 import { authorizeKnowledgeFixtures } from '../../support/knowledge-fixture';
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Store } from '../../../electron/services/storage/store';
@@ -41,6 +41,142 @@ function fixture() {
   return { root, store, knowledge, content, library, document, session, tools };
 }
 describe('generic content workspace', () => {
+  it('starts scoped collaboration for supported image originals while retaining the unsupported-file boundary', async () => {
+    const f = fixture();
+    const image = f.knowledge.importFile(
+      '人物.png',
+      Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jN1kAAAAASUVORK5CYII=',
+        'base64',
+      ),
+      undefined,
+      f.library.id,
+    );
+    const start = vi.fn(() => 'test-run');
+    const handlers = new Map<string, Function>();
+    registerContentServices((name, _op, fn) => handlers.set(name, fn), f.store, {
+      content: f.content,
+      knowledge: f.knowledge,
+      start,
+    } as any);
+    const run = handlers.get('contentRun')!;
+    const input = {
+      documentId: image.id,
+      version: image.version,
+      providerId: 'image-model',
+      model: 'test',
+      prompt: '根据这张图补充资产设定',
+    };
+    const result = run(input);
+    expect(start).toHaveBeenCalledOnce();
+    expect(f.store.get<Session>('session', result.sessionId).contentContext).toEqual({
+      documentId: image.id,
+      libraryId: f.library.id,
+    });
+    const pdf = f.knowledge.importFile(
+      '尚未解析.pdf',
+      Buffer.from('%PDF-test'),
+      undefined,
+      f.library.id,
+    );
+    expect(() => run({ ...input, documentId: pdf.id, version: pdf.version })).toThrow('尚未提取');
+    expect(start).toHaveBeenCalledOnce();
+  });
+  it('reads actual library images on demand, keeps text reads unchanged and enforces scope and integrity', async () => {
+    const f = fixture();
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jN1kAAAAASUVORK5CYII=',
+      'base64',
+    );
+    const image = f.knowledge.importFile('林舟冬装.png', png, undefined, f.library.id);
+    const { scope } = f.tools(true);
+    const text = await scope.call('content_read', { id: image.id });
+    expect(text.images).toBeUndefined();
+    expect(JSON.parse(text.text!).content).toBe(image.content);
+    const viewed = await scope.call('content_read', { id: image.id, includeImage: true });
+    expect(viewed.images).toEqual([{ mimeType: 'image/png', data: png.toString('base64') }]);
+    expect(JSON.parse(viewed.text!).media.imageIncluded).toBe(true);
+    const outside = f.knowledge.importFile('其他库.png', png);
+    expect((await scope.call('content_read', { id: outside.id, includeImage: true })).isError).toBe(
+      true,
+    );
+    expect(() => f.content.preview(outside.id, f.session.id)).toThrow('范围');
+    const oversized = f.knowledge.importFile(
+      '大图.png',
+      Buffer.concat([png, Buffer.alloc(3_000_000)]),
+      undefined,
+      f.library.id,
+    );
+    const metadata = await scope.call('content_read', { id: oversized.id, includeImage: true });
+    expect(metadata.images).toBeUndefined();
+    expect(JSON.parse(metadata.text!).media).toEqual({ type: 'file', imageIncluded: false });
+    const fake = f.knowledge.importFile(
+      '伪图.png',
+      Buffer.from('并不是图片'),
+      undefined,
+      f.library.id,
+    );
+    expect((await scope.call('content_read', { id: fake.id, includeImage: true })).isError).toBe(
+      true,
+    );
+    writeFileSync(path.join(f.knowledge.root, 'files', image.blob!), 'changed');
+    expect((await scope.call('content_read', { id: image.id, includeImage: true })).isError).toBe(
+      true,
+    );
+    expect(() => f.knowledge.originalBytes(image.id)).toThrow('校验');
+  });
+  it('reuses asset records across episodes with versioned sources and detects changes without replacing adopted references', async () => {
+    const f = fixture(),
+      { scope } = f.tools();
+    const call = async (tool: string, args: unknown) => {
+      const result = await scope.call(tool, args);
+      expect(result.isError, result.text).toBeFalsy();
+      return JSON.parse(result.text!);
+    };
+    const folder = await call('content_folder', {
+      libraryId: f.library.id,
+      name: '测试作品 · 公共人物',
+    });
+    const asset = await call('content_write', {
+      libraryId: f.library.id,
+      folderId: folder.id,
+      contentType: 'manju/character',
+      title: '测试作品 · 林舟',
+      content: '@林舟\n当前采用：冬装；用户已确认。',
+      sourceIds: [f.document.id],
+    });
+    const manifest = await call('content_write', {
+      libraryId: f.library.id,
+      title: '第01集 · 资产清单',
+      content: `EP01_B001：@林舟 [[${asset.id}|人物设定]] v1，冬装。`,
+      sourceIds: [asset.id],
+    });
+    expect(
+      (await call('content_list', { query: '林舟' })).documents.map((d: any) => d.id),
+    ).toContain(asset.id);
+    await call('content_write', {
+      id: asset.id,
+      version: asset.version,
+      libraryId: f.library.id,
+      title: asset.title,
+      content: '@林舟\n当前采用：冬装；夏装是新候选，尚未采用。',
+    });
+    const read = f.knowledge.read(manifest.id);
+    expect(read.document.sources).toEqual([{ id: asset.id, title: asset.title, version: 1 }]);
+    expect(read.changedSourceIds).toEqual([asset.id]);
+    expect(read.links).toMatchObject([{ id: asset.id, ambiguous: false }]);
+    expect(f.knowledge.read(asset.id).backlinks.map((d) => d.id)).toContain(manifest.id);
+    const reopened = new ContentWorkspace(f.store, new Knowledge(f.store, f.root));
+    expect(reopened.document(manifest.id).content).toBe(read.document.content);
+    const stale = await scope.call('content_write', {
+      id: asset.id,
+      version: 1,
+      libraryId: f.library.id,
+      title: asset.title,
+      content: '覆盖',
+    });
+    expect(stale.isError).toBe(true);
+  });
   it('reads and updates files in directories, descendants and unfiled content', async () => {
     const f = fixture();
     const root = f.knowledge.saveFolder({ name: '根目录', libraryId: f.library.id });

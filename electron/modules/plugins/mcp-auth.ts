@@ -13,6 +13,7 @@ import type { PluginConfig } from '../../../src/shared/types';
 import type { Store } from '../../services/storage/store';
 import { serviceFetch } from '../../services/network/service-network';
 import { codeHost } from '../../../src/shared/code-hosting';
+import { figmaConnection, figmaAccessMessage } from '../../../src/shared/figma';
 import { verifyGithubPluginToken } from './code-hosting';
 import {
   beginGithubDeviceLogin,
@@ -113,6 +114,18 @@ export class PluginOAuthProvider implements OAuthClientProvider {
   private write(value: Saved) {
     this.check();
     this.store.saveSecret('plugin_oauth_' + this.config.id, JSON.stringify(value));
+    const config = this.store.get<PluginConfig>('plugin', this.config.id);
+    const scope = value.tokens?.scope;
+    const names = scope?.split(codeHost(config) === 'github' ? /[,\s]+/ : /\s+/).filter(Boolean);
+    this.store.put('plugin', {
+      ...config,
+      oauthScopes:
+        names?.length &&
+        names.length <= 100 &&
+        names.every((s) => /^[A-Za-z0-9:._\/-]{1,200}$/.test(s))
+          ? [...new Set(names)]
+          : undefined,
+    });
   }
   get clientMetadata() {
     const methods =
@@ -125,6 +138,7 @@ export class PluginOAuthProvider implements OAuthClientProvider {
           : 'client_secret_basic';
     return {
       client_name: '同舟 Tongzhou',
+      client_uri: 'https://github.com/OrenZhang/tongzhou',
       redirect_uris: [mcpRedirect],
       grant_types: ['authorization_code', 'refresh_token'],
       response_types: ['code'],
@@ -244,6 +258,7 @@ export class PluginOAuthProvider implements OAuthClientProvider {
       ...v,
       tokens: {
         ...tokens,
+        scope: tokens.scope ?? (tokens.issuer === v.tokens?.issuer ? v.tokens?.scope : undefined),
         refresh_token:
           tokens.refresh_token ??
           (tokens.issuer === v.tokens?.issuer ? v.tokens?.refresh_token : undefined),
@@ -316,7 +331,13 @@ export class McpAuth {
   status(id: string, status: PluginConfig['oauthStatus'], error?: string) {
     const p = this.store.list<PluginConfig>('plugin').find((p) => p.id === id);
     if (!p) return;
-    this.store.put('plugin', { ...p, oauthStatus: status, oauthError: error });
+    this.store.put('plugin', {
+      ...p,
+      oauthStatus: status,
+      oauthError: error,
+      ...(status !== 'authorized' ? { catalog: undefined, checkedAt: undefined } : {}),
+      ...(['none', 'error', 'cancelled'].includes(status ?? '') ? { oauthScopes: undefined } : {}),
+    });
     this.store.put('authEvent', {
       id: randomUUID(),
       providerId: id,
@@ -362,6 +383,7 @@ export class McpAuth {
       if ((e as NodeJS.ErrnoException)?.code === 'EADDRINUSE')
         return '本机授权回调端口 17438 已被占用，请关闭其他插件授权窗口后重试。';
       if (failure) return failure;
+      if (figmaConnection(config) === 'remote') return 'Figma 授权未完成。' + figmaAccessMessage;
       if (codeHost(config) === 'gitlab')
         return /does not support dynamic client registration/i.test(String(e))
           ? '该 GitLab 实例未提供 OAuth 应用自动注册。请联系管理员启用，或改用 Token 配置。'
@@ -402,7 +424,7 @@ export class McpAuth {
         const registration = /register/.test(target.pathname);
         failure =
           registration && target.hostname === 'api.figma.com' && response.status === 403
-            ? 'Figma 拒绝客户端注册（HTTP 403）。远程 MCP 需要 Figma 认可的客户端；可填写已获准的 OAuth 应用信息，或改用 Figma 桌面 MCP。'
+            ? 'Figma 拒绝客户端注册（HTTP 403）。' + figmaAccessMessage
             : codeHost(config) === 'gitlab'
               ? `${target.hostname} ${registration ? '拒绝 OAuth 应用自动注册' : /token/.test(target.pathname) ? '未能交换授权令牌' : '授权请求失败'}（HTTP ${response.status}）。请确认实例已启用 MCP、允许应用自动注册及账号访问；也可改用 Token 配置。`
               : `${target.hostname} ${registration ? '拒绝应用注册' : /token/.test(target.pathname) ? '未能交换授权令牌' : '授权请求失败'}（HTTP ${response.status}）。请检查应用配置和账号权限。`;

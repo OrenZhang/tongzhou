@@ -2263,6 +2263,60 @@ svg {
   grid-template-columns: 1fr 1fr;
   gap: 16px;
 }
+.model-pool-table {
+  overflow-x: auto;
+}
+.model-pool-header,
+.model-pool-entry {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.25fr) minmax(132px, 1.4fr) minmax(86px, 0.8fr) minmax(
+      86px,
+      0.8fr
+    ) minmax(106px, 0.9fr) 28px 28px;
+  gap: 6px;
+  min-width: 622px;
+  align-items: center;
+}
+.model-pool-header {
+  color: var(--muted);
+  font-size: 11px;
+  padding-bottom: 4px;
+}
+.model-pool-header > :nth-last-child(2) {
+  text-align: center;
+}
+.model-pool-entry {
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+}
+.modal .model-pool-entry > select {
+  min-width: 0;
+  width: 100%;
+  min-height: 28px;
+  height: 28px;
+  padding: 3px 6px;
+  font-size: 12px;
+  text-overflow: ellipsis;
+}
+.model-pool-images {
+  display: flex;
+  justify-content: center;
+}
+.model-pool-images input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+.model-pool-entry > .icon-button {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+}
+.model-pool-settings > .secondary {
+  margin-top: 8px;
+}
 .preset-row {
   display: flex;
   gap: 6px;
@@ -2570,6 +2624,69 @@ input[type='checkbox'] {
 }
 .process-timeline[hidden] {
   display: none;
+}
+.agent-plan ol {
+  margin: 5px 0;
+  padding: 0;
+  list-style: none;
+}
+.execution-meta {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.agent-activity {
+  font-size: 12px;
+}
+.agent-activity summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  cursor: pointer;
+}
+.agent-activity-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.agent-activity summary small {
+  color: var(--muted);
+}
+.agent-activity summary button {
+  min-height: 24px;
+  height: 24px;
+  padding: 2px 7px;
+  font-size: 11px;
+}
+.agent-activity p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 180px;
+  overflow: auto;
+  margin: 5px 0;
+}
+.agent-plan li {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 3px 0;
+  color: var(--secondary-text);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.agent-plan li > svg {
+  flex-shrink: 0;
+  align-self: center;
+}
+.agent-plan li[data-status='completed'] {
+  color: var(--muted);
+}
+.agent-plan li[data-status='inProgress'] {
+  color: var(--text);
+}
+.agent-plan li span,
+.agent-plan > small {
+  overflow-wrap: anywhere;
 }
 .process-phase {
   color: var(--muted);
@@ -3651,6 +3768,20 @@ kbd {
   max-height: 230px;
   overflow-y: auto;
   margin-top: 10px;
+}
+.provider-secret-control {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.provider-secret-control input {
+  flex: 1;
+  min-width: 0;
+}
+.provider-secret-control button {
+  padding: 6px;
+  flex-shrink: 0;
 }
 .plugin-tool-list p {
   display: flex;
