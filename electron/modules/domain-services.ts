@@ -1,3 +1,5 @@
+import { Canvases } from './canvas/canvas';
+import { CanvasWorkflows } from './canvas/workflow';
 import { Attachments } from './artifacts/attachments';
 import { Artifacts } from './artifacts/artifacts';
 import { TaskMemories } from './sessions/task-memory';
@@ -13,7 +15,29 @@ export function createDomainServices(store: Store, dataDir: string) {
   const memories = new TaskMemories(store);
   const knowledge = new Knowledge(store, dataDir);
   const content = new ContentWorkspace(store, knowledge);
+  const canvases = new Canvases(store, dataDir);
+  const canvasWorkflows = new CanvasWorkflows(
+    store,
+    canvases,
+    {
+      content,
+      knowledge,
+      artifacts,
+      attachments,
+    },
+    undefined,
+    dataDir,
+  );
   const checkpoints = new ChangeCheckpoints(store, dataDir);
-  return { attachments, artifacts, memories, knowledge, content, checkpoints };
+  return {
+    attachments,
+    artifacts,
+    memories,
+    knowledge,
+    content,
+    checkpoints,
+    canvases,
+    canvasWorkflows,
+  };
 }
 export type DomainServices = ReturnType<typeof createDomainServices>;

@@ -1,4 +1,5 @@
-import { FileRecords, managedDirectory } from '../../services/storage/local-files';
+import { serviceFetch } from '../../services/network/service-network';
+import { FileRecords, managedDirectory, atomicWrite } from '../../services/storage/local-files';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync, lstatSync, unlinkSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
@@ -216,12 +217,82 @@ export class Artifacts {
       throw new Error('作品内容校验失败');
     return bytes;
   }
+  /** Keep the original artifact identity when a generated URL is fetched into managed storage. */
+  async download(id: string, signal: AbortSignal, fetcher: typeof serviceFetch = serviceFetch) {
+    const a = this.stored(id);
+    if (a.blob) {
+      this.bytes(id);
+      return this.read(id);
+    }
+    if (!a.remoteUrl) throw new Error('作品没有可下载地址');
+    const response = await fetcher(a.remoteUrl, {
+      redirect: 'error',
+      signal: AbortSignal.any([signal, AbortSignal.timeout(120000)]),
+    });
+    if (!response.ok || !response.body) {
+      await response.body?.cancel();
+      throw new Error('作品下载失败，HTTP ' + response.status + '；生成结果已保留，可重试保存');
+    }
+    const reader = response.body.getReader(),
+      parts: Buffer[] = [];
+    let size = 0;
+    try {
+      while (true) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        size += chunk.value.byteLength;
+        if (size > MAX_BYTES) throw new Error('作品超过 25 MB，原始链接已保留');
+        parts.push(Buffer.from(chunk.value));
+      }
+    } finally {
+      await reader.cancel();
+      reader.releaseLock();
+    }
+    signal.throwIfAborted();
+    const bytes = Buffer.concat(parts);
+    let ext = path.extname(a.name).toLowerCase();
+    if (a.kind === 'image' && !validImage(ext, bytes)) {
+      const detected = ['.png', '.jpg', '.webp', '.gif'].find((e) => validImage(e, bytes));
+      if (detected) {
+        ext = detected;
+        a.name = path.basename(a.name, path.extname(a.name)) + ext;
+        a.mimeType = formats[ext][1];
+      }
+    }
+    if (a.kind === 'video' && response.headers.get('content-type')?.startsWith('video/webm')) {
+      ext = '.webm';
+      a.name = path.basename(a.name, path.extname(a.name)) + ext;
+      a.mimeType = 'video/webm';
+    }
+    if (
+      !bytes.length ||
+      (a.kind === 'image' && !validImage(ext, bytes)) ||
+      (a.kind === 'video' &&
+        !(ext === '.webm'
+          ? bytes.subarray(0, 4).equals(Buffer.from('1a45dfa3', 'hex'))
+          : bytes.toString('ascii', 4, 8) === 'ftyp'))
+    )
+      throw new Error('下载的媒体内容无效，原始链接已保留');
+    if (/^text\/html/i.test(response.headers.get('content-type') ?? ''))
+      throw new Error('媒体下载返回网页，原始链接已保留');
+    const blob = a.id + ext;
+    atomicWrite(this.root, this.file(blob), bytes);
+    this.records.put({
+      ...a,
+      blob,
+      hash: createHash('sha256').update(bytes).digest('hex'),
+      size: bytes.length,
+      sourceUrl: a.remoteUrl,
+      remoteUrl: undefined,
+    });
+    return this.read(id);
+  }
   preview(id: string): ArtifactPreview {
     const a = this.read(id);
     if (a.remoteUrl) return { type: 'external' };
-    if (a.kind === 'image')
+    if (a.kind === 'image' || a.kind === 'video')
       return {
-        type: 'image',
+        type: a.kind,
         content: `data:${a.mimeType};base64,${this.bytes(id).toString('base64')}`,
       };
     if (/^text\//.test(a.mimeType) || ['application/json', 'image/svg+xml'].includes(a.mimeType))

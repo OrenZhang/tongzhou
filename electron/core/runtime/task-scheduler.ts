@@ -7,6 +7,7 @@ import type {
   ExecutionCallbacks,
   TaskService,
   TaskToolPreparation,
+  TaskOperation,
 } from '../task-contracts';
 import type { ApplicationEvents } from '../application-events';
 import type { SessionLifecycle } from '../../modules/sessions/session-lifecycle';
@@ -262,11 +263,13 @@ export class TaskScheduler implements TaskService {
   setSessionPermission(id: string, permission: PermissionMode | null) {
     this.store.setSessionPermission(id, permission);
     this.refreshActivePermission(id);
+    this.resources.events.emit('permissionChanged', id);
     this.changed();
   }
   setDefaultPermission(permission: PermissionMode, applyToAll = false) {
     this.store.setDefaultPermission(permission, applyToAll);
     for (const id of this.active.keys()) this.refreshActivePermission(id);
+    this.resources.events.emit('permissionChanged');
     this.changed();
   }
   private refreshActivePermission(id: string) {
@@ -279,7 +282,10 @@ export class TaskScheduler implements TaskService {
   isActive(id: string) {
     return this.active.has(id);
   }
-  start(input: RunInput, resendMessageId?: string): string {
+  startOperation(input: RunInput, operation: TaskOperation) {
+    return this.start(input, undefined, operation);
+  }
+  start(input: RunInput, resendMessageId?: string, operation?: TaskOperation): string {
     if (this.stopping) throw new Error('应用正在退出');
     let replaced: Message | undefined;
     if (resendMessageId) {
@@ -315,7 +321,7 @@ export class TaskScheduler implements TaskService {
     const session = this.store.get<Session>('session', input.sessionId);
     if (session.archived) throw new Error('请先恢复已归档的会话');
     const localReply =
-      !attachments.length && !session.knowledgeJob && !session.memoryJob
+      !operation && !attachments.length && !session.knowledgeJob && !session.memoryJob
         ? identityReply(input.prompt)
         : undefined;
     if (input.agentId === KNOWLEDGE_ORGANIZER_ID && !session.knowledgeJob)
@@ -332,11 +338,22 @@ export class TaskScheduler implements TaskService {
     if (session.memoryJob || (session.automationJob && session.contentContext))
       agent.permission = 'read-only';
     const requested = { providerId: input.providerId, model: input.model };
-    let provider = this.store.get<Provider>('provider', input.providerId);
+    let provider = operation
+      ? {
+          id: input.providerId,
+          name: '插件执行',
+          protocol: 'openai-chat' as const,
+          baseUrl: '',
+          auth: 'none' as const,
+          models: [],
+          maxOutputTokens: 0,
+          contextChars: 0,
+        }
+      : this.store.get<Provider>('provider', input.providerId);
     if (provider.enabled === false)
       throw new Error('此连接已停用，请在模型中启用，或选择其他连接。');
     let routing: Run['routing'];
-    if (input.model === automaticModel) {
+    if (!operation && input.model === automaticModel) {
       const previous = this.store.sessionObjects<Run>('run', session.id, 1)[0]?.routing;
       // Earlier user images are replayed when a model changes, so they also constrain routing.
       const images =
@@ -372,7 +389,7 @@ export class TaskScheduler implements TaskService {
     if (project && (project.removed || this.resources.projectUnavailable?.(project.id)))
       throw new Error('工作树已移除或正在移除，会话历史仍然保留；请在可用项目中创建会话');
     const secret =
-      provider.protocol === 'codex' || nativeEngine(provider.protocol)
+      operation || provider.protocol === 'codex' || nativeEngine(provider.protocol)
         ? ''
         : this.store.secret(provider.id);
     if (
@@ -398,7 +415,7 @@ export class TaskScheduler implements TaskService {
       outputTokens: 0,
       knowledgeReferences: [],
       config: {
-        executionCore: localReply ? undefined : 'codex',
+        executionCore: localReply || operation ? undefined : 'codex',
         protocol: provider.protocol,
         baseUrl: provider.baseUrl,
         instructions: agent.instructions,
@@ -581,6 +598,15 @@ export class TaskScheduler implements TaskService {
           const scope = buildScope(controller.signal);
           try {
             this.ledger.progress(run, 'phase', '准备工具');
+            if (operation) {
+              await operation.prepare(scope, agent, project);
+              this.ledger.progress(run, 'phase', '执行插件');
+              const text = await operation.execute(scope, controller.signal, (text) =>
+                this.ledger.progress(run, 'tool', text),
+              );
+              this.ledger.add(session.id, 'assistant', text, { runId: run.id, status: 'complete' });
+              break;
+            }
             await prepare(scope, controller.signal, agent);
             if (!session.knowledgeJob && !session.contentContext) checks.attach(scope);
             const compiled = taskInstructions({
@@ -619,7 +645,11 @@ export class TaskScheduler implements TaskService {
             );
             break;
           } catch (error) {
-            if (taskController.signal.aborted || controller.signal.reason !== 'permission-change')
+            if (
+              operation ||
+              taskController.signal.aborted ||
+              controller.signal.reason !== 'permission-change'
+            )
               throw error;
             this.ledger.progress(
               run,

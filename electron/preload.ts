@@ -3,6 +3,15 @@ import type { TongzhouAPI } from '../src/shared/types';
 const call = (method: string, ...args: unknown[]) =>
   ipcRenderer.invoke('tongzhou:' + method, ...args);
 const api: TongzhouAPI = {
+  canvasChooseOutputDirectory: () => call('canvasChooseOutputDirectory'),
+  canvasState: (...args) => call('canvasState', ...args),
+  canvasSave: (...args) => call('canvasSave', ...args),
+  canvasDelete: (...args) => call('canvasDelete', ...args),
+  canvasBind: (...args) => call('canvasBind', ...args),
+  canvasExecute: (...args) => call('canvasExecute', ...args),
+  canvasCancel: (...args) => call('canvasCancel', ...args),
+  canvasResourcePreview: (...args) => call('canvasResourcePreview', ...args),
+  canvasSources: (...args) => call('canvasSources', ...args),
   artifactList: (query) => call('artifactList', query),
   artifactRead: (id) => call('artifactRead', id),
   artifactPreview: (id) => call('artifactPreview', id),

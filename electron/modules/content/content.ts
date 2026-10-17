@@ -145,13 +145,22 @@ export class ContentWorkspace {
       throw new Error('文档不在当前内容范围');
     return doc;
   }
-  preview(id: string, sessionId?: string): ArtifactPreview {
+  preview(id: string, sessionId?: string, maxImageBytes = 3_000_000): ArtifactPreview {
     const doc = this.document(id, sessionId);
     if (!doc.blob) return { type: 'text', content: doc.content };
     const ext = path.extname(doc.fileName ?? '').toLowerCase();
+    if (['.mp4', '.webm'].includes(ext)) {
+      const bytes = this.knowledge.originalBytes(id);
+      return bytes.length <= 25 * 1024 * 1024
+        ? {
+            type: 'video',
+            content: `data:${ext === '.mp4' ? 'video/mp4' : 'video/webm'};base64,${bytes.toString('base64')}`,
+          }
+        : { type: 'file' };
+    }
     if (!['.png', '.jpg', '.jpeg', '.webp'].includes(ext)) return { type: 'file' };
     const bytes = this.knowledge.originalBytes(id);
-    if (bytes.length > 3_000_000) return { type: 'file' };
+    if (bytes.length > maxImageBytes) return { type: 'file' };
     const mimeType = bytes.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex'))
       ? 'image/png'
       : bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255

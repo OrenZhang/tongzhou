@@ -218,6 +218,9 @@ export interface Message {
   visibleTool?: boolean;
 }
 export interface Session {
+  canvasIds?: string[];
+  activeCanvasId?: string;
+  canvasContext?: { canvasId: string; workflowRunId: string; nodeId: string };
   botConversation?: BotConversationContext;
   automationJob?: string;
   contentContext?: { libraryId: string; documentId: string };
@@ -345,7 +348,8 @@ export type AppEvent =
         | 'network'
         | 'connections'
         | 'extensions'
-        | 'knowledge';
+        | 'knowledge'
+        | 'canvas';
     }
   | { type: 'run-event'; event: RunEvent }
   | { type: 'native-auth'; state: NativeAuthState }
@@ -392,6 +396,26 @@ export interface ImportPreview {
   warnings: string[];
 }
 export interface TongzhouAPI {
+  canvasChooseOutputDirectory(): Promise<string | null>;
+  canvasState(id?: string): Promise<import('./canvas').CanvasState>;
+  canvasSave(input: import('./canvas').CanvasWrite): Promise<import('./canvas').Canvas>;
+  canvasDelete(id: string, version: number): Promise<void>;
+  canvasBind(sessionId: string, canvasId: string | null): Promise<void>;
+  canvasExecute(input: import('./canvas').CanvasExecute): Promise<import('./canvas').CanvasRun>;
+  canvasCancel(runId: string): Promise<void>;
+  canvasResourcePreview(
+    resource: import('./canvas').CanvasResource,
+  ): Promise<import('./artifacts').ArtifactPreview>;
+  canvasSources(query: {
+    kind: 'content' | 'artifact' | 'message';
+    media?: 'image' | 'video';
+    query?: string;
+    sessionId?: string;
+  }): Promise<{
+    choices: { title: string; resource: import('./canvas').CanvasResource }[];
+    sessions: { id: string; title: string }[];
+  }>;
+
   artifactList(
     query?: import('./artifacts').ArtifactQuery,
   ): Promise<import('./artifacts').ArtifactPage>;

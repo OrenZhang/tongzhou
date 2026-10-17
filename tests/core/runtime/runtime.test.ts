@@ -1097,6 +1097,11 @@ describe('agent execution lifecycle', () => {
         r.tools.every(
           (t: any) =>
             [
+              'canvas_list',
+              'canvas_read',
+              'canvas_apply',
+              'canvas_execute',
+              'canvas_cancel',
               'current_time',
               'system_info',
               'request_user_input',

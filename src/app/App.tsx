@@ -1,3 +1,4 @@
+import { CanvasWorkspace } from '../features/canvas/CanvasWorkspace';
 import { SidebarNavGroup } from '../components/SidebarNavGroup';
 import { ServiceIcon, providerService } from '../components/ServiceIcon';
 import { useNavigation } from './useNavigation';
@@ -92,6 +93,7 @@ import { SessionNotification } from '../features/chat/NotificationControls';
 import { AuthBadge, Mark, Modal, Spinner, ModelPicker } from '../components/components';
 
 export default function App() {
+  const [canvasOpen, setCanvasOpen] = useState(false);
   const [activityTab, setActivityTab] = useState<'runs' | 'review'>('runs');
   const [reviewSession, setReviewSession] = useState('');
   const [reviewRun, setReviewRun] = useState('');
@@ -429,6 +431,7 @@ export default function App() {
       items: [
         { id: 'agents', label: 'Agent', icon: Users },
         { id: 'knowledge', label: '智库', icon: BookOpen },
+        { id: 'canvas', label: '画布', icon: Layers3 },
         { id: 'connections', label: '渠道', icon: Network },
         { id: 'extensions', label: '插件', icon: Puzzle },
         { id: 'providers', label: '模型', icon: Cpu },
@@ -590,6 +593,7 @@ export default function App() {
                       settings: '设置',
                       extensions: '插件',
                       knowledge: '智库',
+                      canvas: '画布',
                       automations: '定时任务',
                     }[view]}
               </strong>
@@ -664,7 +668,9 @@ export default function App() {
             </div>
           </header>
           {view === 'workspace' && (
-            <div className={`workspace-layout ${workspace.open && session ? 'has-context' : ''}`}>
+            <div
+              className={`workspace-layout ${canvasOpen && session ? 'has-canvas' : workspace.open && session ? 'has-context' : ''}`}
+            >
               <main className="conversation">
                 {session && (
                   <div className="conversation-header">
@@ -1036,6 +1042,14 @@ export default function App() {
                           <span>{taskContext.branch ?? '读取分支…'}</span>
                         </button>
                       )}
+                      <button
+                        className="context-chip"
+                        onClick={() => setCanvasOpen((v) => !v)}
+                        aria-expanded={canvasOpen}
+                      >
+                        <Layers3 size={13} />
+                        画布{session.activeCanvasId ? ' · 已关联' : ''}
+                      </button>
                       {session && (
                         <SessionPermission
                           session={session}
@@ -1339,7 +1353,18 @@ export default function App() {
                   />
                 )}
               </main>
-              {session && workspace.open && !artifactId && !attachmentPreview && (
+              {session && canvasOpen && (
+                <CanvasWorkspace
+                  key={session.id}
+                  compact
+                  api={api}
+                  data={data}
+                  sessionId={session.id}
+                  onSession={activateSession}
+                  onClose={() => setCanvasOpen(false)}
+                />
+              )}
+              {session && !canvasOpen && workspace.open && !artifactId && !attachmentPreview && (
                 <WorkspacePanel
                   key={session.id}
                   fileRequest={fileRequest?.sessionId === session.id ? fileRequest : undefined}
@@ -1359,6 +1384,14 @@ export default function App() {
                 />
               )}
             </div>
+          )}
+          {view === 'canvas' && (
+            <CanvasWorkspace
+              api={api}
+              data={data}
+              sessionId={sessionId}
+              onSession={activateSession}
+            />
           )}
           {view === 'providers' && (
             <main className="page">

@@ -141,6 +141,8 @@ export function applicationServices(kernel: ApplicationKernel): Plugin.Object<vo
         const domains = createDomainServices(ctx.tzStore, ctx.tzDesktop.dataDir);
         ctx.provide('tzKnowledge', domains.knowledge);
         ctx.provide('tzContent', domains.content);
+        ctx.provide('tzCanvases', domains.canvases);
+        ctx.provide('tzCanvasWorkflows', domains.canvasWorkflows);
         ctx.provide('tzArtifacts', domains.artifacts);
         ctx.provide('tzAttachments', domains.attachments);
         ctx.provide('tzMemories', domains.memories);
@@ -292,6 +294,8 @@ export function applicationServices(kernel: ApplicationKernel): Plugin.Object<vo
         'tzProjectTools',
         'tzKnowledge',
         'tzContent',
+        'tzCanvases',
+        'tzCanvasWorkflows',
         'tzArtifacts',
         'tzAttachments',
         'tzMemories',
@@ -306,6 +310,8 @@ export function applicationServices(kernel: ApplicationKernel): Plugin.Object<vo
           {
             knowledge: ctx.tzKnowledge,
             content: ctx.tzContent,
+            canvases: ctx.tzCanvases,
+            canvasWorkflows: ctx.tzCanvasWorkflows,
             artifacts: ctx.tzArtifacts,
             attachments: ctx.tzAttachments,
             memories: ctx.tzMemories,

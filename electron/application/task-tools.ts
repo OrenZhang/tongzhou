@@ -1,3 +1,4 @@
+import { attachCanvasTools } from '../modules/canvas/canvas-tools';
 import { botSettings } from '../services/bots/settings';
 import { botClientPolicy } from '../services/bots/client-policy';
 import type { RunInput } from '../../src/shared/types';
@@ -23,6 +24,16 @@ export function taskToolPreparation(
   startBotTask?: (input: RunInput) => string,
 ): TaskToolPreparation {
   return async ({ scope, session, agent, project, run, signal, ask, progress }) => {
+    if (!session.knowledgeJob && !session.memoryJob && !session.automationJob && !session.parentId)
+      attachCanvasTools(
+        scope,
+        store,
+        domains.canvases,
+        domains.canvasWorkflows,
+        session,
+        agent.permission === 'read-only',
+        changed,
+      );
     const context = run.botContext;
     const policy =
       context && startBotTask ? botClientPolicy(store, context, run.id, startBotTask) : undefined;
@@ -122,7 +133,7 @@ export function taskToolPreparation(
         domains.memories.attach(scope, session.id);
       }
     }
-    if (!session.knowledgeJob && store.capabilities().management)
+    if (!session.knowledgeJob && !session.canvasContext && store.capabilities().management)
       commands?.attach(
         scope,
         agent.permission === 'read-only',

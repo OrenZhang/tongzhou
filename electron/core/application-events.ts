@@ -4,6 +4,7 @@ export type Lifecycle = 'completed' | 'failed' | 'interrupted' | 'approval';
 export type EngineInvalidation = { providerId?: string; protocol?: string };
 export class ApplicationEvents extends EventEmitter<{
   lifecycle: [run: Run, event: Lifecycle, approvalId?: string];
+  permissionChanged: [sessionId?: string];
   engineInvalidated: [scope: EngineInvalidation];
   accountReset: [providerId: string];
   shutdown: [];

@@ -12,7 +12,13 @@ import type {
 } from '../../src/shared/types';
 import type { ToolScope } from './tools/extensions';
 
+/** Internal deterministic operation; public run schemas never accept executable callbacks. */
+export interface TaskOperation {
+  prepare(scope: ToolScope, agent: AgentProfile, project: Project | null): Promise<void>;
+  execute(scope: ToolScope, signal: AbortSignal, progress: (text: string) => void): Promise<string>;
+}
 export interface TaskService {
+  startOperation(input: RunInput, operation: TaskOperation): string;
   controlAgent(sessionId: string, threadId: string, action: 'interrupt' | 'resume'): Promise<void>;
   start(input: RunInput, resendMessageId?: string): string;
   enqueue(input: RunInput, mode: PendingInput['mode']): Promise<void>;

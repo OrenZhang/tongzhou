@@ -327,14 +327,23 @@ export class ToolScope {
     this.specs.push(spec);
     this.handlers.set(spec.name, { title, execute, approval, allowed });
   }
-  async prepare(store: Store, agent: AgentProfile, computer?: ComputerAdapter, project?: Project) {
+  async prepare(
+    store: Store,
+    agent: AgentProfile,
+    computer?: ComputerAdapter,
+    project?: Project,
+    onlyPluginId?: string,
+    captureResults: readonly string[] = [],
+  ) {
     const abort = () => {
       void this.close();
     };
     this.signal.addEventListener('abort', abort, { once: true });
     this.detach = () => this.signal.removeEventListener('abort', abort);
     try {
-      const plugins = store.list<PluginConfig>('plugin').filter((p) => p.enabled);
+      const plugins = store
+        .list<PluginConfig>('plugin')
+        .filter((p) => p.enabled && (!onlyPluginId || p.id === onlyPluginId));
       const largeCatalog = plugins.reduce((total, p) => total + (p.catalog?.length ?? 1), 0) > 64;
       if (plugins.some((p) => codeHost(p)))
         this.add(
@@ -480,6 +489,7 @@ export class ToolScope {
               )
                 throw new Error('工具参数必须是对象');
               if (
+                !(onlyPluginId && isReadOnlyTool(config, tool)) &&
                 !(await this.ask(
                   `${config.name} · ${tool.name}`,
                   JSON.stringify(args.arguments ?? {}, null, 2),
@@ -492,7 +502,7 @@ export class ToolScope {
                 args.tool,
                 args.arguments ?? {},
                 this.signal,
-                !isReadOnlyTool(config, tool),
+                !isReadOnlyTool(config, tool) || captureResults.includes(args.tool),
               );
             },
             false,
@@ -526,9 +536,14 @@ export class ToolScope {
                 throw new Error('工具已移除或只读权限已变化，请重新检查插件');
               this.signal.throwIfAborted();
               if (this.closed || !allowed()) throw new Error('工具已停止、停用或配置已改变');
-              return connection.call(tool.name, args, this.signal, !isReadOnlyTool(config, fresh));
+              return connection.call(
+                tool.name,
+                args,
+                this.signal,
+                !isReadOnlyTool(config, fresh) || captureResults.includes(tool.name),
+              );
             },
-            true,
+            onlyPluginId ? !isReadOnlyTool(config, tool) : true,
             allowed,
           );
         }
@@ -618,6 +633,19 @@ export class ToolScope {
     if (!handler) throw new Error('工具未启用或没有权限：' + name);
     if (!handler.allowed()) throw new Error('工具已停用或配置已改变，请在下一轮使用新配置');
     if (this.closed || this.signal.aborted) throw new Error('工具执行已停止');
+  }
+  async describePlugin(pluginId: string, tool: string): Promise<PluginTool> {
+    const direct = this.specs.find((s) => s.name === mcpName(pluginId, tool));
+    if (direct)
+      return { name: tool, description: direct.description, inputSchema: direct.parameters };
+    const result = await this.call(mcpName(pluginId, 'discover'), { action: 'describe', tool });
+    if (result.isError) throw new Error(result.text);
+    return JSON.parse(result.text);
+  }
+  async callPlugin(pluginId: string, tool: string, args: Record<string, unknown>) {
+    return this.specs.some((s) => s.name === mcpName(pluginId, tool))
+      ? this.call(mcpName(pluginId, tool), args)
+      : this.call(mcpName(pluginId, 'discover'), { action: 'call', tool, arguments: args });
   }
   call(name: string, args: any, callId: string = randomUUID()): Promise<ToolOutput> {
     if (this.seen.has(callId)) return this.seen.get(callId)!;

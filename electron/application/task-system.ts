@@ -26,6 +26,7 @@ export async function createTaskSystem(
   let tasks: TaskScheduler | undefined;
   let execution: CodexExecution | undefined;
   let automations: Automations | undefined;
+  let workflowStop: Promise<void> | undefined;
   const terminals = new Terminals(store, events.changed, dataDir);
   const sessions = new SessionLifecycle(store, dataDir, {
     isActive: (id) => tasks!.isActive(id),
@@ -46,6 +47,9 @@ export async function createTaskSystem(
     producersStopped = true;
     for (const stop of [
       () => automations?.stop(),
+      () => {
+        workflowStop = domains.canvasWorkflows.stop();
+      },
       () => approvals.dispose(),
       () => terminals.dispose(),
     ]) {
@@ -89,6 +93,7 @@ export async function createTaskSystem(
         cleanupErrors.push(error);
       }
       const settled = await Promise.allSettled([
+        workflowStop,
         tasks ? tasks.waitForIdle() : execution?.close(),
         ...invalidations,
       ]);
@@ -124,6 +129,7 @@ export async function createTaskSystem(
             network.transport ? network.transport(profile) : Promise.resolve(fetch),
         })),
     });
+    domains.canvasWorkflows.configure(tasks, events);
     automations = new Automations(store, {
       content: domains.content,
       knowledge: domains.knowledge,
