@@ -86,7 +86,8 @@ try {
   await openSidebar(page, '插件');
   await page.getByRole('button', { name: /^内置插件/ }).click();
   await page.getByLabel('类型', { exact: true }).selectOption('mcp');
-  const builtins = (await page.evaluate(() => window.tongzhou.snapshot())).plugins;
+  const initial = await page.evaluate(() => window.tongzhou.snapshot());
+  const builtins = initial.plugins;
   assert.deepEqual(builtins.map((p) => p.id).sort(), [
     'minimax-coding',
     'minimax-multimedia',
@@ -238,6 +239,7 @@ try {
   await page.getByLabel('启动参数', { exact: true }).fill(mcp);
   await page.keyboard.press('Enter');
   await page.getByRole('button', { name: '保存并检查连接', exact: true }).click();
+  await page.locator('.plugin-detail-page summary').filter({ hasText: '个已发现工具' }).click();
   await page.locator('.plugin-detail-page').getByText('read_note', { exact: true }).waitFor();
   await page.getByRole('button', { name: '保存插件', exact: true }).click();
   await page.getByRole('button', { name: '添加插件', exact: true }).click();
@@ -299,7 +301,7 @@ try {
         maxOutputTokens: 1000,
       });
   }, base);
-  await page.getByRole('button', { name: '返回会话', exact: true }).click();
+  await openSidebar(page, '会话');
   await chooseOption(page, '当前连接', 'fixture-a');
   await page.getByLabel('消息', { exact: true }).fill('读取测试笔记');
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
@@ -311,7 +313,7 @@ try {
   const id = before.sessions[0].id;
   await chooseOption(page, '当前连接', 'fixture-b');
   await openSidebar(page, '插件');
-  await page.getByRole('button', { name: '返回会话', exact: true }).click();
+  await openSidebar(page, '会话');
   assert.equal(
     await page.getByLabel('当前连接', { exact: true }).getAttribute('data-value'),
     'fixture-b',
@@ -334,7 +336,16 @@ try {
   const persisted = await page.evaluate(() => window.tongzhou.snapshot());
   assert.equal(persisted.sessions[0].model, 'model-b');
   assert.equal(persisted.plugins.length, 5);
-  assert.equal(persisted.skills.length, 2);
+  assert.deepEqual(
+    persisted.skills
+      .filter((s) => s.name !== 'sample-skill')
+      .map((s) => s.id)
+      .sort(),
+    initial.skills.map((s) => s.id).sort(),
+  );
+  assert.equal(persisted.skills.filter((s) => s.name === 'sample-skill').length, 1);
+  assert.ok(persisted.skills.some((s) => s.id === 'tongzhou-whiteboard-design'));
+  assert.ok(persisted.skills.some((s) => s.id === 'tongzhou-canvas-workflow'));
   await openSidebar(page, '插件');
   await page.getByRole('button', { name: /^个人插件/ }).click();
   await skillCard.getByRole('button').click();

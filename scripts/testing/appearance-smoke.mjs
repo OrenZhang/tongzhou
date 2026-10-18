@@ -1,3 +1,4 @@
+import { openSidebar } from './navigation-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { build } from 'esbuild';
 import { createRequire } from 'node:module';
@@ -151,6 +152,7 @@ try {
         'insufficient text contrast: ' + style + theme + JSON.stringify(contrast),
       );
       await capture(style + '-' + theme + '-settings');
+      await openSidebar(page, '会话');
       await page.locator('[data-session-id="' + session.id + '"]').click();
       await page.locator('.markdown').first().waitFor();
       assert.equal(
@@ -189,6 +191,7 @@ try {
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'light');
   await page.locator('.settings-page').evaluate((el) => (el.scrollTop = 0));
   await capture('default-settings');
+  await openSidebar(page, '会话');
   await page.locator('[data-session-id="' + session.id + '"]').click();
   await page.locator('.markdown').first().waitFor();
   await capture('default-chat');

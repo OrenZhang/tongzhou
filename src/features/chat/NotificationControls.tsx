@@ -1,4 +1,6 @@
 import { t as tr, localize as localized } from '../../shared/i18n';
+import { notificationTargets } from '../../shared/notification-targets';
+import { NotificationTargetPicker } from '../connections/NotificationTargetPicker';
 import { useState } from 'react';
 import { Bell, BellRing } from 'lucide-react';
 import { Modal } from '../../components/components';
@@ -169,7 +171,8 @@ export function SessionNotification({
   const rules = (data.notificationRules ?? []).filter(
     (r) => r.sessionId === session.id && r.enabled,
   );
-  const channels = (data.channels ?? []).filter((c) => c.enabled);
+  const channels = notificationTargets(data);
+  const target = channels.find((c) => c.id === channelId);
   return (
     <>
       <button
@@ -177,7 +180,7 @@ export function SessionNotification({
         aria-label={tr('会话通知')}
         title={rules.length ? tr('已启用 {0} 条提醒', [rules.length]) : tr('会话通知')}
         onClick={() => {
-          setChannelId(channels[0]?.id ?? '');
+          setChannelId(channels.find((c) => c.available)?.id ?? '');
           setOpen(true);
         }}
       >
@@ -192,19 +195,17 @@ export function SessionNotification({
             </p>
             <label>
               {tr('通知目标')}
-              <select value={channelId} onChange={(e) => setChannelId(e.target.value)}>
-                {!channels.length && <option value="">{tr('请先在渠道中添加通知目标')}</option>}
-                {channels.map((c) => (
-                  <option value={c.id} key={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+              <NotificationTargetPicker
+                targets={channels}
+                value={channelId}
+                onChange={setChannelId}
+              />
             </label>
             <button
               className="primary"
-              disabled={!channelId || busy}
+              disabled={!target?.available || busy}
               onClick={async () => {
+                if (!target?.available || busy) return;
                 setBusy(true);
                 try {
                   await api.saveNotificationRule({

@@ -16,6 +16,7 @@ import { CanvasPreview, resourceKey } from './CanvasPreview';
 import { ResourceThumbnail } from './CanvasBoard';
 import { CanvasSourcePicker } from './CanvasSourcePicker';
 import { CanvasConfigFields } from './CanvasPluginFields';
+import { mediaExtraSchema, switchCanvasMediaTool } from '../../shared/canvas-media-settings';
 
 export function CanvasOutputLocation({
   api,
@@ -191,23 +192,33 @@ export function CanvasMediaFields({
   node,
   patch,
   onError,
+  advancedOnly = false,
 }: {
   api: TongzhouAPI;
   data: Snapshot;
   node: CanvasNode;
   patch(p: Partial<CanvasNode>): void;
   onError(e: unknown): void;
+  advancedOnly?: boolean;
 }) {
   const m = node.media ?? {},
     kind = node.kind === 'audio' ? 'audio' : node.kind === 'video' ? 'video' : 'image',
     modelId = useId();
   const [checking, setChecking] = useState(false),
     [frame, setFrame] = useState<'firstFrame' | 'lastFrame' | 'references' | 'existing'>();
+  const [toolNotice, setToolNotice] = useState('');
   const plugin = data.plugins?.find((p) => p.id === m.pluginId),
     tools = plugin ? canvasMediaTools(plugin, kind) : [],
     tool = tools.find((t) => t.name === m.tool),
     props = tool?.inputSchema.properties ?? {};
   const update = (p: Partial<CanvasMedia>) => patch({ media: { ...m, ...p } });
+  const switchTool = (pluginId?: string, selectedTool?: typeof tool) => {
+    const next = switchCanvasMediaTool(m, pluginId, selectedTool);
+    patch({ media: next.media });
+    setToolNotice(
+      next.reset.length ? tr('已保留兼容设置；不支持的参数已恢复默认，请检查后生成。') : '',
+    );
+  };
   const options = (names: string[]) => {
     const key = names.find((k) => props[k]);
     return key ? (props[key].enum as string[] | undefined) : undefined;
@@ -227,24 +238,41 @@ export function CanvasMediaFields({
     resolutions =
       options(['resolution']) ??
       (kind === 'image' ? ['1K', '2K', '4K'] : ['480P', '720P', '768P', '1080P', '2K', '4K']);
-  const chooseTool = (name: string) => {
-    const t = tools.find((t) => t.name === name),
-      p = t?.inputSchema.properties ?? {},
-      key = ['model', 'model_name'].find((k) => p[k]);
-    update({
-      tool: name || undefined,
-      mode: 'text',
-      aspectRatio: undefined,
-      resolution: undefined,
-      duration: undefined,
-      voice: undefined,
-      speed: undefined,
-      parameters: undefined,
-      model: key ? (p[key].default ?? p[key].enum?.[0]) : undefined,
-    });
-  };
+  const chooseTool = (name: string) =>
+    switchTool(
+      m.pluginId,
+      tools.find((t) => t.name === name),
+    );
+  if (advancedOnly)
+    return (
+      <div className="canvas-media-fields">
+        <h3>{tr('插件扩展参数')}</h3>
+        {tool && Object.keys(mediaExtraSchema(tool).properties).length ? (
+          <CanvasConfigFields
+            schema={mediaExtraSchema(tool)}
+            value={m.parameters ?? {}}
+            onChange={(parameters) => update({ parameters })}
+          />
+        ) : (
+          <small>{tr('当前工具没有额外参数')}</small>
+        )}
+        <button
+          disabled={!plugin || checking}
+          onClick={() => {
+            setChecking(true);
+            void api
+              .testPlugin(plugin!.id)
+              .catch(onError)
+              .finally(() => setChecking(false));
+          }}
+        >
+          {checking ? tr('检查中…') : tr('刷新工具')}
+        </button>
+      </div>
+    );
   return (
     <div className="canvas-media-fields">
+      {toolNotice && <small role="status">{toolNotice}</small>}
       <label>
         {tr('生成模式')}
         <select
@@ -311,20 +339,8 @@ export function CanvasMediaFields({
               value={m.pluginId ?? ''}
               onChange={(e) => {
                 const p = data.plugins?.find((p) => p.id === e.target.value),
-                  t = p ? canvasMediaTools(p, kind)[0] : undefined,
-                  fields = t?.inputSchema.properties ?? {};
-                update({
-                  pluginId: p?.id,
-                  tool: t?.name,
-                  mode: 'text',
-                  aspectRatio: undefined,
-                  resolution: undefined,
-                  duration: undefined,
-                  voice: undefined,
-                  speed: undefined,
-                  parameters: undefined,
-                  model: fields.model?.default ?? fields.model?.enum?.[0],
-                });
+                  t = p ? canvasMediaTools(p, kind)[0] : undefined;
+                switchTool(p?.id, t);
               }}
             >
               <option value="">{tr('选择已启用的插件')}</option>
@@ -551,50 +567,7 @@ export function CanvasMediaFields({
             <details>
               <summary>{tr('插件扩展参数')}</summary>
               <CanvasConfigFields
-                schema={{
-                  ...tool.inputSchema,
-                  properties: Object.fromEntries(
-                    Object.entries(props).filter(
-                      ([key]) =>
-                        ![
-                          'prompt',
-                          'text',
-                          'description',
-                          'model',
-                          'model_name',
-                          'voice_id',
-                          'voice',
-                          'speed',
-                          'speech_rate',
-                          'aspect_ratio',
-                          'ratio',
-                          'resolution',
-                          'duration',
-                          'seconds',
-                          'n',
-                          'count',
-                          'num_images',
-                          'number_of_images',
-                          'input_urls',
-                          'image_urls',
-                          'reference_images',
-                          'image_path',
-                          'subject_reference',
-                          'image_url',
-                          'input_image_url',
-                          'first_frame_image',
-                          'first_frame_image_url',
-                          'last_frame_image',
-                          'last_frame_image_url',
-                          'end_image_url',
-                          'output_directory',
-                          'output_dir',
-                          'output_file',
-                          'save_path',
-                        ].includes(key),
-                    ),
-                  ),
-                }}
+                schema={mediaExtraSchema(tool)}
                 value={m.parameters ?? {}}
                 onChange={(parameters) => update({ parameters })}
               />
@@ -644,9 +617,11 @@ export function CanvasMediaResults({
   onRegenerate,
   onError,
   previewKey,
+  historyOnly = false,
 }: {
   api: TongzhouAPI;
   previewKey: string;
+  historyOnly?: boolean;
   step?: CanvasNodeRun;
   disabled: boolean;
   onRegenerate(index?: number, action?: NonNullable<CanvasExecute['regenerate']>['action']): void;
@@ -668,10 +643,12 @@ export function CanvasMediaResults({
           {tr('生成结果 ')}
           {items.filter((i) => i.status === 'completed').length}/{items.length}
         </strong>
-        <button disabled={disabled} onClick={() => onRegenerate()}>
-          <RotateCw size={12} />
-          {tr('重新生成整组')}
-        </button>
+        {!historyOnly && (
+          <button disabled={disabled} onClick={() => onRegenerate()}>
+            <RotateCw size={12} />
+            {tr('重新生成整组')}
+          </button>
+        )}
       </div>
       <div className="canvas-media-results-grid">
         {items.map((item) => {
@@ -710,16 +687,18 @@ export function CanvasMediaResults({
                 </small>
               ))}
               <div className="canvas-media-result-actions">
-                <button disabled={disabled} onClick={() => onRegenerate(item.index)}>
-                  <RotateCw size={12} />
-                  {tr('重生成')}
-                </button>
-                {item.remoteTaskId && item.status !== 'completed' && (
+                {!historyOnly && (
+                  <button disabled={disabled} onClick={() => onRegenerate(item.index)}>
+                    <RotateCw size={12} />
+                    {tr('重生成')}
+                  </button>
+                )}
+                {!historyOnly && item.remoteTaskId && item.status !== 'completed' && (
                   <button disabled={disabled} onClick={() => onRegenerate(item.index, 'resume')}>
                     {tr('继续查询')}
                   </button>
                 )}
-                {item.phase === 'save' && item.status === 'failed' && (
+                {!historyOnly && item.phase === 'save' && item.status === 'failed' && (
                   <button disabled={disabled} onClick={() => onRegenerate(item.index, 'save')}>
                     {tr('重试保存')}
                   </button>

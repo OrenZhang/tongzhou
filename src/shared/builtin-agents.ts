@@ -1,4 +1,12 @@
 import type { AgentProfile } from './types';
+import { whiteboardGuidance, workflowGuidance } from './canvas-guidance';
+
+export const WHITEBOARD_DESIGNER_ID = 'builtin-whiteboard-designer';
+export const CANVAS_WORKFLOW_ID = 'builtin-canvas-workflow';
+export const isCanvasAgent = (agent: Pick<AgentProfile, 'builtin'>) =>
+  agent.builtin === 'whiteboard-designer' || agent.builtin === 'canvas-workflow';
+export const canvasAgentId = (mode?: 'workflow' | 'whiteboard') =>
+  mode === 'whiteboard' ? WHITEBOARD_DESIGNER_ID : CANVAS_WORKFLOW_ID;
 
 export const KNOWLEDGE_ORGANIZER_ID = 'builtin-knowledge-organizer';
 export const MEMORY_ORGANIZER_ID = 'builtin-memory-organizer';
@@ -40,5 +48,29 @@ export const memoryOrganizer: Readonly<AgentProfile> = {
 export const builtinAgents: readonly Readonly<AgentProfile>[] = [
   knowledgeOrganizer,
   memoryOrganizer,
+  {
+    id: WHITEBOARD_DESIGNER_ID,
+    builtin: 'whiteboard-designer',
+    name: '白板设计',
+    description: '绘制可编辑流程图与结构图，维护箭头绑定、分支、布局和人工修改。',
+    instructions: whiteboardGuidance,
+    providerId: '',
+    model: '',
+    permission: 'ask',
+    maxSteps: 0,
+    skillIds: ['tongzhou-whiteboard-design'],
+  },
+  {
+    id: CANVAS_WORKFLOW_ID,
+    builtin: 'canvas-workflow',
+    name: '工作流编排',
+    description: '搭建与修改节点工作流，核对端口、资源、生成工具和运行结果。',
+    instructions: workflowGuidance,
+    providerId: '',
+    model: '',
+    permission: 'ask',
+    maxSteps: 0,
+    skillIds: ['tongzhou-canvas-workflow'],
+  },
 ];
 export const builtinAgent = (id: string) => builtinAgents.find((agent) => agent.id === id);

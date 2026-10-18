@@ -7,10 +7,10 @@
 1. 更新 `package.json`、锁文件和 `docs/RELEASE_NOTES.md`。稳定版使用新的三段版本号。
 2. 验证后将指定提交快进到 `release`，或在该分支手动运行 Publish release。
    也支持推送与版本号一致的 `v版本号` 标签，但标签提交必须已合入 `release`。独立分支的标签和在其他分支手动触发会在打包前被拒绝。`main` 和 PR 仅运行普通 CI，不发布版本。
-3. Windows x64、macOS Intel、macOS Apple Silicon 分别在原生机器运行测试、打包和安装包启动验证。
+3. Windows x64、macOS Intel、macOS Apple Silicon、Linux x64 分别运行测试、打包和安装包启动验证；Linux 图形测试使用 Xvfb。
 4. 全部成功后，流程核对版本与 SHA-512，合并双架构 macOS 更新清单，创建 `v版本号` 标签及正式 Release。已发布版本禁止覆盖，修复需升版。
 
-发布内容包括 EXE、DMG、ZIP、blockmap、latest.yml、latest-mac.yml、SHA256SUMS。源码开发预览不执行自动更新；正式包启动后及每六小时检查一次，发现版本才显示侧栏更新图标。下载由用户点击发起，校验后安装并重启。存在运行会话、终端或排队任务时拒绝安装；下载期间新任务启动时保留已下载包，等待用户再次点击。
+发布内容包括 EXE、DMG、ZIP、AppImage、DEB、blockmap、latest.yml、latest-mac.yml、SHA256SUMS。源码开发预览不执行自动更新；正式包启动后及每六小时检查一次，发现版本才显示侧栏更新图标。下载由用户点击发起，校验后安装并重启。存在运行会话、终端或排队任务时拒绝安装；下载期间新任务启动时保留已下载包，等待用户再次点击。
 
 ## 签名
 

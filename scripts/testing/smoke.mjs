@@ -1,4 +1,4 @@
-import { openModels } from './navigation-helper.mjs';
+import { openModels, openSidebar } from './navigation-helper.mjs';
 import { chooseOption, openModelMenu } from './choice-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { createServer } from 'node:http';
@@ -160,7 +160,7 @@ try {
       throw new Error('普通聊天不应打开文件夹选择器');
     };
   });
-  await page.getByRole('button', { name: '返回会话', exact: true }).click();
+  await openSidebar(page, '会话');
   await chooseOption(page, '当前连接', provider.id);
   await openModelMenu(page);
   await page.getByRole('button', { name: '当前模型', exact: true }).click();
@@ -242,7 +242,7 @@ try {
   await app.evaluate(({ dialog }, project) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [project] });
   }, project);
-  await page.getByRole('button', { name: '返回会话', exact: true }).click();
+  await openSidebar(page, '会话');
   await page.locator('.welcome').getByRole('button', { name: '打开项目', exact: true }).click();
   await page.getByLabel('消息', { exact: true }).waitFor();
   await page.evaluate(async (p) => window.tongzhou.saveProvider({ ...p, models: [] }), provider);
@@ -347,7 +347,7 @@ try {
     () => document.querySelector('#global-permission')?.value === 'full-access',
   );
   await page.screenshot({ path: 'test-results/permissions-settings.png' });
-  await page.getByRole('button', { name: '返回会话', exact: true }).click();
+  await openSidebar(page, '会话');
   await page.getByLabel('会话权限', { exact: true }).filter({ hasText: '完全开放' }).waitFor();
   await chooseOption(page, '会话权限', 'read-only');
   await page.getByLabel('会话权限', { exact: true }).filter({ hasText: '只读' }).waitFor();

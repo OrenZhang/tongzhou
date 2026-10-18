@@ -168,6 +168,31 @@
   margin: 0;
   color: var(--text);
 }
+.artifact-day .artifact-day-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 6px;
+  margin-left: -6px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  border-radius: 6px;
+}
+.artifact-day .artifact-day-toggle:hover {
+  background: var(--surface-muted);
+}
+.artifact-day-toggle small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.artifact-day-toggle[aria-expanded='false'] > svg {
+  transform: rotate(-90deg);
+}
+.artifact-grid[hidden] {
+  display: none;
+}
 .artifact-entry {
   display: flex;
   align-items: center;

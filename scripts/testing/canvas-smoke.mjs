@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import assert from 'node:assert/strict';
-import { openSidebar } from './navigation-helper.mjs';
+import { openCanvas, openSidebar } from './navigation-helper.mjs';
 
 await mkdir('test-results', { recursive: true });
 const root = await mkdtemp(path.resolve('test-results/canvas-'));
@@ -108,6 +108,9 @@ try {
     const dialog = page.getByRole('dialog', { name: '节点配置', exact: true });
     if (await dialog.count())
       await dialog.getByRole('button', { name: '关闭', exact: true }).click();
+    const floating = page.getByRole('region', { name: '节点配置', exact: true });
+    if (await floating.isVisible())
+      await floating.getByRole('button', { name: /^收起(节点|生成)配置$/ }).click();
   };
   const configure = async (name) => {
     await closeConfig();
@@ -123,15 +126,64 @@ try {
     await closeConfig();
     await page.getByRole('button', { name: '画布设置', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: '画布设置', exact: true });
-    await dialog.getByLabel('执行会话', { exact: true }).selectOption(seed.sessionId);
+    await dialog.getByLabel('画布会话', { exact: true }).selectOption(seed.sessionId);
     await dialog.getByRole('button', { name: '关闭', exact: true }).click();
   };
-  await openSidebar(page, '画布');
-  await page.getByLabel('选择画布', { exact: true }).selectOption(seed.canvasId);
+  await openSidebar(page, '创作');
+  await openCanvas(page, seed.canvasId);
   await bindSession();
-  await configure('故事，文本');
-  await page.getByLabel('正文', { exact: true }).fill('未手动保存的新正文');
-  await closeConfig();
+  const palette = page.getByRole('complementary', { name: '节点库', exact: true });
+  assert((await palette.boundingBox()).width <= 54);
+  assert.equal(await palette.locator('[data-node-plugin] span').count(), 0);
+  await palette.getByRole('button', { name: '展开节点库' }).click();
+  assert((await palette.boundingBox()).width > 100);
+  assert(await palette.locator('[data-node-plugin="image"] span').isVisible());
+  await palette.getByRole('button', { name: '收起节点库' }).click();
+  assert((await palette.boundingBox()).width <= 54);
+  // Palette drag uses canvas coordinates after zooming, and remains one undoable edit.
+  assert.equal(await page.getByLabel('节点类型', { exact: true }).count(), 0);
+  const paletteItem = page.locator('[data-node-plugin="visual.sticky-note"]');
+  assert.equal(await paletteItem.locator('svg').count(), 1);
+  const paletteBoard = page.locator('.canvas-board');
+  const paletteBounds = await paletteBoard.boundingBox();
+  await page.mouse.move(paletteBounds.x + 350, paletteBounds.y + 250);
+  await page.keyboard.down('Control');
+  await page.mouse.wheel(0, -250);
+  await page.keyboard.up('Control');
+  await page.getByRole('button', { name: '保存', exact: true }).click();
+  const beforeDrop = await page.evaluate((id) => window.tongzhou.canvasState(id), seed.canvasId);
+  assert.notEqual(beforeDrop.canvas.viewport.zoom, 1);
+  await paletteItem.dragTo(paletteBoard, { targetPosition: { x: 180, y: 180 } });
+  assert.equal(await page.locator('.canvas-node').count(), 3);
+  await page.getByRole('button', { name: '保存', exact: true }).click();
+  const afterDrop = await page.evaluate((id) => window.tongzhou.canvasState(id), seed.canvasId);
+  const dropped = afterDrop.canvas.nodes.find((n) => n.pluginId === 'visual.sticky-note');
+  assert(dropped);
+  assert(
+    Math.abs(dropped.x - (180 - beforeDrop.canvas.viewport.x) / beforeDrop.canvas.viewport.zoom) <
+      2,
+  );
+  assert(
+    Math.abs(dropped.y - (180 - beforeDrop.canvas.viewport.y) / beforeDrop.canvas.viewport.zoom) <
+      2,
+  );
+  await page.getByTitle('撤销', { exact: true }).click();
+  assert.equal(await page.locator('.canvas-node').count(), 2);
+  await page.getByRole('button', { name: '适应', exact: true }).click();
+  await page.screenshot({ path: path.join(root, 'node-palette.png') });
+  const story = page.getByRole('article', { name: '故事，文本', exact: true });
+  const storyBounds = await story.boundingBox();
+  const storyEditor = story.getByLabel('编辑正文', { exact: true });
+  await storyEditor.fill('未手动保存的新正文');
+  assert.deepEqual(await story.boundingBox(), storyBounds, 'Editing text must not drag the node');
+  await storyEditor.press('ControlOrMeta+a');
+  await storyEditor.press('Backspace');
+  assert.equal(
+    await page.locator('.canvas-node').count(),
+    2,
+    'Typing must not trigger canvas deletion',
+  );
+  await storyEditor.fill('未手动保存的新正文');
   await page.getByRole('button', { name: '展开画布聊天' }).click();
   await page.getByLabel('向画布助手提问').fill('请检查这个节点');
   await page
@@ -249,8 +301,7 @@ try {
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await page.getByTitle('新建画布', { exact: true }).click();
   for (const id of ['markdown', 'svg', 'html', 'sticky-note', 'panorama']) {
-    await page.getByLabel('节点类型', { exact: true }).selectOption('visual.' + id);
-    await page.getByRole('button', { name: '添加节点', exact: true }).click();
+    await page.locator(`[data-node-plugin="visual.${id}"]`).click();
   }
   await closeConfig();
   await page.getByRole('button', { name: '适应', exact: true }).click();
@@ -330,7 +381,23 @@ try {
   await page.keyboard.press('Escape');
   const htmlOutput = page.getByLabel('HTML 输出 结果', { exact: true });
   const nextNode = page.getByRole('dialog', { name: '选择后续节点', exact: true });
+  await page.getByRole('button', { name: '保存', exact: true }).hover();
+  assert.equal(await htmlOutput.evaluate((el) => getComputedStyle(el).opacity), '0');
+  assert.equal(
+    await htmlOutput.locator('span').evaluate((el) => getComputedStyle(el).opacity),
+    '0',
+  );
+  await page.getByRole('article', { name: 'HTML，HTML', exact: true }).locator('header').hover();
+  assert.equal(
+    await htmlOutput.locator('span').evaluate((el) => getComputedStyle(el).opacity),
+    '0',
+  );
   await htmlOutput.hover();
+  assert.equal(await htmlOutput.evaluate((el) => getComputedStyle(el).opacity), '1');
+  assert.equal(
+    await htmlOutput.locator('span').evaluate((el) => getComputedStyle(el).opacity),
+    '1',
+  );
   await nextNode.waitFor();
   await page.keyboard.press('Escape');
   await htmlOutput.click();
@@ -371,8 +438,8 @@ try {
     visualState.canvas.nodes.find((n) => n.pluginId === 'visual.panorama').config.yaw,
     5,
   );
-  await page.getByLabel('选择画布', { exact: true }).selectOption(seed.canvasId);
-  await page.getByLabel('选择画布', { exact: true }).selectOption(visualId);
+  await openCanvas(page, seed.canvasId);
+  await openCanvas(page, visualId);
   await page.getByText('验证保存后的便签', { exact: true }).first().waitFor();
   assert.equal(await page.locator('.canvas-sticky-note.note-pink').count(), 1);
   assert.equal(await page.locator('.canvas-plugin-view').count(), 5);
@@ -380,8 +447,7 @@ try {
   await page.getByTitle('新建画布', { exact: true }).click();
   await bindSession();
   for (const kind of ['text', 'content.split', 'image']) {
-    await page.getByLabel('节点类型', { exact: true }).selectOption(kind);
-    await page.getByRole('button', { name: '添加节点', exact: true }).click();
+    await page.locator(`[data-node-plugin="${kind}"]`).click();
     if (kind === 'text') {
       await configure();
       await page
@@ -408,7 +474,7 @@ try {
   await page.getByLabel('输出名称 1', { exact: true }).fill('角色');
   await page.getByLabel('提取要求 1', { exact: true }).fill('提取角色姓名与服装，不要混入场景');
   await closeConfig();
-  await page.getByRole('button', { name: '运行选中', exact: true }).click();
+  await page.getByRole('button', { name: '运行选中节点', exact: true }).click();
   await configure('内容拆分，Agent 处理');
   await page
     .getByRole('button', { name: '展开角色为文本节点', exact: true })
@@ -441,8 +507,8 @@ try {
   await page.getByLabel('提取要求 4', { exact: true }).fill('提取人物对白');
   await closeConfig();
   await page.getByRole('button', { name: '保存', exact: true }).click();
-  await page.getByLabel('选择画布', { exact: true }).selectOption(seed.canvasId);
-  await page.getByLabel('选择画布', { exact: true }).selectOption(splitId);
+  await openCanvas(page, seed.canvasId);
+  await openCanvas(page, splitId);
   await configure('内容拆分，Agent 处理');
   assert.equal(await page.getByLabel('输出名称 4', { exact: true }).inputValue(), '对白');
   await page.getByRole('button', { name: '删除输出 1', exact: true }).click();
@@ -454,8 +520,7 @@ try {
   await page.getByTitle('新建画布', { exact: true }).click();
   await bindSession();
   for (const kind of ['workflow.schedule', 'workflow.template']) {
-    await page.getByLabel('节点类型', { exact: true }).selectOption(kind);
-    await page.getByRole('button', { name: '添加节点', exact: true }).click();
+    await page.locator(`[data-node-plugin="${kind}"]`).click();
   }
   await closeConfig();
   await page.getByRole('button', { name: '适应', exact: true }).click();
@@ -493,8 +558,7 @@ try {
     scheduledRule.id,
   );
   await closeConfig();
-  await page.getByLabel('节点类型', { exact: true }).selectOption('workflow.notify');
-  await page.getByRole('button', { name: '添加节点', exact: true }).click();
+  await page.locator('[data-node-plugin="workflow.notify"]').click();
   await configure();
   await page.getByLabel('通知渠道', { exact: true }).waitFor();
   assert.equal(await page.getByLabel('通知渠道', { exact: true }).inputValue(), '');

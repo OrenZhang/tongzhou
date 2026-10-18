@@ -9,6 +9,8 @@ import { botSettings } from '../../services/bots/settings';
 import { executionFeatures } from '../codex/dynamic-tools';
 import { executionContext } from './execution-evidence';
 import { skillInstructions } from '../tools/extensions';
+import { isCanvasAgent } from '../../../src/shared/builtin-agents';
+import type { SkillRecord } from '../../../src/shared/types';
 import type { ToolScope } from '../tools/extensions';
 import artifacts from '../../../prompts/artifacts.json';
 import visualizations from '../../../prompts/visualizations.json';
@@ -75,7 +77,14 @@ export function taskInstructions({
         ? '内容自动化：只读本范围参考资料并输出完整结果，由系统保存派生草稿；不声称已自行写入。'
         : '内容工作区：只使用当前内容库工具，更新前读取版本，冲突后重新读取并保留用户修改；不操作本地项目或其他内容库。',
     );
-  if (has('read_skill_file')) add('skills', skillInstructions(store));
+  if (has('read_skill_file')) {
+    add('skills', skillInstructions(store));
+    if (isCanvasAgent(agent)) {
+      for (const skill of store.list<SkillRecord>('skill'))
+        if (skill.enabled && agent.skillIds?.includes(skill.id))
+          add('canvas-skill:' + skill.id, skill.instructions);
+    }
+  }
   if (has('knowledge_search')) {
     add(
       'knowledge',

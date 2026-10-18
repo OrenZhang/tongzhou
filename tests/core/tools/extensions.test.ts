@@ -68,6 +68,31 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:r.id,result})+'\\n');});`,
   return { root, store, config };
 }
 describe('shared plugin scope', () => {
+  it('keeps plugin jobs independent of desktop control without weakening ordinary scopes', async () => {
+    const { store } = await fixture();
+    store.setCapability('computer', true);
+    store.put('skill', { id: 'test-skill', name: 'Test', enabled: true });
+    const scope = new ToolScope(
+      new AbortController().signal,
+      async () => true,
+      () => {},
+    );
+    cleanups.push(() => scope.close());
+    await scope.prepare(store, agent, undefined, undefined, 'fixture');
+    expect(scope.specs.map((s) => s.name).sort()).toEqual(
+      [mcpName('fixture', 'read_item'), mcpName('fixture', 'write_item')].sort(),
+    );
+    expect((await scope.call(mcpName('fixture', 'read_item'), {})).text).toContain(
+      'RESULT:read_item',
+    );
+    const ordinary = new ToolScope(
+      new AbortController().signal,
+      async () => true,
+      () => {},
+    );
+    cleanups.push(() => ordinary.close());
+    await expect(ordinary.prepare(store, agent)).rejects.toThrow('没有电脑控制适配器');
+  });
   it('does not confuse model rounds with tool-call quotas and rejects unavailable tools', async () => {
     const { store } = await fixture();
     const scope = new ToolScope(

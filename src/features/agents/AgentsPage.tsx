@@ -1,4 +1,5 @@
 import { providerLabel } from '../../shared/provider-label';
+import { isCanvasAgent } from '../../shared/builtin-agents';
 import { t as tr } from '../../shared/i18n';
 import { useState } from 'react';
 import {
@@ -9,11 +10,9 @@ import {
   Layers3,
   Plus,
   RefreshCw,
-  SlidersHorizontal,
   ShieldCheck,
   Trash2,
   Users,
-  Zap,
 } from 'lucide-react';
 import type { AgentProfile, Snapshot, TongzhouAPI } from '../../shared/types';
 import type { View } from '../../app/views';
@@ -69,7 +68,7 @@ export function AgentsPage({
             </button>
           </div>
         </div>
-        <div className="agent-grid">
+        <div className="agent-grid agent-directory">
           {!data.agents.length && (
             <div className="empty-state collection-empty">
               <Bot size={28} />
@@ -87,17 +86,16 @@ export function AgentsPage({
                   </span>
                   <span className="tag">
                     {tr('内置 · ')}
-                    {a.builtin === 'memory-organizer' ? tr('记忆整理') : tr('知识整理')}
+                    {isCanvasAgent(a)
+                      ? tr('画布')
+                      : a.builtin === 'memory-organizer'
+                        ? tr('记忆整理')
+                        : tr('知识整理')}
                     {a.customized ? tr(' · 已自定义') : ''}
                   </span>
                 </div>
                 <h3>{a.builtin && !a.customized ? tr(a.name) : a.name}</h3>
                 <p>{a.builtin && !a.customized ? tr(a.description) : a.description}</p>
-                <div className="agent-instructions">
-                  {a.builtin === 'memory-organizer'
-                    ? tr('后台收集候选 → 核对原文 → 按日分类归并 → 持续补充')
-                    : tr('阅读来源 → 查重与补充 → 生成草稿 → 人工核对收录')}
-                </div>
                 <div className="agent-detail">
                   <span>
                     <Layers3 size={13} />
@@ -106,23 +104,37 @@ export function AgentsPage({
                   </span>
                   <span>
                     <ShieldCheck size={13} />
-                    {a.builtin === 'memory-organizer'
-                      ? tr('仅处理本批记忆来源')
-                      : tr('仅整理知识资料')}
+                    {isCanvasAgent(a)
+                      ? tr('遵循当前会话权限')
+                      : a.builtin === 'memory-organizer'
+                        ? tr('仅处理本批记忆来源')
+                        : tr('仅整理知识资料')}
                   </span>
                 </div>
                 <div className="card-footer">
                   <span>
-                    {a.builtin === 'memory-organizer'
-                      ? tr('在定时任务中管理触发与记录')
-                      : tr('在智库选择资料后启动')}
+                    {isCanvasAgent(a)
+                      ? tr('在对应画布中自动使用')
+                      : a.builtin === 'memory-organizer'
+                        ? tr('在定时任务中管理触发与记录')
+                        : tr('在智库选择资料后启动')}
                   </span>
                   <button
                     onClick={() =>
-                      onNavigate(a.builtin === 'memory-organizer' ? 'automations' : 'knowledge')
+                      onNavigate(
+                        isCanvasAgent(a)
+                          ? 'canvas'
+                          : a.builtin === 'memory-organizer'
+                            ? 'automations'
+                            : 'knowledge',
+                      )
                     }
                   >
-                    {a.builtin === 'memory-organizer' ? tr('管理任务') : tr('前往智库')}
+                    {isCanvasAgent(a)
+                      ? tr('前往画布')
+                      : a.builtin === 'memory-organizer'
+                        ? tr('管理任务')
+                        : tr('前往智库')}
                     <ArrowRight size={13} />
                   </button>
                   <button className="primary" onClick={() => setAgentEdit(a)}>
@@ -142,25 +154,13 @@ export function AgentsPage({
                   <span className="tag">
                     {a.permission === 'read-only' ? tr('只读分析') : tr('审批后执行')}
                   </span>
-                  <button
-                    className="icon-button"
-                    aria-label={tr('编辑 ') + a.name}
-                    onClick={() => setAgentEdit(a)}
-                  >
-                    <SlidersHorizontal size={17} />
-                  </button>
                 </div>
                 <h3>{a.builtin && !a.customized ? tr(a.name) : a.name}</h3>
                 <p>{a.builtin && !a.customized ? tr(a.description) : a.description}</p>
-                <div className="agent-instructions">{a.instructions}</div>
                 <div className="agent-detail">
                   <span>
                     <Layers3 size={13} />
                     {a.model || tr('继承会话模型')}
-                  </span>
-                  <span>
-                    <Zap size={13} />
-                    {tr('Codex 执行核心')}
                   </span>
                 </div>
                 <div className="card-footer">
@@ -219,9 +219,11 @@ export function AgentsPage({
                   <input
                     readOnly
                     value={
-                      agentEdit.builtin === 'memory-organizer'
-                        ? tr('本批记忆来源与记忆提交（固定）')
-                        : tr('知识资料读取与草稿整理（固定）')
+                      isCanvasAgent(agentEdit)
+                        ? tr('遵循当前会话权限')
+                        : agentEdit.builtin === 'memory-organizer'
+                          ? tr('本批记忆来源与记忆提交（固定）')
+                          : tr('知识资料读取与草稿整理（固定）')
                     }
                   />
                 ) : (

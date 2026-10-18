@@ -224,8 +224,19 @@ export function minimaxImageArtifacts(result: unknown): ArtifactOutput[] {
       return;
     }
     for (const [key, item] of Object.entries(value)) {
-      if (['url', 'image_url', 'download_url', 'file_download_url'].includes(key)) add(item);
-      else if (['data', 'result', 'results', 'images', 'image_urls', 'image_results'].includes(key))
+      if (['url', 'image_url', 'output_url', 'download_url', 'file_download_url'].includes(key))
+        add(item);
+      else if (
+        [
+          'data',
+          'result',
+          'results',
+          'images',
+          'image_urls',
+          'image_results',
+          'success_items',
+        ].includes(key)
+      )
         visit(item, depth + 1);
     }
   };

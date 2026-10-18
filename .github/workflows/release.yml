@@ -44,12 +44,15 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      - run: npm run check:i18n
       - name: Route smoke launches through Xvfb on Linux
         if: runner.os == 'Linux'
         shell: bash
         run: echo "SMOKE_PREFIX=xvfb-run -a" >> "$GITHUB_ENV"
       - shell: bash
         run: $SMOKE_PREFIX npm run test:desktop
+      - shell: bash
+        run: $SMOKE_PREFIX node scripts/testing/regression.mjs --only=canvas-routing,whiteboard,studio-library
       - shell: bash
         run: $SMOKE_PREFIX npm run test:workspace-layout
       - shell: bash

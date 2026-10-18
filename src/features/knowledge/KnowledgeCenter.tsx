@@ -1,10 +1,10 @@
 import { t as tr, localize as localized, getLocale } from '../../shared/i18n';
 import { ArtifactsCenter } from '../artifacts/Artifacts';
 import { WorkspaceToolbar } from '../workspace/WorkspaceToolbar';
-import { AutomationCenter } from '../automation/AutomationCenter';
 import { KnowledgeGraphView } from './KnowledgeGraphView';
 import { Personalization } from './Personalization';
 import { ContentWorkspace } from './ContentWorkspace';
+import { StudioLibrary } from './StudioLibrary';
 import { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
@@ -18,6 +18,7 @@ import {
   Search,
   Sparkles,
   Trash2,
+  Layers3,
 } from 'lucide-react';
 import type { Session, Snapshot, TongzhouAPI } from '../../shared/types';
 import type {
@@ -42,12 +43,16 @@ export function KnowledgeCenter({
   artifactSession,
   onArtifact,
   onNewChat,
+  onAutomations,
+  onCanvas,
 }: {
   initialDocument?: { id: string; libraryId: string };
   initialSection?: 'workspace' | 'artifacts';
   artifactSession?: string;
   onArtifact?(id: string, organize?: boolean): void;
   onNewChat(): void;
+  onAutomations(): void;
+  onCanvas(id?: string): void;
   api: TongzhouAPI;
   data: Snapshot;
   sessionId: string;
@@ -55,7 +60,7 @@ export function KnowledgeCenter({
 }) {
   const [state, setState] = useState<KnowledgeState>();
   const [section, setSection] = useState<
-    'workspace' | 'knowledge' | 'personalization' | 'automation' | 'artifacts'
+    'workspace' | 'knowledge' | 'personalization' | 'artifacts' | 'studio'
   >(initialSection);
   useEffect(() => setSection(initialSection), [initialSection, artifactSession]);
   const [contentTarget, setContentTarget] = useState<{ id: string; libraryId: string } | undefined>(
@@ -155,8 +160,22 @@ export function KnowledgeCenter({
           <h1>{tr('智库')}</h1>
           <p>{tr('文档供你阅读与创作，知识与记忆供 Agent 按需查用。')}</p>
         </div>
+        <button className="secondary" onClick={onAutomations}>
+          {tr('管理自动化')}
+        </button>
       </header>
       <div className="knowledge-navigation" role="tablist" aria-label={tr('智库分区')}>
+        <button
+          role="tab"
+          aria-selected={section === 'workspace'}
+          onClick={() => setSection('workspace')}
+        >
+          <NotebookPen size={18} />
+          <span>
+            {tr('内容库')}
+            <small>{tr('文档编辑与 AI 协作')}</small>
+          </span>
+        </button>
         <button
           role="tab"
           aria-selected={section === 'artifacts'}
@@ -170,13 +189,13 @@ export function KnowledgeCenter({
         </button>
         <button
           role="tab"
-          aria-selected={section === 'workspace'}
-          onClick={() => setSection('workspace')}
+          aria-selected={section === 'studio'}
+          onClick={() => setSection('studio')}
         >
-          <NotebookPen size={18} />
+          <Layers3 size={18} />
           <span>
-            {tr('内容库')}
-            <small>{tr('文档编辑与 AI 协作')}</small>
+            {tr('创作')}
+            <small>{tr('画布与白板，随时继续编辑')}</small>
           </span>
         </button>
         <button
@@ -207,17 +226,6 @@ export function KnowledgeCenter({
           <span>
             {tr('个性与偏好')}
             <small>{tr('回复方式与记住的习惯')}</small>
-          </span>
-        </button>
-        <button
-          role="tab"
-          aria-selected={section === 'automation'}
-          onClick={() => setSection('automation')}
-        >
-          <Sparkles size={18} />
-          <span>
-            {tr('AI 工作流')}
-            <small>{tr('处理流程、自动化与结果')}</small>
           </span>
         </button>
       </div>
@@ -253,6 +261,13 @@ export function KnowledgeCenter({
       )}
     </>
   );
+  if (section === 'studio')
+    return (
+      <section className="page knowledge-page">
+        {heading}
+        <StudioLibrary api={api} onOpen={onCanvas} />
+      </section>
+    );
   if (section === 'artifacts')
     return (
       <section className="page knowledge-page">
@@ -262,25 +277,6 @@ export function KnowledgeCenter({
           data={data}
           sessionId={artifactSession}
           onOpen={(id, organize) => onArtifact?.(id, organize)}
-        />
-      </section>
-    );
-  if (section === 'automation')
-    return (
-      <section className="page knowledge-page">
-        {heading}
-        <AutomationCenter
-          api={api}
-          data={data}
-          onSession={onSession}
-          onDocument={(id, libraryId) => {
-            if (!libraryId) {
-              open(id);
-              return;
-            }
-            setContentTarget({ id, libraryId });
-            setSection('workspace');
-          }}
         />
       </section>
     );
@@ -382,7 +378,7 @@ export function KnowledgeCenter({
           <button
             className="secondary"
             title={tr('在自动化与定时中设置记忆整理的开关、触发方式，并查看执行记录')}
-            onClick={() => setSection('automation')}
+            onClick={onAutomations}
           >
             <Sparkles size={14} />
             {tr('管理记忆任务')}
@@ -734,7 +730,7 @@ export function KnowledgeCenter({
                 </div>
                 <h2>{tr('每日记忆')}</h2>
                 <p>{tr('在这里查看和修正从会话中整理的记忆。')}</p>
-                <button className="secondary" onClick={() => setSection('automation')}>
+                <button className="secondary" onClick={onAutomations}>
                   {tr('管理记忆任务')}
                 </button>
               </div>

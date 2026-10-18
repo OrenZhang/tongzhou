@@ -115,7 +115,15 @@ export function ChannelNotifications({
               {notice}
             </p>
           )}
-          {rules && <ChannelRules targets={targets} api={api} data={data} refresh={refresh} />}
+          {rules && (
+            <ChannelRules
+              targets={targets}
+              targetId={target.id}
+              api={api}
+              data={data}
+              refresh={refresh}
+            />
+          )}
         </>
       )}
     </div>

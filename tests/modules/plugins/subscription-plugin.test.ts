@@ -59,6 +59,43 @@ afterEach(async () => {
 });
 
 describe('subscription plugin authentication', () => {
+  it('captures successful MiniMax plan batch output_url results without failed or input images', async () => {
+    const fetcher = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          code: 0,
+          success_items: [
+            {
+              is_success: true,
+              output_file: 'slot_0.png',
+              output_url: 'https://cdn.example.test/turnaround.png',
+              has_image_output: true,
+            },
+          ],
+          failed_items: [{ output_url: 'https://cdn.example.test/failed.png' }],
+          input: { output_url: 'https://cdn.example.test/reference.png' },
+          base_resp: { status_code: 0 },
+        }),
+      ),
+    );
+    const result = await callMiniMaxPlan(
+      'minimax-multimedia',
+      'text_to_image',
+      { prompt: 'character sheet' },
+      'https://agent.minimax.cn',
+      'plan-token',
+      signal,
+      fetcher,
+    );
+    expect(normalizeOutput(result, true).artifacts).toEqual([
+      {
+        name: 'MiniMax-image-1.png',
+        mimeType: 'image/png',
+        url: 'https://cdn.example.test/turnaround.png',
+      },
+    ]);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
   it('also captures image URLs returned as JSON text by the API-key MCP', async () => {
     const connection = new PluginConnection(
       { ...plugin('minimax-multimedia'), accountProviderId: undefined },

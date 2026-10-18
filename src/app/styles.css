@@ -1827,6 +1827,29 @@ svg {
   padding: 5px 12px;
   border-radius: 7px;
 }
+.agent-directory {
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+}
+.agent-directory .agent-card {
+  display: flex;
+  flex-direction: column;
+  padding: 14px 16px 0;
+}
+.agent-directory .card-top {
+  margin-bottom: 8px;
+}
+.agent-directory .agent-card > p {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.agent-directory .agent-detail {
+  margin: 10px 0;
+}
+.agent-directory .card-footer {
+  margin-top: auto;
+}
 .add-card {
   display: flex;
   flex-direction: column;

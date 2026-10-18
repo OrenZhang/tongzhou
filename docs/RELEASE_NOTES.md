@@ -1,18 +1,37 @@
-# CoSail v1.0.3
+# CoSail v1.0.4
 
-本版优化后台运行、电源控制和插件接入体验。
+**同舟 CoSail · 与 AI 同行，让想法抵达。**
 
-- **Windows 系统托盘**：关闭窗口后CoSail继续运行，后台会话与机器人连接保持；点击托盘恢复窗口，从托盘菜单退出客户端。
-- **电源与睡眠**：Windows / macOS 可在接通电源时保持唤醒，屏幕仍可熄灭；支持合盖不睡眠，拔电、关闭功能或退出后恢复。macOS 合盖模式需管理员授权，每次启动CoSail后重新开启，会临时禁用系统睡眠（包括手动睡眠）；异常中断后提供恢复重试入口。
-- **插件详情**：紧凑卡片列表与统一详情页，返回时保留筛选；账号、认证、工具和依赖配置集中展示，API Key 模式提供依赖安装／修复。
-- **套餐账号复用**：MiniMax 多媒体、搜索与图片理解，以及 Kimi 搜索与网页读取可绑定CoSail内已登录的套餐账号，共享令牌刷新；无需复制 API Key 或安装 Python。仍支持独立 API Key 模式，实际工具能力与额度以服务端套餐为准。
-- **网页与系统工具**：内置网页搜索与读取默认启用，保留已有用户开关；时间、时区与系统信息查询改为核心只读工具，无需额外 MCP 进程。
-- **图片预览**：图片作品可在会话中直接查看，优化作品与插件界面布局。
+本版完善创作工作台，将节点工作流、自由白板和 AI 协作接入同一入口。
 
-## 安装包
+- **创作入口**：打开后选择工作流画布或白板，支持继续最近的创作。节点库默认显示紧凑图标，可展开、收起和拖入节点。
+- **可编辑白板**：集成 Excalidraw，支持绘图、图片、画框、素材库、原生文件导入导出及 PNG/SVG 导出。AI 可创建和修改图形、布局及绑定箭头，移动图形时连线跟随；支持撤销、保存与冲突提示。编辑器和字体随应用打包。
+- **专属 Agent 与技能**：新建画布和白板自动关联对应 Agent、工具及内置技能；涵盖流程图、工作流、人物三视图、参考图及媒体生成。生成能力仍需配置可用插件，按真实工具结果判断完成。
+- **节点编辑**：点击节点直接编辑配置，配置与聊天使用独立浮窗；缩小连接点，悬停再显示端口名称；调整媒体布局，移除重复标题和多余按钮。
+- **素材与来源**：支持关联内容库、作品、会话消息、项目文件和导入本地文件；文本类节点支持外部地址。完善媒体结果保存、资源引用及失败重试。
+- **智库整理**：内容库置于首位；新增紧凑的创作列表，支持搜索、筛选、重命名、删除和直接打开。作品日期分组可折叠，并记住状态。
+- **界面与可靠性**：补充中英文文案、优化弹窗边距和模块导航，统一通知目标选择；扩展画布、白板、会话关联和智库的自动回归检查。
 
-Windows 使用 win-x64.exe；Apple Silicon 使用 mac-arm64.dmg；Intel Mac 使用 mac-x64.dmg；macOS ZIP 用于更新通道。Linux 使用 linux-x86_64.AppImage（下载后直接运行）或 linux-amd64.deb（`sudo apt install ./CoSail-1.0.3-linux-amd64.deb` 安装或升级）。各平台校验文件为 SHA256SUMS-\*。
+白板提供本地编辑与 AI 协作，不包含 excalidraw.com 在线房间或多人实时协作服务。
 
-Linux 电脑控制目前面向 X11 / XWayland 会话；原生 Wayland 电脑控制尚未支持。电源与合盖功能目前仅支持 Windows / macOS。
+## English
 
-未配置发布证书时，安装包不具备发行者签名。macOS 未签名版本提供新版安装包下载；配置 Developer ID 与公证凭据后，签名版本才启用自动安装。Linux 版本暂不支持应用内自动更新，请下载新版安装包覆盖安装。
+**CoSail · Sail with AI. Bring ideas to life.**
+
+- **Studio** brings workflow canvases and Excalidraw whiteboards together, with compact creation choices, recent files and a collapsible node palette.
+- **Editable whiteboards** support drawing, images, frames, libraries, native files and PNG/SVG export. AI can edit shapes, layouts and bound arrows, with undo, local saving and conflict handling. The editor and fonts are bundled locally.
+- **Dedicated agents and skills** connect each creation mode to its tools, covering diagrams, workflows, character turnarounds, reference images and media generation through configured plugins.
+- **Node editing** opens on click. Configuration and chat use separate floating panels; smaller ports reveal labels on hover, and media previews use space more effectively.
+- **Resources** can come from the content library, artifacts, messages, project files or local uploads. Text-based nodes can also load external URLs. Media saving, references and retry behavior are improved.
+- **Knowledge Center** puts the content library first and adds a compact Studio list with search, filters, rename, delete and direct reopening. Artifact date groups remember their collapsed state.
+- **Polish and validation** include Chinese/English copy, dialog spacing, module navigation, notification targets and expanded desktop regression coverage.
+
+Whiteboards support local editing and AI assistance; hosted multiplayer rooms and Excalidraw cloud accounts are not included.
+
+## 安装包 / Downloads
+
+Windows：`win-x64.exe`。Apple Silicon：`mac-arm64.dmg`。Intel Mac：`mac-x64.dmg`。macOS ZIP 用于更新通道。Linux：`linux-x86_64.AppImage` 或 `linux-amd64.deb`。各平台校验文件为 `SHA256SUMS-*`。
+
+Linux 电脑控制目前面向 X11 / XWayland；电源与合盖功能仅支持 Windows / macOS。未配置发布证书的安装包未签名，macOS 未签名版本及 Linux 版本通过下载新版安装包更新。
+
+Choose the installer for your operating system and architecture. Platform-specific `SHA256SUMS-*` files are included. Linux computer control requires X11/XWayland. Unsigned macOS builds and Linux builds are updated by downloading a new installer.

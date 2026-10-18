@@ -263,7 +263,7 @@ try {
     true,
   );
   checks.push('provider search, modal tab containment, escape and focus restoration');
-  await page.getByRole('button', { name: '返回会话', exact: true }).click();
+  await openSidebar(page, '会话');
   assert.equal(await page.locator('.context-panel').count(), 0);
   await page.locator(`[data-session-id="${sessions[1].id}"]`).click();
   await page.getByRole('button', { name: '展开工作区', exact: true }).click();
@@ -272,14 +272,14 @@ try {
   await page.getByRole('button', { name: '收起会话列表', exact: true }).click();
   assert.equal(await page.locator('.sidebar-sessions').getAttribute('inert'), '');
   const rail = page.getByRole('navigation', { name: '管理与工具', exact: true });
-  const canvasNav = rail.getByRole('button', { name: '画布', exact: true });
+  const canvasNav = rail.getByRole('button', { name: '创作', exact: true });
   await page.mouse.move(500, 100);
   assert.equal(await canvasNav.locator('.rail-tooltip').isVisible(), false);
   await canvasNav.hover();
   await canvasNav.locator('.rail-tooltip').waitFor({ state: 'visible' });
   await page.screenshot({ path: path.join(root, 'sidebar-rail-collapsed.png') });
   await canvasNav.click();
-  await page.getByRole('region', { name: '画布与工作流' }).waitFor();
+  await page.getByRole('region', { name: '创作', exact: true }).waitFor();
   assert.equal(await canvasNav.getAttribute('aria-current'), 'page');
   await rail.getByRole('button', { name: '设置', exact: true }).focus();
   await page.keyboard.press('Enter');
@@ -288,6 +288,7 @@ try {
   await page.waitForSelector('.app-shell');
   assert.equal(await page.locator('.sidebar-sessions').getAttribute('inert'), '');
   assert.equal(await rail.isVisible(), true);
+  await openSidebar(page, '会话');
   await page.getByRole('button', { name: '展开会话列表', exact: true }).click();
   assert.equal(await page.locator('.sidebar-sessions').isVisible(), true);
   await page.locator(`[data-session-id="${sessions[1].id}"]`).click();
@@ -311,7 +312,7 @@ try {
       ({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0].setContentSize(...size),
       [width, height],
     );
-    await page.getByRole('button', { name: '返回会话', exact: true }).click();
+    await openSidebar(page, '会话');
     await page.locator(`[data-session-id="${sessions[0].id}"]`).click();
     await page.locator('.turn-final').waitFor();
     assert.equal(

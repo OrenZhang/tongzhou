@@ -35,4 +35,7 @@ export const canvasToolLabels: Record<string, string> = localized({
   canvas_apply: '更新节点与连线',
   canvas_execute: '启动工作流',
   canvas_cancel: '停止工作流',
+  whiteboard_read: '查看白板',
+  whiteboard_create: '新建白板',
+  whiteboard_apply: '修改白板图形',
 });

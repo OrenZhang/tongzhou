@@ -192,7 +192,7 @@ try {
     await page.evaluate((id) => window.tongzhou.contentConversation(id), source.id),
     job.sessionId,
   );
-  await page.getByRole('tab', { name: /AI 工作流/ }).click();
+  await page.getByRole('button', { name: '管理自动化', exact: true }).click();
   await page.getByRole('button', { name: /任务与结果/ }).click();
   await page.locator('.automation-job-table .automation-job-name').first().click();
   await page.getByRole('heading', { name: '整理结果', exact: true }).waitFor();

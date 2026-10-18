@@ -122,6 +122,96 @@ async function done(f: ReturnType<typeof fixture>, id: string) {
 }
 
 describe('generic canvas and workflow', () => {
+  it('repairs numeric canvas tool fields, rejects invalid writes atomically and attaches existing images', async () => {
+    const f = fixture();
+    const scope = new ToolScope(
+      new AbortController().signal,
+      async () => true,
+      () => {},
+    );
+    cleanups.push(() => scope.close());
+    attachCanvasTools(
+      scope,
+      f.store,
+      f.domains.canvases,
+      f.domains.canvasWorkflows,
+      f.session,
+      false,
+      () => {},
+    );
+    const put = {
+      ...node('image', 'image', '123'),
+      x: '40',
+      y: '-12.5',
+      width: '300',
+      media: { count: '1' },
+      config: { value: '42' },
+    };
+    const created = await scope.call('canvas_apply', {
+      createTitle: 'Numeric fields',
+      ops: [{ type: 'put_node', node: put }],
+    });
+    expect(created.isError).not.toBe(true);
+    const canvas = JSON.parse(created.text!);
+    expect(canvas.nodes[0]).toMatchObject({
+      x: 40,
+      y: -12.5,
+      width: 300,
+      text: '123',
+      media: { count: 1 },
+      config: { value: '42' },
+    });
+    expect(put.x).toBe('40');
+    for (const invalid of ['', ' ', true, null, 'NaN', 'Infinity', '1e999', '100001', {}]) {
+      const result = await scope.call('canvas_apply', {
+        canvasId: canvas.id,
+        version: String(canvas.version),
+        ops: [{ type: 'put_node', node: { ...put, x: invalid } }],
+      });
+      expect(result.isError).toBe(true);
+      expect(JSON.parse(result.text!).issues[0].path).toBe('ops.0.node.x');
+      expect(f.domains.canvases.get(canvas.id).version).toBe(canvas.version);
+    }
+    const unsupported = await scope.call('canvas_apply', {
+      canvasId: canvas.id,
+      version: canvas.version,
+      ops: [{ type: 'put_node', node: { ...put, outputs: [] } }],
+    });
+    expect(unsupported.isError).toBe(true);
+    expect(JSON.parse(unsupported.text!).hint).toContain('resource:');
+    const sourceRunId = randomUUID();
+    f.store.put('run', { id: sourceRunId, sessionId: f.session.id, status: 'completed' });
+    const artifact = await f.domains.artifacts.save(
+      {
+        name: 'image.png',
+        data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jN1kAAAAASUVORK5CYII=',
+      },
+      { sessionId: f.session.id, runId: sourceRunId },
+    );
+    const attached = await scope.call('canvas_apply', {
+      canvasId: canvas.id,
+      version: String(canvas.version),
+      ops: [
+        {
+          type: 'put_node',
+          node: {
+            ...canvas.nodes[0],
+            resource: { kind: 'artifact', id: artifact.id },
+            media: { mode: 'existing' },
+          },
+        },
+      ],
+    });
+    expect(attached.isError).not.toBe(true);
+    const next = JSON.parse(attached.text!);
+    expect(next.nodes[0].resource.id).toBe(artifact.id);
+    const executed = await scope.call('canvas_execute', {
+      canvasId: next.id,
+      version: String(next.version),
+    });
+    expect((await done(f, JSON.parse(executed.text!).id)).status).toBe('completed');
+    expect(f.tasks.start).not.toHaveBeenCalled();
+  });
   it('extracts categories with the existing task system and routes only the selected category downstream', async () => {
     const f = fixture(
       JSON.stringify({
@@ -767,7 +857,11 @@ describe('generic canvas and workflow', () => {
       true,
       () => {},
     );
-    expect(scope.specs.map((s) => s.name)).toEqual(['canvas_list', 'canvas_read']);
+    expect(scope.specs.map((s) => s.name)).toEqual([
+      'canvas_list',
+      'canvas_read',
+      'whiteboard_read',
+    ]);
     const worker = f.store.createSession();
     f.store.put('session', {
       ...worker,

@@ -1,3 +1,4 @@
+import { openCanvas } from './navigation-helper.mjs';
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, writeFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -142,8 +143,8 @@ try {
     .filter((s) => /[\u3400-\u9fff]/.test(s));
   await page.screenshot({ path: path.join(root, 'Plugin-details.png') });
   await page.getByRole('button', { name: 'Back to plugin list', exact: true }).click();
-  await page.getByRole('button', { name: 'Canvas', exact: true }).first().click();
-  await page.getByLabel('Select canvas', { exact: true }).selectOption(fixture.canvasId);
+  await page.getByRole('button', { name: 'Studio', exact: true }).first().click();
+  await openCanvas(page, fixture.canvasId);
   await page.getByRole('article', { name: /^设置，/ }).click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Configure node', exact: true }).click();
   const node = page.getByRole('dialog', { name: 'Node settings', exact: true });

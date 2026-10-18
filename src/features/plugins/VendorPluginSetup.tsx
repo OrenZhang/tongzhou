@@ -13,12 +13,14 @@ export function VendorPluginSetup({
   api,
   refresh,
   onClose,
+  onAccountLogin,
 }: {
   plugin: PluginConfig;
   providers: Provider[];
   api: TongzhouAPI;
   refresh(): Promise<void>;
   onClose(): void;
+  onAccountLogin(engine: 'kimi' | 'minimax', providerId?: string): Promise<string | undefined>;
 }) {
   const definition = vendorPlugin(plugin.id)!;
   const kimi = plugin.id === 'tongzhou-kimi-web';
@@ -49,6 +51,22 @@ export function VendorPluginSetup({
       active = false;
     };
   }, [api, kimi, accountIds]);
+  useEffect(
+    () =>
+      api.onEvent((event) => {
+        if (event.type !== 'native-auth' || event.state.engine !== (kimi ? 'kimi' : 'minimax'))
+          return;
+        const id = event.state.providerId;
+        if (id) {
+          setAccountStatus((current) => ({ ...current, [id]: event.state.authenticated }));
+          if (event.state.authenticated) setAccountId((current) => current || id);
+        }
+      }),
+    [api, kimi],
+  );
+  useEffect(() => {
+    if (!accountId && accounts.length) setAccountId(accounts[0].id);
+  }, [accountIds, accountId]);
   const [key, setKey] = useState('');
   const [region, setRegion] = useState(plugin.hasSecret ? '' : 'cn');
   const [command, setCommand] = useState(plugin.command);
@@ -168,9 +186,30 @@ export function VendorPluginSetup({
             </Field>
             <p>
               {accounts.length
-                ? tr('账号需要在模型页面登录并启用。具体功能权限和额度以当前套餐为准。')
-                : tr('暂无可用账号，请先到模型页面登录并启用 Kimi 或 MiniMax 套餐账号。')}
+                ? tr('登录此账号后即可复用授权。具体功能权限和额度以当前套餐为准。')
+                : tr('暂无可用账号，可在此启用套餐账号并登录。')}
             </p>
+            <button
+              className="secondary"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  const id = await onAccountLogin(
+                    kimi ? 'kimi' : 'minimax',
+                    accounts.find((p) => p.id === accountId)?.id,
+                  );
+                  if (id) setAccountId(id);
+                } catch (error) {
+                  setNotice(errorMessage(error));
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              {accounts.length ? tr('管理套餐账号登录') : tr('启用套餐账号并登录')}
+            </button>
+            <small>{tr('登录窗口关闭后返回此处，未保存的配置会保留。')}</small>
             {plugin.id === 'minimax-multimedia' && (
               <p>
                 {tr(

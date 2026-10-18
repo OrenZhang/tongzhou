@@ -1,7 +1,14 @@
 import { createHash } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
-import { writeLocalFile } from '../../services/storage/file-transfer';
+import { writeLocalFile, absolutePathSchema } from '../../services/storage/file-transfer';
+import {
+  canvasMediaExtensions,
+  importCanvasResources,
+} from '../../modules/canvas/import-resources';
 import { CanvasTransfer, MAX_CANVAS_PACKAGE } from '../../modules/canvas/transfer';
+import { whiteboardSceneSchema } from '../../modules/canvas/whiteboard';
+import { fetchCanvasText } from '../../modules/canvas/text-source';
+import { basename } from 'node:path';
 import { dialog } from 'electron';
 import type { Plugin } from 'cordis';
 import { z } from 'zod';
@@ -61,6 +68,83 @@ export const canvasPlugin: Plugin.Object<void> = {
       ctx.tzArtifacts,
     );
     const versionSchema = z.number().int().positive();
+    define('whiteboardImport', '导入 Excalidraw 文件到新白板', [], true, async () => {
+      const result = await dialog.showOpenDialog({
+        title: '导入白板',
+        properties: ['openFile'],
+        filters: [{ name: 'Excalidraw', extensions: ['excalidraw', 'json'] }],
+      });
+      const path = result.filePaths[0];
+      if (result.canceled || !path) return null;
+      if ((await stat(path)).size > MAX_CANVAS_PACKAGE) throw new Error('白板内容超过 96 MB');
+      const value = JSON.parse(await readFile(path, 'utf8'));
+      if (value.type !== 'excalidraw') throw new Error('请选择 Excalidraw 白板文件');
+      const whiteboard = whiteboardSceneSchema.parse({
+        elements: value.elements,
+        files: value.files ?? {},
+        appState: value.appState ?? {},
+        ...(value.libraryItems ? { libraryItems: value.libraryItems } : {}),
+      });
+      const next = canvases.save({
+        title:
+          basename(path)
+            .replace(/\.(excalidraw|json)$/i, '')
+            .slice(0, 180) || '白板',
+        mode: 'whiteboard',
+        whiteboard,
+        nodes: [],
+        edges: [],
+        selection: [],
+        viewport: { x: 0, y: 0, zoom: 1 },
+      });
+      ctx.tzEvents.changed();
+      return next;
+    });
+    define(
+      'whiteboardExport',
+      '导出白板文件或图片',
+      [
+        z
+          .object({
+            title: z.string().max(180),
+            format: z.enum(['excalidraw', 'svg', 'png']),
+            data: z.string().max(128 * 1024 * 1024),
+          })
+          .strict(),
+      ],
+      false,
+      async (input) => {
+        const { title, format, data } = input;
+        if (format === 'png' && !/^data:image\/png;base64,/.test(data))
+          throw new Error('PNG 格式无效');
+        if (format === 'excalidraw') {
+          const value = JSON.parse(data);
+          if (value.type !== 'excalidraw') throw new Error('白板格式无效');
+          whiteboardSceneSchema.parse({
+            elements: value.elements,
+            files: value.files ?? {},
+            appState: value.appState ?? {},
+            ...(value.libraryItems ? { libraryItems: value.libraryItems } : {}),
+          });
+        }
+        const result = await dialog.showSaveDialog({
+          title: '导出白板',
+          defaultPath: title.replace(/[<>:"/\\|?*]/g, '_') + '.' + format,
+          filters: [{ name: format, extensions: [format] }],
+        });
+        if (result.canceled || !result.filePath) return null;
+        const original = await readFile(result.filePath).catch((e: NodeJS.ErrnoException) => {
+          if (e.code === 'ENOENT') return undefined;
+          throw e;
+        });
+        await writeLocalFile(
+          result.filePath,
+          format === 'png' ? Buffer.from(data.split(',')[1], 'base64') : Buffer.from(data),
+          original ? createHash('sha256').update(original).digest('hex') : undefined,
+        );
+        return result.filePath;
+      },
+    );
     const folder = (name: string) =>
       ctx.tzKnowledge
         .folders()
@@ -235,6 +319,66 @@ export const canvasPlugin: Plugin.Object<void> = {
     );
     define('canvasResourcePreview', '预览画布引用的原件', [resourceSchema], false, (r) =>
       workflows.resources.preview(r),
+    );
+    define('canvasReadTextSource', '读取画布节点的文本来源', [resourceSchema], false, (r) =>
+      workflows.resources.readTextSource(r),
+    );
+    define(
+      'canvasImportTextUrl',
+      '从外部地址导入画布文本来源',
+      [z.string().url().max(4000)],
+      true,
+      async (url) => {
+        const source = await fetchCanvasText(url);
+        const title = decodeURIComponent(
+          new URL(source.url).pathname.split('/').pop() || '网页.html',
+        ).slice(0, 170);
+        const doc = ctx.tzKnowledge.importFile(
+          title + (/\.(html?|svg|md|txt|css|json|xml)$/i.test(title) ? '' : '.txt'),
+          Buffer.from(source.text),
+          undefined,
+          'default',
+        );
+        ctx.tzEvents.changed();
+        return {
+          ...source,
+          title: doc.title,
+          resource: { kind: 'content' as const, id: doc.id, version: doc.version },
+        };
+      },
+    );
+    const importResourcesSchema = z
+      .object({
+        paths: z.array(absolutePathSchema).min(1).max(20).optional(),
+        media: z.enum(['image', 'video', 'audio']).optional(),
+      })
+      .strict();
+    define(
+      'canvasImportResources',
+      '导入外部文件到内容库并返回画布资源引用',
+      [importResourcesSchema],
+      true,
+      async (raw) => {
+        const input = importResourcesSchema.parse(raw);
+        const chosen = input.paths
+          ? { canceled: false, filePaths: input.paths }
+          : await dialog.showOpenDialog({
+              title: '导入画布资源',
+              properties: ['openFile', 'multiSelections'],
+              ...(input.media
+                ? {
+                    filters: [
+                      { name: input.media, extensions: canvasMediaExtensions[input.media] },
+                    ],
+                  }
+                : {}),
+            });
+        if (chosen.canceled) return { choices: [], errors: [] };
+        if (chosen.filePaths.length > 20) throw new Error('每次最多导入 20 个文件');
+        const result = await importCanvasResources(ctx.tzKnowledge, chosen.filePaths, input.media);
+        if (result.choices.length) ctx.tzEvents.changed();
+        return result;
+      },
     );
     // Selection is native UI only: chat uses its scoped source tools and canvas_apply.
     define(
