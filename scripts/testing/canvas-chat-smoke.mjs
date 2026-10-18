@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import { mkdir, mkdtemp } from 'node:fs/promises';
 import path from 'node:path';
 import assert from 'node:assert/strict';
-import { openSidebar } from './navigation-helper.mjs';
+import { openCanvas, openSidebar } from './navigation-helper.mjs';
 
 await mkdir('test-results', { recursive: true });
 const root = await mkdtemp(path.resolve('test-results/canvas-chat-'));
@@ -164,14 +164,19 @@ try {
     }
     throw Error('Timed out');
   };
-  await openSidebar(page, '画布');
-  await page.getByLabel('选择画布', { exact: true }).selectOption(seed.canvasId);
+  await openSidebar(page, '创作');
+  await openCanvas(page, seed.canvasId);
   await page.getByRole('button', { name: '展开画布聊天', exact: true }).click();
   await page.getByRole('button', { name: '会话设置', exact: true }).click();
-  await page.getByLabel('画布聊天会话').selectOption(seed.sessionId);
+  await page.getByRole('button', { name: '管理画布会话', exact: true }).click();
+  const sessionSettings = page.getByRole('dialog', { name: '画布设置', exact: true });
+  await sessionSettings.getByLabel('画布会话').selectOption(seed.sessionId);
+  await sessionSettings.getByRole('button', { name: '关闭', exact: true }).click();
   await poll(
     async () =>
-      (await page.getByLabel('画布聊天会话').inputValue()) === seed.sessionId &&
+      (await page
+        .getByRole('button', { name: '管理画布会话', exact: true })
+        .getAttribute('data-session-id')) === seed.sessionId &&
       !(await page.getByRole('button', { name: '新建会话', exact: true }).isDisabled()),
   );
   await page.getByRole('button', { name: '会话设置', exact: true }).click();
@@ -184,7 +189,7 @@ try {
   };
   const configure = async (name) => {
     // Collapse the floating chat when it covers the node; the reply keeps running.
-    if (await chat.isVisible()) await chat.getByRole('button', { name: '收起画布聊天' }).click();
+    if (await chat.isVisible()) await page.getByRole('button', { name: '收起画布聊天' }).click();
     await page
       .getByRole('article', { name, exact: true })
       .locator('header')
@@ -265,14 +270,18 @@ try {
   await page.screenshot({ path: path.join(root, 'chat-expanded.png') });
   await page.reload();
   await page.waitForSelector('.app-shell');
-  await openSidebar(page, '画布');
-  await page.getByLabel('选择画布', { exact: true }).selectOption(seed.canvasId);
+  await openSidebar(page, '创作');
+  await openCanvas(page, seed.canvasId);
   await page.getByRole('button', { name: '展开画布聊天', exact: true }).click();
   await page.getByRole('button', { name: '会话设置', exact: true }).click();
-  await page.getByLabel('画布聊天会话').selectOption(seed.sessionId);
+  await page.getByRole('button', { name: '管理画布会话', exact: true }).click();
+  await sessionSettings.getByLabel('画布会话').selectOption(seed.sessionId);
+  await sessionSettings.getByRole('button', { name: '关闭', exact: true }).click();
   await poll(
     async () =>
-      (await page.getByLabel('画布聊天会话').inputValue()) === seed.sessionId &&
+      (await page
+        .getByRole('button', { name: '管理画布会话', exact: true })
+        .getAttribute('data-session-id')) === seed.sessionId &&
       !(await page.getByRole('button', { name: '新建会话', exact: true }).isDisabled()),
   );
   await page.getByRole('button', { name: '会话设置', exact: true }).click();
@@ -365,19 +374,21 @@ try {
     await page.evaluate(
       () =>
         Math.abs(
-          document.querySelector('.canvas-board').getBoundingClientRect().width -
+          document.querySelector('.canvas-board').getBoundingClientRect().width +
+            document.querySelector('.canvas-node-palette').getBoundingClientRect().width -
             document.querySelector('.canvas-body').getBoundingClientRect().width,
         ) < 1,
     ),
   );
   await chat.getByLabel('向画布助手提问').fill('收起保留的草稿');
-  await chat.getByRole('button', { name: '收起画布聊天' }).click();
+  await page.getByRole('button', { name: '收起画布聊天' }).click();
   assert.equal(await chat.isVisible(), false);
   assert(
     await page.evaluate(
       () =>
         Math.abs(
-          document.querySelector('.canvas-board').getBoundingClientRect().width -
+          document.querySelector('.canvas-board').getBoundingClientRect().width +
+            document.querySelector('.canvas-node-palette').getBoundingClientRect().width -
             document.querySelector('.canvas-body').getBoundingClientRect().width,
         ) < 1,
     ),
@@ -387,11 +398,18 @@ try {
   assert.equal(await chat.getByLabel('向画布助手提问').inputValue(), '收起保留的草稿');
   await chat.getByRole('button', { name: '会话设置', exact: true }).click();
   await chat.getByRole('button', { name: '新建会话', exact: true }).click();
-  await poll(async () => (await chat.getByLabel('画布聊天会话').inputValue()) !== seed.sessionId);
+  await poll(
+    async () =>
+      (await chat
+        .getByRole('button', { name: '管理画布会话', exact: true })
+        .getAttribute('data-session-id')) !== seed.sessionId,
+  );
   assert.equal(await chat.locator('.canvas-chat-message.user').count(), 0);
   assert.equal(await chat.getByLabel('向画布助手提问').inputValue(), '收起保留的草稿');
   assert.equal(await chat.getByLabel('画布聊天权限').inputValue(), 'full-access');
-  const newSessionId = await chat.getByLabel('画布聊天会话').inputValue();
+  const newSessionId = await chat
+    .getByRole('button', { name: '管理画布会话', exact: true })
+    .getAttribute('data-session-id');
   assert.equal(
     await page.evaluate(
       async (id) => (await window.tongzhou.snapshot()).sessions.find((s) => s.id === id).permission,

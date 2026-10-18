@@ -569,7 +569,8 @@ export class ToolScope {
           );
         }
       }
-      if (store.capabilities().computer) {
+      // Media/plugin jobs have no desktop adapter and must stay scoped to their plugin.
+      if (!onlyPluginId && store.capabilities().computer) {
         if (!computer) throw new Error('此环境没有电脑控制适配器');
         const scopedComputer = computer.fork?.() ?? computer;
         for (const spec of scopedComputer.specs(agent.permission === 'read-only'))
@@ -581,7 +582,7 @@ export class ToolScope {
             () => store.capabilities().computer,
           );
       }
-      this.prepareSkills(store);
+      if (!onlyPluginId) this.prepareSkills(store);
       if (this.specs.length > 128) throw new Error('当前 Agent 工具超过 128 个，请减少启用的插件');
     } catch (e) {
       await this.close();

@@ -93,6 +93,7 @@ export class CanvasTransfer {
 
   async encode(id: string, version: number, mode: 'template' | 'project') {
     const source = this.canvases.get(id);
+    if (source.mode === 'whiteboard') throw new Error('请在白板菜单导出 Excalidraw、PNG 或 SVG');
     if (source.version !== version) throw new Error('画布已更新，请重新保存后导出');
     const { id: _id, version: _v, updatedAt: _time, ...definition } = source;
     const canvas = { ...definition, selection: [], nodes: source.nodes.map(portable) };

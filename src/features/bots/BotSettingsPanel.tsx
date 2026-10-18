@@ -27,6 +27,7 @@ export function BotSettingsPanel({
   }, [saved.providerId, saved.model, saved.permission, saved.mode, saved.defaultProjectId]);
   const providers = data.providers.filter((p) => p.enabled !== false);
   const provider = providers.find((p) => p.id === draft.providerId);
+  const activeTasks = data.runs.filter((run) => run.botContext && run.status === 'running');
   const changed = JSON.stringify(saved) !== JSON.stringify(draft);
   return (
     <div className="bot-settings-panel modal-content">
@@ -38,7 +39,7 @@ export function BotSettingsPanel({
           try {
             await api.saveBotSettings(draft);
             await refresh();
-            setNotice(tr('已保存，下次消息生效'));
+            setNotice(tr('设置已保存，将用于后续机器人消息。'));
           } catch (error) {
             setNotice(String(error));
           } finally {
@@ -131,7 +132,14 @@ export function BotSettingsPanel({
             </select>
           </label>
         )}
-        <p className="bot-settings-hint">{tr('修改设置会停止正在处理的机器人任务。')}</p>
+        <p className="bot-settings-hint">
+          {tr('这些设置用于所有渠道机器人；保存会停止正在处理的机器人任务，后续消息使用新设置。')}
+        </p>
+        {changed && activeTasks.length > 0 && (
+          <p role="status" className="info-strip">
+            {tr('保存将停止 {0} 个正在运行的机器人任务。', [activeTasks.length])}
+          </p>
+        )}
         <div className="bot-settings-actions">
           <button type="button" onClick={onClose}>
             {tr('关闭')}

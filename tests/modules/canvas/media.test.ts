@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, writeFile, readFile, readdir, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -8,10 +8,15 @@ import { mediaArguments, mediaResponse } from '../../../electron/modules/canvas/
 import { canvasMediaTools } from '../../../src/shared/canvas';
 import type { CanvasNode } from '../../../src/shared/canvas';
 import type { PluginTool } from '../../../src/shared/types';
+import { PluginConnection, normalizeOutput } from '../../../electron/core/tools/extensions';
+import { callMiniMaxPlan } from '../../../electron/modules/plugins/minimax-plan';
+import { setServiceTransport } from '../../../electron/services/network/service-network';
 
 const cleanups: (() => void | Promise<void>)[] = [];
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
+  vi.restoreAllMocks();
+  setServiceTransport();
 });
 const png =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jN1kAAAAASUVORK5CYII=';
@@ -155,6 +160,69 @@ const image = (count = 3): CanvasNode => ({
 });
 
 describe('media plugin nodes', () => {
+  it('saves and previews the MiniMax plan batch response through the canvas task pipeline', async () => {
+    const f = await fixture();
+    f.store.setCapability('computer', true);
+    const vendor = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            code: 0,
+            success_items: [
+              {
+                is_success: true,
+                output_file: 'slot_0.png',
+                output_url: 'https://cdn.example.test/character.png',
+                has_image_output: true,
+              },
+            ],
+            failed_items: [],
+            base_resp: { status_code: 0 },
+          }),
+        ),
+    );
+    const download = vi.fn(
+      async () =>
+        new Response(Buffer.from(png, 'base64'), { headers: { 'Content-Type': 'image/png' } }),
+    );
+    setServiceTransport(download);
+    vi.spyOn(PluginConnection.prototype, 'call').mockImplementation(async (_name, args, signal) =>
+      normalizeOutput(
+        await callMiniMaxPlan(
+          'minimax-multimedia',
+          'text_to_image',
+          { prompt: args.prompt, aspect_ratio: args.aspect_ratio, resolution: args.resolution },
+          'https://agent.minimax.cn',
+          'test-token',
+          signal,
+          vendor,
+        ),
+        true,
+      ),
+    );
+    const c = f.canvas(image(1));
+    const run = await f.run(c);
+    expect(run.status, JSON.stringify(run.nodes)).toBe('completed');
+    const ref = run.nodes.image.output!.resources.find((r) => r.kind === 'artifact')!;
+    expect(f.system.domains.artifacts.preview(ref.id).type).toBe('image');
+    expect(vendor).toHaveBeenCalledTimes(1);
+    expect(download).toHaveBeenCalledTimes(1);
+    expect((await f.run(c)).nodes.image.status).toBe('cached');
+    expect(vendor).toHaveBeenCalledTimes(1);
+  });
+  it('generates and previews an image with desktop control enabled but no desktop adapter', async () => {
+    const f = await fixture();
+    f.store.setCapability('computer', true);
+    const c = f.canvas(image(1));
+    const run = await f.run(c);
+    expect(run.status).toBe('completed');
+    expect((await f.calls()).filter((c) => c.name === 'text_to_image')).toHaveLength(1);
+    const resource = run.nodes.image.output!.resources.find((r) => r.kind === 'artifact')!;
+    expect(resource).toBeDefined();
+    expect(f.system.domains.artifacts.preview(resource.id).type).toBe('image');
+    expect((await f.run(c)).nodes.image.status).toBe('cached');
+    expect((await f.calls()).filter((c) => c.name === 'text_to_image')).toHaveLength(1);
+  });
   it('runs audio batches through the real MCP task pipeline, saves originals and reuses unchanged output', async () => {
     const f = await fixture();
     const c = f.canvas({
@@ -412,6 +480,17 @@ describe('media plugin nodes', () => {
       ...image(1),
       media: { mode: 'reference' as const, referenceImages: [a, b] },
     };
+    expect(
+      await mediaArguments(
+        { ...reference, media: { ...reference.media, referenceImages: [a] } },
+        referenceTool,
+        [{ text: '', resources: [a, b], inputPort: 'reference' }],
+        f.system.domains,
+        path.join(f.root, 'combined-ref'),
+      ),
+    ).toMatchObject({
+      input_urls: ['https://example.com/first.png', 'https://example.com/last.png'],
+    });
     expect(
       await mediaArguments(
         reference,

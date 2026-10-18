@@ -4,6 +4,17 @@ import { createWriteStream } from 'node:fs';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 const suites = [
+  'canvas',
+  'canvas-chat',
+  'canvas-import',
+  'canvas-media-node',
+  'canvas-node-config',
+  'canvas-routing',
+  'canvas-text-source',
+  'whiteboard',
+  'studio-library',
+  'module-navigation',
+  'notification-ui',
   'smoke',
   'session-entry',
   'state-boundaries',

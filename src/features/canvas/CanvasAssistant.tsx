@@ -1,13 +1,13 @@
 import { providerLabel } from '../../shared/provider-label';
+import { canvasAgentId } from '../../shared/builtin-agents';
 import { t as tr } from '../../shared/i18n';
-import { Minus, Settings2, Check, LoaderCircle, AlertCircle, ArrowUp, Square } from 'lucide-react';
+import { Settings2, Check, LoaderCircle, AlertCircle, ArrowUp, Square, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { canvasChatTurns, canvasChatError, canvasToolLabels } from '../../shared/canvas-chat';
 import type { Canvas, CanvasRun } from '../../shared/canvas';
 import type { Message, PermissionMode, Session, Snapshot, TongzhouAPI } from '../../shared/types';
 import { effectivePermission, permissionLabels } from '../../shared/permissions';
 import { canvasChatPrompt, canvasChatUserText } from '../../shared/canvas-collaboration';
-import { isUserSession } from '../../shared/session-scope';
 import { errorMessage } from '../../lib/feedback';
 import { Markdown } from '../../components/markdown/RichMarkdown';
 import { ApprovalQueue } from '../chat/ApprovalQueue';
@@ -21,11 +21,11 @@ export function CanvasAssistant({
   data,
   blocked,
   onPrepare,
-  onBind,
+  onOpenSettings,
+  onCollapse,
   onCreate,
   onInsert,
   onSession,
-  onCollapse,
   open,
   workflowRuns,
 }: {
@@ -35,11 +35,11 @@ export function CanvasAssistant({
   data: Snapshot;
   blocked: boolean;
   onPrepare(): Promise<void>;
-  onBind(id: string): Promise<void>;
+  onOpenSettings(): void;
+  onCollapse(): void;
   onCreate(): Promise<void>;
   onInsert(message: Message, replace: boolean): void;
   onSession(s: Session): void;
-  onCollapse(): void;
   open: boolean;
   workflowRuns: CanvasRun[];
 }) {
@@ -183,8 +183,8 @@ export function CanvasAssistant({
         sessionId: session.id,
         providerId: session.providerId,
         model: session.model,
-        agentId: session.agentId,
-        prompt: canvasChatPrompt(canvas.id, text),
+        agentId: canvasAgentId(canvas.mode),
+        prompt: canvasChatPrompt(canvas.id, text, canvas.mode),
       });
       if (latestIdentity.current !== identity) return;
       setPendingRun(id);
@@ -230,7 +230,7 @@ export function CanvasAssistant({
             <Settings2 size={16} />
           </button>
           <button aria-label={tr('收起画布聊天')} title={tr('收起')} onClick={onCollapse}>
-            <Minus size={16} />
+            <X size={15} />
           </button>
         </div>
       </header>
@@ -240,21 +240,14 @@ export function CanvasAssistant({
             {tr('画布聊天默认完全开放；沿用会话中已明确设置的权限。权限修改也适用于该会话。')}
           </small>
           <div className="canvas-chat-session">
-            <select
-              aria-label={tr('画布聊天会话')}
-              value={session?.id ?? ''}
+            <button
+              aria-label={tr('管理画布会话')}
+              data-session-id={session?.id ?? ''}
               disabled={busy || working}
-              onChange={(e) => void perform(() => onBind(e.target.value))}
+              onClick={onOpenSettings}
             >
-              <option value="">{tr('选择会话')}</option>
-              {data.sessions
-                .filter((s) => isUserSession(s) && !s.archived)
-                .map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.title}
-                  </option>
-                ))}
-            </select>
+              {tr('画布会话')} · {session?.title ?? tr('未选择')}
+            </button>
             <button disabled={busy || working} onClick={() => void perform(createSession)}>
               {tr('新建会话')}
             </button>
@@ -285,32 +278,15 @@ export function CanvasAssistant({
           )}
         </div>
       )}
-      {session && (
-        <select
-          aria-label={tr('画布聊天模型')}
-          value={currentModel}
-          disabled={busy || working}
-          onChange={(e) =>
-            void perform(async () => {
-              const [providerId, model] = JSON.parse(e.target.value) as [string, string];
-              await api.updateSession(session.id, { providerId, model });
-            })
-          }
-        >
-          {!models.some((m) => m.key === currentModel) && (
-            <option value={currentModel}>{session.model || tr('请选择模型')}</option>
-          )}
-          {models.map((m) => (
-            <option key={m.key} value={m.key}>
-              {m.label}
-            </option>
-          ))}
-        </select>
-      )}
       <small>
-        {canvas.selection.length
-          ? tr('当前选中 {0} 个节点', [canvas.selection.length])
-          : tr('围绕整个画布')}{' '}
+        {canvas.mode === 'whiteboard'
+          ? tr('当前选中 {0} 个图形', [
+              Object.values(canvas.whiteboard?.appState.selectedElementIds ?? {}).filter(Boolean)
+                .length,
+            ])
+          : canvas.selection.length
+            ? tr('当前选中 {0} 个节点', [canvas.selection.length])
+            : tr('围绕整个画布')}{' '}
         · {readOnly ? tr('当前会话只读，仅讨论') : tr('按需求直接配置，修改实时同步')}
       </small>
       <div
@@ -365,8 +341,15 @@ export function CanvasAssistant({
         {!turns.length && (
           <div className="canvas-chat-empty">
             <strong>{tr('你描述需求，我来配置画布')}</strong>
-            <p>{tr('创建节点、连接流程、调整参数，修改会直接显示在画布上。')}</p>
-            {[tr('创建一个小猫图片生成节点'), tr('搭建小说人物和场景提取流程')].map((text) => (
+            <p>
+              {canvas.mode === 'whiteboard'
+                ? tr('绘制流程图、调整布局、修改选中图形，结果可以继续手动编辑。')
+                : tr('创建节点、连接流程、调整参数，修改会直接显示在画布上。')}
+            </p>
+            {(canvas.mode === 'whiteboard'
+              ? [tr('画一个包含判断分支的登录流程图'), tr('将选中图形横向对齐，并统一配色')]
+              : [tr('创建一个小猫图片生成节点'), tr('搭建小说人物和场景提取流程')]
+            ).map((text) => (
               <button
                 key={text}
                 onClick={() => {
@@ -382,7 +365,9 @@ export function CanvasAssistant({
         {turns.map(({ user, replies, tools }) => {
           const run = data.runs.find((r) => r.id === user.runId);
           const applied = tools.filter(
-            (m) => m.toolName === 'canvas_apply' && m.status === 'complete',
+            (m) =>
+              ['canvas_apply', 'whiteboard_apply'].includes(m.toolName ?? '') &&
+              m.status === 'complete',
           ).length;
           const final = replies.at(-1);
           const failed = run?.status === 'failed' || replies.some((m) => m.status === 'error');
@@ -437,20 +422,23 @@ export function CanvasAssistant({
                       ))}
                     </div>
                   ))}
-                  {final && !failed && run?.status === 'completed' && (
-                    <details className="canvas-chat-actions">
-                      <summary>{tr('更多操作')}</summary>
-                      <div className="canvas-inline-actions">
-                        <button onClick={() => onInsert(final, false)}>{tr('插入画布')}</button>
-                        <button
-                          disabled={canvas.selection.length !== 1}
-                          onClick={() => onInsert(final, true)}
-                        >
-                          {tr('替换选中节点')}
-                        </button>
-                      </div>
-                    </details>
-                  )}
+                  {canvas.mode !== 'whiteboard' &&
+                    final &&
+                    !failed &&
+                    run?.status === 'completed' && (
+                      <details className="canvas-chat-actions">
+                        <summary>{tr('更多操作')}</summary>
+                        <div className="canvas-inline-actions">
+                          <button onClick={() => onInsert(final, false)}>{tr('插入画布')}</button>
+                          <button
+                            disabled={canvas.selection.length !== 1}
+                            onClick={() => onInsert(final, true)}
+                          >
+                            {tr('替换选中节点')}
+                          </button>
+                        </div>
+                      </details>
+                    )}
                 </article>
               )}
             </div>
@@ -520,9 +508,14 @@ export function CanvasAssistant({
       <textarea
         ref={composer}
         aria-label={tr('向画布助手提问')}
+        title={tr('Enter 发送 · Shift+Enter 换行')}
         value={prompt}
         onChange={(e) => editPrompt(e.target.value)}
-        placeholder={tr('例如：搭建小说人物提取流程，再连接到图片生成节点')}
+        placeholder={
+          canvas.mode === 'whiteboard'
+            ? tr('例如：画一个登录流程图，再把选中的步骤改为判断分支')
+            : tr('例如：搭建小说人物提取流程，再连接到图片生成节点')
+        }
         maxLength={12000}
         rows={3}
         onKeyDown={(e) => {
@@ -533,7 +526,31 @@ export function CanvasAssistant({
         }}
       />
       <div className="canvas-chat-send">
-        <small>{tr('Enter 发送 · Shift+Enter 换行')}</small>
+        {session ? (
+          <select
+            aria-label={tr('助手模型')}
+            title={tr('助手模型：用于聊天和文本处理')}
+            value={currentModel}
+            disabled={busy || working}
+            onChange={(e) =>
+              void perform(async () => {
+                const [providerId, model] = JSON.parse(e.target.value) as [string, string];
+                await api.updateSession(session.id, { providerId, model });
+              })
+            }
+          >
+            {!models.some((m) => m.key === currentModel) && (
+              <option value={currentModel}>{session.model || tr('请选择模型')}</option>
+            )}
+            {models.map((m) => (
+              <option key={m.key} value={m.key}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <small>{tr('Enter 发送 · Shift+Enter 换行')}</small>
+        )}
         {working ? (
           <button
             disabled={busy}

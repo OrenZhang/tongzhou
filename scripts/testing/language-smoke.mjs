@@ -1,3 +1,4 @@
+import { openCanvas } from './navigation-helper.mjs';
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, writeFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -89,7 +90,7 @@ try {
     'Channels',
     'Plugins',
     'Knowledge',
-    'Canvas',
+    'Studio',
     'Scheduled tasks',
     'Run history',
     'Agent',
@@ -142,14 +143,17 @@ try {
     .filter((s) => /[\u3400-\u9fff]/.test(s));
   await page.screenshot({ path: path.join(root, 'Plugin-details.png') });
   await page.getByRole('button', { name: 'Back to plugin list', exact: true }).click();
-  await page.getByRole('button', { name: 'Canvas', exact: true }).first().click();
-  await page.getByLabel('Select canvas', { exact: true }).selectOption(fixture.canvasId);
-  await page.getByRole('article', { name: /^设置，/ }).click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'Configure node', exact: true }).click();
-  const node = page.getByRole('dialog', { name: 'Node settings', exact: true });
+  await page.getByRole('button', { name: 'Studio', exact: true }).first().click();
+  await openCanvas(page, fixture.canvasId);
+  await page
+    .getByRole('article', { name: /^设置，/ })
+    .locator('header')
+    .click();
+  const node = page.getByRole('region', { name: 'Node settings', exact: true });
   assert.equal(await node.getByLabel('Body', { exact: true }).inputValue(), '原始正文 Settings');
-  await node.getByRole('button', { name: 'Close', exact: true }).click();
-  const choices = await page.getByLabel('Node type', { exact: true }).innerText();
+  await node.getByRole('button', { name: 'Collapse node settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Expand node library', exact: true }).click();
+  const choices = await page.getByRole('complementary', { name: 'Nodes', exact: true }).innerText();
   untranslated['Node types'] = choices.split('\n').filter((s) => /[\u3400-\u9fff]/.test(s));
   await page.screenshot({ path: path.join(root, 'Canvas-nodes.png') });
   await writeFile(path.join(root, 'untranslated.json'), JSON.stringify(untranslated, null, 2));

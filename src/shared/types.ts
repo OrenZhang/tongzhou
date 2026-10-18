@@ -60,7 +60,7 @@ export type PermissionMode = 'read-only' | 'ask' | 'full-access';
 export interface AgentProfile {
   soul?: string;
   id: string;
-  builtin?: 'knowledge-organizer' | 'memory-organizer';
+  builtin?: 'knowledge-organizer' | 'memory-organizer' | 'whiteboard-designer' | 'canvas-workflow';
   customized?: boolean;
   name: string;
   description: string;
@@ -400,6 +400,16 @@ export interface TongzhouAPI {
   droppedFilePath(file: File): string;
   canvasExport(id: string, version: number, mode: 'template' | 'project'): Promise<string | null>;
   canvasImport(): Promise<import('./canvas').Canvas | null>;
+  whiteboardImport(): Promise<import('./canvas').Canvas | null>;
+  whiteboardExport(input: {
+    title: string;
+    format: 'excalidraw' | 'png' | 'svg';
+    data: string;
+  }): Promise<string | null>;
+  canvasImportResources(input: { paths?: string[]; media?: 'image' | 'video' | 'audio' }): Promise<{
+    choices: { title: string; resource: import('./canvas').CanvasResource }[];
+    errors: string[];
+  }>;
   canvasSaveTemplate(id: string, version: number): Promise<void>;
   canvasLoadTemplate(id: string, version: number): Promise<import('./canvas').Canvas>;
   canvasLibrary(
@@ -422,6 +432,16 @@ export interface TongzhouAPI {
   canvasResourcePreview(
     resource: import('./canvas').CanvasResource,
   ): Promise<import('./artifacts').ArtifactPreview>;
+  canvasReadTextSource(resource: import('./canvas').CanvasResource): Promise<{
+    text: string;
+    resource: import('./canvas').CanvasResource;
+  }>;
+  canvasImportTextUrl(url: string): Promise<{
+    text: string;
+    title: string;
+    url: string;
+    resource: import('./canvas').CanvasResource;
+  }>;
   canvasSources(query: {
     kind: 'content' | 'artifact' | 'message';
     media?: 'image' | 'video' | 'audio';

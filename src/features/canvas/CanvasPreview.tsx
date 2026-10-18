@@ -98,78 +98,82 @@ export function CanvasPreview({
   }, [media, index]);
   return createPortal(
     <Modal title={tr('画布媒体预览')} onClose={onClose} wide>
-      {loading ? (
-        <p role="status">{tr('正在读取原件…')}</p>
-      ) : !current ? (
-        <p>{tr('没有可预览的媒体，原件可能已移除。')}</p>
-      ) : (
-        <>
-          <div className="canvas-preview-controls">
-            <button
-              aria-label={tr('上一张')}
-              disabled={index === 0}
-              onClick={() => choose(index - 1)}
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <span>
-              <strong>{current.title}</strong>
-              <small aria-live="polite">
-                {index + 1} / {media.length}
-              </small>
-            </span>
-            <button
-              aria-label={tr('下一张')}
-              disabled={index === media.length - 1}
-              onClick={() => choose(index + 1)}
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
-          {current.preview.type === 'audio' ? (
-            <audio
-              key={resourceKey(current.resource)}
-              src={current.preview.content}
-              controls
-              autoPlay
-            />
-          ) : current.preview.type === 'video' ? (
-            <video
-              key={resourceKey(current.resource)}
-              className="canvas-media-lightbox"
-              src={current.preview.content}
-              controls
-              autoPlay
-            />
-          ) : (
-            <img
-              className="canvas-media-lightbox"
-              src={current.preview.content}
-              alt={current.title}
-            />
-          )}
-          {media.length > 1 && (
-            <div className="canvas-preview-strip" aria-label={tr('预览图片列表')}>
-              {media.map((item, i) => (
-                <button
-                  key={resourceKey(item.resource)}
-                  aria-label={tr('预览第 {0} 张：{1}', [i + 1, item.title])}
-                  aria-pressed={i === index}
-                  onClick={() => choose(i)}
-                >
-                  {item.preview.type === 'image' ? (
-                    <img src={item.preview.content} alt="" />
-                  ) : (
-                    <span>
-                      {item.preview.type === 'audio' ? tr('音频') : tr('视频')} {i + 1}
-                    </span>
-                  )}
-                </button>
-              ))}
+      <div className="canvas-preview-body">
+        {loading ? (
+          <p className="canvas-preview-empty" role="status">
+            {tr('正在读取原件…')}
+          </p>
+        ) : !current ? (
+          <p className="canvas-preview-empty">{tr('没有可预览的媒体，原件可能已移除。')}</p>
+        ) : (
+          <>
+            <div className="canvas-preview-controls">
+              <button
+                aria-label={tr('上一张')}
+                disabled={index === 0}
+                onClick={() => choose(index - 1)}
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <span>
+                <strong>{current.title}</strong>
+                <small aria-live="polite">
+                  {index + 1} / {media.length}
+                </small>
+              </span>
+              <button
+                aria-label={tr('下一张')}
+                disabled={index === media.length - 1}
+                onClick={() => choose(index + 1)}
+              >
+                <ChevronRight size={16} />
+              </button>
             </div>
-          )}
-        </>
-      )}
+            {current.preview.type === 'audio' ? (
+              <audio
+                key={resourceKey(current.resource)}
+                src={current.preview.content}
+                controls
+                autoPlay
+              />
+            ) : current.preview.type === 'video' ? (
+              <video
+                key={resourceKey(current.resource)}
+                className="canvas-media-lightbox"
+                src={current.preview.content}
+                controls
+                autoPlay
+              />
+            ) : (
+              <img
+                className="canvas-media-lightbox"
+                src={current.preview.content}
+                alt={current.title}
+              />
+            )}
+            {media.length > 1 && (
+              <div className="canvas-preview-strip" aria-label={tr('预览图片列表')}>
+                {media.map((item, i) => (
+                  <button
+                    key={resourceKey(item.resource)}
+                    aria-label={tr('预览第 {0} 张：{1}', [i + 1, item.title])}
+                    aria-pressed={i === index}
+                    onClick={() => choose(i)}
+                  >
+                    {item.preview.type === 'image' ? (
+                      <img src={item.preview.content} alt="" />
+                    ) : (
+                      <span>
+                        {item.preview.type === 'audio' ? tr('音频') : tr('视频')} {i + 1}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </Modal>,
     document.body,
   );

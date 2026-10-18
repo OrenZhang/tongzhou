@@ -200,6 +200,7 @@ try {
     });
     return s.id;
   }, `http://127.0.0.1:${server.address().port}/v1`);
+  await openSidebar(page, '会话');
   await page.locator(`[data-session-id="${sessionId}"]`).click();
   await openSidebar(page, '智库');
   await openSidebar(page, '智库');
@@ -237,6 +238,7 @@ try {
     ({ sessionId, sourceId }) => window.tongzhou.knowledgeOrganize(sessionId, [sourceId]),
     { sessionId, sourceId },
   );
+  await openSidebar(page, '会话');
   await page.locator(`[data-session-id="${organizeId}"]`).click();
   await page
     .getByText('已保存库存处理 Wiki 草稿，保留来源及待验证事项。', { exact: true })
@@ -271,6 +273,7 @@ try {
     );
     await page.screenshot({ path: `test-results/knowledge-${theme}.png` });
   }
+  await openSidebar(page, '会话');
   await page.locator(`[data-session-id="${sessionId}"]`).click();
   await page.getByLabel('消息', { exact: true }).fill('库存什么时候扣减？');
   await page.getByRole('button', { name: '发送消息', exact: true }).click();

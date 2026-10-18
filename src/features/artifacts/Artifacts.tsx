@@ -2,8 +2,8 @@ import { t as tr, getLocale, localize as localized } from '../../shared/i18n';
 import { WorkspaceFrame } from '../workspace/WorkspaceFrame';
 import type { WorkspaceLayout } from '../workspace/workspace-state';
 import artifactPrompts from '../../../prompts/artifacts.json';
-import { useEffect, useRef, useState } from 'react';
-import { Download, FileText, Image as ImageIcon, ArrowUpRight } from 'lucide-react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { Download, FileText, Image as ImageIcon, ArrowUpRight, ChevronDown } from 'lucide-react';
 import { Field } from '../../components/components';
 import {
   artifactKinds as raw_artifactKinds,
@@ -154,6 +154,26 @@ export function ArtifactsCenter({
   onOpen(id: string, organize?: boolean): void;
 }) {
   const [day, setDay] = useState('');
+  const groupId = useId();
+  const [collapsedDays, setCollapsedDays] = useState<string[]>(() => {
+    try {
+      const value: unknown = JSON.parse(
+        localStorage.getItem('cosail.artifacts.collapsed-days') ?? '[]',
+      );
+      return Array.isArray(value)
+        ? value.filter(
+            (day): day is string => typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day),
+          )
+        : [];
+    } catch {
+      return [];
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem('cosail.artifacts.collapsed-days', JSON.stringify(collapsedDays));
+    } catch {}
+  }, [collapsedDays]);
   const [query, setQuery] = useState(''),
     [kind, setKind] = useState<ArtifactKind | ''>(''),
     [project, setProject] = useState(''),
@@ -294,13 +314,35 @@ export function ArtifactsCenter({
       {[...groups].map(([date, items]) => (
         <section className="artifact-day" key={date} aria-label={date}>
           <header>
-            <h2>{date}</h2>
-            <small>
-              {items.length}
-              {tr(' 件')}
-            </small>
+            <h2>
+              <button
+                className="artifact-day-toggle"
+                aria-expanded={!collapsedDays.includes(date)}
+                aria-controls={`${groupId}-${date}`}
+                aria-label={tr(
+                  collapsedDays.includes(date) ? '展开 {0} 的作品' : '收起 {0} 的作品',
+                  [date],
+                )}
+                onClick={() =>
+                  setCollapsedDays((old) =>
+                    old.includes(date) ? old.filter((d) => d !== date) : [...old, date],
+                  )
+                }
+              >
+                <ChevronDown size={15} />
+                <span>{date}</span>
+                <small>
+                  {items.length}
+                  {tr(' 件')}
+                </small>
+              </button>
+            </h2>
           </header>
-          <div className="artifact-grid">
+          <div
+            className="artifact-grid"
+            id={`${groupId}-${date}`}
+            hidden={collapsedDays.includes(date)}
+          >
             {items.map((a) => (
               <div className="artifact-entry" key={a.id}>
                 <ArtworkCard item={a} onOpen={() => onOpen(a.id)} />

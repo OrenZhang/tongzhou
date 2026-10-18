@@ -80,7 +80,14 @@ export async function mediaArguments(
     m.lastFrame = last[0] ?? m.lastFrame;
     m.mode = m.lastFrame ? 'frames' : 'first-frame';
   } else if (references.length) {
-    m.referenceImages = references;
+    m.referenceImages = [
+      ...new Map(
+        [...(m.referenceImages ?? []), ...references].map((resource) => [
+          JSON.stringify(resource),
+          resource,
+        ]),
+      ).values(),
+    ];
     m.mode = 'reference';
   }
   for (const key of Object.keys(args))

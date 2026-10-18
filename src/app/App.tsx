@@ -105,6 +105,7 @@ import { AuthBadge, Mark, Modal, Spinner, ModelPicker } from '../components/comp
 
 export default function App() {
   const [canvasOpen, setCanvasOpen] = useState(false);
+  const [canvasTarget, setCanvasTarget] = useState<string>();
   const [activityTab, setActivityTab] = useState<'runs' | 'review'>('runs');
   const [reviewSession, setReviewSession] = useState('');
   const [reviewRun, setReviewRun] = useState('');
@@ -128,6 +129,9 @@ export default function App() {
     paletteOpen,
     setPaletteOpen,
   } = useNavigation(api);
+  useEffect(() => {
+    if (view !== 'canvas') setCanvasTarget(undefined);
+  }, [view]);
   const showSessionSidebar = view === 'workspace' && sidebarOpen;
   const { data, loaded, refresh, notice, setNotice, report, perform } = useApplicationState(api);
   const restoredSession = useRef(false);
@@ -454,7 +458,7 @@ export default function App() {
       items: [
         { id: 'agents', label: 'Agent', icon: Users },
         { id: 'knowledge', label: tr('智库'), icon: BookOpen },
-        { id: 'canvas', label: tr('画布'), icon: Layers3 },
+        { id: 'canvas', label: tr('创作'), icon: Layers3 },
         { id: 'connections', label: tr('渠道'), icon: Network },
         { id: 'extensions', label: tr('插件'), icon: Puzzle },
         { id: 'providers', label: tr('模型'), icon: Cpu },
@@ -547,6 +551,7 @@ export default function App() {
                 items={group.items}
                 view={view}
                 onNavigate={(nextView) => {
+                  if (nextView === 'canvas') setCanvasTarget(undefined);
                   if (nextView === 'knowledge') {
                     setKnowledgeSection('workspace');
                     setArtifactSession(undefined);
@@ -661,7 +666,7 @@ export default function App() {
                       settings: tr('设置'),
                       extensions: tr('插件'),
                       knowledge: tr('智库'),
-                      canvas: tr('画布'),
+                      canvas: tr('创作'),
                       automations: tr('定时任务'),
                     }[view]}
               </strong>
@@ -1146,7 +1151,7 @@ export default function App() {
                         aria-expanded={canvasOpen}
                       >
                         <Layers3 size={13} />
-                        {tr('画布')}
+                        {tr('创作')}
                         {session.activeCanvasId ? tr(' · 已关联') : ''}
                       </button>
                       {session && (
@@ -1503,6 +1508,7 @@ export default function App() {
           )}
           {view === 'canvas' && (
             <CanvasWorkspace
+              initialCanvasId={canvasTarget}
               api={api}
               data={data}
               sessionId={sessionId}
@@ -1644,10 +1650,6 @@ export default function App() {
                               ? tr('{0} 个模型', [p.models.length])
                               : tr('登录或获取模型列表')}
                           </span>
-                          <button onClick={() => setProviderEdit({ ...p, secret: '' })}>
-                            {tr('管理')}
-                            <ArrowRight size={13} />
-                          </button>
                         </div>
                       </article>
                     ))}
@@ -1685,7 +1687,39 @@ export default function App() {
               <NetworkProfilesPanel api={api} />
             </main>
           )}
-          {view === 'extensions' && <Extensions api={api} data={data} refresh={refresh} />}
+          {view === 'extensions' && (
+            <Extensions
+              api={api}
+              data={data}
+              refresh={refresh}
+              onAccountLogin={(engine, id) => {
+                return perform(async () => {
+                  let account =
+                    data.providers.find((p) => p.id === id) ??
+                    data.providers.find((p) => p.protocol === engine);
+                  if (!account)
+                    account = await api.saveProvider({
+                      id: crypto.randomUUID(),
+                      name: engine === 'kimi' ? 'Kimi' : 'MiniMax',
+                      protocol: engine,
+                      auth: 'native',
+                      baseUrl: '',
+                      models: [],
+                      maxOutputTokens: 4096,
+                      contextChars: 0,
+                      enabled: true,
+                    });
+                  else if (account.enabled === false)
+                    account = await api.saveProvider({ ...account, enabled: true });
+                  await refresh();
+                  setAuthProviderId(account.id);
+                  setNativeAccounts({});
+                  setAuthPanel(engine);
+                  return account.id;
+                });
+              }}
+            />
+          )}
           {view === 'automations' && (
             <main className="page">
               <header className="page-heading">
@@ -1708,6 +1742,11 @@ export default function App() {
           )}
           {view === 'knowledge' && (
             <KnowledgeCenter
+              onCanvas={(id) => {
+                setCanvasTarget(id);
+                setView('canvas');
+              }}
+              onAutomations={() => setView('automations')}
               initialDocument={knowledgeTarget}
               onNewChat={() => void newSession()}
               initialSection={knowledgeSection}

@@ -14,21 +14,20 @@ export function ChannelRules({
   data,
   refresh,
   targets,
+  targetId,
 }: {
   api: TongzhouAPI;
   data: Snapshot;
   refresh: () => Promise<void>;
   targets: NotificationTarget[];
+  targetId: string;
 }) {
   const [rule, setRule] = useState<NotificationRule | null>(null),
     [notice, setNotice] = useState(''),
     [busy, setBusy] = useState(''),
     [armed, setArmed] = useState('');
-  const [targetId, setTargetId] = useState(targets[0]?.id ?? '');
-  const target = targets.find((t) => t.id === targetId) ?? targets[0];
-  const rules = (data.notificationRules ?? []).filter((r) =>
-    targets.some((t) => t.id === r.channelId),
-  );
+  const target = targets.find((t) => t.id === targetId);
+  const rules = (data.notificationRules ?? []).filter((r) => r.channelId === targetId);
   const act = async (key: string, fn: () => Promise<unknown>) => {
     setBusy(key);
     setNotice('');
@@ -49,19 +48,6 @@ export function ChannelRules({
         </p>
       )}
       <div className="row">
-        {targets.length > 1 && (
-          <select
-            aria-label={tr('通知接收人')}
-            value={target?.id ?? ''}
-            onChange={(e) => setTargetId(e.target.value)}
-          >
-            {targets.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        )}
         <button
           className="secondary"
           disabled={!target?.available}
@@ -92,6 +78,12 @@ export function ChannelRules({
               });
             }}
           >
+            <p>
+              {tr('通知目标')}：
+              <strong>
+                {targets.find((t) => t.id === rule.channelId)?.name ?? tr('已删除通知目标')}
+              </strong>
+            </p>
             {notice && (
               <p role="alert" className="info-strip">
                 {notice}

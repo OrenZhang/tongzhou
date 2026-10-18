@@ -1,6 +1,6 @@
 {
   "name": "cosail",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "CoSail（同舟）— 多模型协作，一个工作台。An open-source, local-first agent workspace.",
   "private": true,
   "type": "module",
@@ -67,6 +67,7 @@
     "test:codex-interactions": "node scripts/testing/codex-interactions-smoke.mjs"
   },
   "dependencies": {
+    "@excalidraw/excalidraw": "0.18.1",
     "@iarna/toml": "^2.2.5",
     "@larksuiteoapi/node-sdk": "1.74.0",
     "@minimax-ai/code": "0.4.12",
@@ -141,6 +142,7 @@
       "LICENSE",
       "NOTICE",
       "docs/MIHOMO-LICENSE.txt",
+      "docs/EXCALIDRAW-LICENSE.txt",
       "build/node-LICENSE.txt",
       "build/computer/**/*"
     ],

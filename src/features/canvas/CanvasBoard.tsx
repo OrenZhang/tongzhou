@@ -1,18 +1,20 @@
 import { uiCanvasPorts as canvasPorts } from './port-labels';
 import { t as tr, localize as localized } from '../../shared/i18n';
 import { CanvasMinimap } from './CanvasMinimap';
+import { canvasNodeDragType } from './CanvasNodePalette';
 import { CanvasPortMenu, type CanvasPortAnchor } from './CanvasPortMenu';
 import { connectCanvasPorts } from '../../shared/canvas-ports';
 import { CanvasNodeView } from './node-renderers';
+import { CanvasMediaNode } from './CanvasMediaNode';
 import type { CanvasNodePluginDefinition } from '../../shared/canvas';
-import { nodeBounds } from '../../shared/canvas-editing';
+import { appendConnectedCanvasNode, nodeBounds } from '../../shared/canvas-editing';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FolderOutput, MoveDiagonal2, Settings2, Trash2 } from 'lucide-react';
 import { CanvasPreview, resourceKey, type CanvasPreviewItem } from './CanvasPreview';
 import type { Canvas, CanvasNode, CanvasNodeRun, CanvasResource } from '../../shared/canvas';
 import { canvasNodeKinds as raw_canvasNodeKinds } from '../../shared/canvas';
-import type { TongzhouAPI } from '../../shared/types';
+import type { Snapshot, TongzhouAPI } from '../../shared/types';
 
 export function ResourceThumbnail({
   api,
@@ -96,8 +98,10 @@ export function CanvasBoard({
   onSelect,
   onConfigure,
   onRemove,
+  onAddNode,
   plugins = [],
   onError,
+  mediaControls,
 }: {
   api: TongzhouAPI;
   canvas: Canvas;
@@ -106,8 +110,27 @@ export function CanvasBoard({
   onSelect(ids: string[]): void;
   onConfigure(id: string): void;
   onRemove(ids: string[]): void;
+  onAddNode?(pluginId: string, position: { x: number; y: number }): void;
   plugins?: CanvasNodePluginDefinition[];
   onError(error: unknown): void;
+  mediaControls?: {
+    data: Snapshot;
+    disabled: boolean;
+    hideComposer?: boolean;
+    composerTarget: HTMLElement | null;
+    edit(): void;
+    dismiss(): void;
+    sourceCanvas?: Canvas;
+    previousSteps?: Record<string, CanvasNodeRun>;
+    executionIssue?: string;
+    generate(nodeId: string): void;
+    history(nodeId: string): void;
+    retry(
+      nodeId: string,
+      index?: number,
+      action?: NonNullable<import('../../shared/canvas').CanvasExecute['regenerate']>['action'],
+    ): void;
+  };
 }) {
   const board = useRef<HTMLDivElement>(null);
   const [portMenu, setPortMenu] = useState<CanvasPortAnchor>();
@@ -281,6 +304,12 @@ export function CanvasBoard({
   useEffect(() => {
     const element = board.current!;
     const wheel = (e: WheelEvent) => {
+      if (
+        (e.target as Element).closest(
+          '.canvas-media-composer, .canvas-media-content textarea, .canvas-node-text',
+        )
+      )
+        return;
       e.preventDefault();
       const rect = element.getBoundingClientRect();
       if (e.ctrlKey || e.metaKey)
@@ -310,6 +339,24 @@ export function CanvasBoard({
       ref={board}
       tabIndex={0}
       aria-label={tr('通用画布，拖动空白处平移，按住 Command 或 Ctrl 滚轮缩放')}
+      onDragOver={(e) => {
+        if (!onAddNode || !e.dataTransfer.types.includes(canvasNodeDragType)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+      }}
+      onDrop={(e) => {
+        if (!onAddNode || !e.dataTransfer.types.includes(canvasNodeDragType)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const pluginId = e.dataTransfer.getData(canvasNodeDragType);
+        if (!plugins.some((p) => p.id === pluginId)) return;
+        const rect = e.currentTarget.getBoundingClientRect();
+        const viewport = latest.current.viewport;
+        onAddNode(pluginId, {
+          x: (e.clientX - rect.left - viewport.x) / viewport.zoom,
+          y: (e.clientY - rect.top - viewport.y) / viewport.zoom,
+        });
+      }}
       onKeyDown={(e) => {
         if (e.key === 'Escape' && connecting) {
           e.stopPropagation();
@@ -489,20 +536,28 @@ export function CanvasBoard({
                   className={edge.kind}
                   d={`M${x} ${y} C${x + bend} ${y},${tx - bend} ${ty},${tx} ${ty}`}
                 />
-                <circle cx={tx} cy={ty} r="4" />
               </g>
             );
           })}
         </svg>
         {canvas.nodes.map((node) => {
           const definition = plugins.find((p) => p.id === (node.pluginId ?? node.kind));
+          const typeLabel = tr(definition?.name ?? raw_canvasNodeKinds[node.kind]);
+          const label =
+            !node.title ||
+            node.title === typeLabel ||
+            node.title === definition?.name ||
+            node.title === raw_canvasNodeKinds[node.kind]
+              ? typeLabel
+              : `${typeLabel} · ${node.title}`;
           const step = steps[node.id],
             output = step?.output;
           const preview = node.resource ?? output?.resources.find((r) => r.kind === 'artifact');
+          const inlineMedia = !!mediaControls && (node.kind === 'image' || node.kind === 'video');
           return (
             <article
               key={node.id}
-              className={`canvas-node ${canvas.selection.includes(node.id) ? 'selected' : ''} ${step?.status ?? ''} ${['image', 'video', 'audio'].includes(node.kind) ? 'media-node' : ''}`}
+              className={`canvas-node ${canvas.selection.includes(node.id) ? 'selected' : ''} ${step?.status ?? ''} ${['image', 'video', 'audio'].includes(node.kind) ? 'media-node' : ''} ${inlineMedia ? 'inline-media-node' : ''}`}
               style={{
                 left: node.x,
                 top: node.y,
@@ -543,7 +598,9 @@ export function CanvasBoard({
               }}
             >
               <header>
-                <small>{definition?.name ?? canvasNodeKinds[node.kind]}</small>
+                <small className="canvas-node-label" title={label}>
+                  {label}
+                </small>
                 <span className="canvas-node-status">
                   {step ? statusLabels[step.status] : ''}
                   {step?.generation
@@ -551,7 +608,64 @@ export function CanvasBoard({
                     : ''}
                 </span>
               </header>
-              <strong>{node.title}</strong>
+              {inlineMedia && mediaControls && (
+                <CanvasMediaNode
+                  api={api}
+                  data={mediaControls.data}
+                  composerTarget={mediaControls.composerTarget}
+                  canvas={canvas}
+                  node={node}
+                  step={step}
+                  sourceNode={mediaControls.sourceCanvas?.nodes.find((n) => n.id === node.id)}
+                  previousStep={mediaControls.previousSteps?.[node.id]}
+                  steps={steps}
+                  selected={
+                    !mediaControls.hideComposer &&
+                    canvas.selection.length === 1 &&
+                    canvas.selection[0] === node.id
+                  }
+                  disabled={mediaControls.disabled}
+                  executionIssue={mediaControls.executionIssue}
+                  patch={(value, removeEdges = []) =>
+                    onChange({
+                      ...latest.current,
+                      edges: latest.current.edges.filter((e) => !removeEdges.includes(e.id)),
+                      nodes: latest.current.nodes.map((n) =>
+                        n.id === node.id ? { ...n, ...value } : n,
+                      ),
+                    })
+                  }
+                  onSelect={() => {
+                    onSelect([node.id]);
+                    mediaControls.edit();
+                  }}
+                  onDismiss={mediaControls.dismiss}
+                  onVideo={() => {
+                    const video = plugins.find((p) => p.id === 'video');
+                    if (!video) return;
+                    try {
+                      onChange(
+                        appendConnectedCanvasNode(
+                          latest.current,
+                          node.id,
+                          'result',
+                          video,
+                          'firstFrame',
+                          plugins,
+                        ),
+                      );
+                    } catch (error) {
+                      onError(error);
+                    }
+                  }}
+                  onConfigure={() => onConfigure(node.id)}
+                  onHistory={() => mediaControls.history(node.id)}
+                  onGenerate={() => mediaControls.generate(node.id)}
+                  onRetry={(index, action) => mediaControls.retry(node.id, index, action)}
+                  onPreview={openPreview}
+                  onError={onError}
+                />
+              )}
               {definition?.view && (
                 <CanvasNodeView
                   api={api}
@@ -569,7 +683,8 @@ export function CanvasBoard({
                   }
                 />
               )}
-              {!definition?.view &&
+              {!inlineMedia &&
+                !definition?.view &&
                 (['image', 'video', 'audio'].includes(node.kind) || node.resource) && (
                   <button
                     className="canvas-node-save"
@@ -586,38 +701,60 @@ export function CanvasBoard({
                         : tr('作品')}
                   </button>
                 )}
-              {step?.generation?.length ? (
-                <div className="canvas-node-grid">
-                  {step.generation.slice(0, 4).map((item) => (
-                    <div key={item.index}>
-                      <ResourceThumbnail
-                        api={api}
-                        resource={item.resources[0]}
-                        revision={item.status + item.phase}
-                        onPreview={() => openPreview(item.resources[0])}
-                      />
-                      <small>
-                        {item.index + 1} ·{' '}
-                        {item.status === 'completed'
-                          ? tr('完成')
-                          : item.status === 'failed'
-                            ? tr('失败')
-                            : item.status === 'running'
-                              ? tr('生成中')
-                              : tr('等待')}
-                      </small>
-                    </div>
-                  ))}
-                </div>
-              ) : !definition?.view ? (
-                <ResourceThumbnail
-                  api={api}
-                  resource={preview}
-                  showText={!!node.resource}
-                  onPreview={() => openPreview(preview)}
+              {!inlineMedia &&
+                (step?.generation?.length ? (
+                  <div className="canvas-node-grid">
+                    {step.generation.slice(0, 4).map((item) => (
+                      <div key={item.index}>
+                        <ResourceThumbnail
+                          api={api}
+                          resource={item.resources[0]}
+                          revision={item.status + item.phase}
+                          onPreview={() => openPreview(item.resources[0])}
+                        />
+                        <small>
+                          {item.index + 1} ·{' '}
+                          {item.status === 'completed'
+                            ? tr('完成')
+                            : item.status === 'failed'
+                              ? tr('失败')
+                              : item.status === 'running'
+                                ? tr('生成中')
+                                : tr('等待')}
+                        </small>
+                      </div>
+                    ))}
+                  </div>
+                ) : !definition?.view ? (
+                  <ResourceThumbnail
+                    api={api}
+                    resource={preview}
+                    showText={!!node.resource}
+                    onPreview={() => openPreview(preview)}
+                  />
+                ) : null)}
+              {node.kind === 'text' && !definition?.view && (
+                <textarea
+                  className="canvas-node-text"
+                  aria-label={tr('编辑正文')}
+                  placeholder={tr('正文')}
+                  value={node.text ?? ''}
+                  maxLength={32000}
+                  spellCheck={false}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  onFocus={() => onSelect([node.id])}
+                  onChange={(e) =>
+                    onChange({
+                      ...latest.current,
+                      nodes: latest.current.nodes.map((n) =>
+                        n.id === node.id ? { ...n, text: e.target.value } : n,
+                      ),
+                    })
+                  }
                 />
-              ) : null}
-              {(!definition?.view || step?.error) && (
+              )}
+              {!inlineMedia && ((node.kind !== 'text' && !definition?.view) || step?.error) && (
                 <p>
                   {step?.error ||
                     output?.text ||
@@ -632,7 +769,7 @@ export function CanvasBoard({
                   <button
                     key={direction + port.id}
                     className={`canvas-node-port ${direction === 'inputs' ? 'input' : 'output'}`}
-                    style={{ top: `calc(${((index + 1) / (ports.length + 1)) * 100}% - 5px)` }}
+                    style={{ top: `calc(${((index + 1) / (ports.length + 1)) * 100}% - 6px)` }}
                     title={`${port.label} · ${port.types.join(' / ')}`}
                     aria-label={`${node.title} ${direction === 'inputs' ? tr('输入') : tr('输出')} ${port.label}`}
                     data-port={port.id}

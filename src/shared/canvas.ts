@@ -91,6 +91,8 @@ export interface CanvasNode {
   group?: string;
   text?: string;
   resource?: CanvasResource;
+  /** Editable snapshot provenance. Execution uses text; refreshing is explicit. */
+  textSource?: { title: string; url?: string };
   media?: CanvasMedia;
   providerId?: string;
   model?: string;
@@ -107,6 +109,8 @@ export interface CanvasEdge {
   toPort?: string;
 }
 export interface Canvas {
+  mode?: 'workflow' | 'whiteboard';
+  whiteboard?: import('./whiteboard').WhiteboardScene;
   id: string;
   title: string;
   version: number;
@@ -173,7 +177,7 @@ export interface CanvasExecute {
 }
 export interface CanvasState {
   plugins?: CanvasNodePluginDefinition[];
-  canvases: Pick<Canvas, 'id' | 'title' | 'version' | 'updatedAt'>[];
+  canvases: Pick<Canvas, 'id' | 'title' | 'version' | 'updatedAt' | 'mode'>[];
   canvas: Canvas | null;
   runs: CanvasRun[];
 }

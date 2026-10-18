@@ -1,10 +1,12 @@
 import { CanvasNodePlugins } from './node-plugins';
+import { canvasAgentId, builtinAgent, isCanvasAgent } from '../../../src/shared/builtin-agents';
 import { validateCanvasPorts } from '../../../src/shared/canvas-ports';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { FileRecords, managedDirectory } from '../../services/storage/local-files';
 import { z } from 'zod';
+import { whiteboardSceneSchema, applyWhiteboardOperations } from './whiteboard';
 import type { Store } from '../../services/storage/store';
 import type { Canvas, CanvasRun, CanvasState, CanvasOperation } from '../../../src/shared/canvas';
 
@@ -40,6 +42,9 @@ export const nodeSchema = z
     group: z.string().trim().min(1).max(80).optional(),
     text: z.string().max(32000).optional(),
     resource: resourceSchema.optional(),
+    textSource: z
+      .object({ title: z.string().max(180), url: z.url().max(4000).optional() })
+      .optional(),
     media: z
       .object({
         pluginId: id.optional(),
@@ -89,6 +94,8 @@ export const edgeSchema = z
   .strict();
 export const canvasWriteSchema = z
   .object({
+    mode: z.enum(['workflow', 'whiteboard']).optional(),
+    whiteboard: whiteboardSceneSchema.optional(),
     id: z.uuid().optional(),
     version: z.number().int().positive().optional(),
     title: z.string().trim().min(1).max(180),
@@ -209,7 +216,13 @@ export class Canvases {
       canvases: this.definitions
         .list()
         .sort((a, b) => b.updatedAt - a.updatedAt)
-        .map(({ id, title, version, updatedAt }) => ({ id, title, version, updatedAt })),
+        .map(({ id, title, version, updatedAt, mode }) => ({
+          id,
+          title,
+          version,
+          updatedAt,
+          mode,
+        })),
       canvas: id ? this.get(id) : null,
       runs: id
         ? this.runs
@@ -224,6 +237,12 @@ export class Canvases {
     const p = canvasWriteSchema.parse(raw),
       old = p.id ? this.get(p.id) : undefined;
     if (old && p.version !== old.version) throw new Error('画布已更新，请重新载入后保存');
+    if (p.mode === 'whiteboard') {
+      if (!p.whiteboard || p.nodes.length || p.edges.length || p.selection.length)
+        throw new Error('白板需使用图形场景，不能包含工作流节点');
+    } else if (p.whiteboard) throw new Error('工作流不能包含白板场景');
+    if (old && old.mode !== p.mode && (old.mode === 'whiteboard' || p.mode === 'whiteboard'))
+      throw new Error('请新建另一种类型的画布，不能覆盖现有画布类型');
     executionOrder(p);
     const definitions = this.plugins.list();
     for (const edge of p.edges) {
@@ -246,8 +265,19 @@ export class Canvases {
   }
   apply(id: string, version: number, raw: unknown) {
     const current = this.get(id);
+    if (current.mode === 'whiteboard')
+      throw new Error('这是白板，请使用 whiteboard_read 和 whiteboard_apply');
     if (current.version !== version) throw new Error('画布已更新，请重新读取当前版本');
     return this.applyOperations(current, raw);
+  }
+  applyWhiteboard(id: string, version: number, raw: unknown) {
+    const current = this.get(id);
+    if (current.mode !== 'whiteboard' || !current.whiteboard) throw new Error('当前画布不是白板');
+    if (current.version !== version)
+      throw new Error('白板已更新，请重新读取最新版本，保留用户手动修改');
+    const { scene, title } = applyWhiteboardOperations(current.whiteboard, raw);
+    const { updatedAt: _, ...input } = current;
+    return this.save({ ...input, title: title ?? current.title, whiteboard: scene });
   }
   create(title: string, raw: unknown) {
     return this.applyOperations(
@@ -293,6 +323,10 @@ export class Canvases {
         this.store.put('session', {
           ...s,
           activeCanvasId: s.activeCanvasId === id ? undefined : s.activeCanvasId,
+          agentId:
+            s.activeCanvasId === id && isCanvasAgent(builtinAgent(s.agentId) ?? {})
+              ? ''
+              : s.agentId,
           canvasIds: s.canvasIds?.filter((v) => v !== id),
         });
   }
@@ -302,10 +336,19 @@ export class Canvases {
       sessionId,
     );
     if (session.canvasContext) throw new Error('执行节点不能更改画布关联');
-    if (canvasId) this.get(canvasId);
+    const canvas = canvasId ? this.get(canvasId) : undefined;
     const canvasIds = canvasId
       ? [...new Set([...(session.canvasIds ?? []), canvasId])]
       : session.canvasIds;
-    this.store.put('session', { ...session, canvasIds, activeCanvasId: canvasId ?? undefined });
+    this.store.put('session', {
+      ...session,
+      canvasIds,
+      activeCanvasId: canvasId ?? undefined,
+      agentId: canvas
+        ? canvasAgentId(canvas.mode)
+        : isCanvasAgent(builtinAgent(session.agentId) ?? {})
+          ? ''
+          : session.agentId,
+    });
   }
 }

@@ -145,6 +145,7 @@ try {
   await ordinaryRow.waitFor({ state: 'detached' });
   assert.equal(await page.locator('.conversation-header h2').innerText(), '项目任务');
   assert.equal(await page.locator('.composer textarea').inputValue(), '项目会话草稿');
+  await openSidebar(page, '会话');
   await page.getByRole('button', { name: '切换归档会话', exact: true }).click();
   await ordinaryRow.hover();
   await ordinaryRow.getByRole('button', { name: '恢复会话', exact: true }).click();
@@ -363,7 +364,7 @@ try {
   await page.getByRole('button', { name: /^内置插件/ }).click();
   assert.equal(await page.getByRole('button', { name: /^工作插件|^内置与自定义/ }).count(), 0);
   const detail = page.locator('.plugin-detail-page');
-  assert.equal(await page.locator('.plugin-library .plugin-tile').count(), 11);
+  assert.equal(await page.locator('.plugin-library .plugin-tile').count(), 14);
   await capture('builtin-plugin-library-all');
   assert.equal(await page.getByRole('button', { name: '添加插件', exact: true }).count(), 0);
   await page.getByLabel('类型', { exact: true }).selectOption('mcp');
@@ -380,7 +381,10 @@ try {
   await page.getByLabel('搜索插件', { exact: true }).fill('Figma');
   assert.equal(await page.locator('.work-plugins .plugin-tile').count(), 1);
   await page.locator('.work-plugins .plugin-tile-open').click();
-  assert.equal(await detail.getByLabel('认证方式', { exact: true }).inputValue(), 'oauth');
+  assert.equal(
+    await detail.getByLabel('Figma 连接方式', { exact: true }).inputValue(),
+    'https://mcp.figma.com/mcp',
+  );
   await capture('plugin-editor');
   await detail.getByRole('button', { name: '保存连接', exact: true }).click();
   await detail.waitFor({ state: 'hidden' });
@@ -539,6 +543,7 @@ try {
     window.tongzhou.createWorktree('project', 'feature/ui-test', 'HEAD'),
   );
   const isolated = await page.evaluate((id) => window.tongzhou.createSession(id), managed.id);
+  await openSidebar(page, '会话');
   const grouped = page.locator('.project-group[data-project-id="project"]');
   await grouped.locator('[data-session-id="' + isolated.id + '"]').click();
   assert.equal(
@@ -588,7 +593,7 @@ try {
         .getByRole('button', { name: theme === 'dark' ? '深色' : '浅色', exact: true })
         .click();
       await capture(`${width}-${theme}-settings`);
-      await page.getByRole('button', { name: '返回会话', exact: true }).click();
+      await openSidebar(page, '会话');
       await page.locator(`[data-session-id="${sessions[0].id}"]`).click();
       await capture(`${width}-${theme}-chat`);
       await nav('渠道');
@@ -624,6 +629,7 @@ try {
     'light/dark persistence, system change response, all new screens at two viewport sizes',
   );
   await page.evaluate((id) => window.tongzhou.removeWorktree(id), managed.id);
+  await openSidebar(page, '会话');
   await page.getByRole('button', { name: '切换归档会话', exact: true }).click();
   await grouped.locator('[data-session-id="' + isolated.id + '"]').click();
   assert.equal(await page.locator('.project-group').count(), 1);

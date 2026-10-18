@@ -17,7 +17,7 @@ import {
   introductionReply,
   builtinReplyModel,
 } from '../../../electron/modules/agents/assistant-identity';
-import { KNOWLEDGE_ORGANIZER_ID } from '../../../src/shared/builtin-agents';
+import { builtinAgents, KNOWLEDGE_ORGANIZER_ID } from '../../../src/shared/builtin-agents';
 import { Attachments } from '../../../electron/modules/artifacts/attachments';
 import type { ComputerAdapter } from '../../../electron/core/tools/extensions';
 import { mcpName } from '../../../electron/core/tools/extensions';
@@ -118,7 +118,7 @@ describe('completion verification in the real Codex tool loop', () => {
         return call('register', 'completion_check', {
           checks: [
             {
-              command: 'test -f result.txt && test "$(cat existing.txt)" = preserved',
+              command: `node -e "const fs=require('node:fs');process.exit(fs.existsSync('result.txt') && fs.readFileSync('existing.txt','utf8') === 'preserved' ? 0 : 1)"`,
               description: 'New result and original successful behavior',
             },
           ],
@@ -314,7 +314,13 @@ describe('conversation input and lifecycle changes', () => {
   });
   it('exposes the built-in organizer and confines it to knowledge jobs', async () => {
     const f = await fixture(() => [text('已查看资料')]);
-    expect(f.runtime.snapshot().agents.filter((a) => a.builtin)).toHaveLength(2);
+    expect(
+      f.runtime
+        .snapshot()
+        .agents.filter((a) => a.builtin)
+        .map((a) => a.id)
+        .sort(),
+    ).toEqual(builtinAgents.map((a) => a.id).sort());
     const input = { ...f.input, agentId: KNOWLEDGE_ORGANIZER_ID };
     expect(() => f.runtime.start(input)).toThrow('请从智库选择资料');
     expect(f.store.list('run')).toHaveLength(0);
@@ -1102,6 +1108,9 @@ describe('agent execution lifecycle', () => {
               'canvas_apply',
               'canvas_execute',
               'canvas_cancel',
+              'whiteboard_create',
+              'whiteboard_read',
+              'whiteboard_apply',
               'current_time',
               'system_info',
               'request_user_input',

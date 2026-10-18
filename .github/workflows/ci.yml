@@ -26,6 +26,9 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      - run: npm run check:i18n
+      - run: npm run test:language
+      - run: node scripts/testing/regression.mjs --only=canvas,canvas-chat,canvas-import,canvas-media-node,canvas-node-config,canvas-routing,canvas-text-source,whiteboard,studio-library,module-navigation,notification-ui
       - run: npm run test:workspace-layout
       - run: npm run test:desktop
       - run: node scripts/testing/project-deletion-smoke.mjs

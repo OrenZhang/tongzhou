@@ -225,7 +225,7 @@ try {
   });
   assert.equal(
     await page.locator('.sidebar').getByRole('button', { name: '渠道', exact: true }).count(),
-    0,
+    1,
   );
   await openModels(page);
   assert.equal(await page.getByRole('button', { name: '浏览器账号', exact: true }).count(), 0);

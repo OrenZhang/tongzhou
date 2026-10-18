@@ -4,6 +4,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { z } from 'zod';
 import type { CanvasNodeContext, CanvasNodePlugin } from './node-plugins';
 import { registerVisualPlugins } from './visual-plugins';
+import { checkedNodeText } from './text-source';
 import { splitPlugin } from './split-plugin';
 import { registerWorkflowPlugins, type CanvasNotify } from './workflow-plugins';
 import { routeCanvasOutput } from '../../../src/shared/canvas-ports';
@@ -31,6 +32,7 @@ import type { Provider, Run, Session, Project } from '../../../src/shared/types'
 import type { ArtifactPreview } from '../../../src/shared/artifacts';
 import { effectivePermission } from '../../../src/shared/permissions';
 import { agentProfile } from '../agents/agents';
+import { builtinAgent, isCanvasAgent } from '../../../src/shared/builtin-agents';
 import { read, within } from '../../core/tools/workspace';
 import { Canvases, executeSchema, executionOrder, nodeSchema } from './canvas';
 
@@ -93,6 +95,44 @@ export class CanvasResources {
     if (ref.sha256 && ref.sha256 !== sha256)
       throw new Error('文件内容已变化，请重新选择：' + ref.path);
     return { text, resources: [{ ...ref, sha256 }] };
+  }
+  async readTextSource(ref: CanvasResource) {
+    // A deliberate refresh follows the latest source version; execution keeps the edited snapshot.
+    if (ref.kind === 'content')
+      ref = { ...ref, version: this.domains.content.document(ref.id).version };
+    if (ref.kind === 'file') ref = { ...ref, sha256: undefined };
+    this.validate(ref);
+    let text: string;
+    if (ref.kind === 'content') {
+      const doc = this.domains.content.document(ref.id);
+      if (doc.blob && doc.indexed === false) {
+        if (
+          !/\.(html?|svg|md|markdown|txt|css|json|xml|csv|ya?ml|log|[cm]?js|tsx?|jsx|py|sql)$/i.test(
+            doc.fileName ?? '',
+          )
+        )
+          throw new Error('请选择 HTML、SVG、Markdown 或其他文本资源');
+        text = new TextDecoder('utf-8', { fatal: true }).decode(
+          this.domains.knowledge.originalBytes(ref.id),
+        );
+      } else text = doc.content;
+    } else if (ref.kind === 'artifact') {
+      const artifact = this.domains.artifacts.read(ref.id);
+      if (artifact.remoteUrl) throw new Error('请先将外部作品下载到本地，或使用外部地址导入');
+      if (
+        !/^text\//.test(artifact.mimeType) &&
+        !['application/json', 'application/xml', 'image/svg+xml', 'application/xhtml+xml'].includes(
+          artifact.mimeType,
+        )
+      )
+        throw new Error('请选择 HTML、SVG、Markdown 或其他文本资源');
+      text = new TextDecoder('utf-8', { fatal: true }).decode(this.domains.artifacts.bytes(ref.id));
+    } else if (ref.kind === 'file') {
+      const bytes = await this.fileBytes(ref);
+      text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+      ref = { ...ref, sha256: createHash('sha256').update(bytes).digest('hex') };
+    } else text = (await this.resolve(ref)).text;
+    return { text: checkedNodeText(text), resource: ref };
   }
   async fileBytes(ref: Extract<CanvasResource, { kind: 'file' }>) {
     this.validate(ref);
@@ -290,6 +330,8 @@ export class CanvasWorkflows {
     if (!this.tasks || !this.events) throw new Error('任务服务尚未就绪');
     const p = executeSchema.parse(raw),
       canvas = this.canvases.get(p.canvasId);
+    if (canvas.mode === 'whiteboard')
+      throw new Error('白板用于绘图，请使用 whiteboard_read 和 whiteboard_apply 编辑图形');
     if (canvas.version !== p.version) throw new Error('画布已更新，请保存或重新载入后执行');
     const session = this.store.get<Session>('session', p.sessionId);
     if (
@@ -487,7 +529,10 @@ export class CanvasWorkflows {
             ? selectedProvider?.models[0]
             : options.model || session.model) ||
           '';
-        const agentId = node.agentId || session.agentId;
+        // The canvas specialist orchestrates the graph; transform nodes need their own task role.
+        const agentId =
+          node.agentId ||
+          (isCanvasAgent(builtinAgent(session.agentId) ?? {}) ? '' : session.agentId);
         const ownerPermission = effectivePermission(
           session,
           this.store.defaultPermission(),

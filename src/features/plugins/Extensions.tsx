@@ -29,10 +29,12 @@ export function Extensions({
   api,
   data,
   refresh,
+  onAccountLogin,
 }: {
   api: TongzhouAPI;
   data: Snapshot;
   refresh: () => Promise<void>;
+  onAccountLogin(engine: 'kimi' | 'minimax', providerId?: string): Promise<string | undefined>;
 }) {
   const [tab, setTab] = useState<'core' | 'builtin' | 'personal'>('core');
   const [adding, setAdding] = useState(false);
@@ -441,6 +443,7 @@ export function Extensions({
         })()}
       {vendorEdit && (
         <VendorPluginSetup
+          onAccountLogin={onAccountLogin}
           plugin={vendorEdit}
           providers={data.providers}
           api={api}

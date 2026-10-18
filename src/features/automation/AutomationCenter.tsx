@@ -1,3 +1,5 @@
+import { notificationTargets } from '../../shared/notification-targets';
+import { NotificationTargetPicker } from '../connections/NotificationTargetPicker';
 import { providerLabel } from '../../shared/provider-label';
 import { t as tr, localize as localized, getLocale } from '../../shared/i18n';
 import { Fragment, useEffect, useState } from 'react';
@@ -671,28 +673,14 @@ export function AutomationCenter({
             ) : rule.kind === 'task' ? (
               <>
                 <Field label={tr('完成后发送到')}>
-                  <select
-                    aria-label={tr('完成后发送到')}
+                  <NotificationTargetPicker
+                    targets={notificationTargets(data)}
                     value={rule.notificationTargetId ?? ''}
-                    onChange={(e) =>
-                      setRule({ ...rule, notificationTargetId: e.target.value || undefined })
+                    optional
+                    onChange={(notificationTargetId) =>
+                      setRule({ ...rule, notificationTargetId: notificationTargetId || undefined })
                     }
-                  >
-                    <option value="">{tr('不发送')}</option>
-                    {[
-                      ...(data.notificationTargets ?? []),
-                      ...(data.channels ?? []).map((c) => ({
-                        id: c.id,
-                        name: c.name,
-                        available: c.enabled,
-                      })),
-                    ].map((t) => (
-                      <option key={t.id} value={t.id} disabled={!t.available}>
-                        {t.name}
-                        {!t.available ? tr('（不可用）') : ''}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </Field>
                 <Field label={tr('任务指令')}>
                   <textarea

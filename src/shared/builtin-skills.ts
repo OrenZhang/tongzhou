@@ -1,4 +1,6 @@
 export const builtinSkills = [
+  { id: 'tongzhou-whiteboard-design', directory: 'whiteboard-design', title: '白板设计' },
+  { id: 'tongzhou-canvas-workflow', directory: 'canvas-workflow', title: '工作流编排' },
   {
     id: 'tongzhou-skill-creator',
     directory: 'skill-creator',

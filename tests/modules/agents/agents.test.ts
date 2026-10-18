@@ -33,7 +33,7 @@ describe('built-in Agent preferences', () => {
       });
       expect(saved.computerEnabled).toBeUndefined();
       expect(saved.pluginIds).toBeUndefined();
-      expect(agentProfiles(store)).toHaveLength(2);
+      expect(agentProfiles(store)).toHaveLength(4);
       expect(store.list('agent')).toHaveLength(0);
       store.remove('agentOverride', MEMORY_ORGANIZER_ID);
       expect(agentProfile(store, MEMORY_ORGANIZER_ID)).toEqual(defaults);

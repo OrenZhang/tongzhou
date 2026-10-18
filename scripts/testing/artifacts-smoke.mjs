@@ -296,6 +296,18 @@ try {
   assert.match(await page.getByLabel('整理要求', { exact: true }).inputValue(), /会话历史/);
   await page.getByRole('button', { name: '关闭工作区', exact: true }).click();
   assert.equal(await page.locator('.artifact-day').count(), 1);
+  const dateToggle = page.locator('.artifact-day-toggle').first();
+  await dateToggle.click();
+  assert.equal(await dateToggle.getAttribute('aria-expanded'), 'false');
+  assert.equal(await page.locator('.artifact-grid').first().isVisible(), false);
+  await page.getByRole('tab', { name: /^创作/ }).click();
+  await page.getByRole('tab', { name: /^作品/ }).click();
+  await page.locator('.artifact-day-toggle').first().waitFor();
+  assert.equal(await dateToggle.getAttribute('aria-expanded'), 'false');
+  await dateToggle.focus();
+  await page.keyboard.press('Enter');
+  assert.equal(await dateToggle.getAttribute('aria-expanded'), 'true');
+  assert.equal(await page.locator('.artifact-grid').first().isVisible(), true);
   await page.getByLabel('作品日期', { exact: true }).fill('2000-01-01');
   await page.getByText('没有匹配的作品', { exact: true }).waitFor();
   await page.getByRole('button', { name: '全部日期', exact: true }).click();

@@ -1,4 +1,4 @@
-import { openModels } from './navigation-helper.mjs';
+import { openModels, openSidebar } from './navigation-helper.mjs';
 import { openModelMenu } from './choice-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
@@ -161,7 +161,7 @@ try {
     async () =>
       (await window.tongzhou.snapshot()).providers.find((p) => p.id === 'ready').enabled === false,
   );
-  await page.getByRole('button', { name: '返回会话', exact: true }).click();
+  await openSidebar(page, '会话');
   await page.getByText('可用服务：已停用', { exact: true }).waitFor();
   assert.equal(await page.getByLabel('当前连接', { exact: true }).getAttribute('data-value'), '');
   assert.equal(
@@ -179,7 +179,7 @@ try {
   await page.getByText('可用服务：已停用', { exact: true }).waitFor();
   await openModels(page);
   await page.getByRole('switch', { name: '启用连接 可用服务', exact: true }).check();
-  await page.getByRole('button', { name: '返回会话', exact: true }).click();
+  await openSidebar(page, '会话');
   await page.waitForFunction(
     () => document.querySelector('[aria-label="当前连接"]').value === 'ready',
   );
