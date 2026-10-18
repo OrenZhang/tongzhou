@@ -456,6 +456,19 @@ code,
 .appearance-control {
   margin-bottom: 22px;
 }
+.appearance-language {
+  display: grid;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--secondary-text);
+}
+.appearance-language select {
+  width: 100%;
+  max-width: 280px;
+}
+.appearance-language small {
+  line-height: 1.5;
+}
 .appearance-control h4 {
   margin: 0 0 10px;
   font-size: 12px;

@@ -1,3 +1,4 @@
+import { t as tr } from '../../shared/i18n';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowLeft } from 'lucide-react';
@@ -26,7 +27,7 @@ export function PluginTile({
         type="button"
         className="plugin-tile-open"
         onClick={onOpen}
-        aria-label={`查看 ${name}`}
+        aria-label={tr('查看 {0}', [name])}
       >
         <span className="plugin-tile-icon">{icon}</span>
         <span className="plugin-tile-label">
@@ -36,11 +37,11 @@ export function PluginTile({
       </button>
       <label
         className="switch-control"
-        title={onToggle ? `启用 ${name}` : '内置应用始终可用，具体服务在详情中管理'}
+        title={onToggle ? tr('启用 {0}', [name]) : tr('内置应用始终可用，具体服务在详情中管理')}
       >
         <input
           type="checkbox"
-          aria-label={`启用 ${name}`}
+          aria-label={tr('启用 {0}', [name])}
           checked={enabled}
           disabled={disabled || !onToggle}
           onChange={(e) => onToggle?.(e.target.checked)}
@@ -73,7 +74,7 @@ export function PluginDetailPage({
   const outlet = document.getElementById('plugin-detail-outlet');
   if (!outlet) return null;
   return createPortal(
-    <section className="plugin-detail-page" aria-label={`${title} 详情`}>
+    <section className="plugin-detail-page" aria-label={tr('{0} 详情', [title])}>
       <button
         ref={back}
         type="button"
@@ -82,7 +83,7 @@ export function PluginDetailPage({
         onClick={onClose}
       >
         <ArrowLeft size={16} />
-        返回插件列表
+        {tr('返回插件列表')}
       </button>
       <header className="plugin-detail-heading">
         <span className="tag">{type}</span>

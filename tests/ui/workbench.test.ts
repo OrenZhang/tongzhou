@@ -252,7 +252,7 @@ describe('managed Git worktrees', () => {
       main: false,
       dirty: false,
     });
-    await expect(w.remove('root')).rejects.toThrow('同舟创建');
+    await expect(w.remove('root')).rejects.toThrow('CoSail创建');
     await writeFile(path.join(p.path, 'untracked'), 'retain');
     await expect(w.remove(p.id)).rejects.toThrow('未跟踪');
     await rm(path.join(p.path, 'untracked'));

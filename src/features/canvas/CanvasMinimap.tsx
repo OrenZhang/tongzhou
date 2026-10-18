@@ -1,3 +1,4 @@
+import { t as tr } from '../../shared/i18n';
 import type { Canvas } from '../../shared/canvas';
 import { nodeBounds } from '../../shared/canvas-editing';
 
@@ -22,7 +23,7 @@ export function CanvasMinimap({
     <svg
       className="canvas-minimap"
       role="img"
-      aria-label="画布小地图，点击或拖动定位"
+      aria-label={tr('画布小地图，点击或拖动定位')}
       viewBox={`${x} ${y} ${w} ${h}`}
       preserveAspectRatio="none"
       onPointerDown={(e) => {

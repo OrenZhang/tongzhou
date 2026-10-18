@@ -116,7 +116,7 @@ export async function projectPatch(
       if (e.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER')
         return {
           path: relative,
-          patch: '差异超过 2 MB，请缩小修改后查看，或让同舟按文件分析。',
+          patch: '差异超过 2 MB，请缩小修改后查看，或让CoSail按文件分析。',
           binary: false,
           truncated: true,
         };

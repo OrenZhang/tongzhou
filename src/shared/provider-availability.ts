@@ -1,3 +1,4 @@
+import { t as tr } from './i18n';
 import type { Provider } from './types';
 
 export interface AccountAvailability {
@@ -11,14 +12,18 @@ export function providerUnavailableReason(
   provider: Provider,
   account?: AccountAvailability,
 ): string {
-  if (provider.enabled === false) return '已停用';
+  if (provider.enabled === false) return tr('已停用');
   if (['codex', 'kimi', 'minimax'].includes(provider.protocol)) {
-    if (!account) return '正在检查授权';
+    if (!account) return tr('正在检查授权');
     if (!account.connected)
-      return account.pending ? '等待授权完成' : account.error ? '授权状态检查失败' : '尚未授权';
+      return account.pending
+        ? tr('等待授权完成')
+        : account.error
+          ? tr('授权状态检查失败')
+          : tr('尚未授权');
   } else {
-    if (!provider.baseUrl.trim()) return '尚未配置服务地址';
-    if (provider.auth !== 'none' && !provider.hasSecret) return '尚未配置密钥';
+    if (!provider.baseUrl.trim()) return tr('尚未配置服务地址');
+    if (provider.auth !== 'none' && !provider.hasSecret) return tr('尚未配置密钥');
   }
   // An untouched local-service preset is not a configured connection. Explicitly
   // enabled services may discover their models from the picker after selection.
@@ -27,6 +32,6 @@ export function providerUnavailableReason(
     provider.enabled !== true &&
     !provider.models.some((model) => model.trim())
   )
-    return '尚未配置模型';
+    return tr('尚未配置模型');
   return '';
 }

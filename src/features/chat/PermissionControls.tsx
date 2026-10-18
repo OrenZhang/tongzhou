@@ -1,18 +1,20 @@
+import { t as tr, localize as localized } from '../../shared/i18n';
 import { ChoicePicker } from '../../components/controls/ChoicePicker';
 import { CheckCheck } from 'lucide-react';
 import type { PermissionMode, Run, Session, TongzhouAPI } from '../../shared/types';
 import { permissionLabels } from '../../shared/permissions';
 
-const descriptions: Record<PermissionMode, string> = {
+const descriptions: Record<PermissionMode, string> = localized({
   'read-only': '只查看和分析，不修改工作区',
   ask: '执行需要授权的操作前询问',
   'full-access': '自动批准已启用的工具操作',
-};
-const options = Object.entries(permissionLabels).map(([value, label]) => ({
-  value,
-  label,
-  detail: descriptions[value as PermissionMode],
-}));
+});
+const permissionOptions = () =>
+  Object.entries(permissionLabels).map(([value, label]) => ({
+    value,
+    label,
+    detail: descriptions[value as PermissionMode],
+  }));
 export function SessionPermission({
   session,
   defaultPermission,
@@ -34,17 +36,17 @@ export function SessionPermission({
   return (
     <div className={'session-permission ' + selected}>
       <ChoicePicker
-        label="会话权限"
+        label={tr('会话权限')}
         displayLabel={permissionLabels[selected]}
         compact
         value={session.permission ?? 'inherit'}
         options={[
           {
             value: 'inherit',
-            label: `继承全局 · ${permissionLabels[defaultPermission]}`,
-            detail: '跟随设置中的默认权限',
+            label: tr('继承全局 · {0}', [permissionLabels[defaultPermission]]),
+            detail: tr('跟随设置中的默认权限'),
           },
-          ...options,
+          ...permissionOptions(),
         ]}
         onChange={(value) =>
           void api
@@ -56,12 +58,14 @@ export function SessionPermission({
         }
       />
       {effective !== selected ? (
-        <span>只读 Agent 限制</span>
+        <span>{tr('只读 Agent 限制')}</span>
       ) : switching ? (
-        <span role="status">正在切换权限…</span>
+        <span role="status">{tr('正在切换权限…')}</span>
       ) : running ? (
         <span>
-          {actual === selected ? '当前任务生效' : `当前任务：${permissionLabels[actual]}`}
+          {actual === selected
+            ? tr('当前任务生效')
+            : tr('当前任务：{0}', [permissionLabels[actual]])}
         </span>
       ) : null}
     </div>
@@ -80,30 +84,33 @@ export function GlobalPermission({
   return (
     <div className="global-permission">
       <div className="settings-row">
-        <label htmlFor="global-permission">全局默认权限</label>
+        <label htmlFor="global-permission">{tr('全局默认权限')}</label>
         <ChoicePicker
           id="global-permission"
-          label="全局默认权限"
+          label={tr('全局默认权限')}
           value={value}
-          options={options}
+          options={permissionOptions()}
           onChange={(next) => void api.setDefaultPermission(next as PermissionMode).catch(onError)}
         />
       </div>
       <p>
-        完全开放会自动批准已启用的文件、命令、插件和电脑工具。命令以当前系统用户权限执行；系统授权和插件开关仍然有效。只读
-        Agent 与协作分析保持只读。
+        {tr(
+          '完全开放会自动批准已启用的文件、命令、插件和电脑工具。命令以当前系统用户权限执行；系统授权和插件开关仍然有效。只读 Agent 与协作分析保持只读。',
+        )}
       </p>
       <div className="settings-row">
-        <span>默认用于新会话及选择“继承全局”的会话。</span>
+        <span>{tr('默认用于新会话及选择“继承全局”的会话。')}</span>
         <button
           className="secondary action-emphasis"
           onClick={() => void api.setDefaultPermission(value, true).catch(onError)}
         >
           <CheckCheck size={15} />
-          应用到全部会话
+          {tr('应用到全部会话')}
         </button>
       </div>
-      <small>应用到全部会话会清除各会话的单独权限设置；运行中的任务会更新权限后继续执行。</small>
+      <small>
+        {tr('应用到全部会话会清除各会话的单独权限设置；运行中的任务会更新权限后继续执行。')}
+      </small>
     </div>
   );
 }

@@ -1,3 +1,5 @@
+import { pluginLabel } from '../../shared/plugin-label';
+import { t as tr } from '../../shared/i18n';
 import { useEffect, useId, useState } from 'react';
 import { RotateCw, Download, Play } from 'lucide-react';
 import type {
@@ -44,9 +46,9 @@ export function CanvasOutputLocation({
   return (
     <div className="canvas-output-location">
       <label>
-        保存位置
+        {tr('保存位置')}
         <select
-          aria-label="生成保存位置"
+          aria-label={tr('生成保存位置')}
           value={destination?.kind ?? 'artifacts'}
           onChange={(e) => {
             if (e.target.value === 'directory')
@@ -65,15 +67,15 @@ export function CanvasOutputLocation({
               });
           }}
         >
-          <option value="artifacts">作品（默认）</option>
-          <option value="content">内容库</option>
-          <option value="directory">本地目录…</option>
+          <option value="artifacts">{tr('作品（默认）')}</option>
+          <option value="content">{tr('内容库')}</option>
+          <option value="directory">{tr('本地目录…')}</option>
         </select>
       </label>
       {destination?.kind === 'content' && (
         <>
           <label>
-            内容库
+            {tr('内容库')}
             <select
               value={destination.libraryId}
               onChange={(e) =>
@@ -88,7 +90,7 @@ export function CanvasOutputLocation({
             </select>
           </label>
           <label>
-            目录
+            {tr('目录')}
             <select
               value={destination.folderId ?? ''}
               onChange={(e) => {
@@ -96,7 +98,7 @@ export function CanvasOutputLocation({
                   update({ destination: { ...destination, folderId: e.target.value || null } });
               }}
             >
-              <option value="">根目录</option>
+              <option value="">{tr('根目录')}</option>
               {content?.folders.map((f) => (
                 <option key={f.id} value={f.id}>
                   {f.name}
@@ -172,12 +174,12 @@ export function CanvasResourceOutput({
       <button disabled={busy} onClick={onSave}>
         <Download size={13} />
         {busy
-          ? '保存中…'
+          ? tr('保存中…')
           : node.media?.destination?.kind === 'directory'
-            ? '保存到本地目录'
+            ? tr('保存到本地目录')
             : node.media?.destination?.kind === 'content'
-              ? '保存到内容库'
-              : '保存到作品'}
+              ? tr('保存到内容库')
+              : tr('保存到作品')}
       </button>
     </>
   );
@@ -244,18 +246,23 @@ export function CanvasMediaFields({
   return (
     <div className="canvas-media-fields">
       <label>
-        生成模式
+        {tr('生成模式')}
         <select
-          aria-label="生成模式"
+          aria-label={tr('生成模式')}
           value={m.mode ?? 'text'}
           onChange={(e) => update({ mode: e.target.value as CanvasMedia['mode'] })}
         >
           <option value="text">
-            {kind === 'audio' ? '文本生成音频' : kind === 'image' ? '文生图' : '文生视频'}
+            {kind === 'audio'
+              ? tr('文本生成音频')
+              : kind === 'image'
+                ? tr('文生图')
+                : tr('文生视频')}
           </option>
-          {kind !== 'audio' && <option value="reference">参考图生成</option>}
+          {kind !== 'audio' && <option value="reference">{tr('参考图生成')}</option>}
           <option value="existing">
-            选择已有{kind === 'audio' ? '音频' : kind === 'video' ? '视频' : '图片'}
+            {tr('选择已有')}
+            {kind === 'audio' ? tr('音频') : kind === 'video' ? tr('视频') : tr('图片')}
           </option>
           {kind === 'video' && (
             <>
@@ -271,7 +278,7 @@ export function CanvasMediaFields({
                   ].some((k) => props[k])
                 }
               >
-                首帧生成
+                {tr('首帧生成')}
               </option>
               <option
                 value="frames"
@@ -282,7 +289,7 @@ export function CanvasMediaFields({
                   )
                 }
               >
-                首尾帧生成
+                {tr('首尾帧生成')}
               </option>
             </>
           )}
@@ -292,15 +299,15 @@ export function CanvasMediaFields({
         <>
           <ResourceThumbnail api={api} resource={node.resource} />
           <button onClick={() => setFrame('existing')}>
-            {node.resource ? '更换已有素材' : '选择已有素材'}
+            {node.resource ? tr('更换已有素材') : tr('选择已有素材')}
           </button>
         </>
       ) : (
         <>
           <label>
-            生成插件
+            {tr('生成插件')}
             <select
-              aria-label="生成插件"
+              aria-label={tr('生成插件')}
               value={m.pluginId ?? ''}
               onChange={(e) => {
                 const p = data.plugins?.find((p) => p.id === e.target.value),
@@ -320,7 +327,7 @@ export function CanvasMediaFields({
                 });
               }}
             >
-              <option value="">选择已启用的插件</option>
+              <option value="">{tr('选择已启用的插件')}</option>
               {data.plugins
                 ?.filter(
                   (p) =>
@@ -329,20 +336,20 @@ export function CanvasMediaFields({
                 )
                 .map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name}
+                    {pluginLabel(p)}
                   </option>
                 ))}
             </select>
           </label>
           <div className="canvas-media-tool">
             <label>
-              生成工具
+              {tr('生成工具')}
               <select
-                aria-label="生成工具"
+                aria-label={tr('生成工具')}
                 value={m.tool ?? ''}
                 onChange={(e) => chooseTool(e.target.value)}
               >
-                <option value="">选择工具</option>
+                <option value="">{tr('选择工具')}</option>
                 {tools.map((t) => (
                   <option key={t.name} value={t.name}>
                     {t.description?.slice(0, 24) || t.name}
@@ -360,21 +367,25 @@ export function CanvasMediaFields({
                   .finally(() => setChecking(false));
               }}
             >
-              {checking ? '检查中…' : '刷新工具'}
+              {checking ? tr('检查中…') : tr('刷新工具')}
             </button>
           </div>
-          {!tools.length && <small>先在插件页面启用并检查媒体生成工具。</small>}
+          {!tools.length && <small>{tr('先在插件页面启用并检查媒体生成工具。')}</small>}
           <div className="canvas-media-grid">
             <label>
-              {kind === 'audio' ? '音频数量' : kind === 'image' ? '图片数量' : '视频数量'}
+              {kind === 'audio'
+                ? tr('音频数量')
+                : kind === 'image'
+                  ? tr('图片数量')
+                  : tr('视频数量')}
               <select
-                aria-label="生成数量"
+                aria-label={tr('生成数量')}
                 value={m.count ?? 1}
                 onChange={(e) => update({ count: Number(e.target.value) })}
               >
                 {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
                   <option key={n} value={n}>
-                    {n} {kind === 'image' ? '张' : '条'}
+                    {n} {kind === 'image' ? tr('张') : tr('条')}
                   </option>
                 ))}
               </select>
@@ -383,14 +394,14 @@ export function CanvasMediaFields({
           {m.mode && m.mode !== 'text' && (
             <small>
               {m.mode === 'frames'
-                ? '选择首帧和尾帧，或按连线顺序连接两张图片。'
-                : '连接图片节点作为参考。'}
-              是否支持本地原件由插件决定，不会自动上传素材。
+                ? tr('选择首帧和尾帧，或按连线顺序连接两张图片。')
+                : tr('连接图片节点作为参考。')}
+              {tr('是否支持本地原件由插件决定，不会自动上传素材。')}
             </small>
           )}
           {m.mode === 'reference' && (
             <div className="canvas-reference-inputs">
-              <button onClick={() => setFrame('references')}>选择参考图片</button>
+              <button onClick={() => setFrame('references')}>{tr('选择参考图片')}</button>
               <div className="canvas-frame-inputs">
                 {m.referenceImages?.map((resource, i) => (
                   <div key={resourceKey(resource)}>
@@ -402,7 +413,9 @@ export function CanvasMediaFields({
                         })
                       }
                     >
-                      移除第 {i + 1} 张
+                      {tr('移除第 ')}
+                      {i + 1}
+                      {tr(' 张')}
                     </button>
                   </div>
                 ))}
@@ -418,23 +431,27 @@ export function CanvasMediaFields({
                 )[]
               ).map((key) => (
                 <div key={key}>
-                  <strong>{key === 'firstFrame' ? '首帧' : '尾帧'}</strong>
+                  <strong>{key === 'firstFrame' ? tr('首帧') : tr('尾帧')}</strong>
                   {m[key] && <ResourceThumbnail api={api} resource={m[key]} />}
-                  <button onClick={() => setFrame(key)}>{m[key] ? '更换图片' : '选择图片'}</button>
-                  {m[key] && <button onClick={() => update({ [key]: undefined })}>移除</button>}
+                  <button onClick={() => setFrame(key)}>
+                    {m[key] ? tr('更换图片') : tr('选择图片')}
+                  </button>
+                  {m[key] && (
+                    <button onClick={() => update({ [key]: undefined })}>{tr('移除')}</button>
+                  )}
                 </div>
               ))}
-              <small>未单独选择时使用相连的图片节点。首尾帧功能取决于所选插件。</small>
+              <small>{tr('未单独选择时使用相连的图片节点。首尾帧功能取决于所选插件。')}</small>
             </div>
           )}
           <label>
-            生成模型
+            {tr('生成模型')}
             <input
-              aria-label="生成模型"
+              aria-label={tr('生成模型')}
               disabled={!!tool && !props.model && !props.model_name}
               list={modelId}
               value={m.model ?? ''}
-              placeholder="使用工具默认模型"
+              placeholder={tr('使用工具默认模型')}
               onChange={(e) => update({ model: e.target.value || undefined })}
             />
             <datalist id={modelId}>
@@ -446,13 +463,13 @@ export function CanvasMediaFields({
           {kind !== 'audio' && (
             <div className="canvas-media-grid">
               <label>
-                画面比例
+                {tr('画面比例')}
                 <input
-                  aria-label="画面比例"
+                  aria-label={tr('画面比例')}
                   disabled={!!tool && !props.aspect_ratio && !props.ratio}
                   list={modelId + '-ratio'}
                   value={m.aspectRatio ?? ''}
-                  placeholder="工具默认，如 16:9"
+                  placeholder={tr('工具默认，如 16:9')}
                   onChange={(e) => update({ aspectRatio: e.target.value || undefined })}
                 />
                 <datalist id={modelId + '-ratio'}>
@@ -462,13 +479,13 @@ export function CanvasMediaFields({
                 </datalist>
               </label>
               <label>
-                分辨率
+                {tr('分辨率')}
                 <input
-                  aria-label="分辨率"
+                  aria-label={tr('分辨率')}
                   disabled={!!tool && !props.resolution}
                   list={modelId + '-resolution'}
                   value={m.resolution ?? ''}
-                  placeholder="工具默认"
+                  placeholder={tr('工具默认')}
                   onChange={(e) => update({ resolution: e.target.value || undefined })}
                 />
                 <datalist id={modelId + '-resolution'}>
@@ -482,12 +499,12 @@ export function CanvasMediaFields({
           {kind === 'audio' && (
             <>
               <label>
-                音色 ID
+                {tr('音色 ID')}
                 <input
-                  aria-label="音色 ID"
+                  aria-label={tr('音色 ID')}
                   value={m.voice ?? ''}
                   disabled={!!tool && !props.voice_id && !props.voice}
-                  placeholder="使用插件默认音色"
+                  placeholder={tr('使用插件默认音色')}
                   onChange={(e) => update({ voice: e.target.value || undefined })}
                   list={modelId + '-voices'}
                 />
@@ -498,16 +515,16 @@ export function CanvasMediaFields({
                 </datalist>
               </label>
               <label>
-                语速
+                {tr('语速')}
                 <input
-                  aria-label="语速"
+                  aria-label={tr('语速')}
                   type="number"
                   min={(props.speed ?? props.speech_rate)?.minimum ?? 0.25}
                   max={(props.speed ?? props.speech_rate)?.maximum ?? 4}
                   step="0.1"
                   value={m.speed ?? ''}
                   disabled={!!tool && !props.speed && !props.speech_rate}
-                  placeholder="工具默认"
+                  placeholder={tr('工具默认')}
                   onChange={(e) =>
                     update({ speed: e.target.value ? Number(e.target.value) : undefined })
                   }
@@ -517,9 +534,9 @@ export function CanvasMediaFields({
           )}
           {kind === 'video' && (
             <label>
-              时长（秒）
+              {tr('时长（秒）')}
               <input
-                aria-label="视频时长"
+                aria-label={tr('视频时长')}
                 disabled={!!tool && !props.duration && !props.seconds}
                 type="number"
                 min={(props.duration ?? props.seconds)?.minimum ?? 1}
@@ -532,7 +549,7 @@ export function CanvasMediaFields({
           )}
           {tool && (
             <details>
-              <summary>插件扩展参数</summary>
+              <summary>{tr('插件扩展参数')}</summary>
               <CanvasConfigFields
                 schema={{
                   ...tool.inputSchema,
@@ -583,7 +600,9 @@ export function CanvasMediaFields({
               />
             </details>
           )}
-          <small>每次重新生成都会保留旧结果。结果先进入作品，选择其他位置时再保存副本。</small>
+          <small>
+            {tr('每次重新生成都会保留旧结果。结果先进入作品，选择其他位置时再保存副本。')}
+          </small>
         </>
       )}
       {frame && (
@@ -597,7 +616,7 @@ export function CanvasMediaFields({
               .canvasResourcePreview(resource)
               .then((p) => {
                 if (p.type !== (frame === 'existing' ? kind : 'image'))
-                  throw new Error('请选择可用的媒体原件');
+                  throw new Error(tr('请选择可用的媒体原件'));
                 if (frame === 'existing') patch({ resource });
                 else if (frame === 'references') {
                   const refs = [
@@ -605,7 +624,7 @@ export function CanvasMediaFields({
                       [...(m.referenceImages ?? []), resource].map((r) => [resourceKey(r), r]),
                     ).values(),
                   ];
-                  if (refs.length > 8) throw new Error('最多选择 8 张参考图');
+                  if (refs.length > 8) throw new Error(tr('最多选择 8 张参考图'));
                   update({ referenceImages: refs });
                 } else update({ [frame]: resource });
                 setFrame(undefined);
@@ -636,21 +655,22 @@ export function CanvasMediaResults({
   const [preview, setPreview] = useState<string>(),
     items = step?.generation ?? [];
   const labels: Record<CanvasGenerationItem['status'], string> = {
-    pending: '等待',
-    running: '生成中',
-    completed: '已完成',
-    failed: '失败',
-    cancelled: '已停止',
+    pending: tr('等待'),
+    running: tr('生成中'),
+    completed: tr('已完成'),
+    failed: tr('失败'),
+    cancelled: tr('已停止'),
   };
   return (
-    <section className="canvas-media-results" aria-label="生成结果">
+    <section className="canvas-media-results" aria-label={tr('生成结果')}>
       <div className="canvas-media-results-heading">
         <strong>
-          生成结果 {items.filter((i) => i.status === 'completed').length}/{items.length}
+          {tr('生成结果 ')}
+          {items.filter((i) => i.status === 'completed').length}/{items.length}
         </strong>
         <button disabled={disabled} onClick={() => onRegenerate()}>
           <RotateCw size={12} />
-          重新生成整组
+          {tr('重新生成整组')}
         </button>
       </div>
       <div className="canvas-media-results-grid">
@@ -659,8 +679,12 @@ export function CanvasMediaResults({
           return (
             <article key={item.index}>
               <header>
-                <span>第 {item.index + 1} 项</span>
-                <small>{item.reused ? '已复用' : labels[item.status]}</small>
+                <span>
+                  {tr('第 ')}
+                  {item.index + 1}
+                  {tr(' 项')}
+                </span>
+                <small>{item.reused ? tr('已复用') : labels[item.status]}</small>
               </header>
               {resource && (
                 <button
@@ -674,34 +698,35 @@ export function CanvasMediaResults({
                   />
                   <span>
                     <Play size={12} />
-                    预览
+                    {tr('预览')}
                   </span>
                 </button>
               )}
               {item.error && <p role="alert">{item.error}</p>}
               {item.savedPaths?.map((p) => (
                 <small key={p} title={p}>
-                  已保存到 {p.split(/[\\/]/).at(-1)}
+                  {tr('已保存到 ')}
+                  {p.split(/[\\/]/).at(-1)}
                 </small>
               ))}
               <div className="canvas-media-result-actions">
                 <button disabled={disabled} onClick={() => onRegenerate(item.index)}>
                   <RotateCw size={12} />
-                  重生成
+                  {tr('重生成')}
                 </button>
                 {item.remoteTaskId && item.status !== 'completed' && (
                   <button disabled={disabled} onClick={() => onRegenerate(item.index, 'resume')}>
-                    继续查询
+                    {tr('继续查询')}
                   </button>
                 )}
                 {item.phase === 'save' && item.status === 'failed' && (
                   <button disabled={disabled} onClick={() => onRegenerate(item.index, 'save')}>
-                    重试保存
+                    {tr('重试保存')}
                   </button>
                 )}
                 {resource?.kind === 'artifact' && (
                   <button
-                    aria-label={`下载第 ${item.index + 1} 项`}
+                    aria-label={tr('下载第 {0} 项', [item.index + 1])}
                     onClick={() => void api.artifactExport(resource.id).catch(onError)}
                   >
                     <Download size={12} />
@@ -712,7 +737,7 @@ export function CanvasMediaResults({
           );
         })}
       </div>
-      {!items.length && <p>填写提示词后生成，结果会逐项显示。</p>}
+      {!items.length && <p>{tr('填写提示词后生成，结果会逐项显示。')}</p>}
       {preview !== undefined && (
         <CanvasPreview
           api={api}
@@ -721,7 +746,7 @@ export function CanvasMediaResults({
           items={items.flatMap((item) =>
             item.resources
               .filter((r) => r.kind === 'artifact')
-              .map((resource) => ({ resource, title: `第 ${item.index + 1} 项` })),
+              .map((resource) => ({ resource, title: tr('第 {0} 项', [item.index + 1]) })),
           )}
           onClose={() => setPreview(undefined)}
         />

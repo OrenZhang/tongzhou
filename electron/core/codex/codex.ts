@@ -39,7 +39,7 @@ export function codexBinary(): string {
       .replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep);
     if (existsSync(binary)) return binary;
   } catch {}
-  throw new Error('内置 Codex 引擎缺失，请重新安装同舟或安装项目的可选依赖');
+  throw new Error('内置 Codex 引擎缺失，请重新安装CoSail或安装项目的可选依赖');
 }
 export class CodexClient extends EventEmitter {
   private child?: ChildProcessWithoutNullStreams;
@@ -116,7 +116,7 @@ export class CodexClient extends EventEmitter {
         ...(this.modelTransport
           ? Object.entries({
               model_provider: 'tongzhou-model',
-              'model_providers.tongzhou-model.name': 'Tongzhou model adapter',
+              'model_providers.tongzhou-model.name': 'CoSail model adapter',
               'model_providers.tongzhou-model.base_url': this.modelTransport.baseUrl,
               'model_providers.tongzhou-model.env_key': 'TONGZHOU_MODEL_TOKEN',
               'model_providers.tongzhou-model.wire_api': 'responses',

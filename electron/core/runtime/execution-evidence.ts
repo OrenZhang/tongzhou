@@ -5,7 +5,7 @@ import type { Message, PermissionMode } from '../../../src/shared/types';
 export function executionContext(permission: PermissionMode) {
   return `【本轮客户端状态】权限=${permission}。${
     permission === 'full-access'
-      ? '完全开放：已启用工具由同舟自动批准，无需用户点击批准。历史拒绝不是本轮拒绝；用户重新授权后可以重新发起尚未执行的操作。'
+      ? '完全开放：已启用工具由CoSail自动批准，无需用户点击批准。历史拒绝不是本轮拒绝；用户重新授权后可以重新发起尚未执行的操作。'
       : permission === 'read-only'
         ? '只读：不得执行写操作。'
         : '需要批准的操作由真实工具调用触发审批；没有发起调用就没有待批准项。'

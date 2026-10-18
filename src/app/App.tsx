@@ -1,3 +1,5 @@
+import { providerLabel } from '../shared/provider-label';
+import { t as tr, getLocale, localize as localized } from '../shared/i18n';
 import { flushCanvasDraft } from '../features/canvas/draft-sync';
 import { CanvasWorkspace } from '../features/canvas/CanvasWorkspace';
 import { SidebarNavGroup } from '../components/SidebarNavGroup';
@@ -6,7 +8,11 @@ import { useNavigation } from './useNavigation';
 import { protocolLabels } from '../features/connections/provider-presets';
 import { AccountLoginPanel } from '../features/connections/AccountLoginPanel';
 import { ProviderConnectionDialog } from '../features/connections/ProviderConnectionDialog';
-import { automaticModel, modelStages, type ModelStage } from '../shared/model-protocol';
+import {
+  automaticModel,
+  modelStages as raw_modelStages,
+  type ModelStage,
+} from '../shared/model-protocol';
 import type { Provider } from '../shared/types';
 import { FilePreviewContext } from '../components/files/FilePreviewContext';
 import { AttachmentPreview } from '../components/files/Attachments';
@@ -88,6 +94,7 @@ import { effectivePermission } from '../shared/permissions';
 import { ConnectionsPage } from '../features/connections/ConnectionsPage';
 import { NetworkProfilesPanel } from '../features/connections/NetworkProfilesPanel';
 import { Appearance, useAppearance } from '../features/settings/Appearance';
+import { useLocale } from '../hooks/useLocale';
 import { useDraft } from '../hooks/useDraft';
 import { useComposerDrop } from '../features/chat/useComposerDrop';
 import { AttachmentCards, useAttachmentDraft } from '../components/files/Attachments';
@@ -121,6 +128,7 @@ export default function App() {
     paletteOpen,
     setPaletteOpen,
   } = useNavigation(api);
+  const showSessionSidebar = view === 'workspace' && sidebarOpen;
   const { data, loaded, refresh, notice, setNotice, report, perform } = useApplicationState(api);
   const restoredSession = useRef(false);
   const [attachmentPreview, setAttachmentPreview] = useState<Attachment>();
@@ -165,6 +173,7 @@ export default function App() {
   const attachments = useAttachmentDraft(sessionId, (error) => report(error));
   const attachmentPicker = useRef<HTMLInputElement>(null);
   const { appearance, setAppearance } = useAppearance();
+  useLocale();
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
   const [providerEdit, setProviderEdit] = useState<ProviderInput | null>(null);
@@ -235,7 +244,7 @@ export default function App() {
     ? model === automaticModel && poolReady(provider)
       ? ''
       : providerUnavailableReason(provider, accountStates[provider.id])
-    : '请选择连接';
+    : tr('请选择连接');
   const providerReady = !!provider && !unavailableReason;
   const selectedAgent = data.agents.find((a) => a.id === agentId);
   const sessionPermission = effectivePermission(session, data.defaultPermission, selectedAgent);
@@ -416,7 +425,7 @@ export default function App() {
         setProviderEdit({ ...saved, secret: '' });
       } else {
         setProviderEdit(null);
-        setNotice('连接已保存');
+        setNotice(tr('连接已保存'));
       }
     } catch (e) {
       report(e);
@@ -431,7 +440,7 @@ export default function App() {
       const saved = await api.saveProvider(normalizedProvider());
       const models = await api.models(saved.id);
       setProviderEdit({ ...saved, models, secret: '' });
-      setNotice(`已获取并保存 ${models.length} 个模型`);
+      setNotice(tr('已获取并保存 {0} 个模型', [models.length]));
       await refresh();
     } catch (e) {
       report(e);
@@ -441,21 +450,21 @@ export default function App() {
   };
   const navGroups = [
     {
-      label: '资源与工具',
+      label: tr('资源与工具'),
       items: [
         { id: 'agents', label: 'Agent', icon: Users },
-        { id: 'knowledge', label: '智库', icon: BookOpen },
-        { id: 'canvas', label: '画布', icon: Layers3 },
-        { id: 'connections', label: '渠道', icon: Network },
-        { id: 'extensions', label: '插件', icon: Puzzle },
-        { id: 'providers', label: '模型', icon: Cpu },
+        { id: 'knowledge', label: tr('智库'), icon: BookOpen },
+        { id: 'canvas', label: tr('画布'), icon: Layers3 },
+        { id: 'connections', label: tr('渠道'), icon: Network },
+        { id: 'extensions', label: tr('插件'), icon: Puzzle },
+        { id: 'providers', label: tr('模型'), icon: Cpu },
       ],
     },
     {
-      label: '任务与记录',
+      label: tr('任务与记录'),
       items: [
-        { id: 'activity', label: '运行记录', icon: Activity },
-        { id: 'automations', label: '定时任务', icon: Clock3 },
+        { id: 'activity', label: tr('运行记录'), icon: Activity },
+        { id: 'automations', label: tr('定时任务'), icon: Clock3 },
       ],
     },
   ] as const;
@@ -470,15 +479,21 @@ export default function App() {
       );
   };
   const statusLabel = (s: string) =>
-    ({ running: '运行中', completed: '已完成', interrupted: '已停止', failed: '失败' })[s] ?? s;
+    ({
+      running: tr('运行中'),
+      completed: tr('已完成'),
+      interrupted: tr('已停止'),
+      failed: tr('失败'),
+    })[s] ?? s;
 
   if (!api)
     return (
       <div className="browser-fallback">
         <Mark />
-        <h1>同舟 Tongzhou</h1>
+        <h1>CoSail</h1>
         <p>
-          请使用桌面应用打开。开发模式运行 <code>npm run dev</code>。
+          {tr('请使用桌面应用打开。开发模式运行 ')}
+          <code>npm run dev</code>。
         </p>
       </div>
     );
@@ -489,12 +504,16 @@ export default function App() {
         setAttachmentPreview(file);
       }}
     >
-      <div className={`app-shell ${sidebarOpen ? '' : 'sidebar-collapsed'}`} data-view={view}>
-        <aside className="sidebar" aria-label="主导航">
-          <nav className="sidebar-rail" aria-label="管理与工具">
+      <div
+        className={`app-shell ${showSessionSidebar ? '' : 'sidebar-collapsed'}`}
+        data-view={view}
+      >
+        <aside className="sidebar" aria-label={tr('主导航')}>
+          <nav className="sidebar-rail" aria-label={tr('管理与工具')}>
             <button
               className="rail-button"
-              aria-label={sidebarOpen ? '收起会话列表' : '展开会话列表'}
+              hidden={view !== 'workspace'}
+              aria-label={sidebarOpen ? tr('收起会话列表') : tr('展开会话列表')}
               aria-expanded={sidebarOpen}
               aria-controls="sidebar-sessions"
               onClick={() => setSidebarOpen((open) => !open)}
@@ -505,21 +524,20 @@ export default function App() {
                 <PanelLeftOpen size={19} aria-hidden="true" />
               )}
               <span className="rail-tooltip" aria-hidden="true">
-                {sidebarOpen ? '收起会话列表' : '展开会话列表'}
+                {sidebarOpen ? tr('收起会话列表') : tr('展开会话列表')}
               </span>
             </button>
             <button
               className={`rail-button ${view === 'workspace' ? 'active' : ''}`}
-              aria-label="会话"
+              aria-label={tr('会话')}
               aria-current={view === 'workspace' ? 'page' : undefined}
               onClick={() => {
                 setView('workspace');
-                setSidebarOpen(true);
               }}
             >
               <MessageSquare size={19} aria-hidden="true" />
               <span className="rail-tooltip" aria-hidden="true">
-                会话
+                {tr('会话')}
               </span>
             </button>
             {navGroups.map((group) => (
@@ -540,35 +558,41 @@ export default function App() {
             <div className="rail-footer">
               <UpdateControl api={api} />
               <button
-                aria-label="设置"
+                aria-label={tr('设置')}
                 onClick={() => setView('settings')}
                 aria-current={['settings', 'network'].includes(view) ? 'page' : undefined}
                 className={`rail-button ${['settings', 'network'].includes(view) ? 'active' : ''}`}
               >
                 <Settings2 size={19} aria-hidden="true" />
                 <span className="rail-tooltip" aria-hidden="true">
-                  设置
+                  {tr('设置')}
                 </span>
               </button>
             </div>
           </nav>
-          <div id="sidebar-sessions" className="sidebar-sessions" inert={!sidebarOpen}>
+          <div
+            id="sidebar-sessions"
+            className="sidebar-sessions"
+            inert={!showSessionSidebar}
+            hidden={!showSessionSidebar}
+          >
             <button
               className="brand"
-              aria-label="返回会话"
-              title="返回当前会话"
+              aria-label={tr('返回会话')}
+              title={tr('返回当前会话')}
               onClick={() => setView('workspace')}
             >
               <Mark />
               <div>
-                <strong>同舟</strong>
+                <strong>CoSail</strong>
                 <span>TONGZHOU</span>
               </div>
               <span className="version">{version}</span>
             </button>
             <button className="new-chat" onClick={() => newSession()}>
               <Plus size={17} />
-              开启新会话<span>↗</span>
+              {tr('开启新会话')}
+              <span>↗</span>
             </button>
             <div className="sidebar-divider" />
             <SessionNavigator
@@ -602,42 +626,43 @@ export default function App() {
         </aside>
         <div className="main-shell">
           <header className="topbar">
-            <nav className="breadcrumb" aria-label="面包屑导航">
+            <nav className="breadcrumb" aria-label={tr('面包屑导航')}>
               <button
                 className="icon-button"
-                aria-label={sidebarOpen ? '收起导航' : '展开导航'}
-                title="切换导航（Ctrl / ⌘ B）"
+                hidden={view !== 'workspace'}
+                aria-label={sidebarOpen ? tr('收起导航') : tr('展开导航')}
+                title={tr('切换导航（Ctrl / ⌘ B）')}
                 aria-expanded={sidebarOpen}
                 onClick={() => setSidebarOpen(!sidebarOpen)}
               >
                 <LayoutPanelLeft size={17} />
               </button>
               <button className="breadcrumb-link" onClick={() => setView('workspace')}>
-                同舟
+                CoSail
               </button>
               <ChevronRight size={13} aria-hidden="true" />
               {view === 'network' && (
                 <>
                   <button className="breadcrumb-link" onClick={() => setView('settings')}>
-                    设置
+                    {tr('设置')}
                   </button>
                   <ChevronRight size={13} aria-hidden="true" />
                 </>
               )}
               <strong aria-current="page">
                 {view === 'workspace'
-                  ? (project?.name ?? (session ? '会话' : '新会话'))
+                  ? (project?.name ?? (session ? tr('会话') : tr('新会话')))
                   : {
-                      providers: '模型',
-                      connections: '渠道',
-                      network: '网络配置',
+                      providers: tr('模型'),
+                      connections: tr('渠道'),
+                      network: tr('网络配置'),
                       agents: 'Agent',
-                      activity: '运行记录',
-                      settings: '设置',
-                      extensions: '插件',
-                      knowledge: '智库',
-                      canvas: '画布',
-                      automations: '定时任务',
+                      activity: tr('运行记录'),
+                      settings: tr('设置'),
+                      extensions: tr('插件'),
+                      knowledge: tr('智库'),
+                      canvas: tr('画布'),
+                      automations: tr('定时任务'),
                     }[view]}
               </strong>
             </nav>
@@ -653,7 +678,7 @@ export default function App() {
                     if (target) activateSession(target);
                   }}
                 >
-                  待处理 ·{' '}
+                  {tr('待处理 ·')}{' '}
                   {
                     data.approvals.filter((a) => view !== 'workspace' || a.sessionId !== sessionId)
                       .length
@@ -663,8 +688,8 @@ export default function App() {
               {view === 'workspace' && session && (
                 <button
                   className="icon-button"
-                  aria-label="会话作品"
-                  title="查看当前会话生成的作品"
+                  aria-label={tr('会话作品')}
+                  title={tr('查看当前会话生成的作品')}
                   onClick={() => {
                     setArtifactSession(session.id);
                     setKnowledgeSection('artifacts');
@@ -676,11 +701,11 @@ export default function App() {
               )}
               <button
                 className="quick-search-trigger"
-                aria-label="搜索与快捷操作"
+                aria-label={tr('搜索与快捷操作')}
                 onClick={() => setPaletteOpen(true)}
               >
                 <Search size={15} />
-                <span>搜索与快捷操作</span>
+                <span>{tr('搜索与快捷操作')}</span>
                 <kbd>{navigator.platform.includes('Mac') ? '⌘ K' : 'Ctrl K'}</kbd>
               </button>
               {view === 'workspace' && session && (
@@ -690,10 +715,12 @@ export default function App() {
                     (workspace.open || artifactId || attachmentPreview ? 'active' : '')
                   }
                   aria-label={
-                    workspace.open || artifactId || attachmentPreview ? '收起工作区' : '展开工作区'
+                    workspace.open || artifactId || attachmentPreview
+                      ? tr('收起工作区')
+                      : tr('展开工作区')
                   }
                   aria-expanded={workspace.open || !!artifactId || !!attachmentPreview}
-                  title="文件、审阅与终端"
+                  title={tr('文件、审阅与终端')}
                   onClick={() => {
                     const open = workspace.open || !!artifactId || !!attachmentPreview;
                     setArtifactId(undefined);
@@ -701,12 +728,13 @@ export default function App() {
                     updateWorkspace({ open: !open });
                   }}
                 >
-                  <LayoutPanelLeft size={16} /> 工作区
+                  <LayoutPanelLeft size={16} />
+                  {tr(' 工作区')}
                 </button>
               )}
               <span className="local-badge">
                 <ShieldCheck size={13} />
-                本地存储
+                {tr('本地存储')}
               </span>
             </div>
           </header>
@@ -731,9 +759,10 @@ export default function App() {
                       <button
                         className="terminal-entry"
                         onClick={() => openReview()}
-                        title="在当前会话中审阅改动"
+                        title={tr('在当前会话中审阅改动')}
                       >
-                        <GitBranch size={16} /> 审阅
+                        <GitBranch size={16} />
+                        {tr(' 审阅')}
                       </button>
                       <button
                         className="terminal-entry"
@@ -743,15 +772,16 @@ export default function App() {
                             (workspace.open && workspace.tab === 'terminal'))
                         }
                         disabled={busy || !!session.knowledgeJob}
-                        title="打开本会话终端"
+                        title={tr('打开本会话终端')}
                         onClick={openTerminal}
                       >
-                        <Terminal size={16} /> 终端
+                        <Terminal size={16} />
+                        {tr(' 终端')}
                       </button>
                       <button
                         className="icon-button"
-                        aria-label="搜索消息内容"
-                        title="搜索消息内容"
+                        aria-label={tr('搜索消息内容')}
+                        title={tr('搜索消息内容')}
                         onClick={() => setHistoryOpen(true)}
                       >
                         <Search size={16} />
@@ -767,12 +797,12 @@ export default function App() {
                       )}
                       <button
                         className="icon-button"
-                        aria-label="导出会话"
-                        title="导出 Markdown"
+                        aria-label={tr('导出会话')}
+                        title={tr('导出 Markdown')}
                         onClick={() =>
                           perform(async () => {
                             const f = await api.exportSession(sessionId);
-                            if (f) setNotice('会话已导出');
+                            if (f) setNotice(tr('会话已导出'));
                           })
                         }
                       >
@@ -785,7 +815,7 @@ export default function App() {
                   className={'feed ' + (!turns.length ? 'empty-feed' : '')}
                   ref={feed}
                   tabIndex={0}
-                  aria-label="会话内容"
+                  aria-label={tr('会话内容')}
                   onKeyDown={(e) => {
                     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && !e.altKey) {
                       const selection = window.getSelection();
@@ -820,7 +850,7 @@ export default function App() {
                         })
                       }
                     >
-                      加载更早消息
+                      {tr('加载更早消息')}
                     </button>
                   )}
                   {!turns.length ? (
@@ -828,22 +858,22 @@ export default function App() {
                       <div className="welcome-mark">
                         <Mark />
                       </div>
-                      <h1>{project ? '从这个项目，开始。' : '今天，一起做点什么？'}</h1>
+                      <h1>{project ? tr('从这个项目，开始。') : tr('今天，一起做点什么？')}</h1>
                       <p>
                         {project
-                          ? '读代码、改功能、验证结果，同一个会话里完成。'
-                          : '随时聊天、解决问题，或打开项目一起创作。'}
+                          ? tr('读代码、改功能、验证结果，同一个会话里完成。')
+                          : tr('随时聊天、解决问题，或打开项目一起创作。')}
                       </p>
                       <div className="welcome-actions">
                         {!project && (
                           <button className="primary open-project" onClick={openProject}>
                             <FolderOpen size={18} />
-                            打开项目
+                            {tr('打开项目')}
                             <ArrowRight size={15} />
                           </button>
                         )}
                         <button className="text-button" onClick={() => setView('providers')}>
-                          连接模型
+                          {tr('连接模型')}
                           <ArrowRight size={14} />
                         </button>
                       </div>
@@ -852,35 +882,35 @@ export default function App() {
                           ? [
                               {
                                 icon: Code2,
-                                title: '读懂一个项目',
-                                text: '分析这个项目的结构、核心模块和运行方式。',
+                                title: tr('读懂一个项目'),
+                                text: tr('分析这个项目的结构、核心模块和运行方式。'),
                               },
                               {
                                 icon: GitBranch,
-                                title: '一起规划实现',
-                                text: '阅读项目，提出下一阶段最值得实现的功能与具体步骤。',
+                                title: tr('一起规划实现'),
+                                text: tr('阅读项目，提出下一阶段最值得实现的功能与具体步骤。'),
                               },
                               {
                                 icon: ShieldCheck,
-                                title: '发现潜在问题',
-                                text: '审查项目中的代码，找出有证据的缺陷和测试缺口。',
+                                title: tr('发现潜在问题'),
+                                text: tr('审查项目中的代码，找出有证据的缺陷和测试缺口。'),
                               },
                             ]
                           : [
                               {
                                 icon: MessageSquare,
-                                title: '聊一个问题',
-                                text: '帮我用通俗的语言解释大语言模型是如何工作的。',
+                                title: tr('聊一个问题'),
+                                text: tr('帮我用通俗的语言解释大语言模型是如何工作的。'),
                               },
                               {
                                 icon: Sparkles,
-                                title: '一起想点子',
-                                text: '我想做一个个人开源项目，帮我梳理方向和第一步。',
+                                title: tr('一起想点子'),
+                                text: tr('我想做一个个人开源项目，帮我梳理方向和第一步。'),
                               },
                               {
                                 icon: Code2,
-                                title: '学习与写作',
-                                text: '帮我设计一个循序渐进的编程学习计划。',
+                                title: tr('学习与写作'),
+                                text: tr('帮我设计一个循序渐进的编程学习计划。'),
                               },
                             ]
                         ).map((p) => (
@@ -900,9 +930,14 @@ export default function App() {
                       </div>
                       <div className="welcome-foot">
                         <Layers3 size={14} />
-                        {availableProviders.length} 个可用连接<span>·</span>
+                        {availableProviders.length}
+                        {tr(' 个可用连接')}
+                        <span>·</span>
                         <Bot size={14} />
-                        {data.agents.length} 个 Agent<span>·</span>上下文随任务同行
+                        {data.agents.length}
+                        {tr(' 个 Agent')}
+                        <span>·</span>
+                        {tr('上下文随任务同行')}
                       </div>
                     </div>
                   ) : (
@@ -976,21 +1011,28 @@ export default function App() {
                             branchDisabled={!!running}
                             delivery={
                               turn.run && turn.run.status !== 'running' && changedFiles > 0 ? (
-                                <div className="turn-delivery" aria-label="任务交付">
+                                <div className="turn-delivery" aria-label={tr('任务交付')}>
                                   <strong>
                                     {turn.run.status === 'completed'
-                                      ? '执行已结束'
+                                      ? tr('执行已结束')
                                       : turn.run.status === 'failed'
-                                        ? '执行失败'
-                                        : '执行已中断'}
+                                        ? tr('执行失败')
+                                        : tr('执行已中断')}
                                   </strong>
-                                  {changedFiles > 0 && <span>{changedFiles} 个文件发生变化</span>}
                                   {changedFiles > 0 && (
-                                    <button onClick={() => openReview(turn.runId)}>查看改动</button>
+                                    <span>
+                                      {changedFiles}
+                                      {tr(' 个文件发生变化')}
+                                    </span>
+                                  )}
+                                  {changedFiles > 0 && (
+                                    <button onClick={() => openReview(turn.runId)}>
+                                      {tr('查看改动')}
+                                    </button>
                                   )}
                                   {hasEvidence && (
                                     <button onClick={() => openReview(turn.runId, 'evidence')}>
-                                      验证记录
+                                      {tr('验证记录')}
                                     </button>
                                   )}
                                 </div>
@@ -1002,13 +1044,17 @@ export default function App() {
                             onCopy={(message) =>
                               void perform(async () => {
                                 await api.copyText(message.content);
-                                setNotice('已复制');
+                                setNotice(tr('已复制'));
                               })
                             }
                             onQuote={(message) => {
-                              setDraft(
-                                (text) =>
-                                  `${text}${text ? '\n\n' : ''}针对历史消息（${message.id}）补充：\n> ${message.content.slice(0, 1500).replace(/\n/g, '\n> ')}\n\n`,
+                              setDraft((text) =>
+                                tr('{0}{1}针对历史消息（{2}）补充：\n> {3}\n\n', [
+                                  text,
+                                  text ? '\n\n' : '',
+                                  message.id,
+                                  message.content.slice(0, 1500).replace(/\n/g, '\n> '),
+                                ]),
                               );
                               composerInput.current?.focus();
                             }}
@@ -1041,49 +1087,57 @@ export default function App() {
                     <button
                       className="follow-latest secondary"
                       onClick={conversationFollow.resume}
-                      title="回到最新消息并继续跟随"
+                      title={tr('回到最新消息并继续跟随')}
                     >
-                      <ArrowDownToLine size={14} /> 回到最新
+                      <ArrowDownToLine size={14} />
+                      {tr(' 回到最新')}
                     </button>
                   )}
-                  {activity.error && <p role="alert">处理记录加载失败：{activity.error}</p>}
+                  {activity.error && (
+                    <p role="alert">
+                      {tr('处理记录加载失败：')}
+                      {activity.error}
+                    </p>
+                  )}
                   {activity.hasEarlier && (
                     <button
                       className="text-button"
                       disabled={activity.loadingEarlier}
                       onClick={() => void activity.loadEarlier()}
                     >
-                      加载更早处理记录
+                      {tr('加载更早处理记录')}
                     </button>
                   )}
                   <PendingInputs key={sessionId} api={api} sessionId={sessionId} data={data} />
                   {session && (
-                    <div className="composer-context" aria-label="执行上下文">
+                    <div className="composer-context" aria-label={tr('执行上下文')}>
                       <button
                         className="context-chip"
-                        title={project?.path ?? taskContext.task?.cwd ?? '正在读取执行目录'}
+                        title={project?.path ?? taskContext.task?.cwd ?? tr('正在读取执行目录')}
                         onClick={() => updateWorkspace({ open: true, tab: 'files' })}
                       >
                         <Folder size={13} />
-                        <span>{project?.name ?? '会话工作目录'}</span>
+                        <span>{project?.name ?? tr('会话工作目录')}</span>
                       </button>
                       <span
                         className="context-chip"
-                        title={taskContext.task?.cwd ?? taskContext.error ?? '正在读取执行目录'}
+                        title={taskContext.task?.cwd ?? taskContext.error ?? tr('正在读取执行目录')}
                       >
                         <Terminal size={13} />
-                        <span>{taskContext.error ?? (taskContext.task ? '本地' : '读取中…')}</span>
+                        <span>
+                          {taskContext.error ?? (taskContext.task ? tr('本地') : tr('读取中…'))}
+                        </span>
                       </span>
                       {project && (
                         <button
                           className="context-chip"
-                          title="查看工作目录全部改动"
+                          title={tr('查看工作目录全部改动')}
                           onClick={() =>
                             updateWorkspace({ open: true, tab: 'review', scope: 'directory' })
                           }
                         >
                           <GitBranch size={13} />
-                          <span>{taskContext.branch ?? '读取分支…'}</span>
+                          <span>{taskContext.branch ?? tr('读取分支…')}</span>
                         </button>
                       )}
                       <button
@@ -1092,7 +1146,8 @@ export default function App() {
                         aria-expanded={canvasOpen}
                       >
                         <Layers3 size={13} />
-                        画布{session.activeCanvasId ? ' · 已关联' : ''}
+                        {tr('画布')}
+                        {session.activeCanvasId ? tr(' · 已关联') : ''}
                       </button>
                       {session && (
                         <SessionPermission
@@ -1116,8 +1171,8 @@ export default function App() {
                       </div>
                       <button
                         className="icon-button"
-                        aria-label="移除专属 Agent"
-                        title="移除角色"
+                        aria-label={tr('移除专属 Agent')}
+                        title={tr('移除角色')}
                         disabled={!!running}
                         onClick={() => setAgentId('')}
                       >
@@ -1135,7 +1190,7 @@ export default function App() {
                   >
                     {composerDrop.dragging && (
                       <p className="composer-drop-hint" role="status">
-                        松开以插入文件路径
+                        {tr('松开以插入文件路径')}
                       </p>
                     )}
                     <AttachmentCards
@@ -1144,7 +1199,7 @@ export default function App() {
                     />
                     {attachments.pending && (
                       <p className="attachment-hint" role="status">
-                        正在添加附件…
+                        {tr('正在添加附件…')}
                       </p>
                     )}
                     <input
@@ -1153,7 +1208,7 @@ export default function App() {
                       hidden
                       multiple
                       accept="image/png,image/jpeg,image/webp,.txt,.md,.json,.csv,.log,.js,.ts,.tsx,.py,.yaml,.yml"
-                      aria-label="选择附件文件"
+                      aria-label={tr('选择附件文件')}
                       onChange={(e) => {
                         void attachments.addFiles(Array.from(e.target.files ?? []));
                         e.target.value = '';
@@ -1161,11 +1216,11 @@ export default function App() {
                     />
                     <textarea
                       ref={composerInput}
-                      aria-label="消息"
+                      aria-label={tr('消息')}
                       placeholder={
                         project
-                          ? '描述你的想法，或让 Agent 接着完成任务…'
-                          : '直接输入消息开始聊天，无需打开项目…'
+                          ? tr('描述你的想法，或让 Agent 接着完成任务…')
+                          : tr('直接输入消息开始聊天，无需打开项目…')
                       }
                       value={draft}
                       disabled={!!session?.archived}
@@ -1182,12 +1237,12 @@ export default function App() {
                           e.preventDefault();
                           void attachments
                             .addFiles([
-                              new File([text], `粘贴文本-${Date.now()}.txt`, {
+                              new File([text], tr('粘贴文本-{0}.txt', [Date.now()]), {
                                 type: 'text/plain',
                               }),
                             ])
                             .then((added) => {
-                              if (added) setNotice('长文本已转为附件，点击卡片可查看全文');
+                              if (added) setNotice(tr('长文本已转为附件，点击卡片可查看全文'));
                             });
                         }
                       }}
@@ -1209,32 +1264,34 @@ export default function App() {
                         }}
                       >
                         <summary
-                          aria-label="选择模型与连接"
-                          title={`${provider?.name ?? '未连接'} · ${model || '选择模型'}`}
+                          aria-label={tr('选择模型与连接')}
+                          title={`${provider ? providerLabel(provider) : tr('未连接')} · ${model || tr('选择模型')}`}
                         >
                           <span>
                             {providerReady
                               ? model === automaticModel
-                                ? '自动路由'
+                                ? tr('自动路由')
                                 : (provider?.modelLabels?.[model] ?? model)
-                              : '选择模型'}
+                              : tr('选择模型')}
                           </span>
-                          <small>{provider?.name ?? '未连接'}</small>
+                          <small>{provider ? providerLabel(provider) : tr('未连接')}</small>
                           <ChevronDown size={13} />
                         </summary>
                         <div className="composer-model-options">
                           <div className="composer-controls">
                             <ChoicePicker
-                              label="当前连接"
+                              label={tr('当前连接')}
                               compact
                               searchable
                               value={providerReady ? providerId : ''}
                               options={availableProviders.map((p) => ({
                                 value: p.id,
-                                label: p.name,
-                                detail: `${p.models.length} 个模型`,
+                                label: providerLabel(p),
+                                detail: tr('{0} 个模型', [p.models.length]),
                               }))}
-                              placeholder={availableProviders.length ? '选择连接' : '暂无可用连接'}
+                              placeholder={
+                                availableProviders.length ? tr('选择连接') : tr('暂无可用连接')
+                              }
                               onChange={(id) =>
                                 selectModel(
                                   id,
@@ -1245,7 +1302,7 @@ export default function App() {
                             />
                             <ModelPicker
                               key={providerId}
-                              label="当前模型"
+                              label={tr('当前模型')}
                               compact
                               value={providerReady ? model : ''}
                               models={
@@ -1258,7 +1315,7 @@ export default function App() {
                               }
                               modelLabels={{
                                 ...provider?.modelLabels,
-                                [automaticModel]: '自动路由',
+                                [automaticModel]: tr('自动路由'),
                               }}
                               load={
                                 providerReady && provider
@@ -1270,12 +1327,12 @@ export default function App() {
                             />
                             {model === automaticModel && (
                               <select
-                                aria-label="路由阶段"
+                                aria-label={tr('路由阶段')}
                                 value={routingStage}
                                 disabled={!!running}
                                 onChange={(e) => setRoutingStage(e.target.value as ModelStage | '')}
                               >
-                                <option value="">自动识别阶段</option>
+                                <option value="">{tr('自动识别阶段')}</option>
                                 {Object.entries(modelStages).map(([v, label]) => (
                                   <option key={v} value={v}>
                                     {label}
@@ -1289,8 +1346,8 @@ export default function App() {
                       <div className="row composer-actions">
                         <button
                           className="icon-button"
-                          aria-label="添加图片或文件"
-                          title="添加图片或文本文件，也可直接粘贴图片"
+                          aria-label={tr('添加图片或文件')}
+                          title={tr('添加图片或文本文件，也可直接粘贴图片')}
                           disabled={busy || attachments.pending || !!session?.archived}
                           onClick={() => attachmentPicker.current?.click()}
                         >
@@ -1298,8 +1355,8 @@ export default function App() {
                         </button>
                         <button
                           className="icon-button"
-                          title="多 Agent 协作（只读分析）"
-                          aria-label="多 Agent 协作"
+                          title={tr('多 Agent 协作（只读分析）')}
+                          aria-label={tr('多 Agent 协作')}
                           disabled={
                             !!session?.archived ||
                             (!draft.trim() && !attachments.items.length) ||
@@ -1322,7 +1379,7 @@ export default function App() {
                             />
                             <button
                               className="send-button"
-                              aria-label="补充"
+                              aria-label={tr('补充')}
                               title={inputModes.find((mode) => mode.value === inputMode)?.label}
                               disabled={
                                 busy ||
@@ -1338,7 +1395,7 @@ export default function App() {
                         {running ? (
                           <button
                             className="send-button stop"
-                            aria-label="停止执行"
+                            aria-label={tr('停止执行')}
                             onClick={() => perform(() => api.cancel(sessionId))}
                           >
                             <Square size={15} fill="currentColor" />
@@ -1346,7 +1403,7 @@ export default function App() {
                         ) : (
                           <button
                             className="send-button"
-                            aria-label="发送消息"
+                            aria-label={tr('发送消息')}
                             disabled={
                               (!draft.trim() && !attachments.items.length) ||
                               attachments.pending ||
@@ -1369,10 +1426,11 @@ export default function App() {
                       <span>
                         {provider
                           ? `${provider.name}：${unavailableReason}`
-                          : '先连接一个模型，即可开始聊天'}
+                          : tr('先连接一个模型，即可开始聊天')}
                       </span>
                       <button className="text-button" onClick={() => setView('providers')}>
-                        管理模型 <ArrowRight size={13} />
+                        {tr('管理模型 ')}
+                        <ArrowRight size={13} />
                       </button>
                     </div>
                   )}
@@ -1382,17 +1440,19 @@ export default function App() {
                         <>
                           <span className="live-dot" />
                           {data.approvals.some((approval) => approval.sessionId === sessionId)
-                            ? '有问题或审批需要你处理'
-                            : `${running.agentName} · ${running.phase || '正在工作'}`}
+                            ? tr('有问题或审批需要你处理')
+                            : `${running.agentName} · ${running.phase || tr('正在工作')}`}
                         </>
                       ) : (
                         <>
                           <ShieldCheck size={12} />
-                          {project ? '文件修改与命令执行受权限控制' : '普通聊天 · 无需项目文件夹'}
+                          {project
+                            ? tr('文件修改与命令执行受权限控制')
+                            : tr('普通聊天 · 无需项目文件夹')}
                         </>
                       )}
                     </span>
-                    <span>Enter 发送 · Shift + Enter 换行</span>
+                    <span>{tr('Enter 发送 · Shift + Enter 换行')}</span>
                   </div>
                 </div>
                 {session && workspace.terminalOpen && workspace.dock === 'bottom' && (
@@ -1434,7 +1494,7 @@ export default function App() {
                   onNotice={setNotice}
                   onReference={(text) => {
                     setDraft((old) => (old ? old + '\n\n' + text : text));
-                    setNotice('已引用到当前会话输入框，可补充要求后发送');
+                    setNotice(tr('已引用到当前会话输入框，可补充要求后发送'));
                     composerInput.current?.focus();
                   }}
                 />
@@ -1454,8 +1514,8 @@ export default function App() {
               <div className="page-heading">
                 <div className="page-title-row">
                   <div>
-                    <h1>模型</h1>
-                    <p>管理模型服务与订阅账号，选择适合当前任务的模型。</p>
+                    <h1>{tr('模型')}</h1>
+                    <p>{tr('管理模型服务与订阅账号，选择适合当前任务的模型。')}</p>
                   </div>
                 </div>
               </div>
@@ -1463,15 +1523,15 @@ export default function App() {
                 <div className="info-strip">
                   <ShieldCheck size={17} />
                   <span>
-                    API 密钥加密保存在本机。每次运行使用独立配置，切换连接不会覆盖已有会话。
+                    {tr('API 密钥加密保存在本机。每次运行使用独立配置，切换连接不会覆盖已有会话。')}
                   </span>
                 </div>
                 <div className="collection-toolbar">
                   <label className="filter-input">
                     <Search size={15} />
                     <input
-                      aria-label="搜索模型连接"
-                      placeholder="搜索名称、协议或地址"
+                      aria-label={tr('搜索模型连接')}
+                      placeholder={tr('搜索名称、协议或地址')}
                       value={providerQuery}
                       onChange={(e) => setProviderQuery(e.target.value)}
                     />
@@ -1482,11 +1542,11 @@ export default function App() {
                       onClick={() => perform(async () => setPreview(await api.importCCSwitch()))}
                     >
                       <ArrowDownToLine size={15} />
-                      导入 CC Switch
+                      {tr('导入 CC Switch')}
                     </button>
                     <button className="primary" onClick={editNewProvider}>
                       <Plus size={16} />
-                      添加连接
+                      {tr('添加连接')}
                     </button>
                   </div>{' '}
                 </div>
@@ -1521,34 +1581,35 @@ export default function App() {
                           ) : (
                             <span className="tag">
                               {p.auth === 'none'
-                                ? '无需密钥'
+                                ? tr('无需密钥')
                                 : p.hasSecret
-                                  ? '已配置密钥'
-                                  : '待配置'}
+                                  ? tr('已配置密钥')
+                                  : tr('待配置')}
                             </span>
                           )}
                           <button
                             className="icon-button"
-                            aria-label={'编辑 ' + p.name}
+                            aria-label={tr('编辑 ') + p.name}
                             onClick={() => setProviderEdit({ ...p, secret: '' })}
                           >
                             <SlidersHorizontal size={17} />
                           </button>
                         </div>
-                        <h3>{p.name}</h3>
+                        <h3>{providerLabel(p)}</h3>
                         <p>{protocolLabels[p.protocol]}</p>
                         <div className="provider-endpoint">
-                          {p.baseUrl || protocolLabels[p.protocol] + ' · 官方账号'}
+                          {p.baseUrl || protocolLabels[p.protocol] + tr(' · 官方账号')}
                         </div>
                         <div className="provider-availability">
                           <span className="muted">
-                            {providerUnavailableReason(p, accountStates[p.id]) || '可在会话中选择'}
+                            {providerUnavailableReason(p, accountStates[p.id]) ||
+                              tr('可在会话中选择')}
                           </span>
                           <label className="switch-control">
                             <input
                               type="checkbox"
                               role="switch"
-                              aria-label={'启用连接 ' + p.name}
+                              aria-label={tr('启用连接 ') + p.name}
                               checked={providerToggles[p.id] ?? p.enabled !== false}
                               disabled={
                                 p.id in providerToggles ||
@@ -1579,10 +1640,12 @@ export default function App() {
                         <div className="card-footer">
                           <span>
                             <Layers3 size={13} />
-                            {p.models.length ? `${p.models.length} 个模型` : '登录或获取模型列表'}
+                            {p.models.length
+                              ? tr('{0} 个模型', [p.models.length])
+                              : tr('登录或获取模型列表')}
                           </span>
                           <button onClick={() => setProviderEdit({ ...p, secret: '' })}>
-                            管理
+                            {tr('管理')}
                             <ArrowRight size={13} />
                           </button>
                         </div>
@@ -1594,14 +1657,15 @@ export default function App() {
                     `${p.name} ${p.protocol} ${p.baseUrl}`
                       .toLowerCase()
                       .includes(providerQuery.toLowerCase()),
-                  ) && <p className="empty-record">没有匹配的连接，试试其他关键词。</p>}
+                  ) && <p className="empty-record">{tr('没有匹配的连接，试试其他关键词。')}</p>}
                 <div className="section-note">
                   <Network size={19} />
                   <div>
-                    <strong>协议统一，能力保持透明</strong>
+                    <strong>{tr('协议统一，能力保持透明')}</strong>
                     <p>
-                      支持 Chat Completions、Responses、Anthropic 与 Gemini
-                      API。具体模型的工具调用能力需由服务支持；模型目录不代表账号已获得访问权限。
+                      {tr(
+                        '支持 Chat Completions、Responses、Anthropic 与 Gemini API。具体模型的工具调用能力需由服务支持；模型目录不代表账号已获得访问权限。',
+                      )}
                     </p>
                   </div>
                 </div>
@@ -1612,10 +1676,10 @@ export default function App() {
           {view === 'network' && (
             <main className="page settings-page">
               <div className="page-heading page-title-row">
-                <h1>网络配置</h1>
+                <h1>{tr('网络配置')}</h1>
                 <button className="settings-back-button" onClick={() => setView('settings')}>
                   <ArrowLeft size={15} />
-                  返回设置
+                  {tr('返回设置')}
                 </button>
               </div>
               <NetworkProfilesPanel api={api} />
@@ -1626,8 +1690,8 @@ export default function App() {
             <main className="page">
               <header className="page-heading">
                 <div>
-                  <h1>定时任务</h1>
-                  <p>安排重复工作，集中查看执行结果。</p>
+                  <h1>{tr('定时任务')}</h1>
+                  <p>{tr('安排重复工作，集中查看执行结果。')}</p>
                 </div>
               </header>
               <AutomationCenter
@@ -1679,23 +1743,27 @@ export default function App() {
           {view === 'activity' && (
             <main className="page">
               <div className="page-heading">
-                <h1>运行记录</h1>
-                <p>查看执行状态与用量，按会话审阅任务记忆、改动和验证依据。</p>
+                <h1>{tr('运行记录')}</h1>
+                <p>{tr('查看执行状态与用量，按会话审阅任务记忆、改动和验证依据。')}</p>
               </div>
               <div className="stats-grid">
                 {[
-                  { label: '累计运行', value: data.runs.length },
+                  { label: tr('累计运行'), value: data.runs.length },
                   {
-                    label: '进行中',
+                    label: tr('进行中'),
                     value: data.runs.filter((r) => r.status === 'running').length,
                   },
                   {
-                    label: '已报告输入 Tokens',
-                    value: data.runs.reduce((s, r) => s + r.inputTokens, 0).toLocaleString(),
+                    label: tr('已报告输入 Tokens'),
+                    value: data.runs
+                      .reduce((s, r) => s + r.inputTokens, 0)
+                      .toLocaleString(getLocale()),
                   },
                   {
-                    label: '已报告输出 Tokens',
-                    value: data.runs.reduce((s, r) => s + r.outputTokens, 0).toLocaleString(),
+                    label: tr('已报告输出 Tokens'),
+                    value: data.runs
+                      .reduce((s, r) => s + r.outputTokens, 0)
+                      .toLocaleString(getLocale()),
                   },
                 ].map((s) => (
                   <div key={s.label}>
@@ -1704,13 +1772,13 @@ export default function App() {
                   </div>
                 ))}
               </div>
-              <div className="task-tabs" role="tablist" aria-label="运行记录视图">
+              <div className="task-tabs" role="tablist" aria-label={tr('运行记录视图')}>
                 <button
                   role="tab"
                   aria-selected={activityTab === 'runs'}
                   onClick={() => setActivityTab('runs')}
                 >
-                  执行记录
+                  {tr('执行记录')}
                 </button>
                 <button
                   role="tab"
@@ -1720,7 +1788,7 @@ export default function App() {
                     setActivityTab('review');
                   }}
                 >
-                  任务与交付
+                  {tr('任务与交付')}
                 </button>
               </div>
               {activityTab === 'runs' ? (
@@ -1729,30 +1797,30 @@ export default function App() {
                     <label className="filter-input">
                       <Search size={15} />
                       <input
-                        aria-label="搜索运行记录"
-                        placeholder="搜索会话、Agent 或模型"
+                        aria-label={tr('搜索运行记录')}
+                        placeholder={tr('搜索会话、Agent 或模型')}
                         value={runQuery}
                         onChange={(e) => setRunQuery(e.target.value)}
                       />
                     </label>
                     <select
-                      aria-label="筛选运行状态"
+                      aria-label={tr('筛选运行状态')}
                       value={runFilter}
                       onChange={(e) => setRunFilter(e.target.value)}
                     >
-                      <option value="all">全部状态</option>
-                      <option value="running">运行中</option>
-                      <option value="completed">已完成</option>
-                      <option value="failed">失败</option>
-                      <option value="interrupted">已停止</option>
+                      <option value="all">{tr('全部状态')}</option>
+                      <option value="running">{tr('运行中')}</option>
+                      <option value="completed">{tr('已完成')}</option>
+                      <option value="failed">{tr('失败')}</option>
+                      <option value="interrupted">{tr('已停止')}</option>
                     </select>
                   </div>
                   <div className="runs-table">
                     <div className="table-head">
-                      <span>任务 / Agent</span>
-                      <span>模型</span>
-                      <span>状态</span>
-                      <span>时间</span>
+                      <span>{tr('任务 / Agent')}</span>
+                      <span>{tr('模型')}</span>
+                      <span>{tr('状态')}</span>
+                      <span>{tr('时间')}</span>
                       <span>Tokens</span>
                     </div>
                     {data.runs
@@ -1778,7 +1846,7 @@ export default function App() {
                         >
                           <span>
                             <strong>
-                              {data.sessions.find((s) => s.id === r.sessionId)?.title ?? '会话'}
+                              {data.sessions.find((s) => s.id === r.sessionId)?.title ?? tr('会话')}
                             </strong>
                             <small>{r.agentName}</small>
                           </span>
@@ -1787,7 +1855,7 @@ export default function App() {
                             <i className={'status-pill ' + r.status}>{statusLabel(r.status)}</i>
                           </span>
                           <span>
-                            {new Date(r.startedAt).toLocaleString('zh-CN', {
+                            {new Date(r.startedAt).toLocaleString(getLocale(), {
                               month: '2-digit',
                               day: '2-digit',
                               hour: '2-digit',
@@ -1797,7 +1865,7 @@ export default function App() {
                           <span>
                             {r.usageReported || r.inputTokens + r.outputTokens > 0
                               ? r.inputTokens + r.outputTokens
-                              : '未上报'}
+                              : tr('未上报')}
                           </span>
                         </button>
                       ))}
@@ -1811,30 +1879,31 @@ export default function App() {
                       ) && (
                         <div className="empty-state compact">
                           <Search size={24} />
-                          <p>没有符合条件的运行记录</p>
+                          <p>{tr('没有符合条件的运行记录')}</p>
                         </div>
                       )}
                     {!data.runs.length && (
                       <div className="empty-state">
                         <Activity size={32} />
-                        <h3>准备好启航</h3>
-                        <p>开始一项任务后，运行记录会出现在这里。</p>
+                        <h3>{tr('准备好启航')}</h3>
+                        <p>{tr('开始一项任务后，运行记录会出现在这里。')}</p>
                         <button className="secondary" onClick={() => setView('workspace')}>
-                          回到会话
+                          {tr('回到会话')}
                           <ArrowRight size={14} />
                         </button>
                       </div>
                     )}
                   </div>
                   <p className="footnote">
-                    用量来自上游返回；“—”表示未报告或零用量，不代表免费。协作汇总记录不重复计算子任务
-                    Token。
+                    {tr(
+                      '用量来自上游返回；“—”表示未报告或零用量，不代表免费。协作汇总记录不重复计算子任务 Token。',
+                    )}
                   </p>
                 </>
               ) : (
-                <section className="activity-review" aria-label="任务与交付审阅">
+                <section className="activity-review" aria-label={tr('任务与交付审阅')}>
                   <div className="activity-review-heading">
-                    <label htmlFor="review-session">审阅会话</label>
+                    <label htmlFor="review-session">{tr('审阅会话')}</label>
                     <select
                       id="review-session"
                       value={reviewSession}
@@ -1844,12 +1913,12 @@ export default function App() {
                       }}
                     >
                       <option value="" disabled>
-                        选择会话
+                        {tr('选择会话')}
                       </option>
                       {data.sessions.map((s) => (
                         <option key={s.id} value={s.id}>
                           {s.title}
-                          {s.archived ? ' · 已归档' : ''}
+                          {s.archived ? tr(' · 已归档') : ''}
                         </option>
                       ))}
                     </select>
@@ -1861,7 +1930,7 @@ export default function App() {
                         if (target) activateSession(target);
                       }}
                     >
-                      打开会话
+                      {tr('打开会话')}
                     </button>
                   </div>
                   {reviewSession ? (
@@ -1879,7 +1948,7 @@ export default function App() {
                       }}
                     />
                   ) : (
-                    <p className="task-empty">选择会话后查看任务与交付记录。</p>
+                    <p className="task-empty">{tr('选择会话后查看任务与交付记录。')}</p>
                   )}
                 </section>
               )}
@@ -1888,19 +1957,20 @@ export default function App() {
           {view === 'settings' && (
             <main className="page settings-page">
               <div className="page-heading">
-                <h1>设置</h1>
-                <p>同舟 · 开源多模型桌面工作台</p>
+                <h1>{tr('设置')}</h1>
+                <p>{tr('CoSail · 开源多模型桌面工作台')}</p>
               </div>
               <section className="settings-card settings-link">
                 <div className="settings-card-title">
                   <Network size={22} />
                   <div>
-                    <h3>网络配置</h3>
-                    <p>管理代理配置、网络内核和连接状态。</p>
+                    <h3>{tr('网络配置')}</h3>
+                    <p>{tr('管理代理配置、网络内核和连接状态。')}</p>
                   </div>
                 </div>
                 <button className="secondary" onClick={() => setView('network')}>
-                  管理网络配置 <ArrowRight size={14} />
+                  {tr('管理网络配置 ')}
+                  <ArrowRight size={14} />
                 </button>
               </section>
               <Appearance value={appearance} onChange={setAppearance} />
@@ -1911,8 +1981,8 @@ export default function App() {
                 <div className="settings-card-title">
                   <ShieldCheck size={23} />
                   <div>
-                    <h3>执行权限</h3>
-                    <p>全局默认，也可为每个会话单独设置。</p>
+                    <h3>{tr('执行权限')}</h3>
+                    <p>{tr('全局默认，也可为每个会话单独设置。')}</p>
                   </div>
                 </div>
                 <GlobalPermission
@@ -1926,41 +1996,43 @@ export default function App() {
                 <div className="settings-card-title">
                   <ShieldCheck size={23} />
                   <div>
-                    <h3>权限与数据</h3>
-                    <p>本地优先，模型调用直达你配置的服务。</p>
+                    <h3>{tr('权限与数据')}</h3>
+                    <p>{tr('本地优先，模型调用直达你配置的服务。')}</p>
                   </div>
                 </div>
                 <div className="settings-row">
-                  <span>会话与运行记录</span>
-                  <strong>本地 SQLite 数据库</strong>
+                  <span>{tr('会话与运行记录')}</span>
+                  <strong>{tr('本地 SQLite 数据库')}</strong>
                 </div>
                 <div className="settings-row">
-                  <span>API 密钥</span>
-                  <strong>操作系统加密存储</strong>
+                  <span>{tr('API 密钥')}</span>
+                  <strong>{tr('操作系统加密存储')}</strong>
                 </div>
                 <div className="settings-row">
-                  <span>业务工具</span>
-                  <strong>统一权限与文件范围检查</strong>
+                  <span>{tr('业务工具')}</span>
+                  <strong>{tr('统一权限与文件范围检查')}</strong>
                 </div>
                 <div className="settings-row">
-                  <span>统一执行核心</span>
-                  <strong>Codex 原生沙箱与审批</strong>
+                  <span>{tr('统一执行核心')}</span>
+                  <strong>{tr('Codex 原生沙箱与审批')}</strong>
                 </div>
                 <p className="footnote">
-                  同舟终端工具遵循会话权限，以当前系统用户权限运行；它不提供操作系统级沙箱。项目内容会发送给所选模型服务。同舟不提供云同步或自动更新；账号登录客户端的遥测以各自实现为准。
+                  {tr(
+                    'CoSail终端工具遵循会话权限，以当前系统用户权限运行；它不提供操作系统级沙箱。项目内容会发送给所选模型服务。CoSail不提供云同步或自动更新；账号登录客户端的遥测以各自实现为准。',
+                  )}
                 </p>
               </section>
               <section className="settings-card about-card">
                 <Mark />
-                <h3>多模型协作，一个工作台。</h3>
-                <p>同舟 Tongzhou · Apache-2.0</p>
-                <span>同舟 · 一个工作台，多模型协作</span>
+                <h3>{tr('多模型协作，一个工作台。')}</h3>
+                <p>CoSail · Apache-2.0</p>
+                <span>{tr('同舟：Co 代表协作，Sail 代表航行 · 一个工作台，多模型协作')}</span>
               </section>
             </main>
           )}
         </div>
         {historyOpen && (
-          <Modal title="搜索消息内容" wide onClose={() => setHistoryOpen(false)}>
+          <Modal title={tr('搜索消息内容')} wide onClose={() => setHistoryOpen(false)}>
             <div className="task-panel">
               <HistorySearch
                 api={api}
@@ -1979,15 +2051,15 @@ export default function App() {
             actions={[
               {
                 id: 'new',
-                title: '开启新会话',
-                detail: '普通聊天 · 无需项目',
+                title: tr('开启新会话'),
+                detail: tr('普通聊天 · 无需项目'),
                 icon: Plus,
                 run: () => void newSession(),
               },
               {
                 id: 'project',
-                title: '打开项目',
-                detail: '选择本地项目文件夹',
+                title: tr('打开项目'),
+                detail: tr('选择本地项目文件夹'),
                 icon: FolderOpen,
                 run: () => void openProject(),
               },
@@ -1996,18 +2068,18 @@ export default function App() {
                 title: n.label,
                 detail:
                   n.id === 'providers'
-                    ? '资源与工具 · 模型服务、订阅账号和 API 连接'
+                    ? tr('资源与工具 · 模型服务、订阅账号和 API 连接')
                     : n.id === 'connections'
-                      ? '资源与工具 · 机器人和消息通知'
-                      : '功能页面',
+                      ? tr('资源与工具 · 机器人和消息通知')
+                      : tr('功能页面'),
                 icon: n.icon,
                 run: () => setView(n.id),
               })),
 
               {
                 id: 'settings',
-                title: '设置',
-                detail: '权限与本地数据',
+                title: tr('设置'),
+                detail: tr('权限与本地数据'),
                 icon: Settings2,
                 run: () => setView('settings'),
               },
@@ -2016,7 +2088,7 @@ export default function App() {
                 .map((s) => ({
                   id: s.id,
                   title: s.title,
-                  detail: data.projects.find((p) => p.id === s.projectId)?.name ?? '普通会话',
+                  detail: data.projects.find((p) => p.id === s.projectId)?.name ?? tr('普通会话'),
                   icon: s.projectId ? Folder : MessageSquare,
                   run: () => activateSession(s),
                 })),
@@ -2026,15 +2098,21 @@ export default function App() {
         {notice && (
           <div className="toast" role="status">
             <span>{notice}</span>
-            <button aria-label="关闭提示" onClick={() => setNotice('')}>
+            <button aria-label={tr('关闭提示')} onClick={() => setNotice('')}>
               <X size={15} />
             </button>
           </div>
         )}
         {authPanel && (
           <Modal
-            title={`${authPanel === 'codex' ? 'OpenAI / ChatGPT' : authPanel === 'kimi' ? 'Kimi Code' : 'MiniMax Code'} 账号授权`}
-            subtitle="仅管理当前连接的账号；关闭窗口不会取消正在进行的授权。"
+            title={tr('{0} 账号授权', [
+              authPanel === 'codex'
+                ? 'OpenAI / ChatGPT'
+                : authPanel === 'kimi'
+                  ? 'Kimi Code'
+                  : 'MiniMax Code',
+            ])}
+            subtitle={tr('仅管理当前连接的账号；关闭窗口不会取消正在进行的授权。')}
             onClose={() => {
               setAuthPanel(null);
               setAuthProviderId(undefined);
@@ -2045,17 +2123,17 @@ export default function App() {
               {authPanel === 'codex' && (
                 <div className="info-strip">
                   <span>
-                    账号网络：
+                    {tr('账号网络：')}
                     {data.providers.find((p) => p.id === (authProviderId || 'openai-codex'))
                       ?.network?.mode === 'proxy'
-                      ? '独立代理'
+                      ? tr('独立代理')
                       : data.providers.find((p) => p.id === (authProviderId || 'openai-codex'))
                             ?.network?.mode === 'direct'
-                        ? '不使用代理'
+                        ? tr('不使用代理')
                         : data.providers.find((p) => p.id === (authProviderId || 'openai-codex'))
                               ?.network?.mode === 'managed'
-                          ? '内置网络配置'
-                          : '默认网络'}
+                          ? tr('内置网络配置')
+                          : tr('默认网络')}
                   </span>
                   <button
                     className="text-button"
@@ -2069,7 +2147,7 @@ export default function App() {
                       }
                     }}
                   >
-                    配置账号网络
+                    {tr('配置账号网络')}
                   </button>
                 </div>
               )}
@@ -2113,7 +2191,7 @@ export default function App() {
         )}
         {deleteProjectId && (
           <Modal
-            title="删除项目"
+            title={tr('删除项目')}
             onClose={() => {
               if (!busy) setDeleteProjectId('');
             }}
@@ -2121,19 +2199,23 @@ export default function App() {
           >
             <div className="modal-content confirmation-content">
               <p>
-                确认删除项目“
+                {tr('确认删除项目“')}
                 <strong>{data.projects.find((p) => p.id === deleteProjectId)?.name}</strong>”？
               </p>
               <p className="project-delete-path">
                 {data.projects.find((p) => p.id === deleteProjectId)?.path}
               </p>
               <p className="muted">
-                项目内全部会话（含归档和内部子会话）、消息、运行记录和终端日志将一并删除，无法撤销。
+                {tr(
+                  '项目内全部会话（含归档和内部子会话）、消息、运行记录和终端日志将一并删除，无法撤销。',
+                )}
               </p>
               <p>
                 {deleteProjectSessions
-                  ? `已核对：共 ${deleteProjectSessions.length} 个关联会话（含归档和子会话）。`
-                  : '正在核对项目会话…'}
+                  ? tr('已核对：共 {0} 个关联会话（含归档和子会话）。', [
+                      deleteProjectSessions.length,
+                    ])
+                  : tr('正在核对项目会话…')}
               </p>
               {!!deleteProjectSessions?.length && (
                 <label className="check-row">
@@ -2142,12 +2224,12 @@ export default function App() {
                     checked={deleteProjectAcknowledged}
                     onChange={(e) => setDeleteProjectAcknowledged(e.target.checked)}
                   />
-                  我确认删除这些会话及记录
+                  {tr('我确认删除这些会话及记录')}
                 </label>
               )}
               <p>
-                <strong>磁盘上的项目文件与 Git 工作树目录会保留。</strong>
-                关联的隔离工作目录仅从同舟移除登记。
+                <strong>{tr('磁盘上的项目文件与 Git 工作树目录会保留。')}</strong>
+                {tr('关联的隔离工作目录仅从CoSail移除登记。')}
               </p>
               {deleteProjectError && (
                 <p className="task-error" role="alert">
@@ -2157,7 +2239,7 @@ export default function App() {
             </div>
             <div className="modal-footer">
               <button className="secondary" disabled={busy} onClick={() => setDeleteProjectId('')}>
-                取消
+                {tr('取消')}
               </button>
               <button
                 className="destructive-button"
@@ -2189,36 +2271,38 @@ export default function App() {
                       }
                       setDeleteProjectId('');
                       await refresh();
-                      setNotice('项目已删除，磁盘文件已保留');
+                      setNotice(tr('项目已删除，磁盘文件已保留'));
                     } catch (e) {
                       setDeleteProjectError(errorMessage(e));
                     }
                   })
                 }
               >
-                确认删除项目
+                {tr('确认删除项目')}
               </button>
             </div>
           </Modal>
         )}
         {deleteId && (
-          <Modal title="删除会话" onClose={() => setDeleteId('')} compact>
+          <Modal title={tr('删除会话')} onClose={() => setDeleteId('')} compact>
             <div className="modal-content confirmation-content">
               <p>
-                确认删除“
-                <strong>{data.sessions.find((s) => s.id === deleteId)?.title ?? '此会话'}</strong>
+                {tr('确认删除“')}
+                <strong>
+                  {data.sessions.find((s) => s.id === deleteId)?.title ?? tr('此会话')}
+                </strong>
                 ”？
               </p>
               <p className="muted">
-                消息、运行记录和内部团队子会话将一并删除。项目文件和共享配置会保留。
+                {tr('消息、运行记录和内部团队子会话将一并删除。项目文件和共享配置会保留。')}
               </p>
               {data.runs.some((r) => r.sessionId === deleteId && r.status === 'running') && (
-                <p className="danger">请先停止任务，再删除归档会话。</p>
+                <p className="danger">{tr('请先停止任务，再删除归档会话。')}</p>
               )}
             </div>
             <div className="modal-footer">
               <button className="secondary" onClick={() => setDeleteId('')}>
-                取消
+                {tr('取消')}
               </button>
               <button
                 className="destructive-button"
@@ -2241,15 +2325,15 @@ export default function App() {
                   })
                 }
               >
-                确认删除
+                {tr('确认删除')}
               </button>
             </div>
           </Modal>
         )}
         {teamOpen && (
           <Modal
-            title="邀请伙伴，一起分析"
-            subtitle="最多选择 3 位 Agent，独立只读分析后将结论汇回当前会话。"
+            title={tr('邀请伙伴，一起分析')}
+            subtitle={tr('最多选择 3 位 Agent，独立只读分析后将结论汇回当前会话。')}
             onClose={() => setTeamOpen(false)}
           >
             <div className="modal-content team-options">
@@ -2278,12 +2362,12 @@ export default function App() {
                         {data.providers.find((p) => p.id === a.providerId)?.name || provider?.name}
                       </p>
                     </div>
-                    <span className="tag">只读</span>
+                    <span className="tag">{tr('只读')}</span>
                   </label>
                 ))}
             </div>
             <div className="modal-footer">
-              <span className="muted">每位 Agent 独立产生模型用量</span>
+              <span className="muted">{tr('每位 Agent 独立产生模型用量')}</span>
               <span className="spacer" />
               <button
                 className="primary"
@@ -2291,15 +2375,15 @@ export default function App() {
                 onClick={() => send(true)}
               >
                 <Users size={16} />
-                开始协作
+                {tr('开始协作')}
               </button>
             </div>
           </Modal>
         )}
         {preview && (
           <Modal
-            title="导入 CC Switch"
-            subtitle="原始配置保持不变，请确认需要导入的连接。"
+            title={tr('导入 CC Switch')}
+            subtitle={tr('原始配置保持不变，请确认需要导入的连接。')}
             onClose={() => setPreview(null)}
           >
             <div className="modal-content">
@@ -2310,7 +2394,7 @@ export default function App() {
                     <strong>{p.name}</strong>
                     <p>{p.baseUrl}</p>
                   </div>
-                  <span className="tag">{p.hasSecret ? '包含密钥' : '需配置密钥'}</span>
+                  <span className="tag">{p.hasSecret ? tr('包含密钥') : tr('需配置密钥')}</span>
                 </div>
               ))}
               {preview.warnings.map((w, i) => (
@@ -2330,7 +2414,7 @@ export default function App() {
                     for (const p of preview.providers) await api.saveProvider(p);
                     setPreview(null);
                     await refresh();
-                    setNotice('导入完成');
+                    setNotice(tr('导入完成'));
                   } catch (e) {
                     report(e);
                   } finally {
@@ -2338,7 +2422,9 @@ export default function App() {
                   }
                 }}
               >
-                导入 {preview.providers.length} 个连接
+                {tr('导入 ')}
+                {preview.providers.length}
+                {tr(' 个连接')}
                 <ArrowRight size={15} />
               </button>
             </div>
@@ -2377,10 +2463,13 @@ export default function App() {
               const source = data.sessions.find((s) => s.id === item.sessionId);
               if (!source) return;
               activateSession(source);
-              setSessionDraft(
-                source.id,
-                (old) =>
-                  `${old ? old + '\n\n' : ''}继续处理作品「${item.name}」（作品 ID：${item.id}）：${instruction ?? ''}`,
+              setSessionDraft(source.id, (old) =>
+                tr('{0}继续处理作品「{1}」（作品 ID：{2}）：{3}', [
+                  old ? old + '\n\n' : '',
+                  item.name,
+                  item.id,
+                  instruction ?? '',
+                ]),
               );
               setArtifactId(undefined);
               setArtifactOrganizing(false);
@@ -2404,3 +2493,5 @@ export default function App() {
     </FilePreviewContext.Provider>
   );
 }
+
+const modelStages = localized(raw_modelStages);

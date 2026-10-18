@@ -1,3 +1,4 @@
+import { t as tr } from '../../shared/i18n';
 import { useState } from 'react';
 import { Field } from '../../components/components';
 import type { ProviderInput } from '../../shared/types';
@@ -19,16 +20,20 @@ export function ModelProtocolFields({
   return (
     <details>
       <summary>
-        高级：按模型设置接口协议
-        {Object.keys(overrides).length ? ` · ${Object.keys(overrides).length} 个独立配置` : ''}
+        {tr('高级：按模型设置接口协议')}
+        {Object.keys(overrides).length
+          ? tr(' · {0} 个独立配置', [Object.keys(overrides).length])
+          : ''}
       </summary>
       <p className="muted">
-        同一网关的不同模型可以使用不同协议。按服务支持情况配置，保存后从下一轮生效；请求失败不会自动切换协议重发。
+        {tr(
+          '同一网关的不同模型可以使用不同协议。按服务支持情况配置，保存后从下一轮生效；请求失败不会自动切换协议重发。',
+        )}
       </p>
       <div className="form-grid">
-        <Field label="选择配置模型">
+        <Field label={tr('选择配置模型')}>
           <select
-            aria-label="选择配置模型"
+            aria-label={tr('选择配置模型')}
             value={selected}
             onChange={(e) => setModel(e.target.value)}
           >
@@ -39,9 +44,9 @@ export function ModelProtocolFields({
             ))}
           </select>
         </Field>
-        <Field label="此模型接口协议">
+        <Field label={tr('此模型接口协议')}>
           <select
-            aria-label="此模型接口协议"
+            aria-label={tr('此模型接口协议')}
             value={overrides[selected] ?? ''}
             onChange={(e) => {
               const next = { ...overrides };
@@ -50,7 +55,10 @@ export function ModelProtocolFields({
               onChange(Object.keys(next).length ? next : undefined);
             }}
           >
-            <option value="">继承连接 · {protocolLabels[provider.protocol]}</option>
+            <option value="">
+              {tr('继承连接 · ')}
+              {protocolLabels[provider.protocol]}
+            </option>
             {apiProtocols.map((protocol) => (
               <option key={protocol} value={protocol}>
                 {protocolLabels[protocol]}

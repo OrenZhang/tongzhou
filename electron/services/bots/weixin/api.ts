@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { appFetch, userAgent } from '../../network/request-identity';
 
 export const weixinBaseUrl = 'https://ilinkai.weixin.qq.com';
-// Wire compatibility follows Tencent/openclaw-weixin 2.4.9; application identity is Tongzhou.
+// Wire compatibility follows Tencent/openclaw-weixin 2.4.9; application identity is CoSail.
 const channelVersion = '2.4.9';
 const clientVersion = String((2 << 16) | (4 << 8) | 9);
 export function weixinApiUrl(value = weixinBaseUrl) {

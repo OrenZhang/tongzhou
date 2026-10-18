@@ -1,3 +1,4 @@
+import { t as tr } from '../../shared/i18n';
 import { WorkspaceToolbar } from '../workspace/WorkspaceToolbar';
 import { useEffect, useRef, useState } from 'react';
 import { FileText, MessageSquare, Plus, Upload } from 'lucide-react';
@@ -64,7 +65,7 @@ export function ContentWorkspace({
     const doc = await api.contentWrite({
       libraryId: library,
       folderId: folder === '*' ? null : folder || null,
-      title: '未命名文档',
+      title: tr('未命名文档'),
       content: '',
     });
     setQuery('');
@@ -75,8 +76,8 @@ export function ContentWorkspace({
       <WorkspaceToolbar className="content-toolbar">
         <button
           className="icon-button"
-          title={chat ? '收起文档对话' : '打开文档对话'}
-          aria-label="切换文档对话"
+          title={chat ? tr('收起文档对话') : tr('打开文档对话')}
+          aria-label={tr('切换文档对话')}
           aria-pressed={chat}
           aria-expanded={chat}
           aria-controls="content-document-chat"
@@ -102,11 +103,11 @@ export function ContentWorkspace({
           }
         >
           <Upload size={14} />
-          导入
+          {tr('导入')}
         </button>
         <button className="primary" disabled={busy} onClick={() => void action(createDocument)}>
           <Plus size={14} />
-          新建文档
+          {tr('新建文档')}
         </button>
       </WorkspaceToolbar>
       {error && (
@@ -117,8 +118,8 @@ export function ContentWorkspace({
       <div className={`content-layout ${chat ? 'with-chat' : ''}`}>
         <aside className="content-tree">
           <input
-            aria-label="搜索内容库"
-            placeholder="搜索标题或正文"
+            aria-label={tr('搜索内容库')}
+            placeholder={tr('搜索标题或正文')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -157,25 +158,25 @@ export function ContentWorkspace({
         ) : (
           <div className="content-empty">
             <FileText size={32} />
-            <h2>内容由你定义</h2>
-            <p>管理资料、编辑文档，或让 AI 围绕选中的内容协作。</p>
+            <h2>{tr('内容由你定义')}</h2>
+            <p>{tr('管理资料、编辑文档，或让 AI 围绕选中的内容协作。')}</p>
           </div>
         )}
         {!documentId && chat && (
-          <aside id="content-document-chat" className="content-chat" aria-label="文档对话">
+          <aside id="content-document-chat" className="content-chat" aria-label={tr('文档对话')}>
             <header>
-              <strong>文档对话</strong>
-              <small>尚未选择文档</small>
+              <strong>{tr('文档对话')}</strong>
+              <small>{tr('尚未选择文档')}</small>
             </header>
             <div className="content-chat-messages">
-              <p>从左侧选择一篇文档，即可围绕正文提问、润色或拆分内容。</p>
-              <p className="muted">还没有文档？可以新建文档，或从顶部导入资料。</p>
+              <p>{tr('从左侧选择一篇文档，即可围绕正文提问、润色或拆分内容。')}</p>
+              <p className="muted">{tr('还没有文档？可以新建文档，或从顶部导入资料。')}</p>
               <button
                 className="secondary"
                 disabled={busy}
                 onClick={() => void action(createDocument)}
               >
-                新建文档并打开对话
+                {tr('新建文档并打开对话')}
               </button>
             </div>
           </aside>

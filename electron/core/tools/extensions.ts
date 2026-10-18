@@ -3,6 +3,7 @@ import {
   type SubscriptionPluginConnection,
 } from '../../modules/plugins/subscription-plugin';
 import { clientIdentity } from '../../services/network/request-identity';
+import { minimaxImageArtifacts } from '../../modules/plugins/minimax-plan';
 import { pluginStartupTimeout } from '../../../src/shared/vendor-plugins';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
@@ -281,6 +282,26 @@ export class PluginConnection {
             name,
           ),
       );
+      // The API-key MCP may return generated image URLs as JSON text instead of MCP resources.
+      if (
+        this.config.id === 'minimax-multimedia' &&
+        name === 'text_to_image' &&
+        generated &&
+        !result.isError &&
+        !result.artifacts?.length
+      ) {
+        try {
+          const data = JSON.parse(
+            result.text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''),
+          );
+          if ((data.base_resp?.status_code ?? data.code ?? 0) === 0) {
+            const artifacts = minimaxImageArtifacts(data);
+            if (artifacts.length) result.artifacts = artifacts;
+          }
+        } catch {
+          /* Keep original MCP text when the service does not use a recognized JSON result. */
+        }
+      }
       if (this.oauth) this.secretValues.push(...this.oauth.sensitiveValues());
       return { ...result, text: redact(result.text, this.secretValues) };
     } catch (e) {

@@ -29,14 +29,14 @@ try {
   assert.ok(application.path.endsWith('.app'));
   assert.ok((await stat(application.path)).isDirectory());
   assert.ok(application.icon.startsWith('data:image/png;base64,'));
-  assert.equal(application.name, '同舟.app');
+  assert.equal(application.name, 'CoSail.app');
   const systemName = await app.evaluate(({ app }) => ({
     name: app.getName(),
     executable: app.getPath('exe'),
   }));
-  assert.equal(systemName.name, '同舟');
+  assert.equal(systemName.name, 'CoSail');
   assert.equal(systemName.executable, executablePath);
-  checks.push('Development runtime is 同舟.app with the branded bundle identity and icon');
+  checks.push('Development runtime is CoSail.app with the branded bundle identity and icon');
   await app.evaluate(({ app, BrowserWindow, ipcMain, shell }) => {
     globalThis.permissionStatus = {
       supported: true,
@@ -74,7 +74,7 @@ try {
   await firstPanel.locator('#application').waitFor();
   assert.equal(await firstPanel.evaluate(() => typeof window.tongzhou), 'undefined');
   const options = await app.evaluate(({ BrowserWindow }) => {
-    const panel = BrowserWindow.getAllWindows().find((w) => w.getTitle() === '同舟授权助手');
+    const panel = BrowserWindow.getAllWindows().find((w) => w.getTitle() === 'CoSail授权助手');
     return {
       focusable: panel.isFocusable(),
       focused: panel.isFocused(),
@@ -91,12 +91,12 @@ try {
   assert.equal(
     await app.evaluate(
       ({ BrowserWindow }) =>
-        BrowserWindow.getAllWindows().filter((w) => w.getTitle() === '同舟授权助手').length,
+        BrowserWindow.getAllWindows().filter((w) => w.getTitle() === 'CoSail授权助手').length,
     ),
     1,
   );
   await app.evaluate(({ BrowserWindow, ipcMain }) => {
-    const main = BrowserWindow.getAllWindows().find((w) => w.getTitle() !== '同舟授权助手');
+    const main = BrowserWindow.getAllWindows().find((w) => w.getTitle() !== 'CoSail授权助手');
     ipcMain.emit('tongzhou:permission-panel-drag', {
       sender: main.webContents,
       senderFrame: main.webContents.mainFrame,
@@ -155,14 +155,14 @@ try {
     'Opening the panel must preserve the target window focus',
   );
   await app.evaluate(({ BrowserWindow }) => {
-    const main = BrowserWindow.getAllWindows().find((w) => w.getTitle() === '同舟 Tongzhou');
+    const main = BrowserWindow.getAllWindows().find((w) => w.getTitle() === 'CoSail');
     main.focus();
   });
   await page.waitForTimeout(100);
   assert.equal(
     await app.evaluate(
       ({ BrowserWindow }) =>
-        BrowserWindow.getAllWindows().filter((w) => w.getTitle() === '同舟授权助手').length,
+        BrowserWindow.getAllWindows().filter((w) => w.getTitle() === 'CoSail授权助手').length,
     ),
     0,
   );

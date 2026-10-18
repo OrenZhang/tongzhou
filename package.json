@@ -1,11 +1,11 @@
 {
-  "name": "tongzhou",
+  "name": "cosail",
   "version": "1.0.3",
-  "description": "同舟 — 多模型协作，一个工作台。An open-source, local-first agent workspace.",
+  "description": "CoSail（同舟）— 多模型协作，一个工作台。An open-source, local-first agent workspace.",
   "private": true,
   "type": "module",
   "main": "dist-electron/main.cjs",
-  "author": "Tongzhou contributors",
+  "author": "CoSail contributors",
   "license": "Apache-2.0",
   "engines": {
     "node": ">=22.19.0"
@@ -41,6 +41,8 @@
     "test:workspace-layout": "node scripts/testing/workspace-layout-smoke.mjs",
     "test:markdown": "node scripts/testing/markdown-smoke.mjs",
     "test:appearance": "node scripts/testing/appearance-smoke.mjs",
+    "test:language": "node scripts/testing/language-smoke.mjs",
+    "check:i18n": "node scripts/check-i18n.mjs",
     "test:attachments": "node scripts/testing/attachments-smoke.mjs",
     "test:project-context": "node scripts/testing/project-context-smoke.mjs",
     "test:auth": "node scripts/testing/account-ui-smoke.mjs",
@@ -125,7 +127,7 @@
       }
     ],
     "appId": "org.tongzhou.desktop",
-    "productName": "Tongzhou",
+    "productName": "CoSail",
     "directories": {
       "output": "release"
     },
@@ -167,8 +169,8 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "shortcutName": "同舟",
-      "uninstallDisplayName": "同舟 ${version}",
+      "shortcutName": "CoSail",
+      "uninstallDisplayName": "CoSail ${version}",
       "createDesktopShortcut": true
     },
     "mac": {
@@ -179,8 +181,8 @@
       ],
       "category": "public.app-category.developer-tools",
       "extendInfo": {
-        "CFBundleDisplayName": "同舟",
-        "NSAppleEventsUsageDescription": "同舟需要在你批准后聚焦指定窗口并完成电脑操作。"
+        "CFBundleDisplayName": "CoSail",
+        "NSAppleEventsUsageDescription": "CoSail需要在你批准后聚焦指定窗口并完成电脑操作。"
       }
     },
     "linux": {
@@ -188,7 +190,7 @@
         "AppImage",
         "deb"
       ],
-      "maintainer": "Tongzhou contributors <84196323+OrenZhang@users.noreply.github.com>",
+      "maintainer": "CoSail contributors <84196323+OrenZhang@users.noreply.github.com>",
       "category": "Development"
     },
     "npmRebuild": false

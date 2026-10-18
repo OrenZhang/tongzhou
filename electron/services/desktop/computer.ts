@@ -193,7 +193,7 @@ export class DesktopComputer implements ComputerAdapter {
         const message = error instanceof Error ? error.message : String(error);
         if (message.includes('Could not focus'))
           throw new Error(
-            '无法聚焦目标窗口。请将同舟置于前台批准操作，或先点击目标窗口使其获得键盘焦点后重试。未发送输入。',
+            '无法聚焦目标窗口。请将CoSail置于前台批准操作，或先点击目标窗口使其获得键盘焦点后重试。未发送输入。',
           );
         if (message.includes('focus was lost'))
           throw new Error(
@@ -239,7 +239,7 @@ export class DesktopComputer implements ComputerAdapter {
     if (!output.startsWith('exit code: 0\n')) {
       if (output.includes('Could not focus'))
         throw new Error(
-          '无法聚焦目标窗口。请将同舟置于前台批准操作，或手动激活目标窗口后重试。未发送输入。',
+          '无法聚焦目标窗口。请将CoSail置于前台批准操作，或手动激活目标窗口后重试。未发送输入。',
         );
       if (output.includes('Windows blocked input'))
         throw new Error('系统拒绝向此窗口输入。不支持管理员或受保护窗口。');
@@ -262,7 +262,7 @@ export class DesktopComputer implements ComputerAdapter {
       if (name === 'computer_screenshot') {
         const { windowId } = z.object({ windowId: z.string().max(80) }).parse(args);
         if (this.status().screen === 'denied')
-          throw new Error('请在 macOS 系统设置授予同舟屏幕录制权限后重启');
+          throw new Error('请在 macOS 系统设置授予CoSail屏幕录制权限后重启');
         const windows: WindowInfo[] = await this.helper({ action: 'windows' }, signal);
         const window = observedWindow(windows, windowId);
         let source: Awaited<ReturnType<typeof desktopCapturer.getSources>>[number] | undefined;
@@ -372,7 +372,7 @@ export class DesktopComputer implements ComputerAdapter {
         throw new Error(
           '截图已用于上次操作或已过期，请重新截图观察窗口；每张截图只能执行一次动作。',
         );
-      if (!this.status().accessibility) throw new Error('请先为同舟授予 macOS 辅助功能权限');
+      if (!this.status().accessibility) throw new Error('请先为CoSail授予 macOS 辅助功能权限');
       const current: WindowInfo[] = await this.helper({ action: 'windows' }, signal);
       const window = current.find((w) => w.id === frame.window.id && w.pid === frame.window.pid);
       if (window?.enabled === false)

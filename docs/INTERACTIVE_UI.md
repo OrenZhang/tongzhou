@@ -22,4 +22,4 @@ HTML 运行于仅 `allow-scripts` 的不透明来源 iframe。主界面保持原
 - `node scripts/testing/interactive-ui-smoke.mjs`：独立隐藏窗口验证交互、尺寸、隔离和导航限制，不依赖客户端其余页面。
 - `npm run build` 后执行 `npm run test:markdown`：真实客户端验证 8 类 Mermaid、数学公式、代码、流式消息、HTML 鼠标交互与隔离回归。
 
-设计参考：[ChatGPT 与 Codex 更新记录](https://learn.chatgpt.com/docs/changelog)、[官方 UI quickstart](https://developers.openai.com/plugins/build/app-quickstart)。本实现提供同舟自己的会话预览格式，不假设 Codex 开源执行核心自动提供桌面渲染能力。
+设计参考：[ChatGPT 与 Codex 更新记录](https://learn.chatgpt.com/docs/changelog)、[官方 UI quickstart](https://developers.openai.com/plugins/build/app-quickstart)。本实现提供CoSail自己的会话预览格式，不假设 Codex 开源执行核心自动提供桌面渲染能力。

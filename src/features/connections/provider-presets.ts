@@ -1,4 +1,5 @@
-export const protocolLabels: Record<string, string> = {
+import { localize as localized } from '../../shared/i18n';
+export const protocolLabels: Record<string, string> = localized({
   'openai-chat': 'OpenAI Chat Completions',
   'openai-responses': 'OpenAI Responses',
   anthropic: 'Anthropic Messages',
@@ -6,8 +7,8 @@ export const protocolLabels: Record<string, string> = {
   codex: 'Codex · ChatGPT',
   kimi: 'Kimi Code · 账号授权',
   minimax: 'MiniMax Code · 账号授权',
-};
-export const presets = [
+});
+export const presets = localized([
   {
     name: 'OpenCode Go 订阅',
     protocol: 'openai-chat',
@@ -99,4 +100,4 @@ export const presets = [
     auth: 'none',
     models: [],
   },
-] as const;
+] as const);

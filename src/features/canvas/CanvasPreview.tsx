@@ -1,3 +1,4 @@
+import { t as tr } from '../../shared/i18n';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -96,15 +97,19 @@ export function CanvasPreview({
     return () => document.removeEventListener('keydown', handle, true);
   }, [media, index]);
   return createPortal(
-    <Modal title="画布媒体预览" onClose={onClose} wide>
+    <Modal title={tr('画布媒体预览')} onClose={onClose} wide>
       {loading ? (
-        <p role="status">正在读取原件…</p>
+        <p role="status">{tr('正在读取原件…')}</p>
       ) : !current ? (
-        <p>没有可预览的媒体，原件可能已移除。</p>
+        <p>{tr('没有可预览的媒体，原件可能已移除。')}</p>
       ) : (
         <>
           <div className="canvas-preview-controls">
-            <button aria-label="上一张" disabled={index === 0} onClick={() => choose(index - 1)}>
+            <button
+              aria-label={tr('上一张')}
+              disabled={index === 0}
+              onClick={() => choose(index - 1)}
+            >
               <ChevronLeft size={16} />
             </button>
             <span>
@@ -114,7 +119,7 @@ export function CanvasPreview({
               </small>
             </span>
             <button
-              aria-label="下一张"
+              aria-label={tr('下一张')}
               disabled={index === media.length - 1}
               onClick={() => choose(index + 1)}
             >
@@ -144,11 +149,11 @@ export function CanvasPreview({
             />
           )}
           {media.length > 1 && (
-            <div className="canvas-preview-strip" aria-label="预览图片列表">
+            <div className="canvas-preview-strip" aria-label={tr('预览图片列表')}>
               {media.map((item, i) => (
                 <button
                   key={resourceKey(item.resource)}
-                  aria-label={`预览第 ${i + 1} 张：${item.title}`}
+                  aria-label={tr('预览第 {0} 张：{1}', [i + 1, item.title])}
                   aria-pressed={i === index}
                   onClick={() => choose(i)}
                 >
@@ -156,7 +161,7 @@ export function CanvasPreview({
                     <img src={item.preview.content} alt="" />
                   ) : (
                     <span>
-                      {item.preview.type === 'audio' ? '音频' : '视频'} {i + 1}
+                      {item.preview.type === 'audio' ? tr('音频') : tr('视频')} {i + 1}
                     </span>
                   )}
                 </button>

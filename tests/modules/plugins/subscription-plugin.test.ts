@@ -11,6 +11,7 @@ import {
   subscriptionPluginCredential,
 } from '../../../electron/modules/plugins/subscription-plugin';
 import { callMiniMaxPlan, minimaxPlanTools } from '../../../electron/modules/plugins/minimax-plan';
+import { normalizeOutput, PluginConnection } from '../../../electron/core/tools/extensions';
 import { pluginSecret } from '../../../electron/modules/plugins/code-hosting';
 import { setServiceTransport } from '../../../electron/services/network/service-network';
 import type { Provider, PluginConfig } from '../../../src/shared/types';
@@ -58,6 +59,68 @@ afterEach(async () => {
 });
 
 describe('subscription plugin authentication', () => {
+  it('also captures image URLs returned as JSON text by the API-key MCP', async () => {
+    const connection = new PluginConnection(
+      { ...plugin('minimax-multimedia'), accountProviderId: undefined },
+      '',
+    );
+    vi.spyOn(connection.client, 'callTool').mockResolvedValue({
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({ data: { image_urls: ['https://cdn.example.test/cat.png'] } }),
+        },
+      ],
+    });
+    const result = await connection.call('text_to_image', { prompt: 'cat' }, signal, true);
+    expect(result.artifacts?.[0]).toMatchObject({
+      name: 'MiniMax-image-1.png',
+      url: 'https://cdn.example.test/cat.png',
+    });
+    const observation = await connection.call('understand_image', {}, signal, false);
+    expect(observation.artifacts).toBeUndefined();
+  });
+  it('publishes MiniMax generated images as artifact outputs, excluding echoed references', async () => {
+    const fetcher = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          code: 0,
+          data: {
+            image_urls: [
+              'https://cdn.example.test/cat.webp',
+              'https://cdn.example.test/cat.webp',
+              'file:///private.png',
+            ],
+            images: [{ image_url: 'https://cdn.example.test/second?sign=1' }],
+            input_urls: ['https://cdn.example.test/reference.png'],
+          },
+        }),
+      ),
+    );
+    const result = await callMiniMaxPlan(
+      'minimax-multimedia',
+      'text_to_image',
+      { prompt: 'a cat' },
+      'https://agent.minimax.cn',
+      'plan-token',
+      signal,
+      fetcher,
+    );
+    const output = normalizeOutput(result, true);
+    expect(output.artifacts).toEqual([
+      {
+        name: 'MiniMax-image-1.webp',
+        mimeType: 'image/webp',
+        url: 'https://cdn.example.test/cat.webp',
+      },
+      {
+        name: 'MiniMax-image-2.png',
+        mimeType: 'image/png',
+        url: 'https://cdn.example.test/second?sign=1',
+      },
+    ]);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
   it('refreshes expired Kimi credentials without needing any model alias or copying a key', async () => {
     const f = await fixture();
     await f.put('config.toml', kimiConfig());

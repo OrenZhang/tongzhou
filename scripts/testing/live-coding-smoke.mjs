@@ -5,10 +5,10 @@ import { promisify } from 'node:util';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import assert from 'node:assert/strict';
-// The source is an explicitly selected Tongzhou profile. Credentials never leave ignored local test directories.
+// The source is an explicitly selected CoSail profile. Credentials never leave ignored local test directories.
 if (process.env.TONGZHOU_LIVE_CODING !== '1' || !process.env.TONGZHOU_NATIVE_SOURCE)
   throw new Error(
-    'Set TONGZHOU_LIVE_CODING=1 and TONGZHOU_NATIVE_SOURCE to an authorized Tongzhou profile',
+    'Set TONGZHOU_LIVE_CODING=1 and TONGZHOU_NATIVE_SOURCE to an authorized CoSail profile',
   );
 const engine = process.env.TONGZHOU_TEST_ENGINE ?? 'kimi';
 if (!['kimi', 'minimax'].includes(engine)) throw new Error('Unsupported test engine');
@@ -340,7 +340,7 @@ try {
           await git('add', '.');
           await git(
             '-c',
-            'user.name=Tongzhou test',
+            'user.name=CoSail test',
             '-c',
             'user.email=fixture@example.invalid',
             '-c',

@@ -29,12 +29,7 @@ export const capabilitiesPlugin: Plugin.Object<void> = {
     );
     register(
       'installBuiltinPlugin',
-      operation(
-        '插件',
-        'change',
-        '启用内置网页读取和系统环境两个插件；单独启停请使用 savePlugin',
-        [],
-      ),
+      operation('插件', 'change', '启用内置网页搜索与读取插件；单独启停请使用 savePlugin', []),
       () => {
         for (const definition of builtinPlugins)
           store.put('plugin', {

@@ -1,10 +1,11 @@
+import { localize as localized } from './i18n';
 import type { AgentProfile, PermissionMode, Session } from './types';
 
-export const permissionLabels: Record<PermissionMode, string> = {
+export const permissionLabels: Record<PermissionMode, string> = localized({
   'read-only': '只读',
   ask: '按需审批',
   'full-access': '完全开放',
-};
+});
 
 export function effectivePermission(
   session: Pick<Session, 'permission'> | undefined,

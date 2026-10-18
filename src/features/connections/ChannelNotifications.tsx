@@ -1,3 +1,4 @@
+import { t as tr } from '../../shared/i18n';
 import { useState } from 'react';
 import { errorMessage } from '../../lib/feedback';
 import type { NotificationTarget, Snapshot, TongzhouAPI } from '../../shared/types';
@@ -27,17 +28,17 @@ export function ChannelNotifications({
     <div className="channel-notifications">
       {!target ? (
         <p className="muted">
-          还没有可用接收人。
+          {tr('还没有可用接收人。')}
           <button className="text-button" onClick={manage}>
-            配置接收人
+            {tr('配置接收人')}
           </button>
         </p>
       ) : (
         <>
           <label>
-            接收人
+            {tr('接收人')}
             <select
-              aria-label="渠道接收人"
+              aria-label={tr('渠道接收人')}
               value={target.id}
               onChange={(e) => setTargetId(e.target.value)}
             >
@@ -50,7 +51,7 @@ export function ChannelNotifications({
           </label>
           {!target.available && (
             <p role="status" className="info-strip">
-              {target.reason ?? '当前接收人不可用'}
+              {target.reason ?? tr('当前接收人不可用')}
             </p>
           )}
           <div className="row channel-inline-actions">
@@ -60,10 +61,10 @@ export function ChannelNotifications({
               aria-expanded={composing}
               onClick={() => setComposing(!composing)}
             >
-              发送消息 / 测试
+              {tr('发送消息 / 测试')}
             </button>
             <button className="text-button" aria-expanded={rules} onClick={() => setRules(!rules)}>
-              通知规则
+              {tr('通知规则')}
             </button>
           </div>
           {composing && (
@@ -76,23 +77,26 @@ export function ChannelNotifications({
                 setNotice('');
                 try {
                   const result = await api.sendChannel(target.id, text.trim());
-                  if (result.status !== 'sent') throw new Error(result.error ?? '平台未确认发送');
+                  if (result.status !== 'sent')
+                    throw new Error(result.error ?? tr('平台未确认发送'));
                   setText('');
-                  setNotice('平台已确认发送');
+                  setNotice(tr('平台已确认发送'));
                 } catch (error) {
                   setNotice(errorMessage(error));
                 } finally {
                   try {
                     await refresh();
                   } catch (error) {
-                    setNotice((previous) => `${previous}；记录刷新失败：${errorMessage(error)}`);
+                    setNotice((previous) =>
+                      tr('{0}；记录刷新失败：{1}', [previous, errorMessage(error)]),
+                    );
                   }
                   setBusy(false);
                 }
               }}
             >
               <label>
-                消息内容
+                {tr('消息内容')}
                 <textarea
                   required
                   maxLength={4000}
@@ -102,7 +106,7 @@ export function ChannelNotifications({
                 />
               </label>
               <button className="primary" disabled={busy || !target.available || !text.trim()}>
-                {busy ? '发送中…' : '发送此消息'}
+                {busy ? tr('发送中…') : tr('发送此消息')}
               </button>
             </form>
           )}

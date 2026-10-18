@@ -18,4 +18,4 @@
 
 参考：[Electron 独立 Session 与代理配置](https://www.electronjs.org/docs/latest/api/session)、[Codex shell 环境配置](https://learn.chatgpt.com/docs/config-file/config-reference)。
 
-内置网络配置现已单独实现：支持由同舟管理内核、导入节点并绑定账号，见 [内置网络配置](MANAGED_NETWORK.md)。原有独立代理地址功能仍可继续使用。
+内置网络配置现已单独实现：支持由CoSail管理内核、导入节点并绑定账号，见 [内置网络配置](MANAGED_NETWORK.md)。原有独立代理地址功能仍可继续使用。

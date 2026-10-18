@@ -95,7 +95,7 @@ try {
     assert.ok(!JSON.stringify(snapshot).includes('fixture-qr-secret'));
     const requests = await app.evaluate(() => globalThis.dingtalkSmoke.requests);
     assert.ok(requests.some((r) => r.url.endsWith('/init') && r.body.source === 'DING_DWS_CLAW'));
-    assert.ok(requests.every((r) => r.agent.startsWith('Tongzhou/')));
+    assert.ok(requests.every((r) => r.agent.startsWith('CoSail/')));
     const database = new DatabaseSync(path.join(root, 'profile/tongzhou.db'), { readOnly: true });
     try {
       const saved = database.prepare('SELECT value FROM secrets WHERE id = ?').get('bot_' + bot.id);
@@ -138,7 +138,7 @@ try {
               'authorization',
               'encrypted persistence',
               'secret-free snapshot',
-              'Tongzhou identity',
+              'CoSail identity',
               'cancellation',
             ],
       },

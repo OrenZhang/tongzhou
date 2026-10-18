@@ -23,10 +23,12 @@ import { artifactDateRange, artifactDay } from '../../../src/shared/artifacts';
 import { Knowledge } from '../../../electron/modules/knowledge/knowledge';
 import { ContentWorkspace } from '../../../electron/modules/content/content';
 import { registerArtifactServices } from '../../../electron/modules/artifacts/artifact-services';
+import { setServiceTransport } from '../../../electron/services/network/service-network';
 vi.mock('electron', () => ({ dialog: {}, shell: {} }));
 
 const cleanup: (() => void | Promise<void>)[] = [];
 afterEach(async () => {
+  setServiceTransport();
   for (const fn of cleanup.splice(0).reverse()) await fn();
 });
 const png =
@@ -58,6 +60,67 @@ function fixture() {
   return { root, store, session, run, artifacts, origin, workspace, scope };
 }
 describe('generated artifacts', () => {
+  it('downloads generated image links once and preserves the artifact ID on repeat delivery', async () => {
+    const f = fixture();
+    const fetcher = vi
+      .fn()
+      .mockImplementation(
+        async () =>
+          new Response(Buffer.from(png, 'base64'), { headers: { 'content-type': 'image/png' } }),
+      );
+    setServiceTransport(fetcher);
+    const input = { name: 'cat.png', url: 'https://cdn.example.test/cat.png?signature=test' };
+    const first = await f.artifacts.collect([input], f.origin);
+    expect(first.errors).toEqual([]);
+    expect(first.items[0].remoteUrl).toBeUndefined();
+    expect(first.items[0].sourceUrl).toBe(input.url);
+    expect(f.artifacts.preview(first.items[0].id).content).toBe('data:image/png;base64,' + png);
+    const second = await f.artifacts.collect([input], f.origin);
+    expect(second.items[0].id).toBe(first.items[0].id);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher.mock.calls[0][1]).toMatchObject({ credentials: 'omit', redirect: 'error' });
+  });
+  it('keeps failed downloads visible and retries the existing URL without regenerating', async () => {
+    const f = fixture();
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('expired', { status: 403 }))
+      .mockImplementation(async () => new Response(Buffer.from(png, 'base64')));
+    setServiceTransport(fetcher);
+    const output = await f
+      .scope()
+      .s.call('artifact_create', { name: 'cat.png', url: 'https://cdn.example.test/cat.png' });
+    expect(output.isError).toBeFalsy();
+    expect(output.text).toContain('无需重新生成');
+    const id = output.artifactIds![0];
+    expect(f.artifacts.preview(id).type).toBe('external');
+    const [a, b] = await Promise.all([
+      f.artifacts.download(id, new AbortController().signal),
+      f.artifacts.download(id, new AbortController().signal),
+    ]);
+    expect(a.id).toBe(id);
+    expect(b.id).toBe(id);
+    expect(f.artifacts.preview(id).type).toBe('image');
+    expect(f.artifacts.list().total).toBe(1);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+  it('does not cache an HTML error page as an image', async () => {
+    const f = fixture();
+    setServiceTransport(
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response('<html>login</html>', { headers: { 'content-type': 'text/html' } }),
+        ),
+    );
+    const saved = await f.artifacts.collect(
+      [{ name: 'cat.png', url: 'https://cdn.example.test/cat.png' }],
+      f.origin,
+    );
+    expect(saved.items).toHaveLength(1);
+    expect(saved.errors).toHaveLength(1);
+    expect(f.artifacts.preview(saved.items[0].id).type).toBe('external');
+  });
   it('filters exact local calendar-day boundaries without dropping other dates', async () => {
     const f = fixture(),
       one = await f.artifacts.save({ name: 'first.md', text: 'one' }, f.origin),

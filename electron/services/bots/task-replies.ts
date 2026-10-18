@@ -96,7 +96,7 @@ export class BotTaskReplies {
     }
     const text =
       event === 'approval'
-        ? '此任务需要批准，请回到同舟处理。'
+        ? '此任务需要批准，请回到CoSail处理。'
         : event === 'completed'
           ? this.store
               .messages(run.sessionId)
@@ -105,10 +105,10 @@ export class BotTaskReplies {
               )
               .map((m) => m.content)
               .filter(Boolean)
-              .join('\n\n') || '任务已完成，请在同舟查看结果。'
+              .join('\n\n') || '任务已完成，请在CoSail查看结果。'
           : event === 'interrupted'
             ? '任务已停止。'
-            : '任务执行失败，请在同舟查看详情。';
+            : '任务执行失败，请在CoSail查看详情。';
     try {
       const prefix =
         rootId !== run.id
@@ -122,7 +122,7 @@ export class BotTaskReplies {
           ...current,
           hasSecret: undefined,
           status: 'error',
-          error: '任务结果未能发送到机器人聊天，请在同舟查看',
+          error: '任务结果未能发送到机器人聊天，请在CoSail查看',
         });
         this.changed();
       }

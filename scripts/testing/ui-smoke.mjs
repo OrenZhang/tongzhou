@@ -25,7 +25,7 @@ const store = new Store(path.join(root, 'profile/tongzhou.db'), {
 });
 store.put('project', {
   id: 'ui-project',
-  name: '同舟示例项目',
+  name: 'CoSail示例项目',
   path: projectPath,
   createdAt: Date.now(),
 });
@@ -123,7 +123,7 @@ for (const [title, projectId, status] of [
     sessionId: session.id,
     providerId: session.providerId,
     model: session.model,
-    agentName: '同舟',
+    agentName: 'CoSail',
     status,
     startedAt: Date.now() - 30000,
     endedAt: Date.now() - 12000,
@@ -328,7 +328,7 @@ try {
     assert.ok((await page.locator('.message-footer').first().boundingBox()).y >= responseBottom);
     assert.equal(await page.locator('.feed .brand-mark, .feed .message-avatar').count(), 0);
     assert.equal(
-      await page.locator('.feed .message-meta').getByText('同舟', { exact: true }).count(),
+      await page.locator('.feed .message-meta').getByText('CoSail', { exact: true }).count(),
       0,
     );
     const chatLayout = await page.evaluate(() => {

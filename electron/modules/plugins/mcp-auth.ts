@@ -137,7 +137,7 @@ export class PluginOAuthProvider implements OAuthClientProvider {
           ? 'client_secret_post'
           : 'client_secret_basic';
     return {
-      client_name: '同舟 Tongzhou',
+      client_name: 'CoSail',
       client_uri: 'https://github.com/OrenZhang/tongzhou',
       redirect_uris: [mcpRedirect],
       grant_types: ['authorization_code', 'refresh_token'],
@@ -468,7 +468,7 @@ export class McpAuth {
           throw new Error('not authorized');
         provider.invalidateCredentials('verifier');
         this.status(id, 'authorized');
-        res.end('同舟：插件授权已保存，可以关闭此页面。');
+        res.end('CoSail：插件授权已保存，可以关闭此页面。');
       } catch (e) {
         const message = u.searchParams.has('error')
           ? '你已取消或拒绝授权，可以重新发起。'
@@ -531,7 +531,7 @@ export class McpAuth {
       clientId = githubClientId();
     if (!clientId) {
       const message =
-        '此版本尚未配置同舟的 GitHub 登录应用，请更新至支持登录的版本，或使用 Token 配置。';
+        '此版本尚未配置CoSail的 GitHub 登录应用，请更新至支持登录的版本，或使用 Token 配置。';
       this.status(id, 'error', message);
       throw new Error(message);
     }

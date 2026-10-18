@@ -1,3 +1,5 @@
+import { pluginLabel } from '../../shared/plugin-label';
+import { t as tr } from '../../shared/i18n';
 import { useEffect, useState, useRef } from 'react';
 import type { CanvasNode, CanvasNodePluginDefinition } from '../../shared/canvas';
 import type { Snapshot } from '../../shared/types';
@@ -24,7 +26,7 @@ function JsonField({
     <>
       <textarea
         ref={field}
-        aria-label="JSON 参数"
+        aria-label={tr('JSON 参数')}
         rows={3}
         value={text}
         onChange={(e) => setText(e.target.value)}
@@ -34,8 +36,8 @@ function JsonField({
             field.current?.setCustomValidity('');
             setError('');
           } catch {
-            field.current?.setCustomValidity('请输入有效的 JSON');
-            setError('请输入有效的 JSON');
+            field.current?.setCustomValidity(tr('请输入有效的 JSON'));
+            setError(tr('请输入有效的 JSON'));
           }
         }}
       />
@@ -64,7 +66,7 @@ export function CanvasConfigFields({
     <>
       {Object.entries(schema.properties ?? {}).map(([key, field]: [string, any]) => (
         <label key={key}>
-          {field.title ?? key}
+          {tr(field.title ?? key)}
           {schema.required?.includes(key) ? ' *' : ''}
           {field.enum ? (
             <select
@@ -76,7 +78,7 @@ export function CanvasConfigFields({
                 )
               }
             >
-              <option value="">默认</option>
+              <option value="">{tr('默认')}</option>
               {field.enum.map((v: unknown) => (
                 <option key={String(v)} value={String(v)}>
                   {String(v)}
@@ -114,7 +116,7 @@ export function CanvasConfigFields({
               }
             />
           )}
-          {field.description && <small>{field.description}</small>}
+          {field.description && <small>{tr(field.description)}</small>}
         </label>
       ))}
     </>
@@ -141,13 +143,15 @@ export function CanvasPluginFields({
   return (
     <div className="canvas-media-fields">
       <small>
-        输入：{definition?.inputs.join(' / ') || '无'} · 输出：
-        {definition?.outputs.join(' / ') || '无'}
+        {tr('输入：')}
+        {definition?.inputs.join(' / ') || tr('无')}
+        {tr(' · 输出：')}
+        {definition?.outputs.join(' / ') || tr('无')}
       </small>
       {definition?.adapter === 'mcp' || (node.pluginId ?? node.kind) === 'plugin' ? (
         <>
           <label>
-            服务插件
+            {tr('服务插件')}
             <select
               value={String(config.pluginId ?? '')}
               onChange={(e) => {
@@ -161,23 +165,23 @@ export function CanvasPluginFields({
                 });
               }}
             >
-              <option value="">选择已启用的插件</option>
+              <option value="">{tr('选择已启用的插件')}</option>
               {data.plugins
                 ?.filter((p) => p.enabled)
                 .map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name}
+                    {pluginLabel(p)}
                   </option>
                 ))}
             </select>
           </label>
           <label>
-            工具
+            {tr('工具')}
             <select
               value={String(config.tool ?? '')}
               onChange={(e) => update({ ...config, tool: e.target.value, arguments: {} })}
             >
-              <option value="">选择工具</option>
+              <option value="">{tr('选择工具')}</option>
               {tools.map((t) => (
                 <option key={t.name} value={t.name}>
                   {t.name}
@@ -185,7 +189,7 @@ export function CanvasPluginFields({
               ))}
             </select>
           </label>
-          {!tools.length && <small>在插件页检查连接后，可在这里选择工具。</small>}
+          {!tools.length && <small>{tr('在插件页检查连接后，可在这里选择工具。')}</small>}
           {tool && (
             <CanvasConfigFields
               schema={tool.inputSchema}

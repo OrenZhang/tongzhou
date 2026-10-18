@@ -1,3 +1,4 @@
+import { t as tr } from '../../shared/i18n';
 import type { Snapshot } from '../../shared/types';
 import type { TaskSchedule } from '../../shared/automation';
 import { Field, ModelPicker } from '../../components/components';
@@ -22,10 +23,10 @@ export function ModelAgentFields({
   const provider = data.providers.find((p) => p.id === value.providerId);
   return (
     <div className="automation-grid">
-      <Field label="模型连接">
+      <Field label={tr('模型连接')}>
         <select
           required
-          aria-label="模型连接"
+          aria-label={tr('模型连接')}
           value={value.providerId ?? ''}
           onChange={(e) =>
             onChange({
@@ -34,7 +35,7 @@ export function ModelAgentFields({
             })
           }
         >
-          <option value="">请选择</option>
+          <option value="">{tr('请选择')}</option>
           {data.providers
             .filter((p) => p.enabled !== false)
             .map((p) => (
@@ -44,22 +45,22 @@ export function ModelAgentFields({
             ))}
         </select>
       </Field>
-      <Field label="模型">
+      <Field label={tr('模型')}>
         <ModelPicker
-          label="模型"
+          label={tr('模型')}
           value={value.model ?? ''}
           models={provider?.models ?? []}
           modelLabels={provider?.modelLabels}
           onChange={(model) => onChange({ model })}
         />
       </Field>
-      <Field label="执行 Agent">
+      <Field label={tr('执行 Agent')}>
         <select
-          aria-label="执行 Agent"
+          aria-label={tr('执行 Agent')}
           value={value.agentId ?? ''}
           onChange={(e) => onChange({ agentId: e.target.value })}
         >
-          <option value="">通用助手</option>
+          <option value="">{tr('通用助手')}</option>
           {data.agents
             .filter((a) => !a.builtin)
             .map((a) => (
@@ -85,9 +86,9 @@ export function ScheduleFields({
 }) {
   return (
     <div className="automation-schedule">
-      <Field label="执行频率">
+      <Field label={tr('执行频率')}>
         <select
-          aria-label="执行频率"
+          aria-label={tr('执行频率')}
           value={schedule.kind}
           onChange={(e) => {
             const kind = e.target.value;
@@ -105,16 +106,16 @@ export function ScheduleFields({
             );
           }}
         >
-          <option value="daily">每天</option>
-          <option value="weekly">每周</option>
-          <option value="interval">固定间隔</option>
-          <option value="once">仅一次</option>
+          <option value="daily">{tr('每天')}</option>
+          <option value="weekly">{tr('每周')}</option>
+          <option value="interval">{tr('固定间隔')}</option>
+          <option value="once">{tr('仅一次')}</option>
         </select>
       </Field>
       {schedule.kind === 'interval' ? (
-        <Field label="间隔分钟">
+        <Field label={tr('间隔分钟')}>
           <input
-            aria-label="间隔分钟"
+            aria-label={tr('间隔分钟')}
             required
             type="number"
             min={5}
@@ -124,10 +125,10 @@ export function ScheduleFields({
           />
         </Field>
       ) : schedule.kind === 'once' ? (
-        <Field label="执行日期与时间（本机时区）">
+        <Field label={tr('执行日期与时间（本机时区）')}>
           <input
             required
-            aria-label="执行日期与时间"
+            aria-label={tr('执行日期与时间')}
             type="datetime-local"
             value={new Date(schedule.at - new Date(schedule.at).getTimezoneOffset() * 60000)
               .toISOString()
@@ -141,19 +142,19 @@ export function ScheduleFields({
       ) : (
         <>
           <div className="automation-grid">
-            <Field label="执行时间">
+            <Field label={tr('执行时间')}>
               <input
                 required
-                aria-label="执行时间"
+                aria-label={tr('执行时间')}
                 type="time"
                 value={schedule.time}
                 onChange={(e) => setSchedule({ ...schedule, time: e.target.value })}
               />
             </Field>
-            <Field label="时区">
+            <Field label={tr('时区')}>
               <input
                 required
-                aria-label="时区"
+                aria-label={tr('时区')}
                 value={schedule.timezone}
                 onChange={(e) => setSchedule({ ...schedule, timezone: e.target.value })}
               />
@@ -175,21 +176,22 @@ export function ScheduleFields({
                       })
                     }
                   />
-                  周{'日一二三四五六'[d]}
+                  {tr('周')}
+                  {tr('日一二三四五六')[d]}
                 </label>
               ))}
             </div>
           )}
         </>
       )}
-      <Field label="错过执行时间">
+      <Field label={tr('错过执行时间')}>
         <select
-          aria-label="错过执行时间"
+          aria-label={tr('错过执行时间')}
           value={missed}
           onChange={(e) => onMissed(e.target.value as 'once' | 'skip')}
         >
-          <option value="once">恢复后合并补跑一次</option>
-          <option value="skip">跳过错过的执行</option>
+          <option value="once">{tr('恢复后合并补跑一次')}</option>
+          <option value="skip">{tr('跳过错过的执行')}</option>
         </select>
       </Field>
     </div>

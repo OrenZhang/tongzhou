@@ -1,3 +1,4 @@
+import { t as tr } from '../../shared/i18n';
 import { useEffect, useState } from 'react';
 import { ChevronRight, History, Plus, SlidersHorizontal } from 'lucide-react';
 import type { BotConfig, Channel, Snapshot, TongzhouAPI } from '../../shared/types';
@@ -41,7 +42,7 @@ export function ConnectionsPage({
   const addNotification = (kind: Channel['kind']) =>
     setChannelEdit({
       id: crypto.randomUUID(),
-      name: channelPlatforms[kind].name + '通知',
+      name: channelPlatforms[kind].name + tr('通知'),
       kind,
       enabled: true,
       mode: 'webhook',
@@ -56,8 +57,8 @@ export function ConnectionsPage({
     <main className="page channels-page">
       <header className="page-heading channel-page-heading">
         <div>
-          <h1>渠道</h1>
-          <p>连接你的应用，让同舟在其中协作。</p>
+          <h1>{tr('渠道')}</h1>
+          <p>{tr('连接你的应用，让CoSail在其中协作。')}</p>
         </div>
         <button
           className="text-button channel-settings-toggle"
@@ -66,11 +67,11 @@ export function ConnectionsPage({
           onClick={() => setShowSettings(!showSettings)}
         >
           <SlidersHorizontal size={16} />
-          机器人通用设置
+          {tr('机器人通用设置')}
         </button>
       </header>
       {showSettings && (
-        <Modal compact title="机器人通用设置" onClose={() => setShowSettings(false)}>
+        <Modal compact title={tr('机器人通用设置')} onClose={() => setShowSettings(false)}>
           <BotSettingsPanel
             api={api}
             data={data}
@@ -80,9 +81,9 @@ export function ConnectionsPage({
         </Modal>
       )}
       <div className="channel-workspace">
-        <nav className="channel-sidebar" aria-label="渠道列表">
+        <nav className="channel-sidebar" aria-label={tr('渠道列表')}>
           <div className="channel-list-heading">
-            <span>内置渠道</span>
+            <span>{tr('内置渠道')}</span>
           </div>
           {Object.entries(channelPlatforms).map(([kind, platform]) => {
             const connections = entries.filter((item) => item.value.kind === kind);
@@ -93,7 +94,7 @@ export function ConnectionsPage({
                 <div className="channel-platform-heading">
                   <button
                     className="channel-platform-select"
-                    aria-label={platform.name + '渠道'}
+                    aria-label={platform.name + tr('渠道')}
                     aria-pressed={active}
                     aria-expanded={connections.length ? !collapsed[kind] : undefined}
                     aria-controls={connections.length ? `channel-connections-${kind}` : undefined}
@@ -109,7 +110,9 @@ export function ConnectionsPage({
                     <span className="channel-list-copy">
                       <strong>{platform.name}</strong>
                       <small>
-                        {connections.length ? '已添加 ' + connections.length + ' 个连接' : '未连接'}
+                        {connections.length
+                          ? tr('已添加 ') + connections.length + tr(' 个连接')
+                          : tr('未连接')}
                       </small>
                     </span>
                     {connections.length > 0 && (
@@ -122,8 +125,8 @@ export function ConnectionsPage({
                   </button>
                   <button
                     className="icon-button"
-                    aria-label={'添加' + platform.name + '渠道'}
-                    title={'添加' + platform.name + '渠道'}
+                    aria-label={tr('添加') + platform.name + tr('渠道')}
+                    title={tr('添加') + platform.name + tr('渠道')}
                     onClick={() => setSelected('platform:' + kind)}
                   >
                     <Plus size={14} />
@@ -157,7 +160,7 @@ export function ConnectionsPage({
           <div className="channel-utilities">
             <button aria-pressed={selected === 'records'} onClick={() => setSelected('records')}>
               <History size={15} />
-              连接记录
+              {tr('连接记录')}
             </button>
           </div>
         </nav>
@@ -178,11 +181,12 @@ export function ConnectionsPage({
             />
           )}
           {selected.startsWith('platform:') && (
-            <section className="channel-add-panel" aria-label="添加渠道">
+            <section className="channel-add-panel" aria-label={tr('添加渠道')}>
               <h2>
-                {channelPlatforms[selected.slice(9) as keyof typeof channelPlatforms].name + '渠道'}
+                {channelPlatforms[selected.slice(9) as keyof typeof channelPlatforms].name +
+                  tr('渠道')}
               </h2>
-              <p>添加连接，可接入多个账号或通知目标。</p>
+              <p>{tr('添加连接，可接入多个账号或通知目标。')}</p>
               <div className="channel-platforms">
                 {Object.entries(channelPlatforms)
                   .filter(([kind]) => selected === 'platform:' + kind)
@@ -200,24 +204,24 @@ export function ConnectionsPage({
                         <div className="channel-platform-actions">
                           {kind === 'email' ? (
                             <button className="secondary" onClick={() => addNotification('email')}>
-                              连接邮件
+                              {tr('连接邮件')}
                             </button>
                           ) : (
                             <>
                               <button
                                 className="secondary"
-                                aria-label={`连接${platform.name}`}
+                                aria-label={tr('连接{0}', [platform.name])}
                                 onClick={() => setBotRequest({ kind: kind as BotConfig['kind'] })}
                               >
-                                连接
+                                {tr('连接')}
                               </button>
                               {kind !== 'weixin' && (
                                 <button
                                   className="text-button"
-                                  aria-label={`${platform.name}仅通知`}
+                                  aria-label={tr('{0}仅通知', [platform.name])}
                                   onClick={() => addNotification(kind as Channel['kind'])}
                                 >
-                                  仅通知
+                                  {tr('仅通知')}
                                 </button>
                               )}
                             </>

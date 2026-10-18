@@ -1,3 +1,4 @@
+import { t as tr } from '../../shared/i18n';
 import { useEffect, useRef } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
@@ -80,7 +81,7 @@ export default function TerminalView({
       try {
         const r = await api.readTerminal(sessionId, id, offset);
         if (!alive) return;
-        if (r.offset > offset) terminal.writeln('\r\n[较早日志已截断]\r\n');
+        if (r.offset > offset) terminal.writeln(tr('\r\n[较早日志已截断]\r\n'));
         terminal.write(r.output);
         offset = r.nextOffset;
       } catch (e) {
@@ -105,7 +106,7 @@ export default function TerminalView({
       className="task-terminal"
       ref={host}
       onKeyDown={(e) => e.stopPropagation()}
-      aria-label="交互终端"
+      aria-label={tr('交互终端')}
     />
   );
 }

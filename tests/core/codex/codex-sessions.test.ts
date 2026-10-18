@@ -14,7 +14,7 @@ describe('idle Codex connections', () => {
       b = client();
     pool.put('one', 'key', 'account', 'thread', a);
     a.emit('request', { id: 1 });
-    expect(a.reject).toHaveBeenCalledWith(1, 'No active Tongzhou turn');
+    expect(a.reject).toHaveBeenCalledWith(1, 'No active CoSail turn');
     expect(await pool.take('one', 'key', 'thread')).toBe(a);
     expect(a.listenerCount('request')).toBe(0);
     expect(a.listenerCount('failure')).toBe(0);

@@ -10,7 +10,7 @@ export async function prepareMacDevelopmentApp(executable) {
   if (process.platform !== 'darwin') return executable;
   const root = path.resolve('.');
   const directory = path.join(root, 'work/macos-development');
-  const bundle = path.join(directory, '同舟.app');
+  const bundle = path.join(directory, 'CoSail.app');
   const target = path.join(bundle, 'Contents/MacOS/Electron');
   const source = path.dirname(path.dirname(path.dirname(executable)));
   if (!source.endsWith('.app')) throw new Error('Electron runtime is not a macOS app bundle.');
@@ -36,8 +36,8 @@ export async function prepareMacDevelopmentApp(executable) {
   await writeFile(path.join(bundle, 'Contents/Resources/tongzhou.icns'), icon);
   const plist = path.join(bundle, 'Contents/Info.plist');
   for (const [key, value] of Object.entries({
-    CFBundleName: '同舟',
-    CFBundleDisplayName: '同舟',
+    CFBundleName: 'CoSail',
+    CFBundleDisplayName: 'CoSail',
     CFBundleIdentifier: 'org.tongzhou.desktop.development',
     CFBundleIconFile: 'tongzhou.icns',
   })) {

@@ -32,7 +32,7 @@ export function githubAuthError(code: unknown) {
     : code === 'expired_token' || code === 'token_expired'
       ? 'GitHub 验证码已过期，请重新登录。'
       : code === 'device_flow_disabled' || code === 'incorrect_client_credentials'
-        ? '同舟的 GitHub 登录应用配置不可用，请联系维护者更新。'
+        ? 'CoSail的 GitHub 登录应用配置不可用，请联系维护者更新。'
         : 'GitHub 授权未完成，请重新登录。';
 }
 async function post(path: string, params: Record<string, string>, signal: AbortSignal) {

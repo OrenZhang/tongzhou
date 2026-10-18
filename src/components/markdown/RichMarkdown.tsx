@@ -1,3 +1,5 @@
+import { t as tr } from '../../shared/i18n';
+import { useLocale } from '../../hooks/useLocale';
 import {
   Children,
   isValidElement,
@@ -56,21 +58,22 @@ function CopyCode({ text }: { text: string }) {
   return (
     <button
       type="button"
-      aria-label="复制代码"
-      title={status || '复制代码'}
+      aria-label={tr('复制代码')}
+      title={status || tr('复制代码')}
       onClick={() => {
         void window.tongzhou.copyText(text).then(
-          () => setStatus('已复制'),
-          () => setStatus('复制失败'),
+          () => setStatus(tr('已复制')),
+          () => setStatus(tr('复制失败')),
         );
       }}
     >
       {status === '已复制' ? <Check size={14} /> : <Copy size={14} />}
-      <span aria-live="polite">{status || '复制'}</span>
+      <span aria-live="polite">{status || tr('复制')}</span>
     </button>
   );
 }
 const CodeBlock = memo(function CodeBlock({ text, language }: { text: string; language: string }) {
+  useLocale();
   const [result, setResult] = useState<{ text: string; tree?: Root }>();
   const [wrap, setWrap] = useState(false);
   useEffect(() => {
@@ -86,12 +89,12 @@ const CodeBlock = memo(function CodeBlock({ text, language }: { text: string; la
     };
   }, [text, language]);
   return (
-    <section className="code-block" aria-label={language ? language + ' 代码' : '代码'}>
+    <section className="code-block" aria-label={language ? language + tr(' 代码') : tr('代码')}>
       <div className="code-toolbar">
-        <span>{language || '纯文本'}</span>
+        <span>{language || tr('纯文本')}</span>
         <div>
           <button type="button" aria-pressed={wrap} onClick={() => setWrap(!wrap)}>
-            换行
+            {tr('换行')}
           </button>
           <CopyCode text={text} />
         </div>
@@ -117,6 +120,7 @@ function useDark() {
   return dark;
 }
 const Diagram = memo(function Diagram({ text, pending }: { text: string; pending: boolean }) {
+  useLocale();
   const dark = useDark();
   const [source, setSource] = useState(false),
     [expanded, setExpanded] = useState(false),
@@ -137,7 +141,8 @@ const Diagram = memo(function Diagram({ text, pending }: { text: string; pending
           if (live) setResult({ text, dark, ...image });
         },
         () => {
-          if (live) setResult({ text, dark, error: '图表尚未完整或语法不正确，可以查看源码。' });
+          if (live)
+            setResult({ text, dark, error: tr('图表尚未完整或语法不正确，可以查看源码。') });
         },
       );
     }, 250);
@@ -151,7 +156,7 @@ const Diagram = memo(function Diagram({ text, pending }: { text: string; pending
     <img
       className="diagram-image"
       src={current?.url}
-      alt="Mermaid 图表"
+      alt={tr('Mermaid 图表')}
       style={{
         width: current?.width ? current.width * zoom : undefined,
         maxWidth: zoom === 1 ? '100%' : 'none',
@@ -162,18 +167,18 @@ const Diagram = memo(function Diagram({ text, pending }: { text: string; pending
     <>
       <button
         type="button"
-        aria-label="缩小图表"
+        aria-label={tr('缩小图表')}
         disabled={zoom <= 0.5}
         onClick={() => setZoom(Math.max(0.5, zoom - 0.25))}
       >
         <ZoomOut size={14} />
       </button>
-      <button type="button" title="重置缩放" onClick={() => setZoom(1)}>
+      <button type="button" title={tr('重置缩放')} onClick={() => setZoom(1)}>
         {Math.round(zoom * 100)}%
       </button>
       <button
         type="button"
-        aria-label="放大图表"
+        aria-label={tr('放大图表')}
         disabled={zoom >= 3}
         onClick={() => setZoom(Math.min(3, zoom + 0.25))}
       >
@@ -182,18 +187,18 @@ const Diagram = memo(function Diagram({ text, pending }: { text: string; pending
     </>
   );
   return (
-    <section className="diagram-block" aria-label="Mermaid 图表内容">
+    <section className="diagram-block" aria-label={tr('Mermaid 图表内容')}>
       <div className="code-toolbar">
         <span>Mermaid</span>
         <div>
           {current?.url && !source && controls}
           <button type="button" aria-pressed={source} onClick={() => setSource(!source)}>
             <Code2 size={14} />
-            {source ? '图表' : '源码'}
+            {source ? tr('图表') : tr('源码')}
           </button>
           <CopyCode text={text} />
           {current?.url && (
-            <button type="button" aria-label="展开图表" onClick={() => setExpanded(true)}>
+            <button type="button" aria-label={tr('展开图表')} onClick={() => setExpanded(true)}>
               <Maximize2 size={14} />
             </button>
           )}
@@ -201,18 +206,18 @@ const Diagram = memo(function Diagram({ text, pending }: { text: string; pending
       </div>
       {source || pending || current?.error ? (
         <>
-          <p className="diagram-status">{pending ? '图表生成中…' : current?.error}</p>
+          <p className="diagram-status">{pending ? tr('图表生成中…') : current?.error}</p>
           <CodeBlock text={text} language="mermaid" />
         </>
       ) : current?.url ? (
         <div className="diagram-canvas">{drawing}</div>
       ) : (
         <p className="diagram-status" role="status">
-          正在绘制图表…
+          {tr('正在绘制图表…')}
         </p>
       )}
       {expanded && current?.url && (
-        <Modal title="图表预览" wide onClose={() => setExpanded(false)}>
+        <Modal title={tr('图表预览')} wide onClose={() => setExpanded(false)}>
           <div className="code-toolbar">
             {controls}
             <CopyCode text={text} />
@@ -239,7 +244,7 @@ export function MarkdownLink({
     return (
       <button
         className="markdown-file-link"
-        title={`查看 ${reference.path}`}
+        title={tr('查看 {0}', [reference.path])}
         onClick={() => files!.open(reference.path, reference.line)}
       >
         {children}
@@ -256,7 +261,8 @@ export function MarkdownLink({
           event.preventDefault();
           if (href.startsWith('#'))
             document.getElementById(href.slice(1))?.scrollIntoView({ block: 'nearest' });
-          else void window.tongzhou.openExternalLink(href).catch(() => setError('无法打开链接'));
+          else
+            void window.tongzhou.openExternalLink(href).catch(() => setError(tr('无法打开链接')));
         }}
       >
         {children}
@@ -275,6 +281,7 @@ export const Markdown = memo(function Markdown({
   onKnowledgeLink?: (target: string) => void;
 }) {
   const id = useId().replace(/[^a-z0-9]/gi, '');
+  useLocale();
   const files = useContext(WorkspaceFileContext);
   return (
     <div className="markdown">
@@ -290,8 +297,8 @@ export const Markdown = memo(function Markdown({
         }
         remarkRehypeOptions={{
           clobberPrefix: 'md-' + id + '-',
-          footnoteLabel: '注释',
-          footnoteBackLabel: '返回正文',
+          footnoteLabel: tr('注释'),
+          footnoteBackLabel: tr('返回正文'),
         }}
         rehypePlugins={[
           [rehypeKatex, { trust: false, strict: 'ignore', throwOnError: false, maxExpand: 1000 }],
@@ -312,7 +319,8 @@ export const Markdown = memo(function Markdown({
             ),
           img: ({ src, alt }) => (
             <MarkdownLink href={typeof src === 'string' ? src : undefined}>
-              [图片：{alt || '查看图片'}]
+              {tr('[图片：')}
+              {alt || tr('查看图片')}]
             </MarkdownLink>
           ),
           pre: ({ children, node }) => {

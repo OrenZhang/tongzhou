@@ -1,3 +1,4 @@
+import { t as tr, getLocale, localize as localized } from '../../shared/i18n';
 import { WorkspaceFrame } from '../workspace/WorkspaceFrame';
 import type { WorkspaceLayout } from '../workspace/workspace-state';
 import artifactPrompts from '../../../prompts/artifacts.json';
@@ -5,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Download, FileText, Image as ImageIcon, ArrowUpRight } from 'lucide-react';
 import { Field } from '../../components/components';
 import {
-  artifactKinds,
+  artifactKinds as raw_artifactKinds,
   artifactDay,
   artifactDateRange,
   type Artifact,
@@ -19,10 +20,11 @@ import { knowledgeFolderPath } from '../../shared/knowledge';
 import './artifacts.css';
 import { FileLink } from '../../components/files/FileLink';
 import { HtmlPreview } from '../../components/markdown/HtmlPreview';
+import { errorMessage } from '../../lib/feedback';
 
 const sizeLabel = (size?: number) =>
   size === undefined
-    ? '外部链接'
+    ? tr('外部链接')
     : size < 1024 * 1024
       ? `${Math.ceil(size / 1024)} KB`
       : `${(size / 1024 / 1024).toFixed(1)} MB`;
@@ -32,7 +34,7 @@ function ArtworkCard({ item, onOpen }: { item: Artifact; onOpen(): void }) {
       className="artifact-card"
       onOpen={onOpen}
       name={item.name}
-      label={`查看作品 ${item.name}`}
+      label={tr('查看作品 {0}', [item.name])}
       title={`${item.name} · ${artifactKinds[item.kind]} · ${sizeLabel(item.size)}`}
       icon={item.kind === 'image' ? <ImageIcon size={15} /> : undefined}
     />
@@ -40,33 +42,65 @@ function ArtworkCard({ item, onOpen }: { item: Artifact; onOpen(): void }) {
 }
 function ConversationArtworkCard({ item, onOpen }: { item: Artifact; onOpen(): void }) {
   const [image, setImage] = useState<string>();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let live = true;
     setImage(undefined);
-    if (item.kind === 'image' && !item.remoteUrl) {
-      void window.tongzhou
-        .artifactPreview(item.id)
+    setError('');
+    if (item.kind === 'image') {
+      setLoading(true);
+      const ready = item.remoteUrl ? window.tongzhou.artifactDownload(item.id) : Promise.resolve();
+      void ready
+        .then(() => window.tongzhou.artifactPreview(item.id))
         .then((preview) => {
           if (live && preview.type === 'image') setImage(preview.content);
+          else if (live) setError(tr('图片暂时无法预览'));
         })
-        .catch(() => {
-          // Keep the file entry available when a stored image cannot be read.
+        .catch((error) => {
+          if (live) setError(errorMessage(error));
+        })
+        .finally(() => {
+          if (live) setLoading(false);
         });
     }
     return () => {
       live = false;
     };
-  }, [item.id, item.kind, item.remoteUrl]);
-  if (!image) return <ArtworkCard item={item} onOpen={onOpen} />;
+  }, [item.id, item.kind, item.remoteUrl, attempt]);
+  if (!image)
+    return (
+      <div className="artifact-image-loading">
+        <ArtworkCard item={item} onOpen={onOpen} />
+        {loading && <small role="status">{tr('正在加载图片…')}</small>}
+        {error && (
+          <div className="artifact-image-error" role="status">
+            <small>
+              {tr('图片加载失败，生成结果已保留。')} {error}
+            </small>
+            <button onClick={() => setAttempt((value) => value + 1)}>{tr('重试加载')}</button>
+          </div>
+        )}
+      </div>
+    );
   return (
     <button
       type="button"
       className="artifact-card artifact-image-card"
       onClick={onOpen}
-      aria-label={`查看作品 ${item.name}`}
-      title={`查看原图 · ${item.name}`}
+      aria-label={tr('查看作品 {0}', [item.name])}
+      title={tr('查看原图 · {0}', [item.name])}
     >
-      <img src={image} alt={item.name} decoding="async" onError={() => setImage(undefined)} />
+      <img
+        src={image}
+        alt={item.name}
+        decoding="async"
+        onError={() => {
+          setImage(undefined);
+          setError(tr('图片暂时无法预览'));
+        }}
+      />
       <span>{item.name}</span>
     </button>
   );
@@ -101,7 +135,7 @@ export function ArtifactCards({ ids, onOpen }: { ids: string[]; onOpen(id: strin
     };
   }, [key]);
   return items.length ? (
-    <div className="artifact-strip" aria-label="本轮生成的作品">
+    <div className="artifact-strip" aria-label={tr('本轮生成的作品')}>
       {items.map((a) => (
         <ConversationArtworkCard key={a.id} item={a} onOpen={() => onOpen(a.id)} />
       ))}
@@ -193,25 +227,29 @@ export function ArtifactsCenter({
     <div className="artifacts-page">
       <div className="artifact-filters">
         <input
-          aria-label="搜索作品"
-          placeholder="搜索作品名称…"
+          aria-label={tr('搜索作品')}
+          placeholder={tr('搜索作品名称…')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
         <select
-          aria-label="作品类型"
+          aria-label={tr('作品类型')}
           value={kind}
           onChange={(e) => setKind(e.target.value as ArtifactKind | '')}
         >
-          <option value="">全部类型</option>
+          <option value="">{tr('全部类型')}</option>
           {Object.entries(artifactKinds).map(([id, label]) => (
             <option key={id} value={id}>
               {label}
             </option>
           ))}
         </select>
-        <select aria-label="作品项目" value={project} onChange={(e) => setProject(e.target.value)}>
-          <option value="">全部项目</option>
+        <select
+          aria-label={tr('作品项目')}
+          value={project}
+          onChange={(e) => setProject(e.target.value)}
+        >
+          <option value="">{tr('全部项目')}</option>
           {data.projects
             .filter((p) => !p.removed && !p.sourceProjectId)
             .map((p) => (
@@ -221,11 +259,11 @@ export function ArtifactsCenter({
             ))}
         </select>
         <select
-          aria-label="作品来源会话"
+          aria-label={tr('作品来源会话')}
           value={session}
           onChange={(e) => setSession(e.target.value)}
         >
-          <option value="">全部会话</option>
+          <option value="">{tr('全部会话')}</option>
           {data.sessions.map((s) => (
             <option key={s.id} value={s.id}>
               {s.title}
@@ -234,16 +272,19 @@ export function ArtifactsCenter({
         </select>
         <input
           type="date"
-          aria-label="作品日期"
+          aria-label={tr('作品日期')}
           value={day}
           onChange={(e) => setDay(e.target.value)}
         />
         {day && (
           <button className="text-button" onClick={() => setDay('')}>
-            全部日期
+            {tr('全部日期')}
           </button>
         )}
-        <small>{page.total} 件</small>
+        <small>
+          {page.total}
+          {tr(' 件')}
+        </small>
       </div>
       {error && (
         <p role="alert" className="danger">
@@ -254,14 +295,17 @@ export function ArtifactsCenter({
         <section className="artifact-day" key={date} aria-label={date}>
           <header>
             <h2>{date}</h2>
-            <small>{items.length} 件</small>
+            <small>
+              {items.length}
+              {tr(' 件')}
+            </small>
           </header>
           <div className="artifact-grid">
             {items.map((a) => (
               <div className="artifact-entry" key={a.id}>
                 <ArtworkCard item={a} onOpen={() => onOpen(a.id)} />
                 <button className="text-button artifact-process" onClick={() => onOpen(a.id, true)}>
-                  整理
+                  {tr('整理')}
                 </button>
               </div>
             ))}
@@ -271,14 +315,16 @@ export function ArtifactsCenter({
       {!loading && !page.items.length && (
         <div className="artifact-empty">
           <ImageIcon size={32} />
-          <h2>{query || kind || project || session || day ? '没有匹配的作品' : '还没有作品'}</h2>
-          <p>让 AI 生成图片或交付文件后，成果会显示在聊天和这里。</p>
+          <h2>
+            {query || kind || project || session || day ? tr('没有匹配的作品') : tr('还没有作品')}
+          </h2>
+          <p>{tr('让 AI 生成图片或交付文件后，成果会显示在聊天和这里。')}</p>
         </div>
       )}
-      {loading && <p role="status">正在加载作品…</p>}
+      {loading && <p role="status">{tr('正在加载作品…')}</p>}
       {page.nextOffset !== null && (
         <button disabled={loading} onClick={() => void load(page.nextOffset!)}>
-          加载更多作品
+          {tr('加载更多作品')}
         </button>
       )}
     </div>
@@ -380,7 +426,7 @@ export function ArtifactDetail({
   return (
     <WorkspaceFrame
       className="artifact-workspace"
-      label="文件工作区"
+      label={tr('文件工作区')}
       width={layout.width}
       expanded={layout.expanded}
       onResize={(width) => updateLayout({ width, expanded: false })}
@@ -388,7 +434,7 @@ export function ArtifactDetail({
       onClose={onClose}
       header={
         <strong className="workspace-file-title" title={item?.name}>
-          {item?.name ?? '文件预览'}
+          {item?.name ?? tr('文件预览')}
         </strong>
       }
     >
@@ -415,8 +461,8 @@ export function ArtifactDetail({
                   <FileText size={38} />
                   <p>
                     {preview?.type === 'external'
-                      ? '此作品保留的是外部链接，可打开原链接查看。'
-                      : '使用本地应用打开，或下载文件查看。'}
+                      ? tr('此作品保留的是外部链接，可打开原链接查看。')
+                      : tr('使用本地应用打开，或下载文件查看。')}
                   </p>
                 </div>
               )}
@@ -425,35 +471,37 @@ export function ArtifactDetail({
               <span>
                 {artifactKinds[item.kind]} · {sizeLabel(item.size)}
               </span>
-              <span>{new Date(item.createdAt).toLocaleString()}</span>
+              <span>{new Date(item.createdAt).toLocaleString(getLocale())}</span>
               <span title={item.model}>{item.model}</span>
             </div>
             <div className="artifact-source">
               <span>
-                来源：{source?.title ?? '原会话已删除'}
-                {source?.archived ? '（已归档）' : ''}
+                {tr('来源：')}
+                {source?.title ?? tr('原会话已删除')}
+                {source?.archived ? tr('（已归档）') : ''}
               </span>
               {source && (
                 <button className="text-button" onClick={() => onSource(source.id)}>
-                  回到会话 <ArrowUpRight size={13} />
+                  {tr('回到会话 ')}
+                  <ArrowUpRight size={13} />
                 </button>
               )}
             </div>
             <div className="row artifact-actions">
               <button disabled={busy} onClick={() => void action(() => api.artifactOpen(id))}>
-                {item.remoteUrl ? '打开链接' : '打开文件'}
+                {item.remoteUrl ? tr('打开链接') : tr('打开文件')}
               </button>
               {!item.remoteUrl && (
                 <button
                   disabled={busy}
                   onClick={() =>
                     void action(async () => {
-                      if (await api.artifactExport(id)) setNotice('作品已下载');
+                      if (await api.artifactExport(id)) setNotice(tr('作品已下载'));
                     })
                   }
                 >
                   <Download size={14} />
-                  下载
+                  {tr('下载')}
                 </button>
               )}
               <button
@@ -461,17 +509,19 @@ export function ArtifactDetail({
                 disabled={!source || source.archived}
                 onClick={() => onContinue(item)}
               >
-                继续处理
+                {tr('继续处理')}
               </button>
               <button
                 disabled={!source || source.archived}
                 onClick={() => setOrganizing(!organizing)}
               >
-                整理内容
+                {tr('整理内容')}
               </button>
-              {!item.remoteUrl && <button onClick={() => setSaving(!saving)}>保存到内容库</button>}
+              {!item.remoteUrl && (
+                <button onClick={() => setSaving(!saving)}>{tr('保存到内容库')}</button>
+              )}
               <button className="text-button danger" onClick={() => setDeleting(true)}>
-                删除作品
+                {tr('删除作品')}
               </button>
             </div>
             {organizing && (
@@ -480,13 +530,13 @@ export function ArtifactDetail({
                   className="text-button"
                   onClick={() => setInstruction(artifactPrompts.organize)}
                 >
-                  使用整理提示词
+                  {tr('使用整理提示词')}
                 </button>
-                <Field label="整理要求">
+                <Field label={tr('整理要求')}>
                   <textarea
-                    aria-label="整理要求"
+                    aria-label={tr('整理要求')}
                     rows={3}
-                    placeholder="描述希望如何处理作品，也可以结合当前会话历史…"
+                    placeholder={tr('描述希望如何处理作品，也可以结合当前会话历史…')}
                     value={instruction}
                     onChange={(e) => setInstruction(e.target.value)}
                   />
@@ -496,15 +546,15 @@ export function ArtifactDetail({
                   disabled={!instruction.trim()}
                   onClick={() => onContinue(item, instruction.trim())}
                 >
-                  前往会话整理
+                  {tr('前往会话整理')}
                 </button>
               </div>
             )}
             {saving && (
               <div className="artifact-save">
-                <Field label="内容库">
+                <Field label={tr('内容库')}>
                   <select
-                    aria-label="保存到内容库"
+                    aria-label={tr('保存到内容库')}
                     value={library}
                     onChange={(e) => setLibrary(e.target.value)}
                   >
@@ -515,13 +565,13 @@ export function ArtifactDetail({
                     ))}
                   </select>
                 </Field>
-                <Field label={createFolder ? '上级目录' : '目录'}>
+                <Field label={createFolder ? tr('上级目录') : tr('目录')}>
                   <select
-                    aria-label="作品保存目录"
+                    aria-label={tr('作品保存目录')}
                     value={folder}
                     onChange={(e) => setFolder(e.target.value)}
                   >
-                    <option value="">{createFolder ? '顶层目录' : '未分类'}</option>
+                    <option value="">{createFolder ? tr('顶层目录') : tr('未分类')}</option>
                     {contents?.folders.map((f) => (
                       <option key={f.id} value={f.id}>
                         {knowledgeFolderPath(contents.folders, f.id)}
@@ -535,12 +585,12 @@ export function ArtifactDetail({
                     checked={createFolder}
                     onChange={(e) => setCreateFolder(e.target.checked)}
                   />
-                  新建目录
+                  {tr('新建目录')}
                 </label>
                 {createFolder && (
-                  <Field label="新目录名称">
+                  <Field label={tr('新目录名称')}>
                     <input
-                      aria-label="新目录名称"
+                      aria-label={tr('新目录名称')}
                       value={newFolderName}
                       maxLength={100}
                       onChange={(e) => setNewFolderName(e.target.value)}
@@ -562,13 +612,13 @@ export function ArtifactDetail({
                     })
                   }
                 >
-                  保存到内容库
+                  {tr('保存到内容库')}
                 </button>
               </div>
             )}
             {deleting && (
               <div className="artifact-delete" role="alert">
-                <p>删除作品副本？原始项目文件和聊天记录会保留。</p>
+                <p>{tr('删除作品副本？原始项目文件和聊天记录会保留。')}</p>
                 <button
                   className="danger"
                   disabled={busy}
@@ -579,9 +629,9 @@ export function ArtifactDetail({
                     })
                   }
                 >
-                  确认删除作品
+                  {tr('确认删除作品')}
                 </button>
-                <button onClick={() => setDeleting(false)}>取消</button>
+                <button onClick={() => setDeleting(false)}>{tr('取消')}</button>
               </div>
             )}
           </>
@@ -590,3 +640,5 @@ export function ArtifactDetail({
     </WorkspaceFrame>
   );
 }
+
+const artifactKinds = localized(raw_artifactKinds);

@@ -7,7 +7,7 @@ export function resolveAgent(store: Store, id?: string): AgentProfile {
   if (id) return agentProfile(store, id);
   return {
     id: '',
-    name: '同舟',
+    name: 'CoSail',
     description: '',
     providerId: '',
     model: '',

@@ -1,3 +1,4 @@
+import { t as tr } from '../../shared/i18n';
 import { useEffect, useRef, useState } from 'react';
 import type { CanvasRendererProps } from './node-renderers';
 
@@ -21,7 +22,7 @@ export function CanvasPanorama({ api, node, patch }: CanvasRendererProps) {
     const element = canvas.current!;
     const gl = element.getContext('webgl', { preserveDrawingBuffer: true });
     if (!gl) {
-      setError('当前设备无法使用 WebGL 全景预览');
+      setError(tr('当前设备无法使用 WebGL 全景预览'));
       return;
     }
     let alive = true;
@@ -35,7 +36,7 @@ export function CanvasPanorama({ api, node, patch }: CanvasRendererProps) {
       gl.shaderSource(shader, source);
       gl.compileShader(shader);
       if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS))
-        throw new Error('全景着色器初始化失败');
+        throw new Error(tr('全景着色器初始化失败'));
       gl.attachShader(program, shader);
     };
     const cleanup = () => {
@@ -64,7 +65,8 @@ export function CanvasPanorama({ api, node, patch }: CanvasRendererProps) {
         }`,
       );
       gl.linkProgram(program);
-      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error('全景程序初始化失败');
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS))
+        throw new Error(tr('全景程序初始化失败'));
       gl.useProgram(program);
       gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
       gl.bufferData(
@@ -110,12 +112,12 @@ export function CanvasPanorama({ api, node, patch }: CanvasRendererProps) {
         .then((preview) => {
           if (!alive) return;
           if (preview.type !== 'image' || !preview.content?.startsWith('data:image/'))
-            throw new Error('请选择可预览的全景图片');
+            throw new Error(tr('请选择可预览的全景图片'));
           const image = new Image();
           image.onload = () => {
             if (!alive) return;
             if (Math.max(image.width, image.height) > gl.getParameter(gl.MAX_TEXTURE_SIZE)) {
-              setError('全景图片超过设备纹理尺寸上限，请缩小图片');
+              setError(tr('全景图片超过设备纹理尺寸上限，请缩小图片'));
               return;
             }
             gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -124,7 +126,7 @@ export function CanvasPanorama({ api, node, patch }: CanvasRendererProps) {
             draw.current();
           };
           image.onerror = () => {
-            if (alive) setError('无法解码全景图片');
+            if (alive) setError(tr('无法解码全景图片'));
           };
           image.src = preview.content;
         })
@@ -140,7 +142,7 @@ export function CanvasPanorama({ api, node, patch }: CanvasRendererProps) {
     <div className="canvas-panorama">
       <canvas
         ref={canvas}
-        aria-label="全景预览，拖动环视"
+        aria-label={tr('全景预览，拖动环视')}
         tabIndex={0}
         onPointerDown={(e) => {
           if (e.button !== 0) return;
@@ -188,7 +190,7 @@ export function CanvasPanorama({ api, node, patch }: CanvasRendererProps) {
           });
         }}
       />
-      {(!node.resource || error) && <span>{error || '在配置面板选择 2:1 全景图片'}</span>}
+      {(!node.resource || error) && <span>{error || tr('在配置面板选择 2:1 全景图片')}</span>}
     </div>
   );
 }

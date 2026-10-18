@@ -1,10 +1,20 @@
+import { t as tr, localize as localized } from '../../shared/i18n';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, FileText, Network, Search } from 'lucide-react';
 import { ChoicePicker } from '../../components/controls/ChoicePicker';
 import type { TongzhouAPI } from '../../shared/types';
-import { entityTypes, relationTypes, type KnowledgeGraph } from '../../shared/ontology';
+import {
+  entityTypes as raw_entityTypes,
+  relationTypes as raw_relationTypes,
+  type KnowledgeGraph,
+} from '../../shared/ontology';
 
-const statuses = { confirmed: '已确认', pending: '待核对', stale: '来源失效', expired: '已过期' };
+const statuses = localized({
+  confirmed: '已确认',
+  pending: '待核对',
+  stale: '来源失效',
+  expired: '已过期',
+});
 export function KnowledgeGraphView({
   api,
   project,
@@ -61,20 +71,20 @@ export function KnowledgeGraphView({
         <label className="knowledge-search">
           <Search size={15} />
           <input
-            aria-label="搜索知识关系"
-            placeholder="搜索实体、事实或关系…"
+            aria-label={tr('搜索知识关系')}
+            placeholder={tr('搜索实体、事实或关系…')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
         </label>
         <ChoicePicker
-          label="知识状态"
+          label={tr('知识状态')}
           value={status}
           onChange={setStatus}
           options={[
-            { value: 'all', label: '全部状态' },
+            { value: 'all', label: tr('全部状态') },
             ...Object.entries(statuses).map(([value, label]) => ({ value, label })),
-            { value: 'conflict', label: '可能冲突' },
+            { value: 'conflict', label: tr('可能冲突') },
           ]}
         />
         <button
@@ -82,7 +92,7 @@ export function KnowledgeGraphView({
           onClick={() => setEntity('')}
         >
           <Network size={16} />
-          <span>全部实体</span>
+          <span>{tr('全部实体')}</span>
           <small className="ontology-entity-count">{graph?.entities.length ?? 0}</small>
         </button>
         {graph?.entities.map((e) => (
@@ -102,14 +112,16 @@ export function KnowledgeGraphView({
           </button>
         ))}
       </aside>
-      <main className="knowledge-reader" tabIndex={0} aria-label="知识关系内容">
+      <main className="knowledge-reader" tabIndex={0} aria-label={tr('知识关系内容')}>
         <div className="ontology-heading">
           <div>
-            <h2>{graph?.entities.find((e) => e.id === entity)?.name ?? '知识与记忆'}</h2>
-            <p>从文档和每日记忆提炼，按来源核对。Agent 通过工具按需查询。</p>
+            <h2>{graph?.entities.find((e) => e.id === entity)?.name ?? tr('知识与记忆')}</h2>
+            <p>{tr('从文档和每日记忆提炼，按来源核对。Agent 通过工具按需查询。')}</p>
           </div>
           <span className="knowledge-type">
-            {facts.length} 条 / {graph?.total ?? 0}
+            {facts.length}
+            {tr(' 条 / ')}
+            {graph?.total ?? 0}
           </span>
         </div>
         {error && (
@@ -120,10 +132,11 @@ export function KnowledgeGraphView({
         {!facts.length && (
           <div className="knowledge-welcome">
             <Network size={30} />
-            <h3>{loading ? '正在读取…' : '暂无符合条件的知识'}</h3>
+            <h3>{loading ? tr('正在读取…') : tr('暂无符合条件的知识')}</h3>
             <p>
-              在文档中点“让 Agent
-              整理”，或编辑文档的“结构化知识”。已有每日记忆会自动出现在这里；原文不会被擅自改写。
+              {tr(
+                '在文档中点“让 Agent 整理”，或编辑文档的“结构化知识”。已有每日记忆会自动出现在这里；原文不会被擅自改写。',
+              )}
             </p>
           </div>
         )}
@@ -131,7 +144,9 @@ export function KnowledgeGraphView({
           <article className="ontology-fact" key={f.id}>
             <div className="ontology-fact-meta">
               <span className={'ontology-status ' + f.status}>{statuses[f.status]}</span>
-              {f.conflict && <span className="ontology-status conflict">可能冲突 · 请核对</span>}
+              {f.conflict && (
+                <span className="ontology-status conflict">{tr('可能冲突 · 请核对')}</span>
+              )}
               <small>{scopeName(f.scope)}</small>
             </div>
             <div className="ontology-triple">
@@ -150,13 +165,16 @@ export function KnowledgeGraphView({
             </div>
             {(f.validFrom || f.validUntil) && (
               <p className="knowledge-section-hint">
-                有效期：{f.validFrom ?? '未注明'} — {f.validUntil ?? '未注明'}
+                {tr('有效期：')}
+                {f.validFrom ?? tr('未注明')} — {f.validUntil ?? tr('未注明')}
               </p>
             )}
             <details className="ontology-evidence">
               <summary>
-                证据与维护 · {f.evidence.length} 处来源
-                {f.evidence.some((e) => e.stale) ? ' · 含失效来源' : ''}
+                {tr('证据与维护 · ')}
+                {f.evidence.length}
+                {tr(' 处来源')}
+                {f.evidence.some((e) => e.stale) ? tr(' · 含失效来源') : ''}
               </summary>
               {f.evidence.map((e, i) => (
                 <div key={i}>
@@ -164,8 +182,8 @@ export function KnowledgeGraphView({
                   <button className="text-button" onClick={() => onOpen(e.documentId)}>
                     <FileText size={13} />
                     {e.title} · v{e.version} ·{' '}
-                    {e.stale ? '需复核' : e.reviewed ? '已核对' : '待核对'}
-                    <span>查看 / 修正</span>
+                    {e.stale ? tr('需复核') : e.reviewed ? tr('已核对') : tr('待核对')}
+                    <span>{tr('查看 / 修正')}</span>
                   </button>
                 </div>
               ))}
@@ -202,13 +220,18 @@ export function KnowledgeGraphView({
               }
             }}
           >
-            加载更多知识
+            {tr('加载更多知识')}
           </button>
         )}
         <p className="knowledge-section-hint">
-          相同范围、实体、关系、值与有效期的条目会合并展示。不同项目分别管理；“可能冲突”是结构检查，仍需核对原文。
+          {tr(
+            '相同范围、实体、关系、值与有效期的条目会合并展示。不同项目分别管理；“可能冲突”是结构检查，仍需核对原文。',
+          )}
         </p>
       </main>
     </div>
   );
 }
+
+const entityTypes = localized(raw_entityTypes);
+const relationTypes = localized(raw_relationTypes);

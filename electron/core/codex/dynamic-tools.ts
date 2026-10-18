@@ -53,7 +53,7 @@ export function dynamicToolSpecs(
         {
           type: 'namespace',
           name: BUSINESS_TOOL_NAMESPACE,
-          description: '同舟业务与插件工具',
+          description: 'CoSail业务与插件工具',
           tools,
         },
       ]

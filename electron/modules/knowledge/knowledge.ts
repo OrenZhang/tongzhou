@@ -115,7 +115,7 @@ export class Knowledge {
         `---\n${JSON.stringify(metadata, null, 2)}\n---\n${content}`,
       decode: (text) => {
         const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/.exec(text);
-        if (!match) throw new Error('文档格式损坏：缺少同舟元数据');
+        if (!match) throw new Error('文档格式损坏：缺少CoSail元数据');
         return { ...JSON.parse(match[1]), content: match[2] };
       },
     });
@@ -284,7 +284,7 @@ export class Knowledge {
     const folders = this.folders();
     this.write('folders.json', JSON.stringify(folders, null, 2));
     const lines = [
-      '# 同舟智库',
+      '# CoSail智库',
       '',
       '文档保存在 documents 中，正文和元数据以文件为准。此导航可重新生成。',
       '',

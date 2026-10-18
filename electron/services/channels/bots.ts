@@ -191,7 +191,7 @@ export class Bots {
         return reply;
       } catch {
         this.store.put('botInbox', { id, botId, time: Date.now(), status: 'failed' });
-        return '暂时未能处理消息，请在同舟的机器人模块检查模型连接和运行记录。';
+        return '暂时未能处理消息，请在CoSail的机器人模块检查模型连接和运行记录。';
       }
     }
     const bindingId = createHash('sha256')
@@ -252,7 +252,7 @@ export class Bots {
       return `${s.id.slice(0, 8)} · ${s.title.replace(/[\r\n]/g, ' ').slice(0, 100)} · ${run ? { running: '进行中', completed: '已完成', failed: '失败', interrupted: '已停止' }[run.status] : '待开始'}${run?.status === 'running' ? `（${Math.floor((Date.now() - run.startedAt) / 1000)} 秒）` : ''}`;
     };
     const help =
-      '同舟机器人\n/sessions 会话列表\n/status [会话ID] 进度\n/use 会话ID 切换\n/new 标题 新建\n/run 任务内容 继续任务\n/stop 停止\n/rename 标题 重命名\n/archive 归档\n执行操作需要在同舟中开启权限。';
+      'CoSail机器人\n/sessions 会话列表\n/status [会话ID] 进度\n/use 会话ID 切换\n/new 标题 新建\n/run 任务内容 继续任务\n/stop 停止\n/rename 标题 重命名\n/archive 归档\n执行操作需要在CoSail中开启权限。';
     try {
       let reply: string;
       if (['sessions', '会话', '列表'].includes(name ?? ''))
@@ -280,7 +280,7 @@ export class Bots {
         ['new', 'run', 'stop', 'rename', 'archive', '新建', '继续', '停止'].includes(name ?? '')
       ) {
         if (botSettings(this.store).permission === 'read-only')
-          return '此机器人仅允许查看。请在同舟的机器人通用设置中调整执行模式。';
+          return '此机器人仅允许查看。请在CoSail的机器人通用设置中调整执行模式。';
         if (name === 'new' || name === '新建') {
           if (!arg || arg.length > 120) return '用法：/new 会话标题（最多 120 字）';
           const s = this.store.createSession(botSettings(this.store).defaultProjectId);
@@ -316,10 +316,10 @@ export class Bots {
                 return '当前会话正在执行任务，请等回复，或使用 /status、/stop。';
               const runId = this.runtime.start(input);
               this.taskReplies.register(runId, botId, m.sender, s.id, m.reply);
-              reply = '任务已提交，完成后会在这里回复。需要批准时请回到同舟。';
+              reply = '任务已提交，完成后会在这里回复。需要批准时请回到CoSail。';
             } else {
               await this.runtime.enqueue(input, 'supplement');
-              reply = '任务已提交；使用 /status 查看进度。需要批准时请回到同舟。';
+              reply = '任务已提交；使用 /status 查看进度。需要批准时请回到CoSail。';
             }
           } else if (name === 'stop' || name === '停止') {
             this.runtime.cancel(s.id);
@@ -351,12 +351,12 @@ export class Bots {
   private async chat(bot: BotConfig, message: BotMessage) {
     const settings = botSettings(this.store);
     if (!settings.providerId || !settings.model)
-      return '请在同舟 → 机器人 → 通用设置中选择模型，设置一次即可开始聊天。';
+      return '请在CoSail → 机器人 → 通用设置中选择模型，设置一次即可开始聊天。';
     const provider = this.store
       .providers()
       .find((p) => p.id === settings.providerId && p.enabled !== false);
     if (!provider || !provider.models.includes(settings.model))
-      return '机器人使用的模型已不可用，请在同舟 → 机器人 → 通用设置中重新选择。';
+      return '机器人使用的模型已不可用，请在CoSail → 机器人 → 通用设置中重新选择。';
     let session = this.store
       .list<Session>('session')
       .find(

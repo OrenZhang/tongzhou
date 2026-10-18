@@ -1,7 +1,8 @@
 import { openSidebar } from './navigation-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { createServer } from 'node:http';
-import { mkdir, mkdtemp, readFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 await mkdir('test-results', { recursive: true });
@@ -25,7 +26,7 @@ const server = createServer(async (req, res) => {
     })
     .find((a) => a?.name === '整理结果.md');
   const calls = [
-    { name: '测试图片.png', data: png },
+    { name: '测试图片.png', url: 'https://media-fixture.invalid/image.png' },
     { name: '整理结果.md', text: '# 整理结果\n\n结构清晰的文档。' },
   ];
   res.writeHead(200, { 'Content-Type': 'text/event-stream' });
@@ -107,6 +108,20 @@ try {
     }
     return nativeImage.createFromBitmap(bitmap, { width, height }).toPNG().toString('base64');
   });
+  await app.evaluate(({ session }, data) => {
+    globalThis.mediaDownloadCount = 0;
+    const serviceSession = session.fromPartition('tongzhou-service-network');
+    const originalFetch = serviceSession.fetch.bind(serviceSession);
+    serviceSession.fetch = async (input, options) => {
+      if (new URL(input).hostname !== 'media-fixture.invalid') return originalFetch(input, options);
+      globalThis.mediaDownloadCount++;
+      if (globalThis.mediaDownloadCount === 2)
+        return new Response('Temporary download failure', { status: 503 });
+      return new Response(Buffer.from(data, 'base64'), {
+        headers: { 'content-type': 'image/png' },
+      });
+    };
+  }, png);
   const session = await page.evaluate(async (baseUrl) => {
     const api = window.tongzhou;
     await api.saveProvider({
@@ -141,6 +156,10 @@ try {
   });
   const works = await page.evaluate(() => window.tongzhou.artifactList());
   assert.equal(works.total, 2);
+  const generatedImage = works.items.find((item) => item.kind === 'image');
+  assert.equal(generatedImage.remoteUrl, undefined);
+  assert.equal(generatedImage.sourceUrl, 'https://media-fixture.invalid/image.png');
+  assert.equal(await app.evaluate(() => globalThis.mediaDownloadCount), 1);
   assert.equal(
     (await page.evaluate(() => window.tongzhou.contentState('default'))).documents.length,
     1,
@@ -167,6 +186,30 @@ try {
   await page.getByRole('button', { name: '查看作品 测试图片.png', exact: true }).click();
   await page.locator('.artifact-preview img').waitFor();
   await page.getByRole('button', { name: '关闭工作区', exact: true }).click();
+  // Simulate a pre-upgrade remote-only record. Opening history should download it, not regenerate.
+  const recordPath = path.join(
+    root,
+    'profile/.tzhou/artifacts/records',
+    generatedImage.id + '.json',
+  );
+  const record = JSON.parse(await readFile(recordPath, 'utf8'));
+  record.remoteUrl = record.sourceUrl;
+  delete record.blob;
+  delete record.sourceUrl;
+  delete record.size;
+  record.hash = createHash('sha256').update(record.remoteUrl).digest('hex');
+  await writeFile(recordPath, JSON.stringify(record));
+  await page.reload();
+  await page.waitForSelector('.app-shell');
+  await page.locator(`[data-session-id="${session.id}"]`).click();
+  await page.getByRole('button', { name: '重试加载', exact: true }).waitFor();
+  assert.equal(await app.evaluate(() => globalThis.mediaDownloadCount), 2);
+  await page.getByRole('button', { name: '重试加载', exact: true }).click();
+  await page.waitForFunction(
+    () => document.querySelector('.artifact-image-card img')?.naturalWidth === 720,
+  );
+  assert.equal(await app.evaluate(() => globalThis.mediaDownloadCount), 3);
+  assert.equal((await page.evaluate(() => window.tongzhou.artifactList())).total, 2);
   // A decode failure must leave the original file action accessible.
   await page.locator('.artifact-image-card img').dispatchEvent('error');
   await page.locator('.artifact-strip .file-link').filter({ hasText: '测试图片.png' }).waitFor();
@@ -230,6 +273,7 @@ try {
     content.folders.every((f) => !('usageEnabled' in f)),
     'saving a work must not enable AI usage',
   );
+  await page.getByRole('button', { name: '会话', exact: true }).click();
   await page.locator(`[data-session-id="${session.id}"]`).click();
   await page.getByRole('button', { name: '会话作品', exact: true }).click();
   await page.getByLabel('作品来源会话', { exact: true }).waitFor();
@@ -276,14 +320,17 @@ try {
     await page.setViewportSize({ width, height });
     for (const theme of ['light', 'dark']) {
       await page.evaluate((theme) => (document.documentElement.dataset.theme = theme), theme);
-      const bounds = await page.evaluate(() => {
-        const b = document.querySelector('.sidebar-settings-row').getBoundingClientRect();
-        return {
-          bottom: b.bottom,
-          height: innerHeight,
-          overflow: document.documentElement.scrollWidth - innerWidth,
-        };
-      });
+      const bounds = await page
+        .locator('.sidebar-rail')
+        .getByRole('button', { name: '设置', exact: true })
+        .evaluate((button) => {
+          const b = button.getBoundingClientRect();
+          return {
+            bottom: b.bottom,
+            height: innerHeight,
+            overflow: document.documentElement.scrollWidth - innerWidth,
+          };
+        });
       assert.ok(bounds.bottom <= bounds.height + 1);
       assert.ok(bounds.overflow <= 1);
       await page.screenshot({ path: path.join(root, `works-${width}-${theme}.png`) });

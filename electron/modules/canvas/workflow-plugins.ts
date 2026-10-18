@@ -41,7 +41,7 @@ export function registerWorkflowPlugins(
       kind: 'plugin',
       version: 1,
       cache: 'never',
-      description: '发布后由自动化中心定时执行此节点连接的下游流程；需要同舟保持运行',
+      description: '发布后由自动化中心定时执行此节点连接的下游流程；需要CoSail保持运行',
       inputs: [],
       outputs: ['text'],
       ports: { inputs: [], outputs: [port('result', '触发信息')] },

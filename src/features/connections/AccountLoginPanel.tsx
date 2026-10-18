@@ -1,3 +1,4 @@
+import { t as tr } from '../../shared/i18n';
 import { ArrowRight, CheckCircle2, Globe2, RefreshCw } from 'lucide-react';
 import type {
   NativeAuthState,
@@ -47,8 +48,8 @@ export function AccountLoginPanel({
           <div className="settings-card-title">
             <Mark small />
             <div>
-              <h3>OpenAI / ChatGPT 登录</h3>
-              <p>使用独立的 Codex 配置目录，不改写你已有的 Codex 配置。</p>
+              <h3>{tr('OpenAI / ChatGPT 登录')}</h3>
+              <p>{tr('使用独立的 Codex 配置目录，不改写你已有的 Codex 配置。')}</p>
             </div>
           </div>
           <div className="account-status">
@@ -58,8 +59,8 @@ export function AccountLoginPanel({
               error={!!codex?.error}
             />
             {codex
-              ? codex.account || (codex.available ? 'Codex 可用，尚未登录' : 'Codex 未就绪')
-              : '正在检查账号状态…'}
+              ? codex.account || (codex.available ? tr('Codex 可用，尚未登录') : tr('Codex 未就绪'))
+              : tr('正在检查账号状态…')}
             {codex?.plan && <small>{codex.plan}</small>}
             {codex?.error && <small>{codex.error}</small>}
           </div>
@@ -69,7 +70,7 @@ export function AccountLoginPanel({
               disabled={authPending || !!codex?.account}
               onClick={() => startLogin('browser')}
             >
-              ChatGPT 浏览器登录
+              {tr('ChatGPT 浏览器登录')}
               <ArrowRight size={15} />
             </button>
             <button
@@ -77,7 +78,7 @@ export function AccountLoginPanel({
               disabled={authPending || !!codex?.account}
               onClick={() => startLogin('device')}
             >
-              设备码登录
+              {tr('设备码登录')}
             </button>
             <button
               className="secondary"
@@ -88,7 +89,7 @@ export function AccountLoginPanel({
               }
             >
               <RefreshCw size={14} />
-              刷新状态
+              {tr('刷新状态')}
             </button>
             {codex?.account && !authPending && (
               <button
@@ -100,7 +101,7 @@ export function AccountLoginPanel({
                   })
                 }
               >
-                退出登录
+                {tr('退出登录')}
               </button>
             )}
           </div>
@@ -108,49 +109,56 @@ export function AccountLoginPanel({
             <div className={'auth-progress ' + codex.login.phase} aria-live="polite">
               {codex.login.phase === 'starting' && (
                 <p>
-                  <Spinner /> 正在创建授权请求…
+                  <Spinner />
+                  {tr(' 正在创建授权请求…')}
                 </p>
               )}
               {codex.login.phase === 'checking' && (
                 <p>
-                  <Spinner /> 正在确认账号与授权结果…
+                  <Spinner />
+                  {tr(' 正在确认账号与授权结果…')}
                 </p>
               )}
               {codex.login.phase === 'waiting' && (
                 <>
                   <strong>
-                    {codex.login.method === 'device' ? '输入设备码完成授权' : '等待浏览器授权完成'}
+                    {codex.login.method === 'device'
+                      ? tr('输入设备码完成授权')
+                      : tr('等待浏览器授权完成')}
                   </strong>
                   <p>
                     {codex.login.method === 'device'
-                      ? '打开官方授权页面，登录你的 ChatGPT 账号并输入以下一次性设备码。'
-                      : '在系统浏览器中登录 ChatGPT 并完成授权；同舟会自动更新状态。若浏览器回调失败，可以取消后改用设备码登录。'}
+                      ? tr('打开官方授权页面，登录你的 ChatGPT 账号并输入以下一次性设备码。')
+                      : tr(
+                          '在系统浏览器中登录 ChatGPT 并完成授权；CoSail会自动更新状态。若浏览器回调失败，可以取消后改用设备码登录。',
+                        )}
                   </p>
                   {codex.login.userCode && (
                     <div className="device-code-row">
-                      <code aria-label="设备授权码">{codex.login.userCode}</code>
+                      <code aria-label={tr('设备授权码')}>{codex.login.userCode}</code>
                       <button
                         className="secondary"
                         onClick={() =>
                           perform(async () => {
                             await api.codexLoginCopyCode(authPanel ? authProviderId : undefined);
-                            setNotice('设备码已复制');
+                            setNotice(tr('设备码已复制'));
                           })
                         }
                       >
-                        复制设备码
+                        {tr('复制设备码')}
                       </button>
                     </div>
                   )}
                   {codex.login.method === 'device' && (
-                    <p>设备码登录需要在 ChatGPT 安全设置或工作区权限中启用。</p>
+                    <p>{tr('设备码登录需要在 ChatGPT 安全设置或工作区权限中启用。')}</p>
                   )}
                   {codex.login.error && <p role="alert">{codex.login.error}</p>}
                   {codex.login.method === 'browser' && (
                     <div className="auth-recovery">
                       <p>
-                        如果网页出现 Route Error / Invalid content
-                        type，表示授权网页收到了异常响应。可以重新发起，或改用设备码；旧页面重试不会创建新的授权。
+                        {tr(
+                          '如果网页出现 Route Error / Invalid content type，表示授权网页收到了异常响应。可以重新发起，或改用设备码；旧页面重试不会创建新的授权。',
+                        )}
                       </p>
                       <div className="row">
                         <button
@@ -160,7 +168,7 @@ export function AccountLoginPanel({
                             perform(() => api.codexLoginRetry('device', authProviderId))
                           }
                         >
-                          改用设备码登录
+                          {tr('改用设备码登录')}
                         </button>
                         <button
                           className="text-button"
@@ -169,7 +177,7 @@ export function AccountLoginPanel({
                             perform(() => api.codexLoginRetry('browser', authProviderId))
                           }
                         >
-                          重新发起浏览器授权
+                          {tr('重新发起浏览器授权')}
                         </button>
                       </div>
                     </div>
@@ -181,7 +189,7 @@ export function AccountLoginPanel({
                         perform(() => api.codexLoginOpen(authPanel ? authProviderId : undefined))
                       }
                     >
-                      打开授权页面
+                      {tr('打开授权页面')}
                     </button>
                     <button
                       className="text-button"
@@ -189,26 +197,35 @@ export function AccountLoginPanel({
                         perform(() => api.codexLoginCancel(authPanel ? authProviderId : undefined))
                       }
                     >
-                      取消授权
+                      {tr('取消授权')}
                     </button>
                   </div>
                 </>
               )}
               {codex.login.phase === 'success' && (
                 <p>
-                  <CheckCircle2 size={16} /> 授权成功，已连接 {codex.account}
-                  。模型列表将自动更新。
+                  <CheckCircle2 size={16} />
+                  {tr(' 授权成功，已连接 ')}
+                  {codex.account}
+                  {tr('。模型列表将自动更新。')}
                 </p>
               )}
               {codex.login.phase === 'error' && (
-                <p role="alert">授权失败：{codex.login.error}。可重新授权或切换登录方式。</p>
+                <p role="alert">
+                  {tr('授权失败：')}
+                  {codex.login.error}
+                  {tr('。可重新授权或切换登录方式。')}
+                </p>
               )}
-              {codex.login.phase === 'cancelled' && <p>已取消本次授权，可以重新选择登录方式。</p>}
+              {codex.login.phase === 'cancelled' && (
+                <p>{tr('已取消本次授权，可以重新选择登录方式。')}</p>
+              )}
             </div>
           )}
           <p className="footnote">
-            这两种方式均使用 ChatGPT 账号授权给内置 Codex，成功后选择“OpenAI · ChatGPT”连接。API Key
-            连接仍需单独配置。
+            {tr(
+              '这两种方式均使用 ChatGPT 账号授权给内置 Codex，成功后选择“OpenAI · ChatGPT”连接。API Key 连接仍需单独配置。',
+            )}
           </p>
         </section>
       )}
@@ -219,12 +236,15 @@ export function AccountLoginPanel({
           const pending = !!state && ['starting', 'waiting', 'checking'].includes(state.phase);
           const label = engine === 'kimi' ? 'Kimi Code' : 'MiniMax Code';
           return (
-            <section className="settings-card" key={engine} aria-label={`${label} 账号`}>
+            <section className="settings-card" key={engine} aria-label={tr('{0} 账号', [label])}>
               <div className="settings-card-title">
                 <Globe2 size={23} />
                 <div>
-                  <h3>{label} 账号授权</h3>
-                  <p>登录后可在同一会话中切换模型，也可分配给子 Agent。</p>
+                  <h3>
+                    {label}
+                    {tr(' 账号授权')}
+                  </h3>
+                  <p>{tr('登录后可在同一会话中切换模型，也可分配给子 Agent。')}</p>
                 </div>
               </div>
               <div className="account-status">
@@ -233,11 +253,15 @@ export function AccountLoginPanel({
                   pending={pending}
                   error={!!state?.error}
                 />
-                {state ? (state.authenticated ? '账号已授权' : '尚未登录') : '正在检查账号状态…'}
+                {state
+                  ? state.authenticated
+                    ? tr('账号已授权')
+                    : tr('尚未登录')
+                  : tr('正在检查账号状态…')}
               </div>
               <div className="row">
                 <select
-                  aria-label={`${label} 账号地区`}
+                  aria-label={tr('{0} 账号地区', [label])}
                   disabled={pending || state?.authenticated}
                   value={nativeRegions[engine]}
                   onChange={(e) =>
@@ -247,8 +271,8 @@ export function AccountLoginPanel({
                     }))
                   }
                 >
-                  <option value="cn">国内账号</option>
-                  <option value="global">国际账号</option>
+                  <option value="cn">{tr('国内账号')}</option>
+                  <option value="global">{tr('国际账号')}</option>
                 </select>
                 <button
                   className="primary"
@@ -257,7 +281,8 @@ export function AccountLoginPanel({
                     perform(() => api.nativeLogin(engine, nativeRegions[engine], authProviderId))
                   }
                 >
-                  登录 {label}
+                  {tr('登录 ')}
+                  {label}
                   <ArrowRight size={15} />
                 </button>
                 <button
@@ -268,7 +293,7 @@ export function AccountLoginPanel({
                   }
                 >
                   <RefreshCw size={14} />
-                  刷新状态
+                  {tr('刷新状态')}
                 </button>
                 {state?.authenticated && !pending && (
                   <button
@@ -279,7 +304,7 @@ export function AccountLoginPanel({
                       )
                     }
                   >
-                    退出登录
+                    {tr('退出登录')}
                   </button>
                 )}
               </div>
@@ -287,14 +312,14 @@ export function AccountLoginPanel({
                 <div className="auth-progress waiting" aria-live="polite">
                   <p>
                     {state.phase === 'starting'
-                      ? '正在创建授权请求…'
+                      ? tr('正在创建授权请求…')
                       : state.phase === 'checking'
-                        ? '正在验证账号并同步模型…'
-                        : '请在官方授权页面登录账号并确认授权。'}
+                        ? tr('正在验证账号并同步模型…')
+                        : tr('请在官方授权页面登录账号并确认授权。')}
                   </p>
                   {state.userCode && (
                     <div className="device-code-row">
-                      <code aria-label={`${label} 设备码`}>{state.userCode}</code>
+                      <code aria-label={tr('{0} 设备码', [label])}>{state.userCode}</code>
                       <button
                         className="secondary"
                         onClick={() =>
@@ -303,7 +328,7 @@ export function AccountLoginPanel({
                           )
                         }
                       >
-                        复制设备码
+                        {tr('复制设备码')}
                       </button>
                     </div>
                   )}
@@ -317,7 +342,7 @@ export function AccountLoginPanel({
                           )
                         }
                       >
-                        打开授权页面
+                        {tr('打开授权页面')}
                       </button>
                     )}
                     <button
@@ -328,26 +353,28 @@ export function AccountLoginPanel({
                         )
                       }
                     >
-                      取消授权
+                      {tr('取消授权')}
                     </button>
                   </div>
                 </div>
               )}
               {state?.phase === 'success' && (
                 <div className="auth-progress success">
-                  授权成功，已同步模型列表。请选择“{engine === 'kimi' ? 'Kimi' : 'MiniMax'} ·
-                  账号授权”连接开始聊天。
+                  {tr('授权成功，已同步模型列表。请选择“')}
+                  {engine === 'kimi' ? 'Kimi' : 'MiniMax'}
+                  {tr(' · 账号授权”连接开始聊天。')}
                 </div>
               )}
-              {state?.phase === 'cancelled' && <p className="muted">本次授权已取消。</p>}
+              {state?.phase === 'cancelled' && <p className="muted">{tr('本次授权已取消。')}</p>}
               {state?.error && (
                 <div className="auth-progress error" role="alert">
                   {state.error}
                 </div>
               )}
               <p className="footnote">
-                使用内置官方客户端管理登录与续期，凭据保存在同舟独立目录。任务统一由 Codex
-                核心执行。账号套餐与 API Key 分开配置；API / 套餐 Key 可在“模型”中添加。
+                {tr(
+                  '使用内置官方客户端管理登录与续期，凭据保存在CoSail独立目录。任务统一由 Codex 核心执行。账号套餐与 API Key 分开配置；API / 套餐 Key 可在“模型”中添加。',
+                )}
               </p>
             </section>
           );

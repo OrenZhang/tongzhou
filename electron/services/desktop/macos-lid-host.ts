@@ -49,7 +49,7 @@ authorization = execFile(
           type: 'error',
           message:
             phase === 'busy'
-              ? '另一同舟实例正在管理合盖设置'
+              ? '另一CoSail实例正在管理合盖设置'
               : phase === 'restore-error'
                 ? 'macOS 睡眠设置恢复失败，请重新授权恢复'
                 : '已停止合盖保持唤醒（电源断开或辅助进程退出）',

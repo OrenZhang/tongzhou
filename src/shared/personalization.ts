@@ -26,7 +26,7 @@ export const defaultReply: ReplyPreferences = {
 export const replyOptions = {
   language: { auto: '跟随当前对话', zh: '中文', en: '英文' },
   length: { auto: '按问题需要', concise: '简短，先给结论', detailed: '详细，补充解释和例子' },
-  tone: { auto: '同舟默认风格', direct: '直接、专业', friendly: '自然、耐心' },
+  tone: { auto: 'CoSail默认风格', direct: '直接、专业', friendly: '自然、耐心' },
 } as const;
 /** Shared by the settings summary and the actual next-turn instructions. */
 export function replyInstructions(reply: ReplyPreferences = defaultReply): string[] {

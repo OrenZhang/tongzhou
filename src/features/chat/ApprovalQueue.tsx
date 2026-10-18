@@ -1,3 +1,4 @@
+import { t as tr } from '../../shared/i18n';
 import { useState } from 'react';
 import { ChevronDown, ShieldAlert } from 'lucide-react';
 import type { Approval } from '../../shared/types';
@@ -13,10 +14,10 @@ function approvalDescription(approval: Approval) {
     if (title === 'Codex 请求执行许可')
       title =
         detail.kind === 'command' || detail.command
-          ? '运行命令'
+          ? tr('运行命令')
           : detail.kind === 'fileChange' || detail.grantRoot || detail.changes
-            ? '修改文件'
-            : '执行操作';
+            ? tr('修改文件')
+            : tr('执行操作');
     const reason = detail.reason ?? detail.requestReason;
     if (typeof reason === 'string' && reason.trim()) title += `：${reason}`;
   } catch {
@@ -54,23 +55,23 @@ function ApprovalCard({
         <span className="approval-description" title={description}>
           {description}
         </span>
-        <span className="approval-scope">仅本次</span>
+        <span className="approval-scope">{tr('仅本次')}</span>
         <div className="approval-actions">
           <button
             className="approval-detail-toggle"
-            aria-label={detailsOpen ? '收起操作详情' : '查看操作详情'}
+            aria-label={detailsOpen ? tr('收起操作详情') : tr('查看操作详情')}
             aria-expanded={detailsOpen}
             aria-controls={`approval-detail-${approval.id}`}
-            title={detailsOpen ? '收起操作详情' : '查看操作详情'}
+            title={detailsOpen ? tr('收起操作详情') : tr('查看操作详情')}
             onClick={() => setDetailsOpen(!detailsOpen)}
           >
             <ChevronDown size={14} className={detailsOpen ? 'rotate' : ''} />
           </button>
           <button className="secondary" disabled={busy} onClick={() => void decide(false)}>
-            拒绝
+            {tr('拒绝')}
           </button>
           <button className="approval-confirm" disabled={busy} onClick={() => void decide(true)}>
-            {busy ? '处理中…' : '批准本次'}
+            {busy ? tr('处理中…') : tr('批准本次')}
           </button>
         </div>
       </div>
@@ -93,9 +94,10 @@ export function ApprovalQueue({
 }) {
   if (!approvals.length) return null;
   return (
-    <div className="approval-queue" aria-label="待批准操作">
+    <div className="approval-queue" aria-label={tr('待批准操作')}>
       <p className="approval-count" role="status">
-        {approvals.length} 项等待你处理
+        {approvals.length}
+        {tr(' 项等待你处理')}
       </p>
       {approvals.map((approval) =>
         approval.kind === 'question' ? (

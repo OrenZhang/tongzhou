@@ -76,7 +76,7 @@ export const canvasPlugin: Plugin.Object<void> = {
         const result = await dialog.showSaveDialog({
           title: mode === 'project' ? '导出含素材的画布项目' : '导出工作流模板',
           defaultPath: title + (mode === 'project' ? '.canvas.json' : '.template.json'),
-          filters: [{ name: '同舟画布', extensions: ['json'] }],
+          filters: [{ name: 'CoSail画布', extensions: ['json'] }],
         });
         if (result.canceled || !result.filePath) return null;
         const original = await readFile(result.filePath).catch((e: NodeJS.ErrnoException) => {
@@ -93,7 +93,7 @@ export const canvasPlugin: Plugin.Object<void> = {
       const result = await dialog.showOpenDialog({
         title: '导入画布',
         properties: ['openFile'],
-        filters: [{ name: '同舟画布', extensions: ['json'] }],
+        filters: [{ name: 'CoSail画布', extensions: ['json'] }],
       });
       if (result.canceled || !result.filePaths[0]) return null;
       if ((await stat(result.filePaths[0])).size > MAX_CANVAS_PACKAGE)

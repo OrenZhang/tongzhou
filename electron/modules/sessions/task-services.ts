@@ -246,8 +246,8 @@ export function registerTaskServices(
       const pass = password.parse(raw);
       const file = await dialog.showSaveDialog({
         title: '保存加密备份',
-        defaultPath: '同舟工作数据.tzbackup',
-        filters: [{ name: '同舟加密备份', extensions: ['tzbackup'] }],
+        defaultPath: 'CoSail工作数据.tzbackup',
+        filters: [{ name: 'CoSail加密备份', extensions: ['tzbackup'] }],
       });
       if (file.canceled || !file.filePath) return null;
       await writeFile(file.filePath, maintenance.backup(pass));
@@ -269,7 +269,7 @@ export function registerTaskServices(
       const choice = await dialog.showOpenDialog({
         title: '选择加密备份',
         properties: ['openFile'],
-        filters: [{ name: '同舟加密备份', extensions: ['tzbackup'] }],
+        filters: [{ name: 'CoSail加密备份', extensions: ['tzbackup'] }],
       });
       if (choice.canceled) return null;
       const file = choice.filePaths[0];

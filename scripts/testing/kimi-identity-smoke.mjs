@@ -89,13 +89,13 @@ try {
   assert.ok(received.length > 0, 'Kimi must send an actual model request');
   const { version } = JSON.parse(await readFile('package.json', 'utf8'));
   for (const request of received) {
-    assert.equal(request.headers['user-agent'], `Tongzhou/${version}`);
+    assert.equal(request.headers['user-agent'], `CoSail/${version}`);
     assert.equal(request.headers.authorization, 'Bearer fixture-key');
     assert.equal(request.headers['x-fixture'], 'preserved');
     assert.ok(request.body.messages.length > 0);
   }
   console.log(
-    `PASS: real Kimi/OpenAI SDK sent ${received.length} local request(s) with Tongzhou/${version}; auth and custom headers preserved.`,
+    `PASS: real Kimi/OpenAI SDK sent ${received.length} local request(s) with CoSail/${version}; auth and custom headers preserved.`,
   );
 } finally {
   client?.stop();

@@ -1,11 +1,11 @@
 ---
 name: skill-creator
-description: 在同舟中创建或修改可复用的技能。用户希望把重复工作、固定流程或领域规则保存成技能时使用；普通的一次性任务无需创建技能。
+description: 在CoSail中创建或修改可复用的技能。用户希望把重复工作、固定流程或领域规则保存成技能时使用；普通的一次性任务无需创建技能。
 ---
 
 # 技能创建
 
-将用户的工作方法写成其他 Agent 可以按需读取的技能，保存到同舟「插件 → 个人插件 → 技能」。
+将用户的工作方法写成其他 Agent 可以按需读取的技能，保存到CoSail「插件 → 个人插件 → 技能」。
 
 ## 确定内容
 
@@ -27,11 +27,11 @@ name 使用小写英文、数字和连字符，最长 64 个字符。description
 ## 保存到个人插件
 
 1. 调用 `client_catalog` 查询 `snapshot`，再用 `client_query` 查询现有技能，避免无意创建重复项。
-2. 新建时用 `client_catalog` 查询 `createSkill` 的参数结构，再通过 `client_change` 调用它。传入完整的 `instructions`（含 frontmatter）及可选的 `files` 文本映射。ID、名称与说明由同舟生成或从 frontmatter 提取；新技能默认启用。
+2. 新建时用 `client_catalog` 查询 `createSkill` 的参数结构，再通过 `client_change` 调用它。传入完整的 `instructions`（含 frontmatter）及可选的 `files` 文本映射。ID、名称与说明由CoSail生成或从 frontmatter 提取；新技能默认启用。
 3. 修改用户已有的个人技能时，先读取其 SKILL.md 和涉及的附属文件，查询 `saveSkill` 参数结构，使用真实 ID 更新。保留无关内容；修改名称或说明时同步 frontmatter。内置技能不能覆盖，可以创建不同名称的个人版本。
 4. 用 `client_query` 再次查询 snapshot，核对返回的 ID、名称、内容和启用状态。只有持久化成功后才告知用户“已保存到个人插件”。新技能在下一轮会话中可发现；用户也可在个人插件中停用。
 
-客户端工具的 args 是位置参数数组；按照 `client_catalog` 返回的 schema 传入，不猜测方法参数。保存和更新遵循当前会话审批与权限。若只读权限、客户端管理未启用或操作被拒绝，保留完整技能草稿并明确说明尚未保存；不要绕过限制、读取凭据或直接修改同舟数据库。
+客户端工具的 args 是位置参数数组；按照 `client_catalog` 返回的 schema 传入，不猜测方法参数。保存和更新遵循当前会话审批与权限。若只读权限、客户端管理未启用或操作被拒绝，保留完整技能草稿并明确说明尚未保存；不要绕过限制、读取凭据或直接修改CoSail数据库。
 
 ## 检查质量
 

@@ -1,3 +1,4 @@
+import { t as tr, localize as localized } from '../../shared/i18n';
 import { useEffect, useId, useState, type ReactNode } from 'react';
 import { Check, ChevronDown, Circle } from 'lucide-react';
 import type { Run, RunEvent, Snapshot, TongzhouAPI } from '../../shared/types';
@@ -6,7 +7,10 @@ import { Spinner } from '../../components/components';
 import { agentPlan, parseAgentPlan } from '../../shared/agent-plan';
 import { AgentActivity } from './AgentActivity';
 import type { ChildAgent, ExecutionObservation } from '../../shared/agent-execution';
-import { modelScenes, modelStages } from '../../shared/model-protocol';
+import {
+  modelScenes as raw_modelScenes,
+  modelStages as raw_modelStages,
+} from '../../shared/model-protocol';
 
 export function useRunEvents(api: TongzhouAPI, sessionId: string) {
   const [hasEarlier, setHasEarlier] = useState(false);
@@ -119,7 +123,8 @@ export function TurnProcess({
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [active, run?.id]);
-  const phase = events.filter((e) => e.type === 'phase').at(-1)?.text ?? run?.phase ?? '准备上下文';
+  const phase =
+    events.filter((e) => e.type === 'phase').at(-1)?.text ?? run?.phase ?? tr('准备上下文');
   const phaseKey = active ? 'active' : 'finished';
   const explicitlyExpanded = manual?.phase === phaseKey && manual.open;
   const expanded =
@@ -127,11 +132,11 @@ export function TurnProcess({
       ? manual.open
       : active && (hasContent || !!plan || agents.length > 0);
   const labels: Record<string, string> = {
-    准备上下文: '准备中',
-    准备工具: '准备中',
-    连接模型: '正在连接',
-    等待模型响应: '等待回复',
-    调用工具: '正在执行工具',
+    准备上下文: tr('准备中'),
+    准备工具: tr('准备中'),
+    连接模型: tr('正在连接'),
+    等待模型响应: tr('等待回复'),
+    调用工具: tr('正在执行工具'),
   };
   const label = labels[phase] ?? phase;
   const elapsed = run
@@ -142,11 +147,16 @@ export function TurnProcess({
   const output = ordered.find(
     (e) =>
       (!waiting || e.time >= waiting.time) &&
-      ['正在回复', '正在说明进度', '思考中', '调用工具'].includes(e.text),
+      [tr('正在回复'), tr('正在说明进度'), tr('思考中'), tr('调用工具')].includes(e.text),
   );
   const timing =
     run && waiting
-      ? `准备 ${formatDuration(waiting.time - run.startedAt)} · ${output ? '首条输出 ' + formatDuration(output.time - waiting.time) : '等待首条输出 ' + formatDuration((active ? now : run.endedAt || now) - waiting.time)}`
+      ? tr('准备 {0} · {1}', [
+          formatDuration(waiting.time - run.startedAt),
+          output
+            ? '首条输出 ' + formatDuration(output.time - waiting.time)
+            : '等待首条输出 ' + formatDuration((active ? now : run.endedAt || now) - waiting.time),
+        ])
       : '';
   if (!run && !events.length) return <>{children}</>;
   return (
@@ -154,48 +164,55 @@ export function TurnProcess({
       <div className="turn-process">
         <button
           className="process-toggle"
-          aria-label="本轮用时与处理过程"
-          title={expanded ? '收起本轮处理过程' : '展开本轮处理过程'}
+          aria-label={tr('本轮用时与处理过程')}
+          title={expanded ? tr('收起本轮处理过程') : tr('展开本轮处理过程')}
           aria-expanded={expanded}
           aria-controls={contentId}
           onClick={() => setManual({ phase: phaseKey, open: !expanded })}
         >
           {active && !expanded && <Spinner />}
-          <span>{elapsed === undefined ? '本轮过程' : `用时 ${elapsed}`}</span>
+          <span>{elapsed === undefined ? tr('本轮过程') : tr('用时 {0}', [elapsed])}</span>
           {active && !expanded && <small>{label}</small>}
           <ChevronDown size={13} className={expanded ? 'rotate' : ''} />
         </button>
         <div id={contentId} className="process-timeline" hidden={!expanded}>
           {run?.routing && (
             <small className="execution-meta muted">
-              自动路由：{modelScenes[run.routing.scene]} · {modelStages[run.routing.stage]} ·{' '}
-              {run.model}
-              {run.config?.reasoningEffort ? ` · 思考 ${run.config.reasoningEffort}` : ''}
-              {run.routing.fallback ? ' · 首选不可用，使用后备' : ''}
+              {tr('自动路由：')}
+              {modelScenes[run.routing.scene]} · {modelStages[run.routing.stage]} · {run.model}
+              {run.config?.reasoningEffort ? tr(' · 思考 {0}', [run.config.reasoningEffort]) : ''}
+              {run.routing.fallback ? tr(' · 首选不可用，使用后备') : ''}
             </small>
           )}
           {observation && (
             <small className="execution-meta muted">
-              执行模型：{observation.actualModel}
-              {run?.config?.reasoningEffort ? ` · 思考 ${run.config.reasoningEffort}` : ''}
-              {observation.compactions > 0 ? ` · 上下文整理 ${observation.compactions} 次` : ''}
+              {tr('执行模型：')}
+              {observation.actualModel}
+              {run?.config?.reasoningEffort ? tr(' · 思考 {0}', [run.config.reasoningEffort]) : ''}
+              {observation.compactions > 0
+                ? tr(' · 上下文整理 {0} 次', [observation.compactions])
+                : ''}
               {run?.usageReported
-                ? ` · ${observation.usageIncomplete ? '已上报 ' : ''}Tokens ${run.inputTokens + run.outputTokens}${observation.usageIncomplete ? '（部分未上报）' : ''}`
-                : ' · 用量未上报'}
+                ? ` · ${observation.usageIncomplete ? tr('已上报 ') : ''}Tokens ${run.inputTokens + run.outputTokens}${observation.usageIncomplete ? tr('（部分未上报）') : ''}`
+                : tr(' · 用量未上报')}
             </small>
           )}
           {observation && observation.reroutes.length > 0 && (
             <small className="muted">
-              模型调整：
+              {tr('模型调整：')}
               {observation.reroutes.map((r) => `${r.fromModel} → ${r.toModel}`).join('；')}
             </small>
           )}
           <AgentActivity agents={agents} active={active} onControl={onAgentControl} />
           {!!run?.completionChecks?.checks.length && (
-            <section className="agent-plan" aria-label="完成检查">
+            <section className="agent-plan" aria-label={tr('完成检查')}>
               <small className="muted">
-                完成检查 · {run.completionChecks.checks.filter((c) => c.status === 'passed').length}
-                /{run.completionChecks.checks.length} · 第 {run.completionChecks.attempts} 轮
+                {tr('完成检查 · ')}
+                {run.completionChecks.checks.filter((c) => c.status === 'passed').length}/
+                {run.completionChecks.checks.length}
+                {tr(' · 第 ')}
+                {run.completionChecks.attempts}
+                {tr(' 轮')}
               </small>
               <ol>
                 {run.completionChecks.checks.map((c) => (
@@ -205,10 +222,10 @@ export function TurnProcess({
                       {c.description} ·{' '}
                       {
                         {
-                          pending: '待检查',
-                          passed: '通过',
-                          failed: '未通过',
-                          blocked: '未执行成功',
+                          pending: tr('待检查'),
+                          passed: tr('通过'),
+                          failed: tr('未通过'),
+                          blocked: tr('未执行成功'),
                         }[c.status]
                       }
                     </span>
@@ -218,25 +235,28 @@ export function TurnProcess({
             </section>
           )}
           {timing && explicitlyExpanded && (
-            <small className="muted">{timing}（包含网络与服务端等待）</small>
+            <small className="muted">
+              {timing}
+              {tr('（包含网络与服务端等待）')}
+            </small>
           )}
           {plan && plan.plan.length > 0 && (
-            <section className="agent-plan" aria-label="任务计划">
+            <section className="agent-plan" aria-label={tr('任务计划')}>
               <small className="muted">
-                任务计划 · {plan.plan.filter((s) => s.status === 'completed').length}/
-                {plan.plan.length}
+                {tr('任务计划 · ')}
+                {plan.plan.filter((s) => s.status === 'completed').length}/{plan.plan.length}
               </small>
               <ol>
                 {plan.plan.map((step, index) => (
                   <li key={index} data-status={step.status}>
                     {step.status === 'completed' ? (
-                      <Check size={13} aria-label="已完成" />
+                      <Check size={13} aria-label={tr('已完成')} />
                     ) : step.status === 'inProgress' && active ? (
                       <Spinner />
                     ) : (
                       <Circle
                         size={11}
-                        aria-label={step.status === 'inProgress' ? '未完成' : '待处理'}
+                        aria-label={step.status === 'inProgress' ? tr('未完成') : tr('待处理')}
                       />
                     )}
                     <span>{step.step}</span>
@@ -280,24 +300,26 @@ export function PendingInputs({
           <div className="queued-input" key={p.id}>
             <span>
               {p.status === 'dispatching'
-                ? '已送交引擎，等待确认'
+                ? tr('已送交引擎，等待确认')
                 : p.status === 'paused'
-                  ? '待恢复'
+                  ? tr('待恢复')
                   : p.mode === 'supplement'
-                    ? '等待补充到下一安全点'
-                    : '等待下一轮'}
+                    ? tr('等待补充到下一安全点')
+                    : tr('等待下一轮')}
               ：{p.input.prompt}
-              {p.input.attachmentIds?.length ? ` · ${p.input.attachmentIds.length} 个附件` : ''}
+              {p.input.attachmentIds?.length
+                ? tr(' · {0} 个附件', [p.input.attachmentIds.length])
+                : ''}
             </span>
             {p.status === 'paused' && (
               <button onClick={() => void api.resumeInput(p.id).catch((e) => setError(String(e)))}>
-                继续
+                {tr('继续')}
               </button>
             )}
             {editing === p.id && (
               <>
                 <textarea
-                  aria-label="编辑排队消息"
+                  aria-label={tr('编辑排队消息')}
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                 />
@@ -309,9 +331,9 @@ export function PendingInputs({
                       .catch((e) => setError(String(e)))
                   }
                 >
-                  保存
+                  {tr('保存')}
                 </button>
-                <button onClick={() => setEditing('')}>放弃修改</button>
+                <button onClick={() => setEditing('')}>{tr('放弃修改')}</button>
               </>
             )}
             {p.status !== 'dispatching' && (
@@ -321,14 +343,14 @@ export function PendingInputs({
                   setDraft(p.input.prompt);
                 }}
               >
-                编辑
+                {tr('编辑')}
               </button>
             )}
             <button
               disabled={p.status === 'dispatching'}
               onClick={() => void api.cancelInput(p.id).catch((e) => setError(String(e)))}
             >
-              取消
+              {tr('取消')}
             </button>
           </div>
         ))}
@@ -336,3 +358,6 @@ export function PendingInputs({
     </div>
   );
 }
+
+const modelScenes = localized(raw_modelScenes);
+const modelStages = localized(raw_modelStages);

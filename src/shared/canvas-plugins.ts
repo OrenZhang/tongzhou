@@ -26,7 +26,7 @@ export const canvasVisualPlugins: Omit<CanvasNodePluginDefinition, 'configSchema
     description: '隔离预览 HTML 与 CSS，输出 HTML 源码',
     view: { renderer: 'html', textLabel: 'HTML 源码' },
     defaults: {
-      text: '<style>body { font-family: sans-serif; padding: 20px; color: #334155; }</style><h1>你好，同舟</h1><p>在节点中预览 HTML。</p>',
+      text: '<style>body { font-family: sans-serif; padding: 20px; color: #334155; }</style><h1>你好，CoSail</h1><p>在节点中预览 HTML。</p>',
       width: 360,
       height: 280,
     },

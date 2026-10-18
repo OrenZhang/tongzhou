@@ -157,7 +157,7 @@ export class ClientCommands {
       {
         name: 'client_catalog',
         description:
-          '发现同舟所有模块的功能与配置。内容保存用 contentWrite，偏好配置用 personalizationState/savePersonalization。无参数列出摘要；module 是模块名（如 Skills），method 是操作名（如 snapshot）。查询操作参数示例：{"method":"snapshot"}。manual 表示需要用户在对应页面操作。',
+          '发现CoSail所有模块的功能与配置。内容保存用 contentWrite，偏好配置用 personalizationState/savePersonalization。无参数列出摘要；module 是模块名（如 Skills），method 是操作名（如 snapshot）。查询操作参数示例：{"method":"snapshot"}。manual 表示需要用户在对应页面操作。',
         parameters: {
           type: 'object',
           properties: { module: { type: 'string' }, method: { type: 'string' } },
@@ -217,7 +217,7 @@ export class ClientCommands {
           name,
           description:
             (approval ? '执行' : '查询') +
-            '同舟模块功能。先调用 client_catalog 发现操作及参数；method 是注册名。推荐 argsJson：将完整位置参数数组编码为 JSON 字符串，例如 [{"name":"demo"}]。也可用 args 数组，不能同时提供。无参数操作可省略两者（例如 {"method":"snapshot"}）。不得传入凭据。',
+            'CoSail模块功能。先调用 client_catalog 发现操作及参数；method 是注册名。推荐 argsJson：将完整位置参数数组编码为 JSON 字符串，例如 [{"name":"demo"}]。也可用 args 数组，不能同时提供。无参数操作可省略两者（例如 {"method":"snapshot"}）。不得传入凭据。',
           parameters: {
             type: 'object',
             properties: {
@@ -233,7 +233,7 @@ export class ClientCommands {
             additionalProperties: false,
           },
         },
-        approval ? '执行同舟操作' : '查询同舟',
+        approval ? '执行CoSail操作' : '查询CoSail',
         async (input) => {
           const call = z
             .object({

@@ -1,8 +1,9 @@
+import { t as tr, localize as localized } from '../../shared/i18n';
 import { useState } from 'react';
 import type { ChildAgent } from '../../shared/agent-execution';
 import { errorMessage } from '../../lib/feedback';
 
-const labels: Record<ChildAgent['status'], string> = {
+const labels: Record<ChildAgent['status'], string> = localized({
   pending: '准备中',
   running: '运行中',
   waiting: '等待输入',
@@ -10,7 +11,7 @@ const labels: Record<ChildAgent['status'], string> = {
   interrupted: '已中断',
   failed: '失败',
   closed: '已关闭',
-};
+});
 export function AgentActivity({
   agents,
   active,
@@ -35,9 +36,11 @@ export function AgentActivity({
   };
   if (!agents.length) return null;
   return (
-    <section className="agent-activity" aria-label="子 Agent 任务">
+    <section className="agent-activity" aria-label={tr('子 Agent 任务')}>
       <small className="muted">
-        子任务 · {agents.filter((a) => a.status === 'completed').length}/{agents.length} 已完成
+        {tr('子任务 · ')}
+        {agents.filter((a) => a.status === 'completed').length}/{agents.length}
+        {tr(' 已完成')}
       </small>
       {agents.map((agent) => (
         <details key={agent.threadId}>
@@ -45,7 +48,7 @@ export function AgentActivity({
             <span className="agent-activity-name">{agent.name}</span>
             <small>
               {agent.pendingAction === 'resume'
-                ? '等待恢复'
+                ? tr('等待恢复')
                 : (agent.phase ?? labels[agent.status])}
             </small>
             {active &&
@@ -63,10 +66,10 @@ export function AgentActivity({
                   }}
                 >
                   {busy === agent.threadId
-                    ? '处理中…'
+                    ? tr('处理中…')
                     : ['running', 'waiting'].includes(agent.status)
-                      ? '停止'
-                      : '继续'}
+                      ? tr('停止')
+                      : tr('继续')}
                 </button>
               )}
           </summary>
@@ -85,7 +88,8 @@ export function AgentActivity({
           {agent.startedAt && agent.endedAt && (
             <small className="muted">
               {' '}
-              · {Math.max(0, Math.floor((agent.endedAt - agent.startedAt) / 1000))}秒
+              · {Math.max(0, Math.floor((agent.endedAt - agent.startedAt) / 1000))}
+              {tr('秒')}
             </small>
           )}
           {agent.message && <p>{agent.message}</p>}

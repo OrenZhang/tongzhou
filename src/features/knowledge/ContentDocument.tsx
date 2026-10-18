@@ -1,3 +1,4 @@
+import { t as tr, getLocale } from '../../shared/i18n';
 import {
   Check,
   PencilLine,
@@ -46,7 +47,7 @@ export function ContentDocument({
   const conflict = useRef(false);
   const key = 'tongzhou-content-draft:' + documentId;
   const [error, setError] = useState('');
-  const [status, setStatus] = useState('正在读取…');
+  const [status, setStatus] = useState(tr('正在读取…'));
   const [preview, setPreview] = useState(true);
   const [originalPreview, setOriginalPreview] = useState<ArtifactPreview>();
   const menu = useRef<HTMLDetailsElement>(null);
@@ -72,12 +73,12 @@ export function ContentDocument({
   const setValue = (value: Draft, persist = true) => {
     draftRef.current = value;
     setDraft(value);
-    if (persist) setStatus('未保存 · 即将自动保存');
+    if (persist) setStatus(tr('未保存 · 即将自动保存'));
     if (persist)
       try {
         localStorage.setItem(key, JSON.stringify(value));
       } catch {
-        setError('本地草稿缓存已满，请保存正文后再离开');
+        setError(tr('本地草稿缓存已满，请保存正文后再离开'));
       }
   };
   const load = async (reset = false) => {
@@ -97,9 +98,9 @@ export function ContentDocument({
         setValue(saved, false);
         if (saved.version !== value.document.version) {
           conflict.current = true;
-          setError('正文已有新版本，本地草稿已保留。可另存副本，或重新载入最新正文。');
+          setError(tr('正文已有新版本，本地草稿已保留。可另存副本，或重新载入最新正文。'));
         }
-        setStatus('已恢复本地草稿');
+        setStatus(tr('已恢复本地草稿'));
       } else {
         setValue(
           {
@@ -109,7 +110,7 @@ export function ContentDocument({
           },
           false,
         );
-        setStatus('已保存');
+        setStatus(tr('已保存'));
       }
       if (reset) {
         localStorage.removeItem(key);
@@ -118,7 +119,7 @@ export function ContentDocument({
     } else if (!pending.current && value.document.version !== base.current.version) {
       if (dirty()) {
         conflict.current = true;
-        setError('AI 或其他编辑已更新正文，本地草稿仍保留。请另存副本或重新载入。');
+        setError(tr('AI 或其他编辑已更新正文，本地草稿仍保留。请另存副本或重新载入。'));
       } else {
         base.current = value.document;
         setValue(
@@ -130,7 +131,7 @@ export function ContentDocument({
           false,
         );
         setSelection(undefined);
-        setStatus('已更新到最新版本');
+        setStatus(tr('已更新到最新版本'));
       }
     }
   };
@@ -141,12 +142,12 @@ export function ContentDocument({
       return;
     }
     if (!dirty()) return;
-    if (conflict.current) throw new Error('存在版本冲突，请先处理本地草稿');
+    if (conflict.current) throw new Error(tr('存在版本冲突，请先处理本地草稿'));
     const original = base.current!,
       value = draftRef.current!;
-    if (!value.title.trim()) throw new Error('请填写文档标题');
+    if (!value.title.trim()) throw new Error(tr('请填写文档标题'));
     if (original.origin === 'import') return;
-    setStatus('正在保存…');
+    setStatus(tr('正在保存…'));
     pending.current = (async () => {
       try {
         const saved = await api.contentWrite({
@@ -162,11 +163,11 @@ export function ContentDocument({
         if (latest.title === value.title && latest.content === value.content)
           localStorage.removeItem(key);
         else localStorage.setItem(key, JSON.stringify({ ...latest, version: saved.version }));
-        setStatus('已保存');
+        setStatus(tr('已保存'));
         setError('');
         await onChange();
       } catch (e) {
-        setStatus('保存未完成');
+        setStatus(tr('保存未完成'));
         setError(String(e));
         throw e;
       } finally {
@@ -288,7 +289,7 @@ export function ContentDocument({
     const d = await api.contentWrite({
       libraryId: base.current?.libraryId ?? 'default',
       folderId: base.current?.folderId,
-      title: (draftRef.current?.title || '文档') + ' · 副本',
+      title: (draftRef.current?.title || tr('文档')) + tr(' · 副本'),
       content: draftRef.current?.content ?? '',
       sourceIds: [documentId],
     });
@@ -309,7 +310,7 @@ export function ContentDocument({
               <div className="content-document-heading">
                 <input
                   className="content-title"
-                  aria-label="文档标题"
+                  aria-label={tr('文档标题')}
                   maxLength={180}
                   readOnly={preview || read.document.origin === 'import'}
                   value={draft.title}
@@ -319,8 +320,8 @@ export function ContentDocument({
                   {read.document.origin !== 'import' && (
                     <button
                       className="icon-button"
-                      aria-label={preview ? '编辑正文' : '完成编辑'}
-                      title={preview ? '编辑正文' : '完成编辑（自动保存）'}
+                      aria-label={preview ? tr('编辑正文') : tr('完成编辑')}
+                      title={preview ? tr('编辑正文') : tr('完成编辑（自动保存）')}
                       onClick={() => {
                         if (preview) setPreview(false);
                         else
@@ -335,7 +336,7 @@ export function ContentDocument({
                     </button>
                   )}
                   <details ref={menu} className="content-document-menu">
-                    <summary aria-label="更多文档操作" title="更多文档操作">
+                    <summary aria-label={tr('更多文档操作')} title={tr('更多文档操作')}>
                       <MoreHorizontal size={18} />
                     </summary>
                     <div
@@ -346,7 +347,7 @@ export function ContentDocument({
                       }}
                     >
                       <button className="text-button" onClick={() => void perform(copy)}>
-                        另存副本
+                        {tr('另存副本')}
                       </button>
                       <button
                         className="text-button"
@@ -358,7 +359,7 @@ export function ContentDocument({
                           })
                         }
                       >
-                        版本记录
+                        {tr('版本记录')}
                       </button>
                       <button
                         className="text-button"
@@ -369,7 +370,7 @@ export function ContentDocument({
                           })
                         }
                       >
-                        导出正文
+                        {tr('导出正文')}
                       </button>
                       {read.document.blob && (
                         <button
@@ -380,11 +381,11 @@ export function ContentDocument({
                             })
                           }
                         >
-                          下载原件
+                          {tr('下载原件')}
                         </button>
                       )}
                       <button className="text-button danger" onClick={() => setDeleting(true)}>
-                        删除
+                        {tr('删除')}
                       </button>
                     </div>
                   </details>
@@ -393,28 +394,32 @@ export function ContentDocument({
               <div className="content-document-info">
                 <span
                   className="content-document-path"
-                  title={knowledgeFolderPath(folders, read.document.folderId) || '未分类'}
+                  title={knowledgeFolderPath(folders, read.document.folderId) || tr('未分类')}
                 >
                   <Folder size={13} />
-                  {knowledgeFolderPath(folders, read.document.folderId) || '未分类'}
+                  {knowledgeFolderPath(folders, read.document.folderId) || tr('未分类')}
                 </span>
                 <small role="status">
                   {status} · v{base.current?.version}
                 </small>
-                <small>{draft.content.length.toLocaleString()} 字符</small>
-                <small title={new Date(read.document.updatedAt).toLocaleString()}>
-                  更新于 {new Date(read.document.updatedAt).toLocaleDateString()}
+                <small>
+                  {draft.content.length.toLocaleString(getLocale())}
+                  {tr(' 字符')}
+                </small>
+                <small title={new Date(read.document.updatedAt).toLocaleString(getLocale())}>
+                  {tr('更新于 ')}
+                  {new Date(read.document.updatedAt).toLocaleDateString(getLocale())}
                 </small>
               </div>
             </header>
             {conflict.current && (
               <button className="secondary" onClick={() => void perform(() => load(true))}>
-                丢弃本地草稿并载入最新正文
+                {tr('丢弃本地草稿并载入最新正文')}
               </button>
             )}
             {read.document.origin === 'import' && (
               <p className="muted">
-                导入原件保留不变。可另存副本后编辑，或让 AI 生成关联的新文档。
+                {tr('导入原件保留不变。可另存副本后编辑，或让 AI 生成关联的新文档。')}
               </p>
             )}
             {history && (
@@ -423,7 +428,7 @@ export function ContentDocument({
                   read.revisions.map((r) => (
                     <div key={r.id}>
                       <span>
-                        v{r.version} · {new Date(r.updatedAt).toLocaleString()}
+                        v{r.version} · {new Date(r.updatedAt).toLocaleString(getLocale())}
                       </span>
                       <button
                         onClick={() =>
@@ -439,17 +444,17 @@ export function ContentDocument({
                           })
                         }
                       >
-                        恢复此版本
+                        {tr('恢复此版本')}
                       </button>
                     </div>
                   ))
                 ) : (
-                  <p>尚无历史版本</p>
+                  <p>{tr('尚无历史版本')}</p>
                 )}
               </div>
             )}
             {preview ? (
-              <article className="content-body-preview" aria-label="文档内容" tabIndex={0}>
+              <article className="content-body-preview" aria-label={tr('文档内容')} tabIndex={0}>
                 {originalPreview?.type === 'image' ? (
                   <img
                     className="content-asset-preview"
@@ -465,20 +470,22 @@ export function ContentDocument({
                       else
                         setError(
                           link?.ambiguous
-                            ? '存在同名文档，请使用文档 ID 关联。'
-                            : '关联文档不存在或已删除。',
+                            ? tr('存在同名文档，请使用文档 ID 关联。')
+                            : tr('关联文档不存在或已删除。'),
                         );
                     }}
                   />
                 ) : (
-                  <p className="muted">暂无内容</p>
+                  <p className="muted">{tr('暂无内容')}</p>
                 )}
               </article>
             ) : (
               <textarea
                 className="content-body"
-                aria-label="文档正文"
-                placeholder="在这里撰写内容，停下输入后自动保存。选中一段文字，可在右侧让 AI 处理。"
+                aria-label={tr('文档正文')}
+                placeholder={tr(
+                  '在这里撰写内容，停下输入后自动保存。选中一段文字，可在右侧让 AI 处理。',
+                )}
                 maxLength={200000}
                 readOnly={read.document.origin === 'import'}
                 value={draft.content}
@@ -499,15 +506,18 @@ export function ContentDocument({
             )}
             {!!read.changedSourceIds?.length && (
               <p className="muted" role="status">
-                来源有新版本，当前正文仍保留原版本的加工结果。可让 AI 重新处理并另存草稿。
+                {tr('来源有新版本，当前正文仍保留原版本的加工结果。可让 AI 重新处理并另存草稿。')}
               </p>
             )}
             {!!read.missingSourceIds.length && (
-              <p className="muted">部分来源已删除，来源记录仍保留。</p>
+              <p className="muted">{tr('部分来源已删除，来源记录仍保留。')}</p>
             )}
             {!!read.document.sources.length && (
               <details>
-                <summary>来源 · {read.document.sources.length}</summary>
+                <summary>
+                  {tr('来源 · ')}
+                  {read.document.sources.length}
+                </summary>
                 {read.document.sources.map((s) => (
                   <div key={s.id}>
                     {s.title} {s.version ? `· v${s.version}` : ''}
@@ -517,7 +527,10 @@ export function ContentDocument({
             )}
             {!!read.backlinks.length && (
               <details>
-                <summary>关联内容 · {read.backlinks.length}</summary>
+                <summary>
+                  {tr('关联内容 · ')}
+                  {read.backlinks.length}
+                </summary>
                 {read.backlinks.map((d) => (
                   <button className="text-button" key={d.id} onClick={() => onOpen(d.id)}>
                     {d.title}
@@ -527,29 +540,37 @@ export function ContentDocument({
             )}
           </>
         ) : (
-          <p className="muted">正在载入文档…</p>
+          <p className="muted">{tr('正在载入文档…')}</p>
         )}
       </main>
       {showChat && (
-        <aside id="content-document-chat" className="content-chat" aria-label="文档对话">
+        <aside id="content-document-chat" className="content-chat" aria-label={tr('文档对话')}>
           <header>
-            <strong>文档对话</strong>
+            <strong>{tr('文档对话')}</strong>
             <small>{read?.document.title}</small>
           </header>
           <div className="content-chat-messages">
-            {!messages.length && <p className="muted">围绕当前文档提问，或描述需要修改的内容。</p>}
+            {!messages.length && (
+              <p className="muted">{tr('围绕当前文档提问，或描述需要修改的内容。')}</p>
+            )}
             {messages
               .filter((m) => m.role !== 'tool' && m.content)
               .map((m) => (
                 <div key={m.id} className={`content-chat-message ${m.role}`}>
                   <small>
-                    {m.role === 'user' ? '你' : m.role === 'assistant' ? '同舟' : '运行记录'}
+                    {m.role === 'user'
+                      ? tr('你')
+                      : m.role === 'assistant'
+                        ? 'CoSail'
+                        : tr('运行记录')}
                   </small>
                   <Markdown
                     text={
                       m.role === 'user'
-                        ? m.content.split('\n\n用户要求：\n').slice(1).join('\n\n用户要求：\n') ||
-                          m.content
+                        ? m.content
+                            .split('\n\n用户要求：\n')
+                            .slice(1)
+                            .join(tr('\n\n用户要求：\n')) || m.content
                         : m.content
                     }
                   />
@@ -561,27 +582,27 @@ export function ContentDocument({
                 onOpen={onArtifact}
               />
             )}
-            {active && <p role="status">正在处理文档…</p>}
+            {active && <p role="status">{tr('正在处理文档…')}</p>}
             {lastRun?.status === 'failed' && (
               <p role="alert" className="danger">
-                {lastRun.error || '处理失败，请重试'}
+                {lastRun.error || tr('处理失败，请重试')}
               </p>
             )}
           </div>
           <div className="content-chat-compose">
             <div className="content-chat-input">
               <div className="row">
-                <small title="以当前文档或选段为上下文，可按需读取同库中可访问的资料">
-                  {selection ? `选中 ${selection.text.length} 字符` : '当前文档'}
+                <small title={tr('以当前文档或选段为上下文，可按需读取同库中可访问的资料')}>
+                  {selection ? tr('选中 {0} 字符', [selection.text.length]) : tr('当前文档')}
                 </small>
                 {selection && (
                   <button className="text-button" onClick={() => setSelection(undefined)}>
-                    清除选段
+                    {tr('清除选段')}
                   </button>
                 )}
               </div>
               <textarea
-                aria-label="文档处理要求"
+                aria-label={tr('文档处理要求')}
                 rows={2}
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
@@ -596,12 +617,12 @@ export function ContentDocument({
                   e.preventDefault();
                   if (!e.repeat) sendMessage();
                 }}
-                placeholder="提问，或描述想如何修改文档…"
+                placeholder={tr('提问，或描述想如何修改文档…')}
               />
               <div className="content-chat-toolbar">
                 <div className="content-chat-settings">
                   <ChoicePicker
-                    label="文档对话模型"
+                    label={tr('文档对话模型')}
                     value={JSON.stringify([providerId, model])}
                     options={data.providers
                       .filter((p) => p.enabled !== false)
@@ -612,7 +633,7 @@ export function ContentDocument({
                           detail: p.name,
                         })),
                       )}
-                    placeholder="选择模型"
+                    placeholder={tr('选择模型')}
                     onChange={(value) => {
                       const [provider, selectedModel] = JSON.parse(value) as [string, string];
                       setProviderId(provider);
@@ -626,8 +647,8 @@ export function ContentDocument({
                 {active ? (
                   <button
                     className="content-chat-send"
-                    aria-label="停止处理"
-                    title="停止处理"
+                    aria-label={tr('停止处理')}
+                    title={tr('停止处理')}
                     onClick={() => void perform(() => api.cancel(sessionId))}
                   >
                     <Square size={14} fill="currentColor" />
@@ -635,8 +656,8 @@ export function ContentDocument({
                 ) : (
                   <button
                     className="primary content-chat-send"
-                    aria-label="发送处理要求"
-                    title={sending ? '正在发送…' : '发送（Enter），Shift+Enter 换行'}
+                    aria-label={tr('发送处理要求')}
+                    title={sending ? tr('正在发送…') : tr('发送（Enter），Shift+Enter 换行')}
                     disabled={!prompt.trim() || !providerId || !model || sending || !read}
                     onClick={sendMessage}
                   >
@@ -649,12 +670,12 @@ export function ContentDocument({
         </aside>
       )}
       {deleting && (
-        <Modal title="删除文档" compact onClose={() => setDeleting(false)}>
+        <Modal title={tr('删除文档')} compact onClose={() => setDeleting(false)}>
           <div className="modal-content">
-            <p>将删除此文档及其历史版本。由它派生的其他文档仍保留。</p>
+            <p>{tr('将删除此文档及其历史版本。由它派生的其他文档仍保留。')}</p>
           </div>
           <div className="modal-footer">
-            <button onClick={() => setDeleting(false)}>取消</button>
+            <button onClick={() => setDeleting(false)}>{tr('取消')}</button>
             <button
               className="destructive-button"
               disabled={active || sending}
@@ -667,7 +688,7 @@ export function ContentDocument({
                 })
               }
             >
-              确认删除文档
+              {tr('确认删除文档')}
             </button>
           </div>
         </Modal>

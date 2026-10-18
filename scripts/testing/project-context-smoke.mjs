@@ -223,7 +223,7 @@ try {
     .getByRole('button', { name: /hello.ts/ })
     .click();
   await panel.locator('.diff-line.add').filter({ hasText: 'count = 2' }).waitFor();
-  await panel.getByRole('button', { name: '请同舟审阅', exact: true }).click();
+  await panel.getByRole('button', { name: '请CoSail审阅', exact: true }).click();
   assert.match(await page.getByLabel('消息', { exact: true }).inputValue(), /已暂存.*Git 变更/);
   checks.push('new files, staged/unstaged diffs, old/new line references, review prompt');
   await page.screenshot({ path: 'test-results/project-context-changes.png' });

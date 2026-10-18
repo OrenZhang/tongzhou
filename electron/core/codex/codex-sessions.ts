@@ -29,7 +29,7 @@ export class CodexSessions {
     this.remove(sessionId);
     while (this.entries.size >= this.capacity) this.remove(this.entries.keys().next().value!);
     const failed = () => this.remove(sessionId);
-    const reject = (r: any) => client.reject(r.id, 'No active Tongzhou turn');
+    const reject = (r: any) => client.reject(r.id, 'No active CoSail turn');
     const timer = setTimeout(failed, this.ttl);
     timer.unref();
     this.entries.set(sessionId, { client, key, providerId, threadId, timer, failed, reject });

@@ -1,4 +1,6 @@
-import { builtinApps } from '../../shared/builtin-apps';
+import { pluginLabel } from '../../shared/plugin-label';
+import { t as tr, localize as localized } from '../../shared/i18n';
+import { builtinApps as raw_builtinApps } from '../../shared/builtin-apps';
 import { useState } from 'react';
 import { Plus, Plug, Search, Trash2, BookOpen, Bot } from 'lucide-react';
 import { Field, Modal, Spinner } from '../../components/components';
@@ -12,11 +14,11 @@ import {
 } from './WorkPlugins';
 import { errorMessage } from '../../lib/feedback';
 import { CoreCapabilities } from './CoreCapabilities';
-import { builtinPlugins } from '../../shared/builtin-plugins';
-import { vendorPlugins, vendorPlugin } from '../../shared/vendor-plugins';
+import { builtinPlugins as raw_builtinPlugins } from '../../shared/builtin-plugins';
+import { vendorPlugins as raw_vendorPlugins, vendorPlugin } from '../../shared/vendor-plugins';
 import { VendorPluginSetup } from './VendorPluginSetup';
 import { PluginTile, PluginDetailPage, PluginDetailSection } from './PluginDetail';
-import { builtinSkills, isBuiltinSkill } from '../../shared/builtin-skills';
+import { builtinSkills as raw_builtinSkills, isBuiltinSkill } from '../../shared/builtin-skills';
 import type { PluginConfig, PluginInput, Snapshot, TongzhouAPI } from '../../shared/types';
 import { codeHost } from '../../shared/code-hosting';
 import { configureFigmaPlugin, figmaConnection } from '../../shared/figma';
@@ -58,7 +60,7 @@ export function Extensions({
     (p) =>
       (tab === 'builtin' ? builtinIds.has(p.id) : !builtinIds.has(p.id)) &&
       (kind === 'all' || kind === 'mcp') &&
-      matchesQuery(p.name + (definitions.find((b) => b.id === p.id)?.description ?? p.url)),
+      matchesQuery(pluginLabel(p) + (definitions.find((b) => b.id === p.id)?.description ?? p.url)),
   );
   const visibleSkills =
     kind === 'all' || kind === 'skill'
@@ -100,27 +102,29 @@ export function Extensions({
         clearOAuthClientSecret: false,
       });
       const tools = await api.testPlugin(edit.id);
-      setNotice(`${edit.name}：目录和只读配置检查通过，发现 ${tools.length} 个工具；未执行写操作`);
+      setNotice(
+        tr('{0}：目录和只读配置检查通过，发现 {1} 个工具；未执行写操作', [edit.name, tools.length]),
+      );
     } else setEdit(null);
   };
   return (
     <main className="page extensions-page">
       <div id="plugin-detail-outlet" className="plugin-detail-outlet" />
       <div className="page-heading">
-        <h1>插件</h1>
-        <p>管理同舟的核心能力、内置插件和个人插件，供所有会话与 Agent 按需使用。</p>
+        <h1>{tr('插件')}</h1>
+        <p>{tr('管理CoSail的核心能力、内置插件和个人插件，供所有会话与 Agent 按需使用。')}</p>
       </div>
-      <nav className="section-tabs" aria-label="插件来源">
+      <nav className="section-tabs" aria-label={tr('插件来源')}>
         {(['core', 'builtin', 'personal'] as const).map((value, i) => (
           <button
             key={value}
             aria-pressed={tab === value}
             title={
               value === 'builtin'
-                ? '同舟预设的应用、MCP 与技能'
+                ? tr('CoSail预设的应用、MCP 与技能')
                 : value === 'personal'
-                  ? '你接入的 MCP 服务和导入的技能'
-                  : '同舟内置的基础能力'
+                  ? tr('你接入的 MCP 服务和导入的技能')
+                  : tr('CoSail内置的基础能力')
             }
             className={tab === value ? 'active' : ''}
             onClick={() => {
@@ -130,7 +134,7 @@ export function Extensions({
               setNotice('');
             }}
           >
-            {['核心能力', '内置插件', '个人插件'][i]}
+            {[tr('核心能力'), tr('内置插件'), tr('个人插件')][i]}
             <span className="tab-count">
               {value === 'core'
                 ? 3
@@ -155,7 +159,7 @@ export function Extensions({
         <div className="plugin-library">
           <div className="section-heading">
             <div>
-              <h2>{tab === 'builtin' ? '内置插件' : '个人插件'}</h2>
+              <h2>{tab === 'builtin' ? tr('内置插件') : tr('个人插件')}</h2>
             </div>
             {tab === 'personal' && (
               <button
@@ -168,23 +172,23 @@ export function Extensions({
                 }}
               >
                 <Plus size={16} />
-                添加插件
+                {tr('添加插件')}
               </button>
             )}
           </div>
           <div className="plugin-list-filter">
-            <label htmlFor="plugin-kind">类型</label>
+            <label htmlFor="plugin-kind">{tr('类型')}</label>
             <select id="plugin-kind" value={kind} onChange={(e) => setKind(e.target.value)}>
-              <option value="all">全部类型</option>
-              <option value="app">应用</option>
+              <option value="all">{tr('全部类型')}</option>
+              <option value="app">{tr('应用')}</option>
               <option value="mcp">MCP</option>
-              <option value="skill">技能</option>
+              <option value="skill">{tr('技能')}</option>
             </select>
             <div className="search-box">
               <Search size={14} />
               <input
-                aria-label="搜索插件"
-                placeholder="搜索名称或用途"
+                aria-label={tr('搜索插件')}
+                placeholder={tr('搜索名称或用途')}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
@@ -195,7 +199,7 @@ export function Extensions({
               <PluginTile
                 key={app.id}
                 name={app.name}
-                type="应用"
+                type={tr('应用')}
                 icon={<Bot />}
                 enabled
                 onOpen={() => setDetail({ kind: 'app', id: app.id })}
@@ -218,7 +222,7 @@ export function Extensions({
             {visiblePlugins.map((p) => (
               <PluginTile
                 key={p.id}
-                name={p.name}
+                name={pluginLabel(p)}
                 type="MCP"
                 icon={<Plug />}
                 enabled={pendingToggle?.id === p.id ? pendingToggle.enabled : p.enabled}
@@ -249,7 +253,7 @@ export function Extensions({
               <PluginTile
                 key={'skill:' + s.id}
                 name={builtinSkills.find((b) => b.id === s.id)?.title ?? s.name}
-                type="技能"
+                type={tr('技能')}
                 icon={<BookOpen />}
                 disabled={busy}
                 enabled={pendingToggle?.id === 'skill:' + s.id ? pendingToggle.enabled : s.enabled}
@@ -269,15 +273,15 @@ export function Extensions({
             !localApps.length && (
               <div className="empty-state compact">
                 <Plug size={26} />
-                <h3>{query.trim() ? '没有匹配的插件' : '暂无此类型的插件'}</h3>
+                <h3>{query.trim() ? tr('没有匹配的插件') : tr('暂无此类型的插件')}</h3>
                 <p>
                   {query.trim()
-                    ? '试试其他关键词，或切换类型。'
+                    ? tr('试试其他关键词，或切换类型。')
                     : tab === 'builtin'
-                      ? '可以切换类型查看其他内置插件。'
+                      ? tr('可以切换类型查看其他内置插件。')
                       : kind === 'app'
-                        ? '暂无个人应用插件，可在“内置插件”中配置现有应用。'
-                        : '点击“添加插件”，连接 MCP 服务或导入技能。'}
+                        ? tr('暂无个人应用插件，可在“内置插件”中配置现有应用。')
+                        : tr('点击“添加插件”，连接 MCP 服务或导入技能。')}
                 </p>
               </div>
             )}
@@ -289,11 +293,15 @@ export function Extensions({
         </div>
       )}
       {adding && (
-        <Modal title="添加插件" subtitle="选择要添加的类型" onClose={() => setAdding(false)}>
+        <Modal
+          title={tr('添加插件')}
+          subtitle={tr('选择要添加的类型')}
+          onClose={() => setAdding(false)}
+        >
           <div className="modal-content plugin-kind-options">
             <button
               className="plugin-kind-option"
-              aria-label="连接 MCP 服务"
+              aria-label={tr('连接 MCP 服务')}
               onClick={() => {
                 setAdding(false);
                 setKind('all');
@@ -312,26 +320,26 @@ export function Extensions({
             >
               <Plug size={22} />
               <span>
-                <strong>连接 MCP 服务</strong>
-                <small>添加远程服务或本机工具，供会话调用。</small>
+                <strong>{tr('连接 MCP 服务')}</strong>
+                <small>{tr('添加远程服务或本机工具，供会话调用。')}</small>
               </span>
             </button>
             <button
               className="plugin-kind-option"
-              aria-label="导入 Skill 技能"
+              aria-label={tr('导入 Skill 技能')}
               onClick={() => {
                 setAdding(false);
                 setKind('all');
                 void perform(async () => {
                   const skill = await api.importSkill();
-                  if (skill) setNotice(`已导入技能「${skill.name}」`);
+                  if (skill) setNotice(tr('已导入技能「{0}」', [skill.name]));
                 });
               }}
             >
               <BookOpen size={22} />
               <span>
-                <strong>导入 Skill 技能</strong>
-                <small>选择含 SKILL.md 的文件夹，添加可复用的工作方法。</small>
+                <strong>{tr('导入 Skill 技能')}</strong>
+                <small>{tr('选择含 SKILL.md 的文件夹，添加可复用的工作方法。')}</small>
               </span>
             </button>
           </div>
@@ -346,14 +354,17 @@ export function Extensions({
               app && (
                 <PluginDetailPage
                   title={app.name}
-                  type="应用"
+                  type={tr('应用')}
                   subtitle={app.description}
                   onClose={close}
                 >
-                  <PluginDetailSection title="功能配置">
-                    <p>内置应用始终可用。各渠道的账号、认证和启用状态在渠道管理中独立配置。</p>
+                  <PluginDetailSection title={tr('功能配置')}>
+                    <p>
+                      {tr('内置应用始终可用。各渠道的账号、认证和启用状态在渠道管理中独立配置。')}
+                    </p>
                     <button onClick={() => void perform(() => api.openModule(app.view))}>
-                      打开{app.name}
+                      {tr('打开')}
+                      {app.name}
                     </button>
                   </PluginDetailSection>
                 </PluginDetailPage>
@@ -366,16 +377,19 @@ export function Extensions({
               skill && (
                 <PluginDetailPage
                   title={builtinSkills.find((b) => b.id === skill.id)?.title ?? skill.name}
-                  type="技能"
-                  subtitle={skill.description}
+                  type={tr('技能')}
+                  subtitle={isBuiltinSkill(skill.id) ? tr(skill.description) : skill.description}
                   onClose={close}
                 >
-                  <PluginDetailSection title="技能指令">
+                  <PluginDetailSection title={tr('技能指令')}>
                     <pre className="skill-preview">{skill.instructions}</pre>
-                    <p>{Object.keys(skill.files).length} 个附属文本文件</p>
+                    <p>
+                      {Object.keys(skill.files).length}
+                      {tr(' 个附属文本文件')}
+                    </p>
                   </PluginDetailSection>
                   {!isBuiltinSkill(skill.id) && (
-                    <PluginDetailSection title="管理">
+                    <PluginDetailSection title={tr('管理')}>
                       <button
                         className="text-button danger"
                         disabled={busy}
@@ -387,7 +401,7 @@ export function Extensions({
                         }
                       >
                         <Trash2 size={14} />
-                        移除技能
+                        {tr('移除技能')}
                       </button>
                     </PluginDetailSection>
                   )}
@@ -400,22 +414,22 @@ export function Extensions({
           return (
             p && (
               <PluginDetailPage
-                title={p.name}
+                title={pluginLabel(p)}
                 subtitle={definitions.find((d) => d.id === p.id)?.description}
                 onClose={close}
               >
-                <PluginDetailSection title="工具与连接">
-                  <p>使用同舟自带运行环境，无需安装依赖或认证。</p>
+                <PluginDetailSection title={tr('工具与连接')}>
+                  <p>{tr('使用CoSail自带运行环境，无需安装依赖或认证。')}</p>
                   <button
                     disabled={busy}
                     onClick={() =>
                       void perform(async () => {
                         const tools = await api.testPlugin(p.id);
-                        setNotice('连接成功，发现 ' + tools.length + ' 个工具');
+                        setNotice(tr('连接成功，发现 ') + tools.length + tr(' 个工具'));
                       })
                     }
                   >
-                    检查连接
+                    {tr('检查连接')}
                   </button>
                   <McpPermissions plugin={p} />
                   {p.catalog && <PluginToolList plugin={p} />}
@@ -436,19 +450,19 @@ export function Extensions({
       )}
       {edit && (
         <PluginDetailPage
-          title={edit.name || '新建 MCP 插件'}
-          subtitle="仅添加你信任的服务。本地服务会以当前用户权限运行。"
+          title={edit.name || tr('新建 MCP 插件')}
+          subtitle={tr('仅添加你信任的服务。本地服务会以当前用户权限运行。')}
           busy={busy}
           onClose={() => setEdit(null)}
         >
-          <PluginDetailSection title="连接与认证">
-            <Field label="插件名称">
+          <PluginDetailSection title={tr('连接与认证')}>
+            <Field label={tr('插件名称')}>
               <input
                 value={edit.name}
                 onChange={(e) => setEdit({ ...edit, name: e.target.value })}
               />
             </Field>
-            <Field label="连接方式">
+            <Field label={tr('连接方式')}>
               <select
                 value={edit.transport}
                 onChange={(e) =>
@@ -461,24 +475,24 @@ export function Extensions({
                   })
                 }
               >
-                <option value="stdio">本地 stdio</option>
-                <option value="http">远程 Streamable HTTP</option>
+                <option value="stdio">{tr('本地 stdio')}</option>
+                <option value="http">{tr('远程 Streamable HTTP')}</option>
               </select>
             </Field>
             {edit.transport === 'stdio' ? (
               <>
                 <Field
-                  label="启动命令"
-                  hint="例如 node、npx 或已安装程序的绝对路径；不通过 shell 解释。"
+                  label={tr('启动命令')}
+                  hint={tr('例如 node、npx 或已安装程序的绝对路径；不通过 shell 解释。')}
                 >
                   <input
                     value={edit.command}
                     onChange={(e) => setEdit({ ...edit, command: e.target.value })}
                   />
                 </Field>
-                <Field label="启动参数（每行一个）">
+                <Field label={tr('启动参数（每行一个）')}>
                   <MultiValueInput
-                    label="启动参数"
+                    label={tr('启动参数')}
                     split={false}
                     value={edit.args}
                     onChange={(args) => setEdit({ ...edit, args })}
@@ -486,7 +500,7 @@ export function Extensions({
                 </Field>
               </>
             ) : (
-              <Field label="MCP 服务地址">
+              <Field label={tr('MCP 服务地址')}>
                 <input
                   value={edit.url}
                   onChange={(e) => setEdit(configureFigmaPlugin({ ...edit, url: e.target.value }))}
@@ -497,11 +511,11 @@ export function Extensions({
             {figmaConnection(edit) && <FigmaConnectionInfo plugin={edit} />}
             {edit.authMode !== 'oauth' && !figmaConnection(edit) && (
               <Field
-                label={edit.transport === 'stdio' ? '环境变量 JSON' : '请求头 JSON'}
+                label={edit.transport === 'stdio' ? tr('环境变量 JSON') : tr('请求头 JSON')}
                 hint={
                   edit.hasSecret
-                    ? '已加密保存；留空保留原值。'
-                    : '字符串键值对象，例如 {"Authorization":"Bearer …"}。使用系统加密存储。'
+                    ? tr('已加密保存；留空保留原值。')
+                    : tr('字符串键值对象，例如 {"Authorization":"Bearer …"}。使用系统加密存储。')
                 }
               >
                 <textarea
@@ -533,30 +547,31 @@ export function Extensions({
                       setNotice(
                         result.url
                           ? result.browserOpened
-                            ? '已打开浏览器，请完成授权。'
-                            : '系统浏览器未打开，请点击下方链接继续授权。'
-                          : '授权已更新。',
+                            ? tr('已打开浏览器，请完成授权。')
+                            : tr('系统浏览器未打开，请点击下方链接继续授权。')
+                          : tr('授权已更新。'),
                       );
                     })
                   }
                 >
                   {codeHost(edit) === 'github'
-                    ? '使用 GitHub 登录'
+                    ? tr('使用 GitHub 登录')
                     : codeHost(edit) === 'gitlab'
-                      ? '使用 GitLab 登录'
+                      ? tr('使用 GitLab 登录')
                       : figmaConnection(edit) === 'remote'
-                        ? '使用 Figma 登录'
-                        : '保存并浏览器授权'}
+                        ? tr('使用 Figma 登录')
+                        : tr('保存并浏览器授权')}
                 </button>
                 {loginCode &&
                   data.plugins?.find((p) => p.id === edit.id)?.oauthStatus === 'waiting' && (
                     <p className="info-strip">
-                      在 GitHub 授权页面输入验证码：<strong>{loginCode}</strong>
+                      {tr('在 GitHub 授权页面输入验证码：')}
+                      <strong>{loginCode}</strong>
                     </p>
                   )}
                 {loginUrl && (
                   <a href={loginUrl} target="_blank" rel="noreferrer">
-                    打开授权页面
+                    {tr('打开授权页面')}
                   </a>
                 )}
                 {['starting', 'waiting'].includes(
@@ -571,7 +586,7 @@ export function Extensions({
                       })
                     }
                   >
-                    取消授权
+                    {tr('取消授权')}
                   </button>
                 )}
               </>
@@ -582,7 +597,7 @@ export function Extensions({
                 checked={!!edit.clearSecret}
                 onChange={(e) => setEdit({ ...edit, clearSecret: e.target.checked })}
               />
-              清除已保存的环境变量 / 请求头
+              {tr('清除已保存的环境变量 / 请求头')}
             </label>
             <label className="checkbox-line">
               <input
@@ -590,11 +605,13 @@ export function Extensions({
                 checked={edit.enabled}
                 onChange={(e) => setEdit({ ...edit, enabled: e.target.checked })}
               />
-              启用插件（所有会话按需连接）
+              {tr('启用插件（所有会话按需连接）')}
             </label>
             <Field
-              label="允许只读 Agent 使用的工具名（每行一个）"
-              hint="仅填写确认不会修改状态的工具。官方 GitHub/GitLab/Figma 可识别只读声明；保存并检查会校验名称和写操作冲突。"
+              label={tr('允许只读 Agent 使用的工具名（每行一个）')}
+              hint={tr(
+                '仅填写确认不会修改状态的工具。官方 GitHub/GitLab/Figma 可识别只读声明；保存并检查会校验名称和写操作冲突。',
+              )}
             >
               <textarea
                 rows={2}
@@ -606,7 +623,7 @@ export function Extensions({
             </Field>
             {notice && <p role="status">{notice}</p>}
           </PluginDetailSection>
-          <PluginDetailSection title="权限与连接校验">
+          <PluginDetailSection title={tr('权限与连接校验')}>
             <McpPermissions plugin={permissionState!} />
             {permissionState?.catalog && <PluginToolList plugin={permissionState} />}
           </PluginDetailSection>
@@ -621,14 +638,15 @@ export function Extensions({
                 })
               }
             >
-              删除插件
+              {tr('删除插件')}
             </button>
             <span className="spacer" />
             <button className="secondary" disabled={busy} onClick={() => perform(() => save(true))}>
-              保存并检查连接
+              {tr('保存并检查连接')}
             </button>
             <button className="primary" disabled={busy} onClick={() => perform(() => save())}>
-              {busy ? <Spinner /> : null}保存插件
+              {busy ? <Spinner /> : null}
+              {tr('保存插件')}
             </button>
           </div>
         </PluginDetailPage>
@@ -636,3 +654,8 @@ export function Extensions({
     </main>
   );
 }
+
+const builtinApps = localized(raw_builtinApps);
+const builtinPlugins = localized(raw_builtinPlugins);
+const vendorPlugins = localized(raw_vendorPlugins);
+const builtinSkills = localized(raw_builtinSkills);

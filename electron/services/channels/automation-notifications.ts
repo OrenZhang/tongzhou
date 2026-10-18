@@ -30,6 +30,6 @@ export function automationNotification(store: Store, session: Session, run: Run)
   return {
     target,
     key: 'automation:' + job.id,
-    text: result.length > 4000 ? result.slice(0, 3900) + '\n…完整结果请在同舟查看。' : result,
+    text: result.length > 4000 ? result.slice(0, 3900) + '\n…完整结果请在CoSail查看。' : result,
   };
 }

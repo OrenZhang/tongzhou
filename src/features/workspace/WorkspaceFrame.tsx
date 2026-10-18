@@ -1,3 +1,4 @@
+import { t as tr } from '../../shared/i18n';
 import { useRef, type ReactNode } from 'react';
 import { Maximize2, Minimize2, X } from 'lucide-react';
 
@@ -9,7 +10,7 @@ export function WorkspaceFrame({
   onResize,
   onExpand,
   onClose,
-  label = '会话工作区',
+  label = tr('会话工作区'),
   className = '',
 }: {
   children: ReactNode;
@@ -33,7 +34,7 @@ export function WorkspaceFrame({
       <div
         className="workspace-resizer"
         role="separator"
-        aria-label="调整工作区宽度"
+        aria-label={tr('调整工作区宽度')}
         aria-orientation="vertical"
         tabIndex={0}
         aria-valuemin={320}
@@ -72,12 +73,12 @@ export function WorkspaceFrame({
         {header}
         <button
           className="icon-button"
-          aria-label={expanded ? '还原工作区宽度' : '放大工作区'}
+          aria-label={expanded ? tr('还原工作区宽度') : tr('放大工作区')}
           onClick={onExpand}
         >
           {expanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
         </button>
-        <button className="icon-button" aria-label="关闭工作区" onClick={onClose}>
+        <button className="icon-button" aria-label={tr('关闭工作区')} onClick={onClose}>
           <X size={16} />
         </button>
       </header>

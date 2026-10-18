@@ -1,19 +1,23 @@
-<p align="center"><img src="docs/assets/logo.svg" width="78" alt="同舟" /></p>
-<h1 align="center">同舟 Tongzhou</h1>
+<p align="center"><img src="docs/assets/logo.svg" width="78" alt="CoSail" /></p>
+<h1 align="center">CoSail</h1>
 <p align="center"><strong>整合模型、知识与会话，一个本地工作台。</strong><br/>Windows · macOS · 开源 · 本地优先</p>
 <p align="center"><a href="https://github.com/OrenZhang/tongzhou/releases">版本发布</a> · <a href="https://github.com/OrenZhang/tongzhou/issues">问题反馈</a> · <a href="CONTRIBUTING.md">参与贡献</a></p>
 
-同舟是一个开源、本地优先的 AI 工作台，整合模型服务与订阅、本地知识库、连续会话和远程消息入口，覆盖日常问答、资料整理、内容创作和项目开发。
+CoSail，中文释义为“同舟”：Co 代表协作，Sail 代表航行。它是一个开源、本地优先的 AI 工作台，整合模型服务与订阅、本地知识库、连续会话和远程消息入口，覆盖日常问答、资料整理、内容创作和项目开发。
+
+应用名称与图标已统一为 CoSail。升级继续使用原 `Tongzhou` 用户数据目录及应用标识，会话、配置与本地密钥无需搬迁；现有仓库地址、`TONGZHOU_*` 环境变量及集成接口保持兼容。
+
+界面支持简体中文与 English，可在 **设置 → 外观与字体 → 界面语言** 切换，即时生效并在重启后保留。导航、会话操作、画布、插件、模型、渠道、智库、Agent、定时任务及设置使用统一翻译目录；会话内容、文档、提示词正文和用户自定义名称保留原文。English is available under **Settings → Appearance & fonts → Language**.
 
 你可以在同一个会话中切换模型、继续任务，把值得保留的资料和经验沉淀到自己的智库，再通过飞书、企业微信等入口查看和管理会话。
 
 ## 整合的目标
 
-- **自己的知识，自己维护**：无需安装 Obsidian 等笔记应用，在同舟内管理资料、笔记、整理文档与会话记忆。Agent 按需检索、提炼和补充知识，保留来源与版本，供你核对、修正和复用。
+- **自己的知识，自己维护**：无需安装 Obsidian 等笔记应用，在CoSail内管理资料、笔记、整理文档与会话记忆。Agent 按需检索、提炼和补充知识，保留来源与版本，供你核对、修正和复用。
 - **不同模型，同一份会话**：集中接入已适配的模型 API、订阅套餐与本地模型服务，在同一个会话里选择模型和账号，接续已有上下文与任务。
 - **多个入口，同一个工作台**：桌面端与飞书、企业微信等机器人连接本地会话，在授权范围内查看进度、继续任务和接收通知。
 
-整合围绕可持续使用的会话和知识展开：模型可以更换，任务与资料继续积累；新增服务通过适配接入，沿用同舟的权限和管理流程。
+整合围绕可持续使用的会话和知识展开：模型可以更换，任务与资料继续积累；新增服务通过适配接入，沿用CoSail的权限和管理流程。
 
 ## 核心能力
 
@@ -60,7 +64,7 @@ npm run dev
 
 任务支持结构化追问，可选择选项或填写补充内容；完全开放权限不会代替你回答。官方账号及 GPT-6 原生 Responses 连接支持原生子 Agent，可在处理过程查看状态、停止和继续。执行过程显示核心报告的模型、思考强度、压缩次数及父子任务用量，进度说明与最终答复分别展示。
 
-macOS 的同舟密钥改为本地加密保存，不再调用系统钥匙串。旧版钥匙串密文会保留，但不会自动解锁或迁移；标为需要更新的连接请重新填写 Token，OAuth 插件请重新登录。重新保存后，日常读取密钥无需系统密码。加密密钥位于应用数据目录的 `local-secret.key`，随手动复制数据目录一同保留；应用导出的备份仍不包含认证凭据。
+macOS 的CoSail密钥改为本地加密保存，不再调用系统钥匙串。旧版钥匙串密文会保留，但不会自动解锁或迁移；标为需要更新的连接请重新填写 Token，OAuth 插件请重新登录。重新保存后，日常读取密钥无需系统密码。加密密钥位于应用数据目录的 `local-secret.key`，随手动复制数据目录一同保留；应用导出的备份仍不包含认证凭据。
 
 插件列表使用紧凑卡片，仅展示图标、名称、类型和启用开关。点击名称进入统一详情页，按插件类型展示连接与认证、本机账号、依赖安装、工具列表或技能指令；返回列表保留搜索与类型筛选。渠道属于始终可用的内置应用，其具体账号开关在渠道管理中操作。
 
@@ -72,26 +76,26 @@ macOS 的同舟密钥改为本地加密保存，不再调用系统钥匙串。�
 
 “网页搜索与读取 · 内置”在新配置中默认开启，已有用户手动设置保持不变。`web_search` 通过必应公开 RSS 搜索返回关键词结果，无需模型账号或 API Key；`fetch_page` 读取指定网址正文。搜索请求允许必应国内站点跳转，遇到网络错误、验证页或响应格式变化时会明确报错，不会当作没有结果。该公开搜索入口不提供商业 API 的可用性保证。
 
-在 **插件 → 内置插件 → MCP** 中配置 MiniMax 多媒体、MiniMax 搜索与图片理解，以及 Kimi 搜索与网页读取。默认关闭，点击插件名称进入详情，优先选择 **使用同舟套餐账号**，绑定模型页面中已登录并启用的对应账号，不必复制 API Key 或安装 Python。调用时读取最新授权，模型与插件共享令牌刷新；账号停用、移除或退出后不可继续调用。凭据仅留在主进程，固定发往官方套餐接口，不传给 MCP 子进程。
+在 **插件 → 内置插件 → MCP** 中配置 MiniMax 多媒体、MiniMax 搜索与图片理解，以及 Kimi 搜索与网页读取。默认关闭，点击插件名称进入详情，优先选择 **使用CoSail套餐账号**，绑定模型页面中已登录并启用的对应账号，不必复制 API Key 或安装 Python。调用时读取最新授权，模型与插件共享令牌刷新；账号停用、移除或退出后不可继续调用。凭据仅留在主进程，固定发往官方套餐接口，不传给 MCP 子进程。
 
 - **MiniMax 套餐模式**：搜索与图片理解提供联网搜索、HTTPS 图片理解；多媒体提供图片生成、语音合成、音色查询、视频生成和查询，返回媒体 URL。适配已锁定的 `@minimax-ai/code` 0.4.12 套餐接口。声音克隆、声音设计和本机播放仍使用 API Key 模式；工具能力、额度以服务端账号套餐为准。
 - **MiniMax API Key 模式**：使用[官方多媒体 MCP](https://github.com/MiniMax-AI/MiniMax-MCP) `minimax-mcp==0.0.19` 和[官方 Coding Plan MCP](https://github.com/MiniMax-AI/MiniMax-Coding-Plan-MCP) `minimax-coding-plan-mcp==0.0.5`。仅此模式需安装 [uv](https://docs.astral.sh/uv/getting-started/installation/)，在详情中安装／修复依赖或指定 uvx 路径。密钥加密保存，区域需与密钥一致；切换套餐模式会保留已有密钥供以后切回使用。
-- **Kimi 搜索与网页读取**：同舟适配 [Kimi Code 的服务接口](https://www.kimi.com/en/help/kimi-code/cli-config-files)，可复用同舟 Kimi 登录，也可单独配置 Kimi Code API Key，无需 Python。套餐模式只允许匹配的官方服务端点与授权引用。
+- **Kimi 搜索与网页读取**：CoSail适配 [Kimi Code 的服务接口](https://www.kimi.com/en/help/kimi-code/cli-config-files)，可复用CoSail Kimi 登录，也可单独配置 Kimi Code API Key，无需 Python。套餐模式只允许匹配的官方服务端点与授权引用。
 
 保存并检查连接验证凭据读取和工具目录，不调用付费生成接口，也不代表服务端已验证套餐权限或额度。生成请求失败不会自动重发，避免重复消耗额度。
 
-Windows 上点击窗口右上角的关闭按钮会隐藏到系统托盘，后台会话与机器人连接继续运行。点击托盘中的同舟图标，或右键选择 **打开同舟**，即可恢复窗口；右键选择 **退出同舟** 才会完全退出客户端。
+Windows 上点击窗口右上角的关闭按钮会隐藏到系统托盘，后台会话与机器人连接继续运行。点击托盘中的CoSail图标，或右键选择 **打开CoSail**，即可恢复窗口；右键选择 **退出CoSail** 才会完全退出客户端。
 
-在 Windows 和 macOS 的 **设置 → 电源与睡眠** 中，可开启 **接通电源时保持唤醒**：阻止空闲自动睡眠，同时允许屏幕熄灭。仅在接通电源时生效，拔电后暂停，退出同舟后释放。另可开启 **接通电源时合盖不睡眠**，关闭功能或退出后恢复原设置：Windows 只临时修改当前电源计划的交流电合盖动作，不更改电池策略；macOS 无需外接显示器，但每次启动同舟后需重新开启合盖模式并通过系统管理员授权，此模式会临时禁用系统睡眠（包括手动睡眠），辅助进程监测拔电与应用退出后恢复。异常中断的恢复记录会保留，失败时设置页显示重试入口。合盖运行时请保持散热通畅。
+在 Windows 和 macOS 的 **设置 → 电源与睡眠** 中，可开启 **接通电源时保持唤醒**：阻止空闲自动睡眠，同时允许屏幕熄灭。仅在接通电源时生效，拔电后暂停，退出CoSail后释放。另可开启 **接通电源时合盖不睡眠**，关闭功能或退出后恢复原设置：Windows 只临时修改当前电源计划的交流电合盖动作，不更改电池策略；macOS 无需外接显示器，但每次启动CoSail后需重新开启合盖模式并通过系统管理员授权，此模式会临时禁用系统睡眠（包括手动睡眠），辅助进程监测拔电与应用退出后恢复。异常中断的恢复记录会保留，失败时设置页显示重试入口。合盖运行时请保持散热通畅。
 
 GitHub 和 GitLab 的认证统一在 **插件 → 内置插件** 管理，选择 **Token 配置** 或 **OAuth2 授权**。连接中心只管理独立浏览器登录、渠道通知、机器人和网络，不再提供 GitHub/GitLab 账号配置入口；已有账号数据保留，可在插件的 Token 来源中复用。
 
-- **GitHub**：Token 和 OAuth2 均使用官方远程 MCP。OAuth2 点击 **使用 GitHub 登录**，在 GitHub 官方页面输入界面显示的验证码并授权；普通用户无需配置 Client ID/Client Secret。应用身份由同舟维护者在构建时配置，支持授权保存、令牌刷新和退出；维护者配置见 [GitHub 登录](docs/GITHUB_LOGIN.md)。可点击 **检测本地账号** 识别 Git 凭据或 GitHub CLI 当前登录，再点击 **使用并启用**。同舟重新验证身份及 MCP 连接后加密保存，检测结果仅展示账号和来源；手动 Token 的 **保存并检查** 同样验证账号和工具连接。
+- **GitHub**：Token 和 OAuth2 均使用官方远程 MCP。OAuth2 点击 **使用 GitHub 登录**，在 GitHub 官方页面输入界面显示的验证码并授权；普通用户无需配置 Client ID/Client Secret。应用身份由CoSail维护者在构建时配置，支持授权保存、令牌刷新和退出；维护者配置见 [GitHub 登录](docs/GITHUB_LOGIN.md)。可点击 **检测本地账号** 识别 Git 凭据或 GitHub CLI 当前登录，再点击 **使用并启用**。CoSail重新验证身份及 MCP 连接后加密保存，检测结果仅展示账号和来源；手动 Token 的 **保存并检查** 同样验证账号和工具连接。
 - **GitLab**：填写 GitLab.com 或自建实例 HTTPS 根地址。Token 模式使用官方 REST API，无需开启 MCP；**保存并检查** 验证身份与项目 API，读取通常需要 `read_api`，写操作需要 `api`，并受项目权限限制。会话通过 `gitlab_api_read` / `gitlab_api_write` 调用实例上的项目、仓库、Issue、Merge Request 和 CI/CD API，写操作遵循会话权限。OAuth2 点击 **使用 GitLab 登录**，在所填实例的官方页面登录授权，授权加密保存在本机，普通用户无需填写 Client ID / Client Secret。此方式通过官方 MCP 自动注册 OAuth 应用，要求实例支持并开启 MCP 和应用自动注册；管理员关闭自动注册或实例不支持时，可改用 Token 配置。插件卡片与 Token 配置弹窗均支持本地 Git / glab 检测，**使用并配置** 保存 Token 账号；切换地址清除旧检测结果，不将普通 Token 当成 MCP OAuth 授权。
 
 认证依据：[GitHub 官方 MCP 接入](https://github.com/github/github-mcp-server/blob/main/docs/host-integration.md) · [GitLab REST API 认证](https://docs.gitlab.com/api/rest/authentication/) · [GitLab 官方 MCP](https://docs.gitlab.com/user/model_context_protocol/mcp_server/)。仅保存凭据会显示待检查，通过连接检查后才显示已验证。
 
-**Figma** 支持远程浏览器授权和桌面 MCP，应用配置由同舟管理，用户无需填写 Client ID / Secret。同舟已申请远程 MCP 全部读写工具接入，尚未获批；当前可连接 Figma 桌面 MCP 读取设计，FigJam 图表生成需要远程服务。插件详情提供授权范围、工具读写分类及只读配置校验；连接检查不会执行写操作，也不代表拥有所有文件或项目的读写权限。详见 [Figma 连接与 MCP 权限](docs/FIGMA_MCP.md)。
+**Figma** 支持远程浏览器授权和桌面 MCP，应用配置由CoSail管理，用户无需填写 Client ID / Secret。CoSail已申请远程 MCP 全部读写工具接入，尚未获批；当前可连接 Figma 桌面 MCP 读取设计，FigJam 图表生成需要远程服务。插件详情提供授权范围、工具读写分类及只读配置校验；连接检查不会执行写操作，也不代表拥有所有文件或项目的读写权限。详见 [Figma 连接与 MCP 权限](docs/FIGMA_MCP.md)。
 
 智库的使用流程、来源核对与本地数据说明见 [本地智库与每日记忆](docs/KNOWLEDGE-CENTER.md)。
 

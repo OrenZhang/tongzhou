@@ -2,7 +2,7 @@ import common from '../../../prompts/common.json';
 
 export const greetingReply = common.greeting;
 export const introductionReply = common.introduction;
-export const builtinReplyModel = '同舟内置回复';
+export const builtinReplyModel = 'CoSail内置回复';
 
 /** Match entire standalone utterances only; never rewrite task text or quoted material. */
 export function identityReply(prompt: string): string | undefined {
@@ -12,7 +12,11 @@ export function identityReply(prompt: string): string | undefined {
     .replace(/[。.!！?？]+$/u, '')
     .trim();
   const greeting = '(?:你好(?:呀|啊)?|您好|嗨|哈喽|早上好|下午好|晚上好|hello|hi|hey)';
-  if (new RegExp(`^(?:同舟[，,\\s]*)?${greeting}(?:[，,\\s]*同舟)?$`, 'u').test(text))
+  if (
+    new RegExp(`^(?:(?:cosail|同舟)[，,\\s]*)?${greeting}(?:[，,\\s]*(?:cosail|同舟))?$`, 'u').test(
+      text,
+    )
+  )
     return greetingReply;
   if (
     new RegExp(

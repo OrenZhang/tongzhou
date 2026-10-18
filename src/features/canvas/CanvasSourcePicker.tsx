@@ -1,3 +1,4 @@
+import { t as tr } from '../../shared/i18n';
 import { useEffect, useState } from 'react';
 import type { Snapshot, TongzhouAPI, FileEntry } from '../../shared/types';
 import type { CanvasResource } from '../../shared/canvas';
@@ -71,29 +72,33 @@ export function CanvasSourcePicker({
     };
   }, [api, kind, query, sourceSession, project, path, imageOnly, mediaOnly]);
   return (
-    <Modal title="选择画布资源" subtitle="引用已有内容；原件仍由来源模块管理。" onClose={onClose}>
+    <Modal
+      title={tr('选择画布资源')}
+      subtitle={tr('引用已有内容；原件仍由来源模块管理。')}
+      onClose={onClose}
+    >
       <div className="canvas-source-controls">
         <select
-          aria-label="资源来源"
+          aria-label={tr('资源来源')}
           value={kind}
           onChange={(e) => setKind(e.target.value as typeof kind)}
         >
-          <option value="content">内容库</option>
-          <option value="artifact">会话作品</option>
+          <option value="content">{tr('内容库')}</option>
+          <option value="artifact">{tr('会话作品')}</option>
           {!imageOnly && !mediaOnly && (
             <>
-              <option value="message">会话消息</option>
-              <option value="file">工作区文件</option>
+              <option value="message">{tr('会话消息')}</option>
+              <option value="file">{tr('工作区文件')}</option>
             </>
           )}
         </select>
         {kind === 'message' && (
           <select
-            aria-label="来源会话"
+            aria-label={tr('来源会话')}
             value={sourceSession}
             onChange={(e) => setSourceSession(e.target.value)}
           >
-            <option value="">选择会话</option>
+            <option value="">{tr('选择会话')}</option>
             {result.sessions.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.title}
@@ -104,7 +109,7 @@ export function CanvasSourcePicker({
         {kind === 'file' ? (
           <>
             <select
-              aria-label="来源工作区"
+              aria-label={tr('来源工作区')}
               value={project}
               onChange={(e) => {
                 setProject(e.target.value);
@@ -120,14 +125,14 @@ export function CanvasSourcePicker({
                 ))}
             </select>
             <button onClick={() => setPath(path.split(/[\\/]/).slice(0, -1).join('/'))}>
-              上级目录
+              {tr('上级目录')}
             </button>
-            <span>{path || '根目录'}</span>
+            <span>{path || tr('根目录')}</span>
           </>
         ) : (
           <input
-            aria-label="搜索资源"
-            placeholder="搜索标题或消息"
+            aria-label={tr('搜索资源')}
+            placeholder={tr('搜索标题或消息')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -136,7 +141,7 @@ export function CanvasSourcePicker({
       {error && <p role="alert">{error}</p>}
       <div className="canvas-source-list">
         {loading ? (
-          <p>读取中…</p>
+          <p>{tr('读取中…')}</p>
         ) : kind === 'file' ? (
           files.map((f) => (
             <button
@@ -162,7 +167,7 @@ export function CanvasSourcePicker({
           ))
         )}
         {!loading && !error && (kind === 'file' ? !files.length : !result.choices.length) && (
-          <p>暂无匹配资源</p>
+          <p>{tr('暂无匹配资源')}</p>
         )}
       </div>
     </Modal>

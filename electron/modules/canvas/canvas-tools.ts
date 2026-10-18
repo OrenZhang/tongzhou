@@ -155,7 +155,7 @@ export function attachCanvasTools(
   );
   define(
     'canvas_execute',
-    '启动保存的画布工作流，或执行指定节点及其执行依赖；复用同舟模型、工具与审批。立即返回运行 ID，随后用 canvas_read 查询。',
+    '启动保存的画布工作流，或执行指定节点及其执行依赖；复用CoSail模型、工具与审批。立即返回运行 ID，随后用 canvas_read 查询。',
     z
       .object({
         canvasId: z.uuid().optional(),

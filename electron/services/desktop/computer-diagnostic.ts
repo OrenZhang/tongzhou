@@ -4,7 +4,7 @@ import { DesktopComputer } from './computer';
 
 /** Invoked explicitly from the UI. Operates only a newly created, locally owned test window. */
 export async function computerDiagnostic(computer: DesktopComputer) {
-  const title = '同舟功能自检 ' + randomUUID().slice(0, 8);
+  const title = 'CoSail功能自检 ' + randomUUID().slice(0, 8);
   const window = new BrowserWindow({
     width: 600,
     height: 300,
@@ -21,7 +21,7 @@ export async function computerDiagnostic(computer: DesktopComputer) {
     await window.loadURL(
       'data:text/html;charset=utf-8,' +
         encodeURIComponent(
-          `<html><meta charset="utf-8"><title>${title}</title><h2>同舟电脑控制自检</h2><p>只在此窗口验证截图与中文输入，数据不会发送到外部。</p><input id="sample" autofocus style="font-size:24px" /></html>`,
+          `<html><meta charset="utf-8"><title>${title}</title><h2>CoSail电脑控制自检</h2><p>只在此窗口验证截图与中文输入，数据不会发送到外部。</p><input id="sample" autofocus style="font-size:24px" /></html>`,
         ),
     );
     window.show();
@@ -44,7 +44,7 @@ export async function computerDiagnostic(computer: DesktopComputer) {
     step = '输入中文';
     await adapter.execute(
       'computer_type',
-      { frameId: frame.frameId, text: '同舟自检成功' },
+      { frameId: frame.frameId, text: 'CoSail自检成功' },
       controller.signal,
     );
     // Synthetic key events are delivered asynchronously (XWayland → Chromium → renderer);
@@ -55,10 +55,10 @@ export async function computerDiagnostic(computer: DesktopComputer) {
         'JSON.stringify({value: document.querySelector("#sample").value, focus: document.hasFocus(), active: document.activeElement?.id || document.activeElement?.tagName})',
       );
       parsed = JSON.parse(value) as { value: string; focus: boolean; active: string };
-      if (parsed.value === '同舟自检成功') break;
+      if (parsed.value === 'CoSail自检成功') break;
       await new Promise((r) => setTimeout(r, 150));
     }
-    if (parsed.value !== '同舟自检成功')
+    if (parsed.value !== 'CoSail自检成功')
       throw new Error('中文输入未到达自检窗口，请重新聚焦后再试');
     step = '再次验证截图';
     await adapter.execute('computer_screenshot', { windowId: target.id }, controller.signal);

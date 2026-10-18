@@ -1,3 +1,5 @@
+import { t as tr, getLocale } from '../shared/i18n';
+import brandMark from '../shared/brand-mark.json';
 import { AttachmentCards } from './files/Attachments';
 import {
   X,
@@ -33,14 +35,14 @@ export function AuthBadge({
   error?: boolean;
 }) {
   const label = pending
-    ? '授权中'
+    ? tr('授权中')
     : error
-      ? '状态待确认'
+      ? tr('状态待确认')
       : connected
-        ? '已授权'
+        ? tr('已授权')
         : connected === undefined
-          ? '检查中'
-          : '未授权';
+          ? tr('检查中')
+          : tr('未授权');
   return (
     <span
       role="status"
@@ -63,10 +65,17 @@ export function AuthBadge({
 export function Mark({ small = false }: { small?: boolean }) {
   return (
     <span className={'brand-mark ' + (small ? 'small' : '')} aria-hidden="true">
-      <svg viewBox="0 0 40 40" fill="none">
-        <path d="M20 5v23H7L20 5Z" fill="currentColor" />
-        <path d="M24 11v17h10L24 11Z" fill="currentColor" opacity=".55" />
-        <path d="M5 31h31l-6 5H12l-7-5Z" fill="currentColor" />
+      <svg viewBox="0 0 256 256" fill="none">
+        <rect width="256" height="256" rx="58" fill={`rgb(${brandMark.background.join(',')})`} />
+        <g transform="translate(32 25) scale(4.8)">
+          {brandMark.polygons.map(({ p, color }, i) => (
+            <polygon
+              key={i}
+              points={p.map((point) => point.join(',')).join(' ')}
+              fill={`rgb(${color.join(',')})`}
+            />
+          ))}
+        </g>
       </svg>
     </span>
   );
@@ -148,7 +157,7 @@ export function Modal({
             <h2>{title}</h2>
             {subtitle && <p>{subtitle}</p>}
           </div>
-          <button className="icon-button" aria-label="关闭" onClick={onClose}>
+          <button className="icon-button" aria-label={tr('关闭')} onClick={onClose}>
             <X size={20} />
           </button>
         </div>
@@ -286,7 +295,9 @@ export function ModelPicker({
           if (!open && !attempted.current) void refresh();
         }}
       >
-        <span>{modelLabels[value] || value || (inherit ? '继承会话模型' : '选择模型')}</span>
+        <span>
+          {modelLabels[value] || value || (inherit ? tr('继承会话模型') : tr('选择模型'))}
+        </span>
         <ChevronDown size={14} />
       </button>
       {open &&
@@ -296,7 +307,7 @@ export function ModelPicker({
             style={position}
             className="model-picker-panel"
             role="dialog"
-            aria-label={`${label}选择`}
+            aria-label={tr('{0}选择', [label])}
             onKeyDown={(e) => {
               if (e.key === 'Escape') {
                 e.preventDefault();
@@ -326,8 +337,8 @@ export function ModelPicker({
           >
             <input
               autoFocus
-              aria-label="搜索模型"
-              placeholder="搜索模型名称…"
+              aria-label={tr('搜索模型')}
+              placeholder={tr('搜索模型名称…')}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {
@@ -347,7 +358,8 @@ export function ModelPicker({
             <div className="model-picker-list">
               {inherit && !query && (
                 <button type="button" onClick={() => choose('')}>
-                  继承会话模型{!value && <Check size={14} />}
+                  {tr('继承会话模型')}
+                  {!value && <Check size={14} />}
                 </button>
               )}
               {filtered.map((m) => (
@@ -365,20 +377,24 @@ export function ModelPicker({
               {!filtered.length && (
                 <p>
                   {loading
-                    ? '正在获取模型…'
+                    ? tr('正在获取模型…')
                     : options.length
-                      ? '没有匹配的模型'
-                      : '暂无模型，请获取模型列表。'}
+                      ? tr('没有匹配的模型')
+                      : tr('暂无模型，请获取模型列表。')}
                 </p>
               )}
             </div>
             {error && (
               <p className="model-picker-error" role="status">
-                {error}。可重试，或在模型连接中检查地址与认证。
+                {error}
+                {tr('。可重试，或在模型连接中检查地址与认证。')}
               </p>
             )}
             <div className="model-picker-footer">
-              <small>{options.length} 个模型</small>
+              <small>
+                {options.length}
+                {tr(' 个模型')}
+              </small>
               <button
                 type="button"
                 className="text-button"
@@ -386,7 +402,7 @@ export function ModelPicker({
                 onClick={() => void refresh()}
               >
                 {loading ? <Spinner /> : null}
-                {loading ? '获取中…' : '刷新模型列表'}
+                {loading ? tr('获取中…') : tr('刷新模型列表')}
               </button>
             </div>
             {query.trim() && !options.includes(query.trim()) && (
@@ -395,7 +411,8 @@ export function ModelPicker({
                 className="model-picker-custom"
                 onClick={() => choose(query.trim())}
               >
-                使用自定义 ID：{query.trim()}
+                {tr('使用自定义 ID：')}
+                {query.trim()}
               </button>
             )}
           </div>,
@@ -420,9 +437,9 @@ export function ChatMessage({ message: m, footer }: { message: Message; footer?:
           <Terminal size={14} />
           <span>{toolLabel(m.toolName)}</span>
           {m.status === 'error' ? (
-            <X size={13} aria-label="未完成" />
+            <X size={13} aria-label={tr('未完成')} />
           ) : (
-            <Check size={13} aria-label="已完成" />
+            <Check size={13} aria-label={tr('已完成')} />
           )}
           <ChevronDown size={14} className={open ? 'rotate' : ''} />
         </button>
@@ -433,7 +450,7 @@ export function ChatMessage({ message: m, footer }: { message: Message; footer?:
               <img
                 className="tool-screenshot"
                 key={index}
-                alt="工具截图"
+                alt={tr('工具截图')}
                 src={`data:${image.mimeType};base64,${image.data}`}
               />
             ))}
@@ -443,29 +460,31 @@ export function ChatMessage({ message: m, footer }: { message: Message; footer?:
     );
   const meta = (
     <div className="message-meta">
-      {m.role !== 'user' && m.agent && m.agent !== '同舟' && <strong>{m.agent}</strong>}
+      {m.role !== 'user' && m.agent && !['CoSail', '同舟'].includes(m.agent) && (
+        <strong>{m.agent}</strong>
+      )}
       {m.model && <span>{m.model}</span>}
       <time>
-        {new Date(m.createdAt).toLocaleTimeString('zh-CN', {
+        {new Date(m.createdAt).toLocaleTimeString(getLocale(), {
           hour: '2-digit',
           minute: '2-digit',
         })}
       </time>
       {m.status === 'streaming' && <Spinner />}
-      {m.status === 'interrupted' && <span>已中断</span>}
+      {m.status === 'interrupted' && <span>{tr('已中断')}</span>}
     </div>
   );
   return (
     <article
       className={'chat-message ' + m.role}
-      aria-label={m.role === 'user' ? '你的消息' : '助手回复'}
+      aria-label={m.role === 'user' ? tr('你的消息') : tr('助手回复')}
     >
       <div className="message-body">
         {m.role !== 'user' && meta}
         <div className="message-content">
           <AttachmentCards items={m.attachments} />
           <Markdown
-            text={m.content || (m.status === 'streaming' ? '正在思考…' : '')}
+            text={m.content || (m.status === 'streaming' ? tr('正在思考…') : '')}
             streaming={m.status === 'streaming'}
           />
         </div>

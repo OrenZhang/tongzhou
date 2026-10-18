@@ -1,7 +1,7 @@
 import { version } from '../../../package.json';
 
-export const clientIdentity = { name: 'tongzhou', title: '同舟 Tongzhou', version };
-export const userAgent = `Tongzhou/${version}`;
+export const clientIdentity = { name: 'cosail', title: 'CoSail', version };
+export const userAgent = `CoSail/${version}`;
 
 export function requestUserAgent(existing?: string | null) {
   return existing === `${userAgent} clash.meta` ? existing : userAgent;
@@ -9,7 +9,7 @@ export function requestUserAgent(existing?: string | null) {
 
 /** Preserve Chromium compatibility while identifying the app hosting the page. */
 export function browserUserAgent(existing: string) {
-  return `${existing.replace(/\bTongzhou\/[\w.-]+/gi, '').trim()} ${userAgent}`.trim();
+  return `${existing.replace(/\b(?:Tongzhou|CoSail)\/[\w.-]+/gi, '').trim()} ${userAgent}`.trim();
 }
 
 /** Keep transport, auth and Request semantics intact while branding app-owned HTTP traffic. */

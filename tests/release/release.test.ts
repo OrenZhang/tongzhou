@@ -50,7 +50,7 @@ it('merges architecture-specific update manifests only after checking complete p
     const directory = path.join(root, 'artifacts', target);
     mkdirSync(directory, { recursive: true });
     const files = (target.startsWith('win') ? ['exe'] : ['zip', 'dmg']).map((ext) => {
-      const url = `Tongzhou-0.1.0-${target}.${ext}`;
+      const url = `CoSail-0.1.0-${target}.${ext}`;
       writeFileSync(path.join(directory, url), url);
       return { url, sha512: createHash('sha512').update(url).digest('base64') };
     });
@@ -62,9 +62,9 @@ it('merges architecture-specific update manifests only after checking complete p
   const linuxDirectory = path.join(root, 'artifacts', 'linux-amd64');
   mkdirSync(linuxDirectory, { recursive: true });
   const linuxFiles = [
-    'Tongzhou-0.1.0-linux-x86_64.AppImage',
-    'Tongzhou-0.1.0-linux-x86_64.AppImage.blockmap',
-    'Tongzhou-0.1.0-linux-amd64.deb',
+    'CoSail-0.1.0-linux-x86_64.AppImage',
+    'CoSail-0.1.0-linux-x86_64.AppImage.blockmap',
+    'CoSail-0.1.0-linux-amd64.deb',
   ].map((url) => {
     writeFileSync(path.join(linuxDirectory, url), url);
     return { url, sha512: createHash('sha512').update(url).digest('base64') };
@@ -80,14 +80,14 @@ it('merges architecture-specific update manifests only after checking complete p
   );
   expect(manifest.files).toHaveLength(4);
   expect(manifest.files.some((f: any) => f.url.endsWith('mac-arm64.zip'))).toBe(true);
-  writeFileSync(path.join(root, 'artifacts/win-x64/Tongzhou-0.1.0-win-x64.exe'), 'corrupt');
+  writeFileSync(path.join(root, 'artifacts/win-x64/CoSail-0.1.0-win-x64.exe'), 'corrupt');
   expect(() => execFileSync(process.execPath, [script], { cwd: root, stdio: 'pipe' })).toThrow();
   writeFileSync(
-    path.join(root, 'artifacts/win-x64/Tongzhou-0.1.0-win-x64.exe'),
-    'Tongzhou-0.1.0-win-x64.exe',
+    path.join(root, 'artifacts/win-x64/CoSail-0.1.0-win-x64.exe'),
+    'CoSail-0.1.0-win-x64.exe',
   );
   writeFileSync(
-    path.join(root, 'artifacts/linux-amd64/Tongzhou-0.1.0-linux-amd64.deb'),
+    path.join(root, 'artifacts/linux-amd64/CoSail-0.1.0-linux-amd64.deb'),
     'corrupt',
   );
   expect(() => execFileSync(process.execPath, [script], { cwd: root, stdio: 'pipe' })).toThrow();

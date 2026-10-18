@@ -1,6 +1,6 @@
 # GitHub 与 GitLab 工作插件
 
-同舟通过 MCP 提供代码托管工具，并通过同一个 ToolScope 将工具交给 API 模型、Codex 动态工具和 Kimi / MiniMax 的 ACP 工具桥。没有复制 Codex 桌面应用的专有连接器，也不读取其账号凭据。
+CoSail通过 MCP 提供代码托管工具，并通过同一个 ToolScope 将工具交给 API 模型、Codex 动态工具和 Kimi / MiniMax 的 ACP 工具桥。没有复制 Codex 桌面应用的专有连接器，也不读取其账号凭据。
 
 ## 配置
 
@@ -23,7 +23,7 @@
 
 ## 验证范围
 
-本地协议测试覆盖两家各 246 个工具、真实 MCP HTTP 分页、OAuth token 传递、完整工具集请求头、同舟 User-Agent、搜索和 schema 获取、通过原生工具桥调用、审批拒绝、只读过滤、账号更新与注销、凭据脱敏、重复游标及当前仓库上下文。GitLab 的 OAuth discovery / DCR / PKCE / 回调 scope 另由本地合成服务验证。
+本地协议测试覆盖两家各 246 个工具、真实 MCP HTTP 分页、OAuth token 传递、完整工具集请求头、CoSail User-Agent、搜索和 schema 获取、通过原生工具桥调用、审批拒绝、只读过滤、账号更新与注销、凭据脱敏、重复游标及当前仓库上下文。GitLab 的 OAuth discovery / DCR / PKCE / 回调 scope 另由本地合成服务验证。
 
 这些测试不代表已经完成用户的真实 GitLab 授权，也不运行真实 Actions、流水线、发布或仓库写入。实际连接验证以用户授权后的「检查工具」结果为准。
 

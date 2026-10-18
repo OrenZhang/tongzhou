@@ -1,35 +1,10 @@
-// Original sail mark rasterized from the project's vector geometry. No external assets.
+// CoSail double-sail mark rasterized from the project's vector geometry. No external assets.
 import { deflateSync } from 'node:zlib';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 const samples = 4;
-const background = [75, 94, 140]; // #4b5e8c, shared with the interface accent and SVG logo.
-const polygons = [
-  {
-    p: [
-      [20, 5],
-      [20, 28],
-      [7, 28],
-    ],
-    color: [255, 255, 255],
-  },
-  {
-    p: [
-      [24, 11],
-      [24, 28],
-      [34, 28],
-    ],
-    color: background.map((channel) => Math.round(255 * 0.55 + channel * 0.45)),
-  },
-  {
-    p: [
-      [5, 31],
-      [36, 31],
-      [30, 36],
-      [12, 36],
-    ],
-    color: [255, 255, 255],
-  },
-];
+const { background, polygons } = JSON.parse(
+  await readFile(new URL('../src/shared/brand-mark.json', import.meta.url), 'utf8'),
+);
 function inside(x, y, p) {
   let yes = false;
   for (let i = 0, j = p.length - 1; i < p.length; j = i++)
@@ -126,3 +101,22 @@ const iconHeader = Buffer.alloc(8);
 iconHeader.write('icns', 0, 'ascii');
 iconHeader.writeUInt32BE(8 + iconEntries.reduce((size, entry) => size + entry.length, 0), 4);
 await writeFile('build/icon.icns', Buffer.concat([iconHeader, ...iconEntries]));
+
+const rgb = (color) => 'rgb(' + color.join(',') + ')';
+const svg =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="CoSail"><rect width="256" height="256" rx="58" fill="' +
+  rgb(background) +
+  '"/><g transform="translate(32 25) scale(4.8)">' +
+  polygons
+    .map(
+      ({ p, color }) =>
+        '<polygon points="' +
+        p.map((point) => point.join(',')).join(' ') +
+        '" fill="' +
+        rgb(color) +
+        '"/>',
+    )
+    .join('') +
+  '</g></svg>\n';
+await writeFile('docs/assets/logo.svg', svg);
+await writeFile('public/cosail.svg', svg);

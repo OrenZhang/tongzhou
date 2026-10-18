@@ -149,7 +149,7 @@ try {
     'GFM headings, table, task list, footnote, math/fonts, exact clipboard, validated links, light/dark syntax colors',
   );
   for (const [language, source] of Object.entries({
-    javascript: 'const answer = "同舟";',
+    javascript: 'const answer = "CoSail";',
     typescript: 'interface Result { value: number }',
     json: '{"ok": true}',
     sql: 'SELECT name FROM users;',
@@ -169,13 +169,13 @@ try {
     flowchart:
       'flowchart LR\nA[输入数据] --> B{是否有序?}\nB -->|是| C[返回结果]\nB -->|否| D[执行排序]\nD --> C',
     sequence:
-      'sequenceDiagram\nparticipant U as 用户\nparticipant A as 同舟\nU->>A: 处理任务\nA-->>U: 返回结果',
+      'sequenceDiagram\nparticipant U as 用户\nparticipant A as CoSail\nU->>A: 处理任务\nA-->>U: 返回结果',
     er: 'erDiagram\nUSER ||--o{ SESSION : owns',
     class: 'classDiagram\nAnimal <|-- Duck\nAnimal : +int age',
     state: 'stateDiagram-v2\n[*] --> Working\nWorking --> Done\nDone --> [*]',
     gantt: 'gantt\ntitle 开发计划\ndateFormat YYYY-MM-DD\nsection 实现\n编码 :a, 2026-10-01, 2d',
     pie: 'pie title 测试结果\n"通过" : 90\n"待处理" : 10',
-    mindmap: 'mindmap\n  root((同舟))\n    会话\n    连接\n    工具',
+    mindmap: 'mindmap\n  root((CoSail))\n    会话\n    连接\n    工具',
   };
   const waitImage = () =>
     page.waitForFunction(
@@ -219,8 +219,8 @@ try {
   const htmlFrame = () => page.frameLocator('.html-preview iframe');
   await htmlFrame().getByRole('button', { name: '点击 0' }).click();
   await htmlFrame().getByRole('button', { name: '点击 1' }).waitFor();
-  await htmlFrame().getByRole('textbox', { name: '名称' }).fill('同舟');
-  await htmlFrame().getByText('你好，同舟', { exact: true }).waitFor();
+  await htmlFrame().getByRole('textbox', { name: '名称' }).fill('CoSail');
+  await htmlFrame().getByText('你好，CoSail', { exact: true }).waitFor();
   await page.locator('.html-preview').getByRole('button', { name: '源码', exact: true }).click();
   await page.locator('.html-preview-source').waitFor();
   await page.locator('.html-preview').getByRole('button', { name: '预览', exact: true }).click();

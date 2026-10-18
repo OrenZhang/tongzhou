@@ -1,3 +1,4 @@
+import { t as tr } from '../../shared/i18n';
 import { useEffect, useRef, useState } from 'react';
 import { errorMessage } from '../../lib/feedback';
 
@@ -54,8 +55,8 @@ export function SessionTitle({
       <input
         ref={input}
         autoFocus
-        aria-label="会话名称"
-        title="Enter 保存 · Esc 取消"
+        aria-label={tr('会话名称')}
+        title={tr('Enter 保存 · Esc 取消')}
         maxLength={120}
         value={draft}
         disabled={saving}
@@ -82,7 +83,7 @@ export function SessionTitle({
       <button
         ref={trigger}
         className="conversation-title"
-        title="点击标题重命名"
+        title={tr('点击标题重命名')}
         onClick={() => {
           ending.current = false;
           setDraft(title);

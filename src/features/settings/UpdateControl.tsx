@@ -1,3 +1,4 @@
+import { t as tr } from '../../shared/i18n';
 import { useEffect, useState } from 'react';
 import { CircleArrowDown, LoaderCircle, RefreshCw } from 'lucide-react';
 import type { UpdateState } from '../../shared/updates';
@@ -28,14 +29,14 @@ export function UpdateControl({ api, settings = false }: { api: TongzhouAPI; set
   const available = !!state.version;
   const label =
     state.phase === 'downloading'
-      ? `正在下载 ${state.progress ?? 0}%`
+      ? tr('正在下载 {0}%', [state.progress ?? 0])
       : state.phase === 'installing'
-        ? '正在安装'
+        ? tr('正在安装')
         : state.phase === 'downloaded'
-          ? '安装并重启'
+          ? tr('安装并重启')
           : state.automaticInstall
-            ? `更新到 ${state.version}`
-            : `下载新版 ${state.version}`;
+            ? tr('更新到 {0}', [state.version])
+            : tr('下载新版 {0}', [state.version]);
   const install = async () => {
     setError('');
     try {
@@ -50,7 +51,7 @@ export function UpdateControl({ api, settings = false }: { api: TongzhouAPI; set
         <button
           className="icon-button"
           aria-label={label}
-          title={error || state.message || label}
+          title={error || (state.message ? tr(state.message) : undefined) || label}
           disabled={working}
           aria-busy={working}
           onClick={() => void install()}
@@ -67,11 +68,17 @@ export function UpdateControl({ api, settings = false }: { api: TongzhouAPI; set
   return (
     <section className="settings-card update-settings">
       <div>
-        <h3>版本更新</h3>
-        <p>当前版本 {state.currentVersion} · 安装包由 GitHub Releases 提供</p>
+        <h3>{tr('版本更新')}</h3>
+        <p>
+          {tr('当前版本 ')}
+          {state.currentVersion}
+          {tr(' · 安装包由 GitHub Releases 提供')}
+        </p>
       </div>
       <p role="status">
-        {error || state.message || (working ? '正在检查更新…' : '检查可用的新版本')}
+        {error ||
+          (state.message ? tr(state.message) : undefined) ||
+          (working ? tr('正在检查更新…') : tr('检查可用的新版本'))}
       </p>
       <div className="row">
         <button
@@ -83,7 +90,7 @@ export function UpdateControl({ api, settings = false }: { api: TongzhouAPI; set
           }}
         >
           <RefreshCw size={14} />
-          检查更新
+          {tr('检查更新')}
         </button>
         {available && (
           <button className="primary" disabled={working} onClick={() => void install()}>
@@ -99,7 +106,7 @@ export function UpdateControl({ api, settings = false }: { api: TongzhouAPI; set
               .catch((e) => setError(errorMessage(e)));
           }}
         >
-          打开发布页面
+          {tr('打开发布页面')}
         </button>
       </div>
     </section>

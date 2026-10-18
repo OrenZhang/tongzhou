@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { PluginTool } from '../../../src/shared/types';
+import type { ArtifactOutput } from '../../../src/shared/artifacts';
 import { serviceFetch } from '../../services/network/service-network';
 
 const text = z.string().trim().min(1).max(8000);
@@ -37,7 +38,8 @@ const definitions = {
   },
   text_to_image: {
     route: 'image_synthesize',
-    description: '使用 MiniMax 套餐生成图片，返回图片 URL。可提供最多 4 个参考图片 URL。',
+    description:
+      '使用 MiniMax 套餐生成图片，结果自动保存为本地作品并在聊天中展示。可提供最多 4 个参考图片 URL。若下载失败，只重试下载，不要重复生成。',
     readOnly: false,
     schema: z
       .object({
@@ -190,7 +192,9 @@ export async function callMiniMaxPlan(
   const code = result.base_resp?.status_code ?? result.code ?? 0;
   if (code !== 0) throw new Error('MiniMax 套餐拒绝了请求，请检查功能权限、剩余额度和参数');
   const output = JSON.stringify(result);
+  const artifacts = name === 'text_to_image' ? minimaxImageArtifacts(result) : [];
   return {
+    ...(artifacts.length ? { structuredContent: { artifacts } } : {}),
     content: [
       {
         type: 'text' as const,
@@ -198,4 +202,40 @@ export async function callMiniMaxPlan(
       },
     ],
   };
+}
+
+/** Only inspect image-generation output fields, never prompts or echoed reference images. */
+export function minimaxImageArtifacts(result: unknown): ArtifactOutput[] {
+  const urls = new Set<string>();
+  const add = (value: unknown) => {
+    if (typeof value !== 'string' || value.length > 8000) return;
+    try {
+      const url = new URL(value);
+      if (url.protocol === 'https:' && !url.username && !url.password) urls.add(url.href);
+    } catch {
+      /* Invalid optional media URLs do not invalidate a successful generation. */
+    }
+  };
+  const visit = (value: unknown, depth = 0) => {
+    if (!value || typeof value !== 'object' || depth > 8 || urls.size >= 12) return;
+    if (Array.isArray(value)) {
+      for (const item of value.slice(0, 12))
+        typeof item === 'string' ? add(item) : visit(item, depth + 1);
+      return;
+    }
+    for (const [key, item] of Object.entries(value)) {
+      if (['url', 'image_url', 'download_url', 'file_download_url'].includes(key)) add(item);
+      else if (['data', 'result', 'results', 'images', 'image_urls', 'image_results'].includes(key))
+        visit(item, depth + 1);
+    }
+  };
+  visit(result);
+  return [...urls].slice(0, 12).map((url, index) => {
+    const ext = /\.(png|jpe?g|webp|gif)$/i.exec(new URL(url).pathname)?.[1].toLowerCase() ?? 'png';
+    return {
+      name: `MiniMax-image-${index + 1}.${ext}`,
+      mimeType: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
+      url,
+    };
+  });
 }

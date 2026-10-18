@@ -2,6 +2,7 @@ export type Theme = 'system' | 'light' | 'dark';
 export type AppearanceStyle = 'graphite' | 'blue' | 'sand';
 export type InterfaceFont = 'modern' | 'system' | 'serif';
 export interface AppearancePreferences {
+  language?: 'zh-CN' | 'en';
   theme: Theme;
   style: AppearanceStyle;
   font: InterfaceFont;
@@ -17,6 +18,7 @@ export function normalizeAppearance(raw: unknown): AppearancePreferences {
   const value = raw && typeof raw === 'object' ? (raw as Partial<AppearancePreferences>) : {};
   const theme = value.theme;
   return {
+    ...(value.language === 'en' || value.language === 'zh-CN' ? { language: value.language } : {}),
     theme: theme === 'light' || theme === 'dark' ? theme : 'system',
     style: value.style === 'blue' || value.style === 'sand' ? value.style : 'graphite',
     font: value.font === 'modern' || value.font === 'serif' ? value.font : 'system',

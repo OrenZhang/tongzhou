@@ -68,7 +68,7 @@ it('reports an unavailable built-in GitHub app without asking the user for clien
     request = vi.fn();
   const service = new McpAuth(s, () => {}, open, request);
   cleanups.push(() => service.dispose());
-  await expect(service.login(plugin.id)).rejects.toThrow('尚未配置同舟的 GitHub 登录应用');
+  await expect(service.login(plugin.id)).rejects.toThrow('尚未配置CoSail的 GitHub 登录应用');
   expect(open).not.toHaveBeenCalled();
   expect(request).not.toHaveBeenCalled();
   expect(s.get<PluginConfig>('plugin', plugin.id)).toMatchObject({

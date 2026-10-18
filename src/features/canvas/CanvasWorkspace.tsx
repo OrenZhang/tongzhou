@@ -1,3 +1,5 @@
+import { providerLabel } from '../../shared/provider-label';
+import { t as tr, getLocale, localize as localized } from '../../shared/i18n';
 import { Modal } from '../../components/components';
 import { CanvasLibrary } from './CanvasLibrary';
 import { CanvasWorkflowFields } from './CanvasWorkflowFields';
@@ -35,7 +37,7 @@ import type {
   CanvasResource,
   CanvasState,
 } from '../../shared/canvas';
-import { canvasNodeKinds } from '../../shared/canvas';
+import { canvasNodeKinds as raw_canvasNodeKinds } from '../../shared/canvas';
 import type { Session, Snapshot, TongzhouAPI } from '../../shared/types';
 import { effectivePermission } from '../../shared/permissions';
 import { isUserSession } from '../../shared/session-scope';
@@ -77,7 +79,7 @@ export function CanvasWorkspace({
     [library, setLibrary] = useState<'prompt' | 'template'>(),
     [notice, setNotice] = useState('');
   const [libraries, setLibraries] = useState<{ id: string; name: string }[]>([
-    { id: 'default', name: '我的内容' },
+    { id: 'default', name: tr('我的内容') },
   ]);
   useEffect(() => {
     let active = true;
@@ -102,7 +104,7 @@ export function CanvasWorkspace({
     );
     if (invalid) {
       invalid.reportValidity();
-      throw new Error('请检查节点插件的扩展参数');
+      throw new Error(tr('请检查节点插件的扩展参数'));
     }
   };
   const boundCanvas = useRef<string | undefined>(undefined);
@@ -177,7 +179,7 @@ export function CanvasWorkspace({
         setDirty(merged.dirty);
         conflictRef.current = undefined;
         setConflict(undefined);
-        setNotice('已同步 AI／其他窗口的修改，并保留你的本地编辑。');
+        setNotice(tr('已同步 AI／其他窗口的修改，并保留你的本地编辑。'));
         return;
       }
       if (force || !dirtyRef.current) {
@@ -191,7 +193,7 @@ export function CanvasWorkspace({
             if (draft?.id === next.id && draft.version === next.version) {
               next = draft;
               restored = true;
-            } else if (draft) setError('画布已有新版本，本地草稿仍保留；请先核对当前内容。');
+            } else if (draft) setError(tr('画布已有新版本，本地草稿仍保留；请先核对当前内容。'));
           } catch {
             /* Ignore malformed browser drafts. */
           }
@@ -199,7 +201,7 @@ export function CanvasWorkspace({
           undo.current.push(local);
           redo.current = [];
           if (undo.current.length > 80) undo.current.shift();
-          setNotice('画布已更新，可撤销本次修改。');
+          setNotice(tr('画布已更新，可撤销本次修改。'));
         }
         savedBase.current = result.canvas;
         conflictRef.current = undefined;
@@ -277,7 +279,7 @@ export function CanvasWorkspace({
   };
   const saveOnce = async () => {
     if (current.current) await load(current.current.id);
-    if (conflictRef.current) throw new Error('请先处理画布修改冲突');
+    if (conflictRef.current) throw new Error(tr('请先处理画布修改冲突'));
     const c = current.current;
     if (!c) return;
     if (!dirtyRef.current) return c;
@@ -307,7 +309,7 @@ export function CanvasWorkspace({
   const flush = useRef(async () => {});
   flush.current = async () => {
     for (let i = 0; i < 8 && (dirtyRef.current || saving.current); i++) await save();
-    if (dirtyRef.current) throw new Error('画布仍在编辑，请稍后发送');
+    if (dirtyRef.current) throw new Error(tr('画布仍在编辑，请稍后发送'));
     if (owner && current.current) await api.canvasBind(owner, current.current.id);
   };
   useEffect(() => (owner ? registerCanvasDraft(owner, () => flush.current()) : undefined), [owner]);
@@ -322,7 +324,7 @@ export function CanvasWorkspace({
     const created = await api.createSession(ownerSession?.projectId ?? null);
     await api.setSessionPermission(created.id, 'full-access');
     await api.updateSession(created.id, {
-      title: `${current.current.title} · 画布聊天`,
+      title: tr('{0} · 画布聊天', [current.current.title]),
       ...(ownerSession ? { providerId: ownerSession.providerId, model: ownerSession.model } : {}),
     });
     await api.canvasBind(created.id, current.current.id);
@@ -330,7 +332,7 @@ export function CanvasWorkspace({
   };
   const create = async () => {
     const next = await api.canvasSave({
-      title: '未命名画布',
+      title: tr('未命名画布'),
       nodes: [],
       edges: [],
       selection: [],
@@ -440,7 +442,7 @@ export function CanvasWorkspace({
   const execute = (selected = false) =>
     void perform(async () => {
       validateConfig();
-      if (!owner) throw new Error('请选择执行会话');
+      if (!owner) throw new Error(tr('请选择执行会话'));
       await flush.current();
       const c = current.current;
       if (!c) return;
@@ -456,7 +458,7 @@ export function CanvasWorkspace({
     });
   const saveReferenced = () =>
     void perform(async () => {
-      if (!owner || !node) throw new Error('请选择执行会话和媒体节点');
+      if (!owner || !node) throw new Error(tr('请选择执行会话和媒体节点'));
       await flush.current();
       const c = current.current;
       if (!c) return;
@@ -479,7 +481,7 @@ export function CanvasWorkspace({
   ) =>
     void perform(async () => {
       validateConfig();
-      if (!owner) throw new Error('请选择执行会话');
+      if (!owner) throw new Error(tr('请选择执行会话'));
       await flush.current();
       const c = current.current;
       if (!c) return;
@@ -503,7 +505,7 @@ export function CanvasWorkspace({
     <section
       className={`canvas-workspace ${compact ? 'compact' : ''}`}
       ref={workspace}
-      aria-label="画布与工作流"
+      aria-label={tr('画布与工作流')}
       onKeyDown={(e) => {
         if (e.target instanceof Element && e.target.closest('[role="dialog"],.canvas-chat-float'))
           return;
@@ -543,19 +545,19 @@ export function CanvasWorkspace({
             undo.current = [];
             redo.current = [];
             await load(next.id, true);
-            setNotice('模板已创建。请重新选择素材、插件连接和执行会话。');
+            setNotice(tr('模板已创建。请重新选择素材、插件连接和执行会话。'));
           }}
           onPrompt={(text, title, replace) => {
             const c = current.current;
-            if (!c) throw new Error('请先创建画布');
+            if (!c) throw new Error(tr('请先创建画布'));
             if (replace) {
-              if (c.selection.length !== 1) throw new Error('请选择一个节点后填入提示词');
+              if (c.selection.length !== 1) throw new Error(tr('请选择一个节点后填入提示词'));
               change({
                 ...c,
                 nodes: c.nodes.map((n) => (n.id === c.selection[0] ? { ...n, text } : n)),
               });
             } else {
-              if (c.nodes.length >= 200) throw new Error('画布最多支持 200 个节点');
+              if (c.nodes.length >= 200) throw new Error(tr('画布最多支持 200 个节点'));
               const id = crypto.randomUUID();
               change({
                 ...c,
@@ -578,7 +580,7 @@ export function CanvasWorkspace({
       )}
       <header className="canvas-toolbar">
         <select
-          aria-label="选择画布"
+          aria-label={tr('选择画布')}
           value={canvas?.id ?? ''}
           disabled={busy}
           onChange={(e) =>
@@ -591,7 +593,7 @@ export function CanvasWorkspace({
             })
           }
         >
-          <option value="">选择画布</option>
+          <option value="">{tr('选择画布')}</option>
           {state.canvases.map((c) => (
             <option key={c.id} value={c.id}>
               {c.title}
@@ -599,7 +601,7 @@ export function CanvasWorkspace({
           ))}
         </select>
         <button
-          title="新建画布"
+          title={tr('新建画布')}
           disabled={busy}
           onClick={() =>
             void perform(async () => {
@@ -609,16 +611,16 @@ export function CanvasWorkspace({
           }
         >
           <Plus size={14} />
-          新建
+          {tr('新建')}
         </button>
         {canvas && (
           <>
             <button disabled={busy || !dirty} onClick={() => void perform(save)}>
               <Save size={14} />
-              {dirty ? '保存' : '已保存'}
+              {dirty ? tr('保存') : tr('已保存')}
             </button>
             <button
-              title="复制画布"
+              title={tr('复制画布')}
               disabled={busy}
               onClick={() =>
                 void perform(async () => {
@@ -627,7 +629,7 @@ export function CanvasWorkspace({
                   const { id: _, version: _v, updatedAt: _t, ...definition } = source;
                   const next = await api.canvasSave({
                     ...definition,
-                    title: source.title + ' · 副本',
+                    title: source.title + tr(' · 副本'),
                   });
                   if (owner) await api.canvasBind(owner, next.id);
                   await load(next.id, true);
@@ -638,7 +640,7 @@ export function CanvasWorkspace({
             </button>
             <span className="canvas-version">
               v{canvas.version}
-              {dirty ? ' · 未保存' : ''}
+              {dirty ? tr(' · 未保存') : ''}
             </span>
           </>
         )}
@@ -653,15 +655,15 @@ export function CanvasWorkspace({
                 undo.current = [];
                 redo.current = [];
                 await load(next.id, true);
-                setNotice('已导入。请重新选择模型／插件连接，并检查素材和输出位置。');
+                setNotice(tr('已导入。请重新选择模型／插件连接，并检查素材和输出位置。'));
               }
             })
           }
         >
-          导入
+          {tr('导入')}
         </button>
         <select
-          aria-label="导出画布"
+          aria-label={tr('导出画布')}
           value=""
           disabled={busy || !canvas}
           onChange={(e) => {
@@ -671,13 +673,13 @@ export function CanvasWorkspace({
                 await flush.current();
                 const c = current.current!;
                 const path = await api.canvasExport(c.id, c.version, mode);
-                if (path) setNotice('已导出到：' + path);
+                if (path) setNotice(tr('已导出到：') + path);
               });
           }}
         >
-          <option value="">导出…</option>
-          <option value="template">工作流模板 JSON</option>
-          <option value="project">项目 JSON（含素材与结果）</option>
+          <option value="">{tr('导出…')}</option>
+          <option value="template">{tr('工作流模板 JSON')}</option>
+          <option value="project">{tr('项目 JSON（含素材与结果）')}</option>
         </select>
         <button
           disabled={busy || !canvas}
@@ -686,34 +688,36 @@ export function CanvasWorkspace({
               await flush.current();
               const c = current.current!;
               await api.canvasSaveTemplate(c.id, c.version);
-              setNotice('已保存到内容库的“画布模板”目录。');
+              setNotice(tr('已保存到内容库的“画布模板”目录。'));
             })
           }
         >
-          保存为模板
+          {tr('保存为模板')}
         </button>
-        <button onClick={() => setLibrary('template')}>模板库</button>
+        <button onClick={() => setLibrary('template')}>{tr('模板库')}</button>
         <button onClick={() => setLibrary('prompt')} disabled={!canvas}>
-          提示词库
+          {tr('提示词库')}
         </button>
         <span className="canvas-toolbar-spacer" />
         <button
-          aria-label="切换画布聊天"
+          aria-label={tr('切换画布聊天')}
           aria-pressed={chatOpen}
           onClick={() => setChatOpen((v) => !v)}
         >
-          <MessageSquare size={15} /> 聊天
+          <MessageSquare size={15} />
+          {tr(' 聊天')}
         </button>
         <button
-          aria-label="画布设置"
+          aria-label={tr('画布设置')}
           disabled={busy || !canvas}
           onClick={() => setSettingsOpen(true)}
         >
-          <Settings2 size={15} /> 画布设置
+          <Settings2 size={15} />
+          {tr(' 画布设置')}
         </button>
         {onClose && (
           <button
-            aria-label="关闭画布"
+            aria-label={tr('关闭画布')}
             onClick={() => {
               if (dirty)
                 void perform(async () => {
@@ -730,7 +734,7 @@ export function CanvasWorkspace({
       {notice && (
         <div className="canvas-notice" role="status">
           {notice}
-          <button aria-label="关闭提示" onClick={() => setNotice('')}>
+          <button aria-label={tr('关闭提示')} onClick={() => setNotice('')}>
             ×
           </button>
         </div>
@@ -738,23 +742,25 @@ export function CanvasWorkspace({
       {error && (
         <div className="canvas-alert" role="alert">
           {error}
-          <button onClick={() => void perform(() => load(canvas?.id, true))}>重新载入</button>
+          <button onClick={() => void perform(() => load(canvas?.id, true))}>
+            {tr('重新载入')}
+          </button>
         </div>
       )}
       {conflict && (
         <div className="canvas-alert" role="alert">
-          你和 AI／其他窗口修改了同一处内容，已暂停同步。
+          {tr('你和 AI／其他窗口修改了同一处内容，已暂停同步。')}
           <button
             onClick={() =>
               void perform(async () => {
                 const id = current.current?.id;
                 await load(id, true);
                 if (id) localStorage.removeItem(draftKey(id));
-                setNotice('已采用最新版本，可以继续编辑和对话。');
+                setNotice(tr('已采用最新版本，可以继续编辑和对话。'));
               })
             }
           >
-            使用最新版本
+            {tr('使用最新版本')}
           </button>
           <button
             onClick={() => {
@@ -764,21 +770,25 @@ export function CanvasWorkspace({
               change({ ...local, version: conflict.version });
               conflictRef.current = undefined;
               setConflict(undefined);
-              setNotice('已保留本地草稿；保存后将覆盖该版本的远端修改。');
+              setNotice(tr('已保留本地草稿；保存后将覆盖该版本的远端修改。'));
             }}
           >
-            保留本地草稿
+            {tr('保留本地草稿')}
           </button>
         </div>
       )}
       {canvas && (
         <div className="canvas-actionbar">
-          <select aria-label="节点类型" value={kind} onChange={(e) => setKind(e.target.value)}>
+          <select
+            aria-label={tr('节点类型')}
+            value={kind}
+            onChange={(e) => setKind(e.target.value)}
+          >
             {(
               state.plugins ?? Object.entries(canvasNodeKinds).map(([id, name]) => ({ id, name }))
             ).map((plugin) => (
               <option key={plugin.id} value={plugin.id}>
-                {plugin.name}
+                {tr(plugin.name)}
               </option>
             ))}
           </select>
@@ -791,32 +801,46 @@ export function CanvasWorkspace({
             }}
           >
             <Plus size={13} />
-            添加节点
+            {tr('添加节点')}
           </button>
-          <button title="撤销" disabled={!undo.current.length} onClick={() => history('undo')}>
+          <button
+            title={tr('撤销')}
+            disabled={!undo.current.length}
+            onClick={() => history('undo')}
+          >
             <Undo2 size={14} />
           </button>
-          <button title="重做" disabled={!redo.current.length} onClick={() => history('redo')}>
+          <button
+            title={tr('重做')}
+            disabled={!redo.current.length}
+            onClick={() => history('redo')}
+          >
             <Redo2 size={14} />
           </button>
-          <button title="移除所选节点" disabled={!canvas.selection.length} onClick={() => remove()}>
+          <button
+            title={tr('移除所选节点')}
+            disabled={!canvas.selection.length}
+            onClick={() => remove()}
+          >
             <Trash2 size={14} />
           </button>
           <button
             disabled={!canvas.selection.length}
             onClick={() => void perform(async () => change(duplicateSelection(canvas)))}
           >
-            复制选中
+            {tr('复制选中')}
           </button>
           <select
-            aria-label="批量操作"
+            aria-label={tr('批量操作')}
             value=""
             disabled={!canvas.selection.length}
             onChange={(e) => {
               const action = e.target.value;
               if (action === 'group' || action === 'ungroup') {
                 const group =
-                  action === 'group' ? `分组 ${crypto.randomUUID().slice(0, 8)}` : undefined;
+                  action === 'group'
+                    ? tr('分组 {0}', [crypto.randomUUID().slice(0, 8)])
+                    : undefined;
                 change({
                   ...canvas,
                   nodes: canvas.nodes.map((n) =>
@@ -827,12 +851,12 @@ export function CanvasWorkspace({
                 change(alignSelection(canvas, action as 'left' | 'top' | 'horizontal'));
             }}
           >
-            <option value="">批量操作</option>
-            <option value="group">编组</option>
-            <option value="ungroup">取消编组</option>
-            <option value="left">左对齐</option>
-            <option value="top">顶对齐</option>
-            <option value="horizontal">水平分布</option>
+            <option value="">{tr('批量操作')}</option>
+            <option value="group">{tr('编组')}</option>
+            <option value="ungroup">{tr('取消编组')}</option>
+            <option value="left">{tr('左对齐')}</option>
+            <option value="top">{tr('顶对齐')}</option>
+            <option value="horizontal">{tr('水平分布')}</option>
           </select>
           <span className="canvas-toolbar-spacer" />
           {activeRun ? (
@@ -841,7 +865,7 @@ export function CanvasWorkspace({
               onClick={() => void perform(() => api.canvasCancel(activeRun.id))}
             >
               <Square size={13} />
-              停止
+              {tr('停止')}
             </button>
           ) : (
             <>
@@ -849,7 +873,7 @@ export function CanvasWorkspace({
                 disabled={busy || readOnly || !canvas.selection.length}
                 onClick={() => execute(true)}
               >
-                运行选中
+                {tr('运行选中')}
               </button>
               <button
                 className="primary"
@@ -857,7 +881,7 @@ export function CanvasWorkspace({
                 onClick={() => execute()}
               >
                 <Play size={13} />
-                运行
+                {tr('运行')}
               </button>
             </>
           )}
@@ -865,11 +889,11 @@ export function CanvasWorkspace({
       )}
       {!canvas ? (
         <div className="canvas-welcome">
-          <h2>画布</h2>
-          <p>组织资料、连接能力、保存并执行工作流。</p>
+          <h2>{tr('画布')}</h2>
+          <p>{tr('组织资料、连接能力、保存并执行工作流。')}</p>
           <button className="primary" disabled={busy} onClick={() => void perform(create)}>
             <Plus size={15} />
-            创建画布
+            {tr('创建画布')}
           </button>
         </div>
       ) : (
@@ -889,23 +913,23 @@ export function CanvasWorkspace({
             }}
           />
           {settingsOpen && (
-            <Modal title="画布设置" onClose={() => setSettingsOpen(false)}>
+            <Modal title={tr('画布设置')} onClose={() => setSettingsOpen(false)}>
               <div className="canvas-inspector canvas-config-form">
                 <label>
-                  画布名称
+                  {tr('画布名称')}
                   <input
                     value={canvas.title}
                     onChange={(e) => change({ ...canvas, title: e.target.value })}
                   />
                 </label>
                 <label>
-                  执行会话
+                  {tr('执行会话')}
                   <select
-                    aria-label="执行会话"
+                    aria-label={tr('执行会话')}
                     value={owner}
                     onChange={(e) => void perform(() => bindOwner(e.target.value))}
                   >
-                    <option value="">请选择</option>
+                    <option value="">{tr('请选择')}</option>
                     {data.sessions
                       .filter((s) => isUserSession(s) && !s.archived)
                       .map((s) => (
@@ -921,28 +945,29 @@ export function CanvasWorkspace({
                     checked={reuse}
                     onChange={(e) => setReuse(e.target.checked)}
                   />
-                  复用输入未变化的结果
+                  {tr('复用输入未变化的结果')}
                 </label>
                 <small>
-                  节点沿用执行会话的模型、思考设置、工具与权限。媒体节点需选择对应生成插件。
+                  {tr('节点沿用执行会话的模型、思考设置、工具与权限。媒体节点需选择对应生成插件。')}
                 </small>
-                <h3>执行记录</h3>
+                <h3>{tr('执行记录')}</h3>
                 <select
-                  aria-label="执行记录"
+                  aria-label={tr('执行记录')}
                   value={shownRun?.id ?? ''}
                   onChange={(e) => setRunId(e.target.value)}
                 >
-                  <option value="">暂无记录</option>
+                  <option value="">{tr('暂无记录')}</option>
                   {state.runs.map((r) => (
                     <option key={r.id} value={r.id}>
-                      {new Date(r.startedAt).toLocaleString()} · v{r.definition.version} ·{' '}
+                      {new Date(r.startedAt).toLocaleString(getLocale())} · v{r.definition.version}{' '}
+                      ·{' '}
                       {
                         {
-                          running: '运行中',
-                          completed: '已完成',
-                          failed: '失败',
-                          cancelled: '已停止',
-                          interrupted: '已中断',
+                          running: tr('运行中'),
+                          completed: tr('已完成'),
+                          failed: tr('失败'),
+                          cancelled: tr('已停止'),
+                          interrupted: tr('已中断'),
                         }[r.status]
                       }
                     </option>
@@ -953,7 +978,11 @@ export function CanvasWorkspace({
             </Modal>
           )}
           {inspector && node && (
-            <Modal title="节点配置" subtitle={node.title} onClose={() => setInspector(undefined)}>
+            <Modal
+              title={tr('节点配置')}
+              subtitle={node.title}
+              onClose={() => setInspector(undefined)}
+            >
               <div className="canvas-inspector canvas-config-form">
                 {node ? (
                   <>
@@ -971,7 +1000,7 @@ export function CanvasWorkspace({
                       </small>
                     )}
                     <label>
-                      节点名称
+                      {tr('节点名称')}
                       <input
                         value={node.title}
                         onChange={(e) => patch({ title: e.target.value })}
@@ -996,25 +1025,25 @@ export function CanvasWorkspace({
                           onSave={saveReferenced}
                         />
                         <label>
-                          自定义提示词
+                          {tr('自定义提示词')}
                           <textarea
-                            aria-label="自定义提示词"
+                            aria-label={tr('自定义提示词')}
                             rows={3}
                             value={node.text ?? ''}
-                            placeholder="补充生成要求，随引用内容传给下游媒体节点"
+                            placeholder={tr('补充生成要求，随引用内容传给下游媒体节点')}
                             onChange={(e) => patch({ text: e.target.value })}
                           />
                         </label>
-                        <button onClick={() => setPicker('replace')}>更换引用资源</button>
+                        <button onClick={() => setPicker('replace')}>{tr('更换引用资源')}</button>
                         <small>
                           {node.resource
                             ? {
-                                content: '内容库',
-                                artifact: '会话作品',
-                                message: '会话消息',
-                                file: '项目文件',
+                                content: tr('内容库'),
+                                artifact: tr('会话作品'),
+                                message: tr('会话消息'),
+                                file: tr('项目文件'),
                               }[node.resource.kind]
-                            : '尚未选择资源'}
+                            : tr('尚未选择资源')}
                           {node.resource?.kind === 'content'
                             ? ' · v' + node.resource.version
                             : node.resource?.kind === 'file'
@@ -1025,20 +1054,26 @@ export function CanvasWorkspace({
                     ) : (
                       node.kind !== 'save' && (
                         <label>
-                          {state.plugins?.find((p) => p.id === node.pluginId)?.view?.textLabel ??
+                          {tr(
+                            state.plugins?.find((p) => p.id === node.pluginId)?.view?.textLabel ??
+                              '',
+                          ) ||
                             (node.kind === 'text'
-                              ? '正文'
+                              ? tr('正文')
                               : ['image', 'video', 'audio'].includes(node.kind)
-                                ? '生成提示词'
-                                : '处理要求')}
+                                ? tr('生成提示词')
+                                : tr('处理要求'))}
                           <textarea
                             aria-label={
-                              state.plugins?.find((p) => p.id === node.pluginId)?.view?.textLabel ??
+                              tr(
+                                state.plugins?.find((p) => p.id === node.pluginId)?.view
+                                  ?.textLabel ?? '',
+                              ) ||
                               (node.kind === 'text'
-                                ? '正文'
+                                ? tr('正文')
                                 : ['image', 'video', 'audio'].includes(node.kind)
-                                  ? '生成提示词'
-                                  : '处理要求')
+                                  ? tr('生成提示词')
+                                  : tr('处理要求'))
                             }
                             value={node.text ?? ''}
                             rows={5}
@@ -1072,13 +1107,13 @@ export function CanvasWorkspace({
                     {state.plugins?.find((p) => p.id === node.pluginId)?.view?.resource ===
                       'image' && (
                       <button onClick={() => setPicker('replace')}>
-                        {node.resource ? '更换全景图片' : '选择全景图片'}
+                        {node.resource ? tr('更换全景图片') : tr('选择全景图片')}
                       </button>
                     )}
                     {node.kind === 'agent' && (
                       <>
                         <label>
-                          模型连接
+                          {tr('模型连接')}
                           <select
                             value={node.providerId ?? ''}
                             onChange={(e) =>
@@ -1089,23 +1124,23 @@ export function CanvasWorkspace({
                               })
                             }
                           >
-                            <option value="">跟随执行会话</option>
+                            <option value="">{tr('跟随执行会话')}</option>
                             {data.providers
                               .filter((p) => p.enabled !== false)
                               .map((p) => (
                                 <option key={p.id} value={p.id}>
-                                  {p.name}
+                                  {providerLabel(p)}
                                 </option>
                               ))}
                           </select>
                         </label>
                         <label>
-                          模型
+                          {tr('模型')}
                           <select
                             value={node.model ?? ''}
                             onChange={(e) => patch({ model: e.target.value || undefined })}
                           >
-                            <option value="">跟随执行会话</option>
+                            <option value="">{tr('跟随执行会话')}</option>
                             {data.providers
                               .find((p) => p.id === (node.providerId || ownerSession?.providerId))
                               ?.models.map((m) => (
@@ -1119,7 +1154,7 @@ export function CanvasWorkspace({
                             value={node.agentId ?? ''}
                             onChange={(e) => patch({ agentId: e.target.value || undefined })}
                           >
-                            <option value="">跟随执行会话</option>
+                            <option value="">{tr('跟随执行会话')}</option>
                             {data.agents
                               .filter(
                                 (a) => !['knowledge-organizer', 'memory-organizer'].includes(a.id),
@@ -1156,7 +1191,7 @@ export function CanvasWorkspace({
                     )}
                     {node.kind === 'save' && (
                       <label>
-                        目标内容库
+                        {tr('目标内容库')}
                         <select
                           value={node.libraryId ?? 'default'}
                           onChange={(e) =>
@@ -1187,14 +1222,14 @@ export function CanvasWorkspace({
                             disabled={busy || !!activeRun || readOnly}
                             onClick={() => regenerate(node.id)}
                           >
-                            生成
+                            {tr('生成')}
                             {node.kind === 'audio'
-                              ? '音频'
+                              ? tr('音频')
                               : node.kind === 'image'
-                                ? '图片'
-                                : '视频'}{' '}
+                                ? tr('图片')
+                                : tr('视频')}{' '}
                             · {node.media?.count ?? 1}
-                            {node.kind === 'image' ? '张' : '条'}
+                            {node.kind === 'image' ? tr('张') : tr('条')}
                           </button>
                           <CanvasMediaResults
                             api={api}
@@ -1221,7 +1256,7 @@ export function CanvasWorkspace({
                     {shownRun?.nodes[node.id] &&
                       !['image', 'video', 'audio'].includes(node.kind) && (
                         <>
-                          <h3>所选运行结果</h3>
+                          <h3>{tr('所选运行结果')}</h3>
                           <p className="canvas-result">
                             {shownRun.nodes[node.id].error ||
                               shownRun.nodes[node.id].output?.text ||
@@ -1236,14 +1271,14 @@ export function CanvasWorkspace({
                                 if (s) onSession(s);
                               }}
                             >
-                              查看执行过程／处理审批
+                              {tr('查看执行过程／处理审批')}
                             </button>
                           )}
                         </>
                       )}
                   </>
                 ) : (
-                  <p>选中节点以编辑；Shift 点击可多选。</p>
+                  <p>{tr('选中节点以编辑；Shift 点击可多选。')}</p>
                 )}
               </div>
             </Modal>
@@ -1270,19 +1305,19 @@ export function CanvasWorkspace({
               onInsert={(message, replace) => {
                 void perform(async () => {
                   const c = current.current!;
-                  if (replace && c.selection.length !== 1) throw new Error('请选择一个节点');
+                  if (replace && c.selection.length !== 1) throw new Error(tr('请选择一个节点'));
                   const selected = c.nodes.find((n) => n.id === c.selection[0]);
                   if (!message.artifactIds?.length && message.content.length > 32000)
-                    throw new Error('回答超过节点上限，请先拆分内容');
+                    throw new Error(tr('回答超过节点上限，请先拆分内容'));
                   if ((message.artifactIds?.length ?? 0) > 8)
-                    throw new Error('回答包含超过 8 个产物，请通过资源选择器分批插入');
+                    throw new Error(tr('回答包含超过 8 个产物，请通过资源选择器分批插入'));
                   if (replace && (message.artifactIds?.length ?? 0) > 1)
-                    throw new Error('多个产物请使用插入画布，或单独选择一个产物替换');
+                    throw new Error(tr('多个产物请使用插入画布，或单独选择一个产物替换'));
                   const items: CanvasNode[] = message.artifactIds?.length
                     ? message.artifactIds.slice(0, 8).map((id, i) => ({
                         id: crypto.randomUUID(),
                         kind: 'resource',
-                        title: `助手产物 ${i + 1}`,
+                        title: tr('助手产物 {0}', [i + 1]),
                         x: (selected?.x ?? 0) + 300 + i * 280,
                         y: selected?.y ?? 0,
                         resource: { kind: 'artifact', id },
@@ -1291,7 +1326,7 @@ export function CanvasWorkspace({
                         {
                           id: crypto.randomUUID(),
                           kind: 'text',
-                          title: '助手建议',
+                          title: tr('助手建议'),
                           text: message.content,
                           x: (selected?.x ?? 0) + 300,
                           y: selected?.y ?? 0,
@@ -1311,7 +1346,7 @@ export function CanvasWorkspace({
                     });
                   } else {
                     if (c.nodes.length + items.length > 200)
-                      throw new Error('画布最多支持 200 个节点');
+                      throw new Error(tr('画布最多支持 200 个节点'));
                     change({
                       ...c,
                       nodes: [...c.nodes, ...items],
@@ -1325,8 +1360,8 @@ export function CanvasWorkspace({
           {!chatOpen && (
             <button
               className="canvas-chat-launcher"
-              aria-label="展开画布聊天"
-              title="AI 助手"
+              aria-label={tr('展开画布聊天')}
+              title={tr('AI 助手')}
               aria-expanded={false}
               onClick={() => setChatOpen(true)}
             >
@@ -1337,8 +1372,13 @@ export function CanvasWorkspace({
       )}
       {canvas && (
         <footer className="canvas-footer">
-          {canvas.nodes.length} 个节点 · {canvas.edges.length} 条连线
-          <span>右键配置节点 · Shift 框选 · ⌘/Ctrl A 全选 · ⌘/Ctrl D 复制 · ⌘/Ctrl S 保存</span>
+          {canvas.nodes.length}
+          {tr(' 个节点 · ')}
+          {canvas.edges.length}
+          {tr(' 条连线')}
+          <span>
+            {tr('右键配置节点 · Shift 框选 · ⌘/Ctrl A 全选 · ⌘/Ctrl D 复制 · ⌘/Ctrl S 保存')}
+          </span>
         </footer>
       )}
       {picker && (
@@ -1362,3 +1402,5 @@ export function CanvasWorkspace({
     </section>
   );
 }
+
+const canvasNodeKinds = localized(raw_canvasNodeKinds);

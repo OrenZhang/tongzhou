@@ -1,3 +1,5 @@
+import { providerLabel } from '../../shared/provider-label';
+import { t as tr } from '../../shared/i18n';
 import { useState } from 'react';
 import {
   ArrowRight,
@@ -45,7 +47,7 @@ export function AgentsPage({
           <div className="page-title-row">
             <div>
               <h1>Agent</h1>
-              <p>内置 Agent 处理专门任务，也可以创建自己的角色。普通聊天无需选择 Agent。</p>
+              <p>{tr('内置 Agent 处理专门任务，也可以创建自己的角色。普通聊天无需选择 Agent。')}</p>
             </div>
             <button
               className="primary"
@@ -63,7 +65,7 @@ export function AgentsPage({
               }
             >
               <Plus size={16} />
-              创建 Agent
+              {tr('创建 Agent')}
             </button>
           </div>
         </div>
@@ -71,8 +73,8 @@ export function AgentsPage({
           {!data.agents.length && (
             <div className="empty-state collection-empty">
               <Bot size={28} />
-              <h3>按需创建你的专属角色</h3>
-              <p>普通聊天无需 Agent。需要固定指令、模型或职责时，再创建一个。</p>
+              <h3>{tr('按需创建你的专属角色')}</h3>
+              <p>{tr('普通聊天无需 Agent。需要固定指令、模型或职责时，再创建一个。')}</p>
             </div>
           )}
           {data.agents
@@ -84,43 +86,47 @@ export function AgentsPage({
                     <BookOpen size={25} />
                   </span>
                   <span className="tag">
-                    内置 · {a.builtin === 'memory-organizer' ? '记忆整理' : '知识整理'}
-                    {a.customized ? ' · 已自定义' : ''}
+                    {tr('内置 · ')}
+                    {a.builtin === 'memory-organizer' ? tr('记忆整理') : tr('知识整理')}
+                    {a.customized ? tr(' · 已自定义') : ''}
                   </span>
                 </div>
-                <h3>{a.name}</h3>
-                <p>{a.description}</p>
+                <h3>{a.builtin && !a.customized ? tr(a.name) : a.name}</h3>
+                <p>{a.builtin && !a.customized ? tr(a.description) : a.description}</p>
                 <div className="agent-instructions">
                   {a.builtin === 'memory-organizer'
-                    ? '后台收集候选 → 核对原文 → 按日分类归并 → 持续补充'
-                    : '阅读来源 → 查重与补充 → 生成草稿 → 人工核对收录'}
+                    ? tr('后台收集候选 → 核对原文 → 按日分类归并 → 持续补充')
+                    : tr('阅读来源 → 查重与补充 → 生成草稿 → 人工核对收录')}
                 </div>
                 <div className="agent-detail">
                   <span>
                     <Layers3 size={13} />
-                    {a.model || (a.providerId ? '使用指定连接的默认模型' : '继承来源会话模型')}
+                    {a.model ||
+                      (a.providerId ? tr('使用指定连接的默认模型') : tr('继承来源会话模型'))}
                   </span>
                   <span>
                     <ShieldCheck size={13} />
-                    {a.builtin === 'memory-organizer' ? '仅处理本批记忆来源' : '仅整理知识资料'}
+                    {a.builtin === 'memory-organizer'
+                      ? tr('仅处理本批记忆来源')
+                      : tr('仅整理知识资料')}
                   </span>
                 </div>
                 <div className="card-footer">
                   <span>
                     {a.builtin === 'memory-organizer'
-                      ? '在定时任务中管理触发与记录'
-                      : '在智库选择资料后启动'}
+                      ? tr('在定时任务中管理触发与记录')
+                      : tr('在智库选择资料后启动')}
                   </span>
                   <button
                     onClick={() =>
                       onNavigate(a.builtin === 'memory-organizer' ? 'automations' : 'knowledge')
                     }
                   >
-                    {a.builtin === 'memory-organizer' ? '管理任务' : '前往智库'}
+                    {a.builtin === 'memory-organizer' ? tr('管理任务') : tr('前往智库')}
                     <ArrowRight size={13} />
                   </button>
                   <button className="primary" onClick={() => setAgentEdit(a)}>
-                    配置
+                    {tr('配置')}
                   </button>
                 </div>
               </article>
@@ -134,44 +140,44 @@ export function AgentsPage({
                     <Bot size={25} />
                   </span>
                   <span className="tag">
-                    {a.permission === 'read-only' ? '只读分析' : '审批后执行'}
+                    {a.permission === 'read-only' ? tr('只读分析') : tr('审批后执行')}
                   </span>
                   <button
                     className="icon-button"
-                    aria-label={'编辑 ' + a.name}
+                    aria-label={tr('编辑 ') + a.name}
                     onClick={() => setAgentEdit(a)}
                   >
                     <SlidersHorizontal size={17} />
                   </button>
                 </div>
-                <h3>{a.name}</h3>
-                <p>{a.description}</p>
+                <h3>{a.builtin && !a.customized ? tr(a.name) : a.name}</h3>
+                <p>{a.builtin && !a.customized ? tr(a.description) : a.description}</p>
                 <div className="agent-instructions">{a.instructions}</div>
                 <div className="agent-detail">
                   <span>
                     <Layers3 size={13} />
-                    {a.model || '继承会话模型'}
+                    {a.model || tr('继承会话模型')}
                   </span>
                   <span>
                     <Zap size={13} />
-                    Codex 执行核心
+                    {tr('Codex 执行核心')}
                   </span>
                 </div>
                 <div className="card-footer">
                   <span>
-                    {data.providers.find((p) => p.id === a.providerId)?.name ?? '继承会话连接'}
+                    {data.providers.find((p) => p.id === a.providerId)?.name ?? tr('继承会话连接')}
                   </span>
                   <button
-                    aria-label={`使用 ${a.name}`}
+                    aria-label={tr('使用 {0}', [a.name])}
                     disabled={running}
                     onClick={() => {
                       onUseAgent(a);
                     }}
                   >
-                    用于当前会话
+                    {tr('用于当前会话')}
                   </button>
                   <button onClick={() => setAgentEdit(a)}>
-                    配置
+                    {tr('配置')}
                     <ArrowRight size={13} />
                   </button>
                 </div>
@@ -181,40 +187,41 @@ export function AgentsPage({
         <div className="section-note">
           <Users size={20} />
           <div>
-            <strong>从同一个问题，获得不同视角</strong>
+            <strong>{tr('从同一个问题，获得不同视角')}</strong>
             <p>
-              在会话输入任务后点击协作按钮，同时运行最多 3 个
-              Agent。第一版的并行协作使用只读权限，结果回到主会话，由主助手继续实施。
+              {tr(
+                '在会话输入任务后点击协作按钮，同时运行最多 3 个 Agent。第一版的并行协作使用只读权限，结果回到主会话，由主助手继续实施。',
+              )}
             </p>
           </div>
         </div>
       </main>
       {agentEdit && (
         <Modal
-          title="配置 Agent"
+          title={tr('配置 Agent')}
           subtitle={
             agentEdit.builtin
-              ? '调整内置 Agent 的整理方式与模型；执行范围固定，保存后用于下一次任务。'
-              : '角色配置可以独立选择模型，也可以继承当前会话。'
+              ? tr('调整内置 Agent 的整理方式与模型；执行范围固定，保存后用于下一次任务。')
+              : tr('角色配置可以独立选择模型，也可以继承当前会话。')
           }
           onClose={() => setAgentEdit(null)}
         >
           <div className="modal-content">
             <div className="form-grid">
-              <Field label="名称">
+              <Field label={tr('名称')}>
                 <input
                   value={agentEdit.name}
                   onChange={(e) => setAgentEdit({ ...agentEdit, name: e.target.value })}
                 />
               </Field>
-              <Field label="执行权限">
+              <Field label={tr('执行权限')}>
                 {agentEdit.builtin ? (
                   <input
                     readOnly
                     value={
                       agentEdit.builtin === 'memory-organizer'
-                        ? '本批记忆来源与记忆提交（固定）'
-                        : '知识资料读取与草稿整理（固定）'
+                        ? tr('本批记忆来源与记忆提交（固定）')
+                        : tr('知识资料读取与草稿整理（固定）')
                     }
                   />
                 ) : (
@@ -227,19 +234,19 @@ export function AgentsPage({
                       })
                     }
                   >
-                    <option value="read-only">只读分析</option>
-                    <option value="ask">修改与命令需审批</option>
+                    <option value="read-only">{tr('只读分析')}</option>
+                    <option value="ask">{tr('修改与命令需审批')}</option>
                   </select>
                 )}
               </Field>
             </div>
-            <Field label="职责描述">
+            <Field label={tr('职责描述')}>
               <input
                 value={agentEdit.description}
                 onChange={(e) => setAgentEdit({ ...agentEdit, description: e.target.value })}
               />
             </Field>
-            <Field label="角色指令">
+            <Field label={tr('角色指令')}>
               <textarea
                 rows={5}
                 value={agentEdit.instructions}
@@ -248,24 +255,24 @@ export function AgentsPage({
             </Field>
             {!agentEdit.builtin && (
               <Field
-                label="性格与表达风格"
-                hint="留空继承同舟的通用性格。只影响表达方式，身份仍为同舟。"
+                label={tr('性格与表达风格')}
+                hint={tr('留空继承CoSail的通用性格。只影响表达方式，身份仍为CoSail。')}
               >
                 <textarea
                   rows={3}
                   maxLength={2000}
                   value={agentEdit.soul ?? ''}
-                  placeholder="例如：像耐心的技术导师，先给结论，再用小例子解释。"
+                  placeholder={tr('例如：像耐心的技术导师，先给结论，再用小例子解释。')}
                   onChange={(e) => setAgentEdit({ ...agentEdit, soul: e.target.value })}
                 />
               </Field>
             )}
             <div className="form-grid">
               <Field
-                label="模型连接"
+                label={tr('模型连接')}
                 hint={
                   agentEdit.builtin
-                    ? '默认继承来源会话。指定其他连接但未选模型时，使用该连接的第一个模型。'
+                    ? tr('默认继承来源会话。指定其他连接但未选模型时，使用该连接的第一个模型。')
                     : undefined
                 }
               >
@@ -275,18 +282,18 @@ export function AgentsPage({
                     setAgentEdit({ ...agentEdit, providerId: e.target.value, model: '' })
                   }
                 >
-                  <option value="">继承会话连接</option>
+                  <option value="">{tr('继承会话连接')}</option>
                   {data.providers.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.name}
+                      {providerLabel(p)}
                     </option>
                   ))}
                 </select>
               </Field>
-              <Field label="模型">
+              <Field label={tr('模型')}>
                 <ModelPicker
                   key={agentEdit.providerId || providerId}
-                  label="Agent 模型"
+                  label={tr('Agent 模型')}
                   inherit
                   modelLabels={
                     data.providers.find((p) => p.id === (agentEdit.providerId || providerId))
@@ -320,7 +327,7 @@ export function AgentsPage({
                 }
               >
                 {agentEdit.builtin ? <RefreshCw size={14} /> : <Trash2 size={14} />}
-                {agentEdit.builtin ? '恢复默认' : '删除'}
+                {agentEdit.builtin ? tr('恢复默认') : tr('删除')}
               </button>
             )}
             <span className="spacer" />
@@ -334,7 +341,7 @@ export function AgentsPage({
                 })
               }
             >
-              保存 Agent
+              {tr('保存 Agent')}
               <Check size={15} />
             </button>
           </div>

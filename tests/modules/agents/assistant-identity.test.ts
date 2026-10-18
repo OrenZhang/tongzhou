@@ -6,13 +6,18 @@ import {
   identityInstructions,
 } from '../../../electron/modules/agents/assistant-identity';
 
-describe('Tongzhou identity routing', () => {
-  it.each(['你好', '您好！', '你好，同舟', 'Hi', '同舟，晚上好。'])(
-    'normalizes a standalone greeting: %s',
-    (text) => {
-      expect(identityReply(text)).toBe(greetingReply);
-    },
-  );
+describe('CoSail identity routing', () => {
+  it.each([
+    '你好',
+    '您好！',
+    '你好，CoSail',
+    'Hi',
+    'CoSail，晚上好。',
+    '同舟，晚上好。',
+    'COSAIL, hi',
+  ])('normalizes a standalone greeting: %s', (text) => {
+    expect(identityReply(text)).toBe(greetingReply);
+  });
   it.each(['你是谁？', '你好，你叫什么名字？', '请问你是谁', '介绍一下自己', 'Who are you?'])(
     'normalizes an identity question: %s',
     (text) => {

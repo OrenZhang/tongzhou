@@ -161,7 +161,7 @@ describe('subscription inference adapter (official CLI retained only for auth)',
     );
     const refresh = vi.fn();
     await expect(nativeModelConnection(provider('kimi'), 'm', f.home, refresh)).rejects.toThrow(
-      '更新同舟',
+      '更新CoSail',
     );
     expect(refresh).not.toHaveBeenCalled();
   });

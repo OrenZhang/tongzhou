@@ -1,3 +1,4 @@
+import { t as tr } from '../../shared/i18n';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown, Search } from 'lucide-react';
@@ -17,7 +18,7 @@ export function ChoicePicker({
   disabled = false,
   compact = false,
   searchable = false,
-  placeholder = '请选择',
+  placeholder = tr('请选择'),
   displayLabel,
 }: {
   id?: string;
@@ -123,7 +124,7 @@ export function ChoicePicker({
             ref={panel}
             className="choice-panel"
             role="dialog"
-            aria-label={`${label}选择`}
+            aria-label={tr('{0}选择', [label])}
             style={position}
             onBlur={(e) => {
               if (!e.currentTarget.contains(e.relatedTarget as Node)) close();
@@ -166,14 +167,17 @@ export function ChoicePicker({
           >
             <div className="choice-heading">
               {label}
-              <small>{options.length} 个选项</small>
+              <small>
+                {options.length}
+                {tr(' 个选项')}
+              </small>
             </div>
             {searchable && (
               <label className="choice-search">
                 <Search size={14} />
                 <input
-                  aria-label={`搜索${label}`}
-                  placeholder="搜索名称…"
+                  aria-label={tr('搜索{0}', [label])}
+                  placeholder={tr('搜索名称…')}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                 />
@@ -200,7 +204,7 @@ export function ChoicePicker({
                   {o.value === value && <Check size={15} />}
                 </button>
               ))}
-              {!filtered.length && <p className="choice-empty">没有匹配的选项</p>}
+              {!filtered.length && <p className="choice-empty">{tr('没有匹配的选项')}</p>}
             </div>
           </div>,
           document.body,

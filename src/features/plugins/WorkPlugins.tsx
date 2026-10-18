@@ -1,3 +1,4 @@
+import { t as tr, localize as localized } from '../../shared/i18n';
 import { ServiceIcon } from '../../components/ServiceIcon';
 import { useState } from 'react';
 import { ExternalLink } from 'lucide-react';
@@ -22,7 +23,7 @@ import {
   githubMcpUrl,
   gitlabMcpUrl,
 } from '../../shared/code-hosting';
-export const workPluginCatalog = [
+export const workPluginCatalog = localized([
   {
     id: 'github',
     name: 'GitHub 仓库工具',
@@ -71,7 +72,7 @@ export const workPluginCatalog = [
     authMode: 'oauth' as const,
     docs: 'https://linear.app/docs/mcp',
   },
-];
+]);
 export function workPluginDefinition(plugin: PluginConfig) {
   return plugin.transport === 'http'
     ? workPluginCatalog.find(
@@ -103,9 +104,9 @@ export function OAuthFields({
     <>
       {showAuthentication && (
         <label>
-          认证方式
+          {tr('认证方式')}
           <select
-            aria-label="认证方式"
+            aria-label={tr('认证方式')}
             value={edit.authMode ?? 'headers'}
             onChange={(e) =>
               onChange({
@@ -117,17 +118,17 @@ export function OAuthFields({
               })
             }
           >
-            <option value="headers">{provider ? 'Token 配置' : '访问令牌 / 请求头'}</option>
-            <option value="oauth">{provider ? 'OAuth2 授权' : '浏览器 OAuth 授权'}</option>
+            <option value="headers">{provider ? tr('Token 配置') : tr('访问令牌 / 请求头')}</option>
+            <option value="oauth">{provider ? tr('OAuth2 授权') : tr('浏览器 OAuth 授权')}</option>
           </select>
         </label>
       )}
       {edit.authMode === 'oauth' && !provider && (
         <details>
-          <summary>高级：使用已注册的 OAuth 应用</summary>
+          <summary>{tr('高级：使用已注册的 OAuth 应用')}</summary>
           <div className="oauth-app-fields">
             <label>
-              预注册 Client ID（可选）
+              {tr('预注册 Client ID（可选）')}
               <input
                 value={edit.oauthClientId ?? ''}
                 onChange={(e) =>
@@ -140,7 +141,7 @@ export function OAuthFields({
               />
             </label>
             <label>
-              Client Secret（留空保留）
+              {tr('Client Secret（留空保留）')}
               <input
                 type="password"
                 autoComplete="new-password"
@@ -148,7 +149,7 @@ export function OAuthFields({
                 onChange={(e) => onChange({ ...edit, oauthClientSecret: e.target.value })}
               />
             </label>
-            {edit.hasOAuthClientSecret && <small>应用密钥已加密保存。</small>}
+            {edit.hasOAuthClientSecret && <small>{tr('应用密钥已加密保存。')}</small>}
             {edit.hasOAuthClientSecret && (
               <label className="checkbox-line">
                 <input
@@ -156,11 +157,11 @@ export function OAuthFields({
                   checked={!!edit.clearOAuthClientSecret}
                   onChange={(e) => onChange({ ...edit, clearOAuthClientSecret: e.target.checked })}
                 />
-                清除已保存的应用密钥
+                {tr('清除已保存的应用密钥')}
               </label>
             )}
             <label>
-              对应授权服务地址（Issuer）
+              {tr('对应授权服务地址（Issuer）')}
               <input
                 type="url"
                 placeholder="https://..."
@@ -169,8 +170,9 @@ export function OAuthFields({
               />
             </label>
             <p>
-              服务允许动态注册时可留空；需要预注册时使用回调地址：
-              http://127.0.0.1:17438/mcp/callback。具体可用权限由服务账号决定。
+              {tr(
+                '服务允许动态注册时可留空；需要预注册时使用回调地址： http://127.0.0.1:17438/mcp/callback。具体可用权限由服务账号决定。',
+              )}
             </p>
           </div>
         </details>
@@ -193,12 +195,12 @@ export function PluginAuthStatus({ plugin }: { plugin?: PluginConfig }) {
       >
         {
           {
-            authorized: '✓ 已授权',
-            starting: '正在连接授权服务',
-            waiting: '等待浏览器授权',
-            error: '授权未完成',
-            cancelled: '已取消',
-            none: '尚未授权',
+            authorized: tr('✓ 已授权'),
+            starting: tr('正在连接授权服务'),
+            waiting: tr('等待浏览器授权'),
+            error: tr('授权未完成'),
+            cancelled: tr('已取消'),
+            none: tr('尚未授权'),
           }[plugin?.oauthStatus ?? 'none']
         }
       </span>
@@ -247,7 +249,7 @@ export function WorkPlugins({
   );
   const [loginUrl, setLoginUrl] = useState('');
   const [loginCode, setLoginCode] = useState('');
-  const act = async (fn: () => Promise<unknown>, success = '已保存') => {
+  const act = async (fn: () => Promise<unknown>, success = tr('已保存')) => {
     setBusy(true);
     setNotice('');
     try {
@@ -277,17 +279,19 @@ export function WorkPlugins({
     setLoginCode('');
     setToken('');
     setSource(plugin.connectorId ?? '');
-    setNotice('本地账号已保存。可点击「保存并检查」验证 Token 工具连接，再启用插件。');
+    setNotice(tr('本地账号已保存。可点击「保存并检查」验证 Token 工具连接，再启用插件。'));
     setEdit({ ...plugin, secret: '' });
   };
   const save = async () => {
     if (!edit) return;
     if (editingService === 'gitlab' && codeHost(edit) !== 'gitlab')
-      throw new Error('请输入有效的 GitLab HTTPS 实例地址');
+      throw new Error(tr('请输入有效的 GitLab HTTPS 实例地址'));
     if (codeHost(edit) && tokenMode === 'token' && current?.connectorId && !token)
-      throw new Error('从本地账号切换为手动 Token 时，请输入访问令牌，或继续复用原 Token 来源。');
+      throw new Error(
+        tr('从本地账号切换为手动 Token 时，请输入访问令牌，或继续复用原 Token 来源。'),
+      );
     if (codeHost(edit) && tokenMode === 'saved' && !tokenAccounts.some((c) => c.id === source))
-      throw new Error('请选择已保存的账号，或手动配置 Token。');
+      throw new Error(tr('请选择已保存的账号，或手动配置 Token。'));
     await api.savePlugin({
       ...edit,
       connectorId: codeHost(edit) && tokenMode === 'saved' ? source : undefined,
@@ -360,7 +364,7 @@ export function WorkPlugins({
               <PluginTile
                 key={p.id}
                 name={p.name}
-                type={'应用 · ' + p.category}
+                type={tr('应用 · ') + p.category}
                 icon={<ServiceIcon service={p.id} />}
                 enabled={installed?.enabled ?? false}
                 disabled={busy}
@@ -380,16 +384,16 @@ export function WorkPlugins({
       {edit && (
         <PluginDetailPage
           title={edit.name}
-          type="应用"
+          type={tr('应用')}
           subtitle={workPluginCatalog.find((p) => p.id === editingService)?.description}
           busy={busy}
           onClose={() => setEdit(null)}
         >
-          <PluginDetailSection title="连接与账号">
+          <PluginDetailSection title={tr('连接与账号')}>
             {(data.plugins ?? []).filter((p) => workPluginDefinition(p)?.id === editingService)
               .length > 1 && (
               <select
-                aria-label="当前插件连接"
+                aria-label={tr('当前插件连接')}
                 value={edit.id}
                 onChange={(e) => {
                   const p = workPluginCatalog.find((p) => p.id === editingService)!;
@@ -425,9 +429,9 @@ export function WorkPlugins({
               {editingService === 'gitlab' && (
                 <>
                   <label>
-                    GitLab 实例地址
+                    {tr('GitLab 实例地址')}
                     <input
-                      aria-label="GitLab 实例地址"
+                      aria-label={tr('GitLab 实例地址')}
                       type="url"
                       required
                       value={edit.url.replace(/\/api\/v4\/mcp\/?$/, '')}
@@ -452,9 +456,9 @@ export function WorkPlugins({
                   </label>
                   {(data.connectors ?? []).some((c) => c.kind === 'gitlab') && (
                     <label>
-                      使用已有 GitLab 站点
+                      {tr('使用已有 GitLab 站点')}
                       <select
-                        aria-label="使用已有 GitLab 站点"
+                        aria-label={tr('使用已有 GitLab 站点')}
                         value=""
                         onChange={(e) => {
                           if (e.target.value) {
@@ -475,7 +479,7 @@ export function WorkPlugins({
                           }
                         }}
                       >
-                        <option value="">选择站点（仍需独立授权）</option>
+                        <option value="">{tr('选择站点（仍需独立授权）')}</option>
                         {(data.connectors ?? [])
                           .filter((c) => c.kind === 'gitlab')
                           .map((c) => (
@@ -488,23 +492,27 @@ export function WorkPlugins({
                   )}
                   <p>
                     {edit.authMode === 'oauth'
-                      ? '点击「使用 GitLab 登录」前往该实例授权，无需填写应用密钥。实例需启用 MCP 和 OAuth 应用自动注册；不支持时可使用 Token 配置。'
-                      : 'Token 使用此实例的官方 REST API，无需实例启用 MCP。保存并检查会验证 Token 身份和 API 连接。'}
+                      ? tr(
+                          '点击「使用 GitLab 登录」前往该实例授权，无需填写应用密钥。实例需启用 MCP 和 OAuth 应用自动注册；不支持时可使用 Token 配置。',
+                        )
+                      : tr(
+                          'Token 使用此实例的官方 REST API，无需实例启用 MCP。保存并检查会验证 Token 身份和 API 连接。',
+                        )}
                   </p>
                 </>
               )}
               {codeHost(edit) && (
                 <p>
                   {codeHostDescription(codeHost(edit)!)}{' '}
-                  工具将在会话中按需发现，也可点击「保存并检查」预览完整目录。
+                  {tr('工具将在会话中按需发现，也可点击「保存并检查」预览完整目录。')}
                 </p>
               )}
               {figmaConnection(edit) && (
                 <>
                   <label>
-                    Figma 连接方式
+                    {tr('Figma 连接方式')}
                     <select
-                      aria-label="Figma 连接方式"
+                      aria-label={tr('Figma 连接方式')}
                       disabled={busy}
                       value={edit.url}
                       onChange={(e) => {
@@ -525,8 +533,10 @@ export function WorkPlugins({
                         setNotice('');
                       }}
                     >
-                      <option value={figmaRemoteUrl}>远程服务 · 浏览器授权（接入待批准）</option>
-                      <option value={figmaDesktopUrl}>桌面服务 · 本机连接</option>
+                      <option value={figmaRemoteUrl}>
+                        {tr('远程服务 · 浏览器授权（接入待批准）')}
+                      </option>
+                      <option value={figmaDesktopUrl}>{tr('桌面服务 · 本机连接')}</option>
                     </select>
                   </label>
                   <FigmaConnectionInfo plugin={edit} />
@@ -534,9 +544,9 @@ export function WorkPlugins({
               )}
               {codeHost(edit) && (
                 <label>
-                  认证方式
+                  {tr('认证方式')}
                   <select
-                    aria-label="认证方式"
+                    aria-label={tr('认证方式')}
                     value={edit.authMode === 'oauth' ? 'oauth' : 'headers'}
                     disabled={busy}
                     onChange={(e) => {
@@ -561,16 +571,16 @@ export function WorkPlugins({
                       });
                     }}
                   >
-                    <option value="headers">Token 配置</option>
-                    <option value="oauth">OAuth2 授权</option>
+                    <option value="headers">{tr('Token 配置')}</option>
+                    <option value="oauth">{tr('OAuth2 授权')}</option>
                   </select>
                 </label>
               )}
               {codeHost(edit) && edit.authMode !== 'oauth' && tokenAccounts.length > 0 && (
                 <label>
-                  Token 来源
+                  {tr('Token 来源')}
                   <select
-                    aria-label="Token 来源"
+                    aria-label={tr('Token 来源')}
                     value={source}
                     disabled={busy}
                     onChange={(e) => {
@@ -579,14 +589,14 @@ export function WorkPlugins({
                       setEdit({ ...edit, clearSecret: false });
                     }}
                   >
-                    <option value="">手动配置 Token</option>
+                    <option value="">{tr('手动配置 Token')}</option>
                     {tokenAccounts.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
                       </option>
                     ))}
                   </select>
-                  <small>可复用本地检测保存的 Token；调用时仍会检查账号和连接权限。</small>
+                  <small>{tr('可复用本地检测保存的 Token；调用时仍会检查账号和连接权限。')}</small>
                 </label>
               )}
               {edit.url !== figmaDesktopUrl && (
@@ -594,9 +604,9 @@ export function WorkPlugins({
               )}
               {edit.authMode !== 'oauth' && edit.url !== figmaDesktopUrl && !source && (
                 <label>
-                  访问令牌（留空保留）
+                  {tr('访问令牌（留空保留）')}
                   <input
-                    aria-label="访问令牌（留空保留）"
+                    aria-label={tr('访问令牌（留空保留）')}
                     type="password"
                     autoComplete="new-password"
                     value={token}
@@ -605,8 +615,12 @@ export function WorkPlugins({
                   {codeHost(edit) && (
                     <small>
                       {codeHost(edit) === 'github'
-                        ? '使用 GitHub Personal Access Token，按目标仓库授予权限；保存并检查后确认官方 MCP 连接。'
-                        : '使用 GitLab Personal / Project / Group Access Token；读取通常需要 read_api，写操作需要 api，并受项目权限限制。'}
+                        ? tr(
+                            '使用 GitHub Personal Access Token，按目标仓库授予权限；保存并检查后确认官方 MCP 连接。',
+                          )
+                        : tr(
+                            '使用 GitLab Personal / Project / Group Access Token；读取通常需要 read_api，写操作需要 api，并受项目权限限制。',
+                          )}
                     </small>
                   )}
                 </label>
@@ -628,42 +642,47 @@ export function WorkPlugins({
                         setLoginCode(result.code ?? '');
                         return result.url
                           ? result.browserOpened
-                            ? '已打开浏览器，请完成授权。'
-                            : '系统浏览器未打开，请点击「打开授权页面」继续。'
-                          : '授权已更新。';
-                      }, '授权状态已更新，请在下方查看。')
+                            ? tr('已打开浏览器，请完成授权。')
+                            : tr('系统浏览器未打开，请点击「打开授权页面」继续。')
+                          : tr('授权已更新。');
+                      }, tr('授权状态已更新，请在下方查看。'))
                     }
                   >
                     {codeHost(edit) === 'github'
-                      ? '使用 GitHub 登录'
+                      ? tr('使用 GitHub 登录')
                       : codeHost(edit) === 'gitlab'
-                        ? '使用 GitLab 登录'
+                        ? tr('使用 GitLab 登录')
                         : figmaConnection(edit) === 'remote'
-                          ? '使用 Figma 登录'
-                          : '浏览器授权'}
+                          ? tr('使用 Figma 登录')
+                          : tr('浏览器授权')}
                   </button>
                   {loginCode && authCurrent?.oauthStatus === 'waiting' && (
                     <p className="info-strip">
-                      在 GitHub 授权页面输入验证码：<strong>{loginCode}</strong>
+                      {tr('在 GitHub 授权页面输入验证码：')}
+                      <strong>{loginCode}</strong>
                     </p>
                   )}
                   {loginUrl && authCurrent?.oauthStatus === 'waiting' && (
-                    <MarkdownLink href={loginUrl}>打开授权页面</MarkdownLink>
+                    <MarkdownLink href={loginUrl}>{tr('打开授权页面')}</MarkdownLink>
                   )}
                   {['starting', 'waiting'].includes(authCurrent?.oauthStatus ?? '') && (
                     <button
                       type="button"
-                      onClick={() => void act(() => api.cancelPluginLogin(edit.id), '已取消授权')}
+                      onClick={() =>
+                        void act(() => api.cancelPluginLogin(edit.id), tr('已取消授权'))
+                      }
                     >
-                      取消授权
+                      {tr('取消授权')}
                     </button>
                   )}
                   {authCurrent?.oauthStatus === 'authorized' && (
                     <button
                       type="button"
-                      onClick={() => void act(() => api.logoutPlugin(edit.id), '已清除本地授权')}
+                      onClick={() =>
+                        void act(() => api.logoutPlugin(edit.id), tr('已清除本地授权'))
+                      }
                     >
-                      退出授权
+                      {tr('退出授权')}
                     </button>
                   )}
                 </div>
@@ -674,12 +693,16 @@ export function WorkPlugins({
                   checked={edit.enabled}
                   onChange={(e) => setEdit({ ...edit, enabled: e.target.checked })}
                 />
-                在会话中启用此插件
+                {tr('在会话中启用此插件')}
               </label>
-              <p>凭据加密保存在本机。工具能访问的范围取决于服务端授权，执行遵循同舟会话权限。</p>
+              <p>
+                {tr(
+                  '凭据加密保存在本机。工具能访问的范围取决于服务端授权，执行遵循CoSail会话权限。',
+                )}
+              </p>
               <div className="row">
                 <button className="primary" disabled={busy}>
-                  保存连接
+                  {tr('保存连接')}
                 </button>
                 <button
                   type="button"
@@ -688,10 +711,10 @@ export function WorkPlugins({
                     void act(async () => {
                       await save();
                       await api.testPlugin(edit.id);
-                    }, '✓ 认证、工具目录及只读配置检查通过；未执行写操作')
+                    }, tr('✓ 认证、工具目录及只读配置检查通过；未执行写操作'))
                   }
                 >
-                  保存并检查
+                  {tr('保存并检查')}
                 </button>
                 {current && (
                   <button
@@ -703,19 +726,19 @@ export function WorkPlugins({
                         const saved = (await api.snapshot()).plugins?.find(
                           (p) => p.id === current.id,
                         );
-                        if (!saved) throw new Error('连接已删除，请刷新后重试');
+                        if (!saved) throw new Error(tr('连接已删除，请刷新后重试'));
                         setEdit(null);
                         onManage(saved);
                       })
                     }
                   >
-                    高级 MCP 设置
+                    {tr('高级 MCP 设置')}
                   </button>
                 )}
               </div>
               {current && (
                 <details>
-                  <summary>其他账号与站点</summary>
+                  <summary>{tr('其他账号与站点')}</summary>
                   <button
                     type="button"
                     className="text-button"
@@ -741,14 +764,14 @@ export function WorkPlugins({
                       });
                     }}
                   >
-                    添加其他账号或站点
+                    {tr('添加其他账号或站点')}
                   </button>
                 </details>
               )}
             </form>
           </PluginDetailSection>
           {editingService === 'github' && (
-            <PluginDetailSection title="本机账号">
+            <PluginDetailSection title={tr('本机账号')}>
               <LocalGithub
                 api={api}
                 refresh={refresh}
@@ -760,7 +783,7 @@ export function WorkPlugins({
             </PluginDetailSection>
           )}
           {editingService === 'gitlab' && (
-            <PluginDetailSection title="本机账号">
+            <PluginDetailSection title={tr('本机账号')}>
               <LocalGitlab
                 key={edit.url}
                 showInstanceInput={false}
@@ -775,14 +798,14 @@ export function WorkPlugins({
             </PluginDetailSection>
           )}
           {edit && pluginPermissionState(edit, current).catalog && (
-            <PluginDetailSection title="可用工具">
+            <PluginDetailSection title={tr('可用工具')}>
               <PluginToolList plugin={pluginPermissionState(edit, current)} />
             </PluginDetailSection>
           )}
-          <PluginDetailSection title="权限与连接校验">
+          <PluginDetailSection title={tr('权限与连接校验')}>
             <McpPermissions plugin={pluginPermissionState(edit, current)} />
           </PluginDetailSection>
-          <PluginDetailSection title="使用说明">
+          <PluginDetailSection title={tr('使用说明')}>
             <a
               href={workPluginCatalog.find((p) => p.id === editingService)?.docs}
               onClick={(e) => {
@@ -792,7 +815,8 @@ export function WorkPlugins({
                   .catch((error) => setNotice(errorMessage(error)));
               }}
             >
-              官方配置说明 <ExternalLink size={13} />
+              {tr('官方配置说明 ')}
+              <ExternalLink size={13} />
             </a>
           </PluginDetailSection>
         </PluginDetailPage>

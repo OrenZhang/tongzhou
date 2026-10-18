@@ -54,7 +54,7 @@ export async function nativeModelConnection(
               ? 'openai-responses'
               : undefined;
       if (!protocol || typeof alias.model !== 'string')
-        throw new Error('此 Kimi 模型协议尚未被当前同舟版本支持，请更新同舟后刷新模型列表');
+        throw new Error('此 Kimi 模型协议尚未被当前CoSail版本支持，请更新CoSail后刷新模型列表');
       return {
         provider: {
           ...provider,

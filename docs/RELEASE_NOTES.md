@@ -1,17 +1,17 @@
-# 同舟 v1.0.3
+# CoSail v1.0.3
 
 本版优化后台运行、电源控制和插件接入体验。
 
-- **Windows 系统托盘**：关闭窗口后同舟继续运行，后台会话与机器人连接保持；点击托盘恢复窗口，从托盘菜单退出客户端。
-- **电源与睡眠**：Windows / macOS 可在接通电源时保持唤醒，屏幕仍可熄灭；支持合盖不睡眠，拔电、关闭功能或退出后恢复。macOS 合盖模式需管理员授权，每次启动同舟后重新开启，会临时禁用系统睡眠（包括手动睡眠）；异常中断后提供恢复重试入口。
+- **Windows 系统托盘**：关闭窗口后CoSail继续运行，后台会话与机器人连接保持；点击托盘恢复窗口，从托盘菜单退出客户端。
+- **电源与睡眠**：Windows / macOS 可在接通电源时保持唤醒，屏幕仍可熄灭；支持合盖不睡眠，拔电、关闭功能或退出后恢复。macOS 合盖模式需管理员授权，每次启动CoSail后重新开启，会临时禁用系统睡眠（包括手动睡眠）；异常中断后提供恢复重试入口。
 - **插件详情**：紧凑卡片列表与统一详情页，返回时保留筛选；账号、认证、工具和依赖配置集中展示，API Key 模式提供依赖安装／修复。
-- **套餐账号复用**：MiniMax 多媒体、搜索与图片理解，以及 Kimi 搜索与网页读取可绑定同舟内已登录的套餐账号，共享令牌刷新；无需复制 API Key 或安装 Python。仍支持独立 API Key 模式，实际工具能力与额度以服务端套餐为准。
+- **套餐账号复用**：MiniMax 多媒体、搜索与图片理解，以及 Kimi 搜索与网页读取可绑定CoSail内已登录的套餐账号，共享令牌刷新；无需复制 API Key 或安装 Python。仍支持独立 API Key 模式，实际工具能力与额度以服务端套餐为准。
 - **网页与系统工具**：内置网页搜索与读取默认启用，保留已有用户开关；时间、时区与系统信息查询改为核心只读工具，无需额外 MCP 进程。
 - **图片预览**：图片作品可在会话中直接查看，优化作品与插件界面布局。
 
 ## 安装包
 
-Windows 使用 win-x64.exe；Apple Silicon 使用 mac-arm64.dmg；Intel Mac 使用 mac-x64.dmg；macOS ZIP 用于更新通道。Linux 使用 linux-x86_64.AppImage（下载后直接运行）或 linux-amd64.deb（`sudo apt install ./Tongzhou-1.0.3-linux-amd64.deb` 安装或升级）。各平台校验文件为 SHA256SUMS-\*。
+Windows 使用 win-x64.exe；Apple Silicon 使用 mac-arm64.dmg；Intel Mac 使用 mac-x64.dmg；macOS ZIP 用于更新通道。Linux 使用 linux-x86_64.AppImage（下载后直接运行）或 linux-amd64.deb（`sudo apt install ./CoSail-1.0.3-linux-amd64.deb` 安装或升级）。各平台校验文件为 SHA256SUMS-\*。
 
 Linux 电脑控制目前面向 X11 / XWayland 会话；原生 Wayland 电脑控制尚未支持。电源与合盖功能目前仅支持 Windows / macOS。
 

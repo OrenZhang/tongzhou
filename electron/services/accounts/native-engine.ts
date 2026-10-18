@@ -33,16 +33,17 @@ export function launchEngine(
     )
     .replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep);
   const entry = path.join(root, definitions[kind].entry);
-  if (!existsSync(entry)) throw new Error(`${kind} 内置引擎缺失，请重新安装同舟`);
+  if (!existsSync(entry)) throw new Error(`${kind} 内置引擎缺失，请重新安装CoSail`);
   const nodeRoot = path
     .dirname(require.resolve('node/package.json', { paths: [__dirname, process.cwd()] }))
     .replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep);
   const executable = path.join(nodeRoot, 'bin', process.platform === 'win32' ? 'node.exe' : 'node');
-  if (!existsSync(executable)) throw new Error('内置 Node 运行时缺失，请重新安装同舟');
+  if (!existsSync(executable)) throw new Error('内置 Node 运行时缺失，请重新安装CoSail');
   const networkBootstrap = path
     .join(__dirname, 'node-request-identity.cjs')
     .replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep);
-  if (!existsSync(networkBootstrap)) throw new Error('内置请求标识模块缺失，请重新构建或安装同舟');
+  if (!existsSync(networkBootstrap))
+    throw new Error('内置请求标识模块缺失，请重新构建或安装CoSail');
   return spawn(executable, ['--require', networkBootstrap, entry, ...args], {
     cwd: home,
     windowsHide: true,
@@ -350,7 +351,7 @@ export class NativeAccount {
             ? e.message
             : e.code === -32000 || /auth|login|sign.in/i.test(e.message)
               ? undefined
-              : '引擎暂不可用，请重试或重新安装同舟。',
+              : '引擎暂不可用，请重试或重新安装CoSail。',
         });
     } finally {
       client.stop();
@@ -380,7 +381,7 @@ export class NativeAccount {
           }, 60000);
           child.once('error', () => {
             clearTimeout(timer);
-            reject(new Error('Kimi 令牌续期进程启动失败，请重新安装同舟'));
+            reject(new Error('Kimi 令牌续期进程启动失败，请重新安装CoSail'));
           });
           child.once('close', () => {
             clearTimeout(timer);
@@ -426,7 +427,7 @@ export class NativeAccount {
       child.stdout.on('data', append);
       child.stderr.on('data', append);
       child.on('error', () => {
-        if (epoch === this.epoch) this.finishError('登录进程启动失败，请重新安装同舟。');
+        if (epoch === this.epoch) this.finishError('登录进程启动失败，请重新安装CoSail。');
       });
       child.on('close', async (code) => {
         if (epoch !== this.epoch) return;
@@ -457,7 +458,7 @@ export class NativeAccount {
         10 * 60 * 1000,
       );
     } catch {
-      this.finishError('内置引擎启动失败，请重新安装同舟。');
+      this.finishError('内置引擎启动失败，请重新安装CoSail。');
     }
     return this.state;
   }

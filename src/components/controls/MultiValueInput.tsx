@@ -1,10 +1,11 @@
+import { t as tr } from '../../shared/i18n';
 import { useState } from 'react';
 import { Plus, X } from 'lucide-react';
 export function MultiValueInput({
   value,
   onChange,
   label,
-  placeholder = '输入后按 Enter 添加',
+  placeholder = tr('输入后按 Enter 添加'),
   split = true,
   id,
 }: {
@@ -31,7 +32,7 @@ export function MultiValueInput({
             <span>{item}</span>
             <button
               type="button"
-              aria-label={`移除 ${item}`}
+              aria-label={tr('移除 {0}', [item])}
               onClick={() => onChange(value.filter((_, n) => n !== i))}
             >
               <X size={12} />
@@ -63,7 +64,7 @@ export function MultiValueInput({
         />
         <button
           type="button"
-          aria-label={`添加${label}`}
+          aria-label={tr('添加{0}', [label])}
           disabled={!pending.trim()}
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => add()}

@@ -84,6 +84,7 @@ export interface ArtifactOrigin {
 }
 const publicItem = ({ blob, hash, ...a }: StoredArtifact): Artifact => a;
 export class Artifacts {
+  private downloads = new Map<string, Promise<Artifact>>();
   readonly root: string;
   readonly records: FileRecords<StoredArtifact>;
   constructor(
@@ -180,7 +181,12 @@ export class Artifacts {
       .digest('hex');
     const old = this.records
       .list()
-      .find((a) => a.runId === run.id && a.hash === hash && a.name === name);
+      .find(
+        (a) =>
+          a.runId === run.id &&
+          (a.hash === hash || (!!remoteUrl && a.sourceUrl === remoteUrl)) &&
+          a.name === name,
+      );
     if (old) return publicItem(old);
     const id = randomUUID(),
       blob = bytes ? id + ext : undefined;
@@ -220,7 +226,18 @@ export class Artifacts {
     return bytes;
   }
   /** Keep the original artifact identity when a generated URL is fetched into managed storage. */
-  async download(id: string, signal: AbortSignal, fetcher: typeof serviceFetch = serviceFetch) {
+  download(
+    id: string,
+    signal: AbortSignal,
+    fetcher: typeof serviceFetch = serviceFetch,
+  ): Promise<Artifact> {
+    const pending = this.downloads.get(id);
+    if (pending) return pending;
+    const task = this.downloadFile(id, signal, fetcher).finally(() => this.downloads.delete(id));
+    this.downloads.set(id, task);
+    return task;
+  }
+  private async downloadFile(id: string, signal: AbortSignal, fetcher: typeof serviceFetch) {
     const a = this.stored(id);
     if (a.blob) {
       this.bytes(id);
@@ -278,6 +295,8 @@ export class Artifacts {
     if (/^text\/html/i.test(response.headers.get('content-type') ?? ''))
       throw new Error('媒体下载返回网页，原始链接已保留');
     const blob = a.id + ext;
+    // A deleted artifact must not be resurrected by a late network response.
+    this.stored(id);
     atomicWrite(this.root, this.file(blob), bytes);
     this.records.put({
       ...a,
@@ -315,12 +334,22 @@ export class Artifacts {
     }
     this.records.remove(a.id);
   }
-  async collect(outputs: ArtifactOutput[], origin: ArtifactOrigin) {
+  async collect(outputs: ArtifactOutput[], origin: ArtifactOrigin, signal?: AbortSignal) {
     const items: Artifact[] = [],
       errors: string[] = [];
     for (const output of outputs.slice(0, 12)) {
       try {
-        items.push(await this.save(output, origin));
+        let item = await this.save(output, origin);
+        if (item.kind === 'image' && item.remoteUrl) {
+          try {
+            item = await this.download(item.id, signal ?? AbortSignal.timeout(120000));
+          } catch (error) {
+            errors.push(
+              `${item.name}: 图片已生成，下载未完成；原链接已保留，可重试下载，无需重新生成。${error instanceof Error ? error.message : String(error)}`,
+            );
+          }
+        }
+        items.push(item);
       } catch (e) {
         errors.push(`${output?.name ?? '未知作品'}: ${e instanceof Error ? e.message : String(e)}`);
       }
@@ -394,7 +423,7 @@ export class Artifacts {
         {
           name: 'artifact_create',
           description:
-            '交付生成的作品：text 为文档正文，data 为文件 Base64，url 为已生成作品的 HTTPS 链接。作品自动出现在聊天和作品页，不加入智库。仅交付用户需要的成果，不保存临时截图、参考资料或凭据。',
+            '交付生成的作品：text 为文档正文，data 为文件 Base64，url 为已生成作品的 HTTPS 链接。远程图片自动下载到本地并直接展示；下载失败保留原链接，只重试下载，不要重新生成。作品自动出现在聊天和作品页，不加入智库。仅交付用户需要的成果，不保存临时截图、参考资料或凭据。',
           parameters: {
             type: 'object',
             properties: {
@@ -411,9 +440,17 @@ export class Artifacts {
         '保存生成作品',
         async (raw) => {
           if (raw.path !== undefined) throw new Error('本地文件请使用 artifact_publish');
-          const item = await this.save(raw, origin);
+          const { items, errors } = await this.collect([raw], origin);
+          const item = items[0];
+          if (!item) throw new Error(errors.join('；'));
           changed();
-          return { text: JSON.stringify(item), artifactIds: [item.id] };
+          return {
+            text: JSON.stringify({
+              ...item,
+              ...(errors.length ? { downloadWarning: errors.join('；') } : {}),
+            }),
+            artifactIds: [item.id],
+          };
         },
         false,
       );
@@ -507,6 +544,7 @@ export class Artifacts {
       async (raw) => {
         const id = z.string().uuid().parse(raw.id);
         if (!this.accessible(id, origin.sessionId)) throw new Error('作品不在当前会话可用范围');
+        if (this.read(id).remoteUrl) await this.download(id, AbortSignal.timeout(120000));
         const a = this.read(id),
           root = sessionWorkspace(this.store, this.dataDir, origin.sessionId);
         mkdirSync(root, { recursive: true });

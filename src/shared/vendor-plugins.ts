@@ -13,7 +13,7 @@ export const vendorPlugins = [
     id: 'minimax-coding',
     name: 'MiniMax 搜索与图片理解',
     description:
-      '联网搜索和图片理解。优先复用同舟已登录的 MiniMax 套餐账号，也可配置 Coding Plan API Key 使用官方 MCP。',
+      '联网搜索和图片理解。优先复用CoSail已登录的 MiniMax 套餐账号，也可配置 Coding Plan API Key 使用官方 MCP。',
     package: 'minimax-coding-plan-mcp',
     version: '0.0.5',
     docs: 'https://github.com/MiniMax-AI/MiniMax-Coding-Plan-MCP',
@@ -23,7 +23,7 @@ export const vendorPlugins = [
     id: 'tongzhou-kimi-web',
     name: 'Kimi 搜索与网页读取',
     description:
-      '同舟适配器：接入 Kimi Code 搜索和网页读取。优先复用同舟已登录的 Kimi 套餐账号，也支持 API Key。',
+      'CoSail适配器：接入 Kimi Code 搜索和网页读取。优先复用CoSail已登录的 Kimi 套餐账号，也支持 API Key。',
     docs: 'https://www.kimi.com/code/docs/en/kimi-code-cli/configuration/config-files.html',
     tools: ['web_search', 'fetch_page'],
   },

@@ -1,4 +1,4 @@
-# 同舟画布节点插件 v1
+# CoSail画布节点插件 v1
 
 节点插件统一使用 `CanvasNodePluginDefinition` 描述身份、版本、输入输出、配置与展示方式；通过 `CanvasNodePlugins` 注册，执行仍走现有工作流。画布保存插件 ID、配置、正文及资源引用，运行记录冻结插件版本。旧画布和旧插件继续兼容。
 
@@ -112,7 +112,7 @@ const dispose = canvasWorkflows.registerMcpNode({
 
 ## 分发边界与验证
 
-本版提供开发接入 API 和内置节点，不包含任意 URL JavaScript 下载执行器。infinite-canvas 的 React 插件依赖其宿主接口，不能直接运行；迁移时须适配同舟 renderer 和执行契约。后续远程安装可在此契约之上增加包清单、兼容版本与隔离运行机制。
+本版提供开发接入 API 和内置节点，不包含任意 URL JavaScript 下载执行器。infinite-canvas 的 React 插件依赖其宿主接口，不能直接运行；迁移时须适配CoSail renderer 和执行契约。后续远程安装可在此契约之上增加包清单、兼容版本与隔离运行机制。
 
 画布 JSON/模板保留节点插件 ID 与可移植配置；项目包携带全景引用素材。MCP 服务连接不随包导出，导入后重新选择。插件缺失时保存的数据仍可查看、导出，但执行会明确报错。
 

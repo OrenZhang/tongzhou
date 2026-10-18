@@ -46,7 +46,7 @@ store.put('run', {
   sessionId: session.id,
   providerId: 'local',
   model: 'fixture',
-  agentName: '同舟',
+  agentName: 'CoSail',
   status: 'failed',
   startedAt: 1,
   endedAt: 2,
@@ -145,12 +145,12 @@ let executablePath = process.env.TONGZHOU_SMOKE_EXECUTABLE;
 if (process.env.TONGZHOU_PACKAGE_AUTO === '1' && !executablePath) {
   const candidates =
     process.platform === 'win32'
-      ? ['release/win-unpacked/Tongzhou.exe']
+      ? ['release/win-unpacked/CoSail.exe']
       : process.platform === 'linux'
-        ? ['release/linux-unpacked/tongzhou']
+        ? ['release/linux-unpacked/cosail']
         : [
-            'release/mac-arm64/Tongzhou.app/Contents/MacOS/Tongzhou',
-            'release/mac/Tongzhou.app/Contents/MacOS/Tongzhou',
+            'release/mac-arm64/CoSail.app/Contents/MacOS/CoSail',
+            'release/mac/CoSail.app/Contents/MacOS/CoSail',
           ];
   for (const candidate of candidates) {
     try {
@@ -212,7 +212,7 @@ try {
   const git = (...args) =>
     execFileSync('git', args, { cwd: project, windowsHide: true, encoding: 'utf8' });
   git('init');
-  git('config', 'user.name', 'Tongzhou Test');
+  git('config', 'user.name', 'CoSail Test');
   git('config', 'user.email', 'test@example.invalid');
   git('add', 'file.txt');
   const reviewed = await page.evaluate(() => window.tongzhou.reviewStaged('p'));

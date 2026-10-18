@@ -41,7 +41,7 @@ try {
       destroyed: global.__traySmoke.tray.isDestroyed(),
       menu: global.__traySmoke.menu.items.map((item) => item.label),
     })),
-    { destroyed: false, menu: ['打开同舟', '', '退出同舟'] },
+    { destroyed: false, menu: ['打开CoSail', '', '退出CoSail'] },
   );
 
   for (const action of ['click', 'double-click', 'menu', 'second-instance']) {

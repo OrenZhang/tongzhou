@@ -1,3 +1,4 @@
+import { t as tr } from '../../shared/i18n';
 import { useEffect, useState } from 'react';
 import {
   ChevronDown,
@@ -19,7 +20,7 @@ import {
   type KnowledgeFolderInput,
 } from '../../shared/knowledge';
 
-export function wikiFolderOptions(folders: KnowledgeFolder[], rootLabel = '未分类') {
+export function wikiFolderOptions(folders: KnowledgeFolder[], rootLabel = tr('未分类')) {
   return [
     { value: '', label: rootLabel },
     ...folders
@@ -135,7 +136,7 @@ export function KnowledgeFolders({
               {children ? (
                 <button
                   className="icon-button wiki-folder-toggle"
-                  aria-label={`${closed ? '展开' : '折叠'}目录 ${folder.name}`}
+                  aria-label={tr('{0}目录 {1}', [closed ? '展开' : '折叠', folder.name])}
                   aria-expanded={!closed}
                   onClick={() =>
                     setCollapsed((previous) => {
@@ -169,8 +170,8 @@ export function KnowledgeFolders({
               </button>
               <button
                 className="icon-button wiki-folder-manage"
-                aria-label={`管理目录 ${folder.name}`}
-                title="重命名、移动或删除目录"
+                aria-label={tr('管理目录 {0}', [folder.name])}
+                title={tr('重命名、移动或删除目录')}
                 onClick={() => begin({ ...folder, parentId: folder.parentId ?? null })}
               >
                 <MoreHorizontal size={15} />
@@ -187,13 +188,13 @@ export function KnowledgeFolders({
       });
   return (
     <>
-      <nav className="wiki-folders" aria-label="文档目录">
+      <nav className="wiki-folders" aria-label={tr('文档目录')}>
         <div className="wiki-folder-heading">
-          <strong>文档目录</strong>
+          <strong>{tr('文档目录')}</strong>
           <button
             className="icon-button"
-            aria-label="新建目录"
-            title="新建目录"
+            aria-label={tr('新建目录')}
+            title={tr('新建目录')}
             onClick={() =>
               begin({ name: '', parentId: selected && selected !== '*' ? selected : null })
             }
@@ -208,14 +209,14 @@ export function KnowledgeFolders({
               aria-pressed={selected === '*'}
               onClick={() => onSelect('*')}
             >
-              全部文档
+              {tr('全部文档')}
             </button>
             <button
               className="wiki-folder-root"
               aria-pressed={selected === ''}
               onClick={() => onSelect('')}
             >
-              未分类
+              {tr('未分类')}
             </button>
           </>
         )}
@@ -224,7 +225,7 @@ export function KnowledgeFolders({
           {fileRows(undefined, 0)}
         </div>
         {documents && !documents.length && (
-          <p className="muted">{searching ? '没有匹配的文档' : '暂无文档'}</p>
+          <p className="muted">{searching ? tr('没有匹配的文档') : tr('暂无文档')}</p>
         )}
         {error && !editing && !deleting && (
           <p className="danger" role="alert">
@@ -232,33 +233,33 @@ export function KnowledgeFolders({
           </p>
         )}
         {!documents && !folders.length && (
-          <p className="muted">按项目或主题新建目录，逐步整理知识页。</p>
+          <p className="muted">{tr('按项目或主题新建目录，逐步整理知识页。')}</p>
         )}
       </nav>
       {editing && (
         <Modal
-          title={editing.id ? '管理文档目录' : '新建文档目录'}
+          title={editing.id ? tr('管理文档目录') : tr('新建文档目录')}
           compact
           onClose={() => !busy && setEditing(undefined)}
         >
           <div className="modal-content wiki-folder-editor">
-            <Field label="目录名称">
+            <Field label={tr('目录名称')}>
               <input
                 autoFocus
-                aria-label="目录名称"
+                aria-label={tr('目录名称')}
                 maxLength={60}
                 value={editing.name}
                 onChange={(e) => setEditing({ ...editing, name: e.target.value })}
               />
             </Field>
-            <Field label="上级目录">
+            <Field label={tr('上级目录')}>
               <ChoicePicker
-                label="上级目录"
+                label={tr('上级目录')}
                 value={editing.parentId ?? ''}
                 searchable
                 options={wikiFolderOptions(
                   folders.filter((f) => !branch.has(f.id)),
-                  '顶层目录',
+                  tr('顶层目录'),
                 )}
                 onChange={(parentId) => setEditing({ ...editing, parentId: parentId || null })}
               />
@@ -281,11 +282,11 @@ export function KnowledgeFolders({
                 }}
               >
                 <Trash2 size={14} />
-                删除目录
+                {tr('删除目录')}
               </button>
             )}
             <button className="secondary" disabled={busy} onClick={() => setEditing(undefined)}>
-              取消
+              {tr('取消')}
             </button>
             <button
               className="primary"
@@ -302,19 +303,21 @@ export function KnowledgeFolders({
                 })
               }
             >
-              {busy ? '保存中…' : '保存目录'}
+              {busy ? tr('保存中…') : tr('保存目录')}
             </button>
           </div>
         </Modal>
       )}
       {deleting && (
-        <Modal title="删除文档目录" compact onClose={() => !busy && setDeleting(undefined)}>
+        <Modal title={tr('删除文档目录')} compact onClose={() => !busy && setDeleting(undefined)}>
           <div className="modal-content confirmation-content">
             <p>
-              删除“<strong>{deleting.name}</strong>”及其子目录？
+              {tr('删除“')}
+              <strong>{deleting.name}</strong>
+              {tr('”及其子目录？')}
             </p>
             <p className="muted">
-              目录中的 文档 页面全部保留，并移到“未分类”。原文、来源引用和历史版本不受影响。
+              {tr('目录中的 文档 页面全部保留，并移到“未分类”。原文、来源引用和历史版本不受影响。')}
             </p>
             {error && (
               <p role="alert" className="error">
@@ -324,7 +327,7 @@ export function KnowledgeFolders({
           </div>
           <div className="modal-footer">
             <button className="secondary" disabled={busy} onClick={() => setDeleting(undefined)}>
-              取消
+              {tr('取消')}
             </button>
             <button
               className="destructive-button"
@@ -337,7 +340,7 @@ export function KnowledgeFolders({
                 })
               }
             >
-              {busy ? '删除中…' : '确认删除目录'}
+              {busy ? tr('删除中…') : tr('确认删除目录')}
             </button>
           </div>
         </Modal>

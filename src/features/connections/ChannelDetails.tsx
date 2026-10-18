@@ -1,3 +1,4 @@
+import { t as tr } from '../../shared/i18n';
 import { useState } from 'react';
 import {
   Bell,
@@ -60,7 +61,11 @@ export function ChannelDetails({
   };
   const toggle = (id: string) => setExpanded(expanded === id ? '' : id);
   return (
-    <section className="channel-details" data-platform={entry.value.kind} aria-label="渠道详情">
+    <section
+      className="channel-details"
+      data-platform={entry.value.kind}
+      aria-label={tr('渠道详情')}
+    >
       <header className="channel-detail-heading">
         <span className="channel-platform-icon">
           <Icon size={22} />
@@ -70,12 +75,12 @@ export function ChannelDetails({
           <p>
             {platform.name} ·{' '}
             {entry.source === 'bot'
-              ? '机器人连接'
+              ? tr('机器人连接')
               : entry.value.kind === 'email'
-                ? 'SMTP 邮件'
+                ? tr('SMTP 邮件')
                 : entry.value.mode === 'app'
-                  ? '应用通知'
-                  : 'Webhook 通知'}
+                  ? tr('应用通知')
+                  : tr('Webhook 通知')}
           </p>
         </div>
         <span className="channel-status" data-status={status.status}>
@@ -83,16 +88,16 @@ export function ChannelDetails({
         </span>
       </header>
       <div className="channel-account">
-        <span className="muted">{entry.source === 'bot' ? '应用 / 账号' : '发送目标'}</span>
+        <span className="muted">{entry.source === 'bot' ? tr('应用 / 账号') : tr('发送目标')}</span>
         <span>
           {entry.source === 'bot'
             ? entry.value.appId
             : entry.value.kind === 'email'
-              ? entry.value.smtp?.to.join('、') || '未设置收件人'
-              : entry.value.receiveId || '已保存的 Webhook'}
+              ? entry.value.smtp?.to.join('、') || tr('未设置收件人')
+              : entry.value.receiveId || tr('已保存的 Webhook')}
         </span>
         <button className="text-button" onClick={manage}>
-          管理授权
+          {tr('管理授权')}
         </button>
       </div>
       {entry.source === 'bot' && entry.value.error && (
@@ -100,7 +105,7 @@ export function ChannelDetails({
           {entry.value.error}
         </p>
       )}
-      <p className="channel-section-label">可使用的功能</p>
+      <p className="channel-section-label">{tr('可使用的功能')}</p>
       {entry.source === 'bot' && (
         <>
           <button
@@ -110,25 +115,26 @@ export function ChannelDetails({
           >
             <MessageSquare size={18} />
             <span>
-              <strong>机器人对话</strong>
-              <small>聊天、查看进度、操作工作台</small>
+              <strong>{tr('机器人对话')}</strong>
+              <small>{tr('聊天、查看进度、操作工作台')}</small>
             </span>
             {expanded === 'chat' ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
           </button>
           {expanded === 'chat' && (
             <div className="channel-capability-body">
               <p>
-                {data.botSettings?.mode === 'chat' ? '仅聊天' : '控制工作台'} ·{' '}
-                {entry.value.allowedSenders.length} 位允许用户
+                {data.botSettings?.mode === 'chat' ? tr('仅聊天') : tr('控制工作台')} ·{' '}
+                {entry.value.allowedSenders.length}
+                {tr(' 位允许用户')}
                 {entry.value.kind !== 'weixin' &&
-                  ` · ${entry.value.allowedChats.length} 个允许群聊`}
+                  tr(' · {0} 个允许群聊', [entry.value.allowedChats.length])}
               </p>
               <div className="row">
                 <button className="text-button" onClick={settings}>
-                  机器人通用设置
+                  {tr('机器人通用设置')}
                 </button>
                 <button className="text-button" onClick={manage}>
-                  管理允许用户
+                  {tr('管理允许用户')}
                 </button>
               </div>
             </div>
@@ -144,8 +150,8 @@ export function ChannelDetails({
           >
             <Bell size={18} />
             <span>
-              <strong>{entry.value.kind === 'email' ? '邮件通知' : '消息通知'}</strong>
-              <small>接收会话结果与定时任务提醒</small>
+              <strong>{entry.value.kind === 'email' ? tr('邮件通知') : tr('消息通知')}</strong>
+              <small>{tr('接收会话结果与定时任务提醒')}</small>
             </span>
             {expanded === 'notifications' ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
           </button>
@@ -168,29 +174,29 @@ export function ChannelDetails({
             className="text-button"
             disabled={busy}
             onClick={() =>
-              void act(() => api.restartBot(entry.value.id), '已请求重新连接，请查看连接状态')
+              void act(() => api.restartBot(entry.value.id), tr('已请求重新连接，请查看连接状态'))
             }
           >
             <RefreshCw size={14} />
-            重新连接
+            {tr('重新连接')}
           </button>
         ) : entry.value.kind === 'email' ? (
           <button
             className="text-button"
             disabled={busy || !entry.value.enabled}
-            onClick={() => void act(() => api.testEmail(entry.value.id), 'SMTP 验证完成')}
+            onClick={() => void act(() => api.testEmail(entry.value.id), tr('SMTP 验证完成'))}
           >
             <RefreshCw size={14} />
-            验证 SMTP
+            {tr('验证 SMTP')}
           </button>
         ) : (
           <button className="text-button" onClick={() => setExpanded('notifications')}>
-            发送测试消息
+            {tr('发送测试消息')}
           </button>
         )}
         {entry.source === 'bot' && entry.value.kind === 'weixin' && (
           <button className="text-button" disabled={busy} onClick={reconnect}>
-            重新扫码
+            {tr('重新扫码')}
           </button>
         )}
         {entry.source === 'notification' && !entry.value.enabled && (
@@ -198,10 +204,13 @@ export function ChannelDetails({
             className="text-button"
             disabled={busy}
             onClick={() =>
-              void act(() => api.saveChannel({ ...entry.value, enabled: true }), '已恢复连接配置')
+              void act(
+                () => api.saveChannel({ ...entry.value, enabled: true }),
+                tr('已恢复连接配置'),
+              )
             }
           >
-            恢复连接
+            {tr('恢复连接')}
           </button>
         )}
         <button
@@ -210,7 +219,7 @@ export function ChannelDetails({
           onClick={() => toggle('records')}
         >
           <History size={14} />
-          最近记录
+          {tr('最近记录')}
         </button>
         <button
           className="text-button danger channel-delete"
@@ -223,16 +232,16 @@ export function ChannelDetails({
                   entry.source === 'bot'
                     ? api.deleteBot(entry.value.id)
                     : api.deleteChannel(entry.value.id),
-                '已删除渠道',
+                tr('已删除渠道'),
               );
           }}
         >
           <Trash2 size={14} />
-          {armed ? '确认删除渠道' : '删除'}
+          {armed ? tr('确认删除渠道') : tr('删除')}
         </button>
         {armed && (
           <button className="text-button" onClick={() => setArmed(false)}>
-            取消删除
+            {tr('取消删除')}
           </button>
         )}
       </div>

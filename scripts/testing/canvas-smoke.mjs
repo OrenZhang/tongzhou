@@ -261,7 +261,7 @@ try {
   );
   await page
     .frameLocator('iframe[title="HTML 预览"]')
-    .getByText('你好，同舟', { exact: true })
+    .getByText('你好，CoSail', { exact: true })
     .waitFor();
   assert.equal(
     await page

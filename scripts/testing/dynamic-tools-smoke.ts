@@ -27,9 +27,9 @@ async function main() {
     assert.equal(JSON.parse(catalog.text).methods[0].name, 'fixtureGreeting');
     const managed = await scope.call('client_query', {
       method: 'fixtureGreeting',
-      args: ['同舟'],
+      args: ['CoSail'],
     });
-    assert.equal(JSON.parse(managed.text).greeting, '你好 同舟');
+    assert.equal(JSON.parse(managed.text).greeting, '你好 CoSail');
     const invalid = await scope.call('client_query', {
       method: 'fixtureGreeting',
       args: [123],

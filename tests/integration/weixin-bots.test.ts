@@ -33,7 +33,7 @@ function authFixture() {
   cleanup.push(() => auth.dispose());
   return { auth, publish, save, request };
 }
-it('uses official wire headers, Tongzhou attribution and lossless uint64 ids', async () => {
+it('uses official wire headers, CoSail attribution and lossless uint64 ids', async () => {
   const fetcher = vi
     .spyOn(globalThis, 'fetch')
     .mockResolvedValue(new Response('{"ret":0,"msgs":[{"message_id":18446744073709551615}]}'));
@@ -45,11 +45,11 @@ it('uses official wire headers, Tongzhou attribution and lossless uint64 ids', a
   expect(result.msgs[0].message_id).toBe('18446744073709551615');
   const init = fetcher.mock.calls[0][1]!;
   const headers = new Headers(init.headers);
-  expect(headers.get('User-Agent')).toMatch(/^Tongzhou\//);
+  expect(headers.get('User-Agent')).toMatch(/^CoSail\//);
   expect(headers.get('Authorization')).toBe('Bearer private-token');
   expect(headers.get('iLink-App-Id')).toBe('bot');
   expect(headers.get('AuthorizationType')).toBe('ilink_bot_token');
-  expect(JSON.parse(String(init.body)).base_info.bot_agent).toMatch(/^Tongzhou\//);
+  expect(JSON.parse(String(init.body)).base_info.bot_agent).toMatch(/^CoSail\//);
   fetcher.mockResolvedValue(new Response('{"status":"wait"}'));
   await api.request(base, 'get_qrcode_status?qrcode=x', new AbortController().signal);
   const pollHeaders = new Headers(fetcher.mock.calls[1][1]!.headers);
@@ -240,7 +240,7 @@ it('routes natural text through existing task core and returns only that run res
   await bots.notify({ ...run, id: 'other-run' }, 'completed');
   expect(reply).not.toHaveBeenCalled();
   await bots.notify(run, 'approval');
-  expect(reply).toHaveBeenLastCalledWith(expect.stringContaining('回到同舟'));
+  expect(reply).toHaveBeenLastCalledWith(expect.stringContaining('回到CoSail'));
   await bots.notify(run, 'completed');
   expect(reply).toHaveBeenLastCalledWith('处理结果');
   await bots.notify(run, 'completed');

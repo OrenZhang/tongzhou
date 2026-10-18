@@ -34,7 +34,7 @@ store.message({
   sessionId: session.id,
   role: 'assistant',
   content:
-    '可以先从一个简单、完整的流程开始。\n\n把**需要解决的问题**写清楚，再确定用户完成任务的步骤：\n\n- 进入会话，描述想法\n- 查看结果，随时补充要求\n- 完成验证，保留每次修改\n\n```ts\nconst workspace = "同舟";\nconsole.log("Ready to build.");\n```\n\n先让核心流程顺畅，再逐步补充其他能力。',
+    '可以先从一个简单、完整的流程开始。\n\n把**需要解决的问题**写清楚，再确定用户完成任务的步骤：\n\n- 进入会话，描述想法\n- 查看结果，随时补充要求\n- 完成验证，保留每次修改\n\n```ts\nconst workspace = "CoSail";\nconsole.log("Ready to build.");\n```\n\n先让核心流程顺畅，再逐步补充其他能力。',
   createdAt: 2000,
   status: 'complete',
 });

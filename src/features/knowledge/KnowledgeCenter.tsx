@@ -1,3 +1,4 @@
+import { t as tr, localize as localized, getLocale } from '../../shared/i18n';
 import { ArtifactsCenter } from '../artifacts/Artifacts';
 import { WorkspaceToolbar } from '../workspace/WorkspaceToolbar';
 import { AutomationCenter } from '../automation/AutomationCenter';
@@ -29,8 +30,8 @@ import { ChoicePicker } from '../../components/controls/ChoicePicker';
 import { Markdown, Modal } from '../../components/components';
 import './knowledge.css';
 
-const labels = { source: '笔记与原件', wiki: '整理文档', memory: '每日记忆' };
-const statuses = { ready: '已核对', draft: '待核对' };
+const labels = localized({ source: '笔记与原件', wiki: '整理文档', memory: '每日记忆' });
+const statuses = localized({ ready: '已核对', draft: '待核对' });
 export function KnowledgeCenter({
   api,
   data,
@@ -141,8 +142,8 @@ export function KnowledgeCenter({
   );
   const doc = selected?.document;
   const scopeOptions = [
-    { value: '*', label: '全部空间' },
-    { value: '', label: '通用资料与普通会话' },
+    { value: '*', label: tr('全部空间') },
+    { value: '', label: tr('通用资料与普通会话') },
     ...data.projects
       .filter((p) => !p.sourceProjectId && !p.removed)
       .map((p) => ({ value: p.id, label: p.name })),
@@ -151,11 +152,11 @@ export function KnowledgeCenter({
     <>
       <header className="page-heading">
         <div>
-          <h1>智库</h1>
-          <p>文档供你阅读与创作，知识与记忆供 Agent 按需查用。</p>
+          <h1>{tr('智库')}</h1>
+          <p>{tr('文档供你阅读与创作，知识与记忆供 Agent 按需查用。')}</p>
         </div>
       </header>
-      <div className="knowledge-navigation" role="tablist" aria-label="智库分区">
+      <div className="knowledge-navigation" role="tablist" aria-label={tr('智库分区')}>
         <button
           role="tab"
           aria-selected={section === 'artifacts'}
@@ -163,7 +164,8 @@ export function KnowledgeCenter({
         >
           <FileText size={18} />
           <span>
-            作品<small>按日期查看生成成果</small>
+            {tr('作品')}
+            <small>{tr('按日期查看生成成果')}</small>
           </span>
         </button>
         <button
@@ -173,7 +175,8 @@ export function KnowledgeCenter({
         >
           <NotebookPen size={18} />
           <span>
-            内容库<small>文档编辑与 AI 协作</small>
+            {tr('内容库')}
+            <small>{tr('文档编辑与 AI 协作')}</small>
           </span>
         </button>
         <button
@@ -188,7 +191,8 @@ export function KnowledgeCenter({
         >
           <Sparkles size={18} />
           <span>
-            知识与记忆<small>实体、关系与每日沉淀</small>
+            {tr('知识与记忆')}
+            <small>{tr('实体、关系与每日沉淀')}</small>
           </span>
         </button>
         <button
@@ -201,7 +205,8 @@ export function KnowledgeCenter({
         >
           <NotebookPen size={18} />
           <span>
-            个性与偏好<small>回复方式与记住的习惯</small>
+            {tr('个性与偏好')}
+            <small>{tr('回复方式与记住的习惯')}</small>
           </span>
         </button>
         <button
@@ -211,7 +216,8 @@ export function KnowledgeCenter({
         >
           <Sparkles size={18} />
           <span>
-            AI 工作流<small>处理流程、自动化与结果</small>
+            {tr('AI 工作流')}
+            <small>{tr('处理流程、自动化与结果')}</small>
           </span>
         </button>
       </div>
@@ -219,7 +225,7 @@ export function KnowledgeCenter({
         <WorkspaceToolbar
           context={
             <ChoicePicker
-              label="智库空间"
+              label={tr('智库空间')}
               value={project}
               options={scopeOptions}
               onChange={(v) => {
@@ -232,7 +238,7 @@ export function KnowledgeCenter({
           <button
             className="secondary"
             disabled={busy || !session}
-            title="只读排查当前会话可访问的知识"
+            title={tr('只读排查当前会话可访问的知识')}
             onClick={() =>
               void action(async () => {
                 const id = await api.knowledgeAudit(session!.id);
@@ -241,7 +247,7 @@ export function KnowledgeCenter({
             }
           >
             <Search size={15} />
-            Agent 排查
+            {tr('Agent 排查')}
           </button>
         </WorkspaceToolbar>
       )}
@@ -312,39 +318,42 @@ export function KnowledgeCenter({
       {heading}
       <details className="knowledge-maintenance">
         <summary>
-          整理与维护 <small>后台记忆 · 本地目录 · 索引</small>
+          {tr('整理与维护 ')}
+          <small>{tr('后台记忆 · 本地目录 · 索引')}</small>
         </summary>
         <div className="knowledge-settings">
           <button
             className="text-button"
             disabled={busy || !session}
-            title="把当前会话最近 100 个已完成轮次加入待整理队列，不直接生成记忆"
+            title={tr('把当前会话最近 100 个已完成轮次加入待整理队列，不直接生成记忆')}
             onClick={() =>
               void action(async () => {
                 const result = await api.knowledgeCollect(session!.id);
-                setNotice(`已加入 ${result.collected} 个候选轮次，后台整理后归并到每日记忆`);
+                setNotice(
+                  tr('已加入 {0} 个候选轮次，后台整理后归并到每日记忆', [result.collected]),
+                );
               })
             }
           >
             <History size={14} />
-            补收当前会话
+            {tr('补收当前会话')}
           </button>
           <button
             className="text-button"
             onClick={() => void action(async () => api.knowledgeOpenFolder())}
           >
             <FolderOpen size={14} />
-            打开目录
+            {tr('打开目录')}
           </button>
           <button
             className="icon-button"
-            aria-label="重建知识索引"
-            title="重建知识索引"
+            aria-label={tr('重建知识索引')}
+            title={tr('重建知识索引')}
             disabled={busy}
             onClick={() =>
               void action(async () => {
                 const result = await api.knowledgeReindex();
-                setNotice(`已重建 ${result.indexed} 份资料的索引`);
+                setNotice(tr('已重建 {0} 份资料的索引', [result.indexed]));
               })
             }
           >
@@ -353,10 +362,17 @@ export function KnowledgeCenter({
         </div>
         <div className="knowledge-memory-status">
           <div>
-            <strong>每日记忆 · {state?.settings.autoCollect ? '已启用' : '已暂停'}</strong>
+            <strong>
+              {tr('每日记忆 · ')}
+              {state?.settings.autoCollect ? tr('已启用') : tr('已暂停')}
+            </strong>
             <small>
-              待整理 {state?.memoryQueue.pending ?? 0} · 整理中 {state?.memoryQueue.running ?? 0} ·
-              失败 {state?.memoryQueue.failed ?? 0}
+              {tr('待整理 ')}
+              {state?.memoryQueue.pending ?? 0}
+              {tr(' · 整理中 ')}
+              {state?.memoryQueue.running ?? 0}
+              {tr(' · 失败 ')}
+              {state?.memoryQueue.failed ?? 0}
             </small>
             {state?.memoryQueue.lastError && (
               <p className="danger">{state.memoryQueue.lastError}</p>
@@ -365,11 +381,11 @@ export function KnowledgeCenter({
           </div>
           <button
             className="secondary"
-            title="在自动化与定时中设置记忆整理的开关、触发方式，并查看执行记录"
+            title={tr('在自动化与定时中设置记忆整理的开关、触发方式，并查看执行记录')}
             onClick={() => setSection('automation')}
           >
             <Sparkles size={14} />
-            管理记忆任务
+            {tr('管理记忆任务')}
           </button>
         </div>
       </details>
@@ -392,7 +408,7 @@ export function KnowledgeCenter({
               setSelected(undefined);
             }}
           >
-            实体与关系
+            {tr('实体与关系')}
           </button>
           <button
             aria-pressed={knowledgeView === 'daily'}
@@ -401,9 +417,9 @@ export function KnowledgeCenter({
               setKind('memory');
             }}
           >
-            每日记忆
+            {tr('每日记忆')}
           </button>
-          <span>不自动注入会话 · 保留证据与核对状态</span>
+          <span>{tr('不自动注入会话 · 保留证据与核对状态')}</span>
         </div>
       )}
       {section === 'knowledge' && knowledgeView === 'graph' ? (
@@ -413,10 +429,10 @@ export function KnowledgeCenter({
           onOpen={open}
           scopeName={(scope) =>
             scope === 'global'
-              ? '通用知识'
+              ? tr('通用知识')
               : scope.startsWith('project:')
-                ? (data.projects.find((p) => p.id === scope.slice(8))?.name ?? '项目')
-                : (data.sessions.find((s) => s.id === scope.slice(8))?.title ?? '会话记忆')
+                ? (data.projects.find((p) => p.id === scope.slice(8))?.name ?? tr('项目'))
+                : (data.sessions.find((s) => s.id === scope.slice(8))?.title ?? tr('会话记忆'))
           }
         />
       ) : (
@@ -425,8 +441,8 @@ export function KnowledgeCenter({
             <label className="knowledge-search">
               <Search size={15} />
               <input
-                aria-label="搜索知识"
-                placeholder="搜索标题或正文…"
+                aria-label={tr('搜索知识')}
+                placeholder={tr('搜索标题或正文…')}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
@@ -434,9 +450,9 @@ export function KnowledgeCenter({
             <div className="knowledge-filters">
               {(
                 [
-                  ['all', '全部'],
-                  ['memory', '每日记忆'],
-                  ['issues', '待整理'],
+                  ['all', tr('全部')],
+                  ['memory', tr('每日记忆')],
+                  ['issues', tr('待整理')],
                 ] as const
               ).map(([value, label]) => (
                 <button
@@ -444,10 +460,10 @@ export function KnowledgeCenter({
                   aria-pressed={kind === value}
                   title={
                     value === 'issues'
-                      ? '当前范围内需要核对的记忆'
+                      ? tr('当前范围内需要核对的记忆')
                       : value === 'all'
-                        ? '查看当前范围内的全部记忆'
-                        : '按日期查看整理的会话记忆'
+                        ? tr('查看当前范围内的全部记忆')
+                        : tr('按日期查看整理的会话记忆')
                   }
                   onClick={() => setKind(value)}
                 >
@@ -456,7 +472,7 @@ export function KnowledgeCenter({
                 </button>
               ))}
             </div>
-            <div className="knowledge-list" aria-label="知识资料列表">
+            <div className="knowledge-list" aria-label={tr('知识资料列表')}>
               {visible.map((d) => (
                 <button
                   key={d.id}
@@ -468,29 +484,32 @@ export function KnowledgeCenter({
                     <small>{statuses[d.status]}</small>
                   </div>
                   <strong>{d.title}</strong>
-                  <p>{d.excerpt.replace(/[#*`]/g, '').slice(0, 100) || '暂无正文'}</p>
+                  <p>{d.excerpt.replace(/[#*`]/g, '').slice(0, 100) || tr('暂无正文')}</p>
                   <small>
                     {data.projects.find((p) => p.id === d.projectId)?.name ??
-                      (d.sessionId ? '会话资料' : '通用资料')}{' '}
-                    · {new Date(d.updatedAt).toLocaleDateString()}
+                      (d.sessionId ? tr('会话资料') : tr('通用资料'))}{' '}
+                    · {new Date(d.updatedAt).toLocaleDateString(getLocale())}
                   </small>
                 </button>
               ))}
               {!visible.length && (
                 <div className="knowledge-list-empty">
-                  {query ? '没有匹配的资料' : '这里还没有资料'}
+                  {query ? tr('没有匹配的资料') : tr('这里还没有资料')}
                 </div>
               )}
             </div>
             <small className="knowledge-count">
-              {visible.length} 项结果 · 共 {scopedDocuments.length} 份记忆
+              {visible.length}
+              {tr(' 项结果 · 共 ')}
+              {scopedDocuments.length}
+              {tr(' 份记忆')}
             </small>
           </aside>
           <main
             className="knowledge-reader"
             key={doc?.id ?? 'empty'}
             tabIndex={0}
-            aria-label="知识内容"
+            aria-label={tr('知识内容')}
           >
             {doc ? (
               <>
@@ -504,7 +523,7 @@ export function KnowledgeCenter({
                   </div>
                   <button
                     className="icon-button"
-                    aria-label="关闭知识详情"
+                    aria-label={tr('关闭知识详情')}
                     onClick={() => setSelected(undefined)}
                   >
                     <ArrowLeft size={16} />
@@ -522,7 +541,7 @@ export function KnowledgeCenter({
                       }}
                     >
                       <Check size={14} />
-                      核对记忆
+                      {tr('核对记忆')}
                     </button>
                   )}
                   <button
@@ -531,7 +550,7 @@ export function KnowledgeCenter({
                     onClick={() => setDeleting(doc)}
                   >
                     <Trash2 size={14} />
-                    永久删除
+                    {tr('永久删除')}
                   </button>
                 </div>
                 {!!state?.issues.some((i) => i.id === doc.id) && (
@@ -552,33 +571,44 @@ export function KnowledgeCenter({
                 )}
                 {!!selected.outline.length && (
                   <details className="knowledge-outline">
-                    <summary>文档目录 · {selected.outline.length} 节</summary>
+                    <summary>
+                      {tr('文档目录 · ')}
+                      {selected.outline.length}
+                      {tr(' 节')}
+                    </summary>
                     {selected.outline.map((h) => (
                       <div key={h.line} style={{ paddingLeft: (h.level - 1) * 12 }}>
                         {h.title}
-                        <small>第 {h.line} 行</small>
+                        <small>
+                          {tr('第 ')}
+                          {h.line}
+                          {tr(' 行')}
+                        </small>
                       </div>
                     ))}
                   </details>
                 )}
                 <article className="knowledge-content">
                   <Markdown
-                    text={doc.content || '尚未填写内容。'}
+                    text={doc.content || tr('尚未填写内容。')}
                     onKnowledgeLink={(target) => {
                       const link = selected.links.find((l) => l.target === target);
                       if (link?.id) open(link.id);
                       else
                         setError(
                           link?.ambiguous
-                            ? '存在同名文档，请使用 [[文档ID|显示名称]] 精确关联。'
-                            : '关联文档不存在或已删除。',
+                            ? tr('存在同名文档，请使用 [[文档ID|显示名称]] 精确关联。')
+                            : tr('关联文档不存在或已删除。'),
                         );
                     }}
                   />
                 </article>
                 {!!doc.memoryEntries?.length && (
                   <details className="ontology-editor">
-                    <summary>维护记忆条目 · {doc.memoryEntries.length}</summary>
+                    <summary>
+                      {tr('维护记忆条目 · ')}
+                      {doc.memoryEntries.length}
+                    </summary>
                     {doc.memoryEntries.map((e) => (
                       <div className="ontology-fact" key={e.id}>
                         <strong>{e.subject}</strong>
@@ -587,7 +617,7 @@ export function KnowledgeCenter({
                           className="text-button"
                           onClick={() => setMemoryEdit({ doc, entryId: e.id, content: e.content })}
                         >
-                          修正此条记忆
+                          {tr('修正此条记忆')}
                         </button>
                         <button
                           className="text-button danger"
@@ -600,7 +630,7 @@ export function KnowledgeCenter({
                             })
                           }
                         >
-                          移除此条记忆
+                          {tr('移除此条记忆')}
                         </button>
                       </div>
                     ))}
@@ -609,7 +639,7 @@ export function KnowledgeCenter({
                 <div className="knowledge-provenance">
                   {!!selected.links.length && (
                     <>
-                      <h3>文档链接</h3>
+                      <h3>{tr('文档链接')}</h3>
                       {selected.links.map((l) => (
                         <button
                           className="text-button"
@@ -618,13 +648,15 @@ export function KnowledgeCenter({
                           onClick={() => open(l.id!)}
                         >
                           {l.target}
-                          {!l.id ? (l.ambiguous ? ' · 同名待确认' : ' · 未找到') : ''}
+                          {!l.id ? (l.ambiguous ? tr(' · 同名待确认') : tr(' · 未找到')) : ''}
                         </button>
                       ))}
                     </>
                   )}
-                  <h3>来源与关联</h3>
-                  {!doc.sources.length && <p>手写或导入的原始资料，可作为后续知识页的来源。</p>}
+                  <h3>{tr('来源与关联')}</h3>
+                  {!doc.sources.length && (
+                    <p>{tr('手写或导入的原始资料，可作为后续知识页的来源。')}</p>
+                  )}
                   {doc.sources.map((source, index) =>
                     source.messageId ? (
                       <button
@@ -636,7 +668,8 @@ export function KnowledgeCenter({
                           if (session) onSession(session);
                         }}
                       >
-                        {source.title} · 原会话
+                        {source.title}
+                        {tr(' · 原会话')}
                       </button>
                     ) : (
                       <button
@@ -648,14 +681,14 @@ export function KnowledgeCenter({
                         <FileText size={13} />
                         {source.title} ·{' '}
                         {selected.missingSourceIds.includes(source.id)
-                          ? '来源已删除'
+                          ? tr('来源已删除')
                           : `v${source.version}`}
                       </button>
                     ),
                   )}
                   {!!selected.backlinks.length && (
                     <>
-                      <h3>引用此资料的知识页</h3>
+                      <h3>{tr('引用此资料的知识页')}</h3>
                       {selected.backlinks.map((d) => (
                         <button className="text-button" key={d.id} onClick={() => open(d.id)}>
                           {d.title}
@@ -667,12 +700,13 @@ export function KnowledgeCenter({
                     <details>
                       <summary>
                         <History size={13} />
-                        修订历史 · {selected.revisions.length}
+                        {tr('修订历史 · ')}
+                        {selected.revisions.length}
                       </summary>
                       {selected.revisions.map((rev) => (
                         <div className="knowledge-revision" key={rev.id}>
                           <span>
-                            v{rev.version} · {new Date(rev.updatedAt).toLocaleString()}
+                            v{rev.version} · {new Date(rev.updatedAt).toLocaleString(getLocale())}
                           </span>
                           <button
                             className="text-button"
@@ -681,11 +715,11 @@ export function KnowledgeCenter({
                               void action(async () => {
                                 await api.knowledgeRestore(doc.id, rev.version, doc.version);
                                 setSelected(await api.knowledgeRead(doc.id));
-                                setNotice('已恢复历史内容，恢复前版本仍保留');
+                                setNotice(tr('已恢复历史内容，恢复前版本仍保留'));
                               })
                             }
                           >
-                            恢复此版本
+                            {tr('恢复此版本')}
                           </button>
                         </div>
                       ))}
@@ -698,10 +732,10 @@ export function KnowledgeCenter({
                 <div className="knowledge-welcome-icon">
                   <BookOpen size={30} />
                 </div>
-                <h2>每日记忆</h2>
-                <p>在这里查看和修正从会话中整理的记忆。</p>
+                <h2>{tr('每日记忆')}</h2>
+                <p>{tr('在这里查看和修正从会话中整理的记忆。')}</p>
                 <button className="secondary" onClick={() => setSection('automation')}>
-                  管理记忆任务
+                  {tr('管理记忆任务')}
                 </button>
               </div>
             )}
@@ -710,21 +744,21 @@ export function KnowledgeCenter({
       )}
       {memoryEdit && (
         <Modal
-          title={memoryEdit.remove ? '移除记忆条目' : '修正记忆条目'}
+          title={memoryEdit.remove ? tr('移除记忆条目') : tr('修正记忆条目')}
           compact
           onClose={() => !busy && setMemoryEdit(undefined)}
         >
           <div className="modal-content">
             <p className="muted">
               {memoryEdit.remove
-                ? '从当前记忆中移除，修订历史仍保留；当天后台不会原样补回此条。'
-                : '核对后修正内容，保留来源和修订历史。'}
+                ? tr('从当前记忆中移除，修订历史仍保留；当天后台不会原样补回此条。')
+                : tr('核对后修正内容，保留来源和修订历史。')}
             </p>
             {memoryEdit.remove ? (
               <p>{memoryEdit.content}</p>
             ) : (
               <textarea
-                aria-label="修正记忆内容"
+                aria-label={tr('修正记忆内容')}
                 value={memoryEdit.content}
                 onChange={(e) => setMemoryEdit({ ...memoryEdit, content: e.target.value })}
               />
@@ -733,7 +767,7 @@ export function KnowledgeCenter({
           </div>
           <div className="modal-footer">
             <button className="secondary" disabled={busy} onClick={() => setMemoryEdit(undefined)}>
-              取消
+              {tr('取消')}
             </button>
             <button
               className={memoryEdit.remove ? 'destructive-button' : 'primary'}
@@ -748,23 +782,27 @@ export function KnowledgeCenter({
                   );
                   setSelected(await api.knowledgeRead(memoryEdit.doc.id));
                   setMemoryEdit(undefined);
-                  setNotice('记忆已更新');
+                  setNotice(tr('记忆已更新'));
                 })
               }
             >
-              {memoryEdit.remove ? '确认移除' : '核对并保存'}
+              {memoryEdit.remove ? tr('确认移除') : tr('核对并保存')}
             </button>
           </div>
         </Modal>
       )}
       {reviewing && (
-        <Modal title="核对记忆" compact onClose={() => !busy && setReviewing(undefined)}>
+        <Modal title={tr('核对记忆')} compact onClose={() => !busy && setReviewing(undefined)}>
           <div className="modal-content confirmation-content">
             <p>
-              确认已阅读“<strong>{reviewing.title}</strong>”并对照来源核对内容？
+              {tr('确认已阅读“')}
+              <strong>{reviewing.title}</strong>
+              {tr('”并对照来源核对内容？')}
             </p>
             <p className="muted">
-              核对状态会供 Agent 查阅时参考。来源变更会再次提示复核；后台新增记忆仍会标记待核对。
+              {tr(
+                '核对状态会供 Agent 查阅时参考。来源变更会再次提示复核；后台新增记忆仍会标记待核对。',
+              )}
             </p>
             {!!reviewing.sources.length && (
               <ul>
@@ -784,7 +822,7 @@ export function KnowledgeCenter({
           </div>
           <div className="modal-footer">
             <button className="secondary" disabled={busy} onClick={() => setReviewing(undefined)}>
-              取消
+              {tr('取消')}
             </button>
             <button
               className="primary"
@@ -794,31 +832,34 @@ export function KnowledgeCenter({
                   await api.knowledgeReview(reviewing.id, reviewing.version);
                   setSelected(await api.knowledgeRead(reviewing.id));
                   setReviewing(undefined);
-                  setNotice('记忆已核对');
+                  setNotice(tr('记忆已核对'));
                 })
               }
             >
-              确认已核对
+              {tr('确认已核对')}
             </button>
           </div>
         </Modal>
       )}
       {deleting && (
-        <Modal title="永久删除资料" compact onClose={() => !busy && setDeleting(undefined)}>
+        <Modal title={tr('永久删除资料')} compact onClose={() => !busy && setDeleting(undefined)}>
           <div className="modal-content confirmation-content">
             <p>
-              确认永久删除“<strong>{deleting.title}</strong>”？
+              {tr('确认永久删除“')}
+              <strong>{deleting.title}</strong>”？
             </p>
             <p className="muted">
-              这份资料的正文、智库中的上传原件和全部修订历史将被删除，删除后无法撤销。原始上传位置的文件不受影响。
+              {tr(
+                '这份资料的正文、智库中的上传原件和全部修订历史将被删除，删除后无法撤销。原始上传位置的文件不受影响。',
+              )}
             </p>
             <p className="muted">
-              删除后 Agent 无法再检索此内容；引用它的其他知识页仍保留，并标记来源已删除。
+              {tr('删除后 Agent 无法再检索此内容；引用它的其他知识页仍保留，并标记来源已删除。')}
             </p>
             {deleting.memoryDate ? (
-              <p className="muted">删除后，后台不会重新生成这一天的记忆。</p>
+              <p className="muted">{tr('删除后，后台不会重新生成这一天的记忆。')}</p>
             ) : deleting.runId ? (
-              <p className="muted">这条会话记忆不会再次自动收集。</p>
+              <p className="muted">{tr('这条会话记忆不会再次自动收集。')}</p>
             ) : null}
             {error && (
               <p className="error" role="alert">
@@ -828,7 +869,7 @@ export function KnowledgeCenter({
           </div>
           <div className="modal-footer">
             <button className="secondary" disabled={busy} onClick={() => setDeleting(undefined)}>
-              取消
+              {tr('取消')}
             </button>
             <button
               className="destructive-button"
@@ -838,11 +879,11 @@ export function KnowledgeCenter({
                   await api.knowledgeDelete(deleting.id, deleting.version);
                   setSelected(undefined);
                   setDeleting(undefined);
-                  setNotice('资料已永久删除');
+                  setNotice(tr('资料已永久删除'));
                 })
               }
             >
-              {busy ? '删除中…' : '确认永久删除'}
+              {busy ? tr('删除中…') : tr('确认永久删除')}
             </button>
           </div>
         </Modal>

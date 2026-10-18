@@ -75,7 +75,7 @@ const server = createServer(async (req, res) => {
     (m) =>
       m.role === 'user' &&
       typeof m.content === 'string' &&
-      m.content.startsWith('你是同舟后台记忆整理 Agent'),
+      m.content.startsWith('你是CoSail后台记忆整理 Agent'),
   )?.content;
   if (!organize && !memoryPrompt) {
     if (!tools.length) output = call('knowledge_search', { query: '库存扣减' });

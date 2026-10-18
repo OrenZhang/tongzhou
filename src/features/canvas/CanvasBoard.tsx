@@ -1,6 +1,8 @@
+import { uiCanvasPorts as canvasPorts } from './port-labels';
+import { t as tr, localize as localized } from '../../shared/i18n';
 import { CanvasMinimap } from './CanvasMinimap';
 import { CanvasPortMenu, type CanvasPortAnchor } from './CanvasPortMenu';
-import { canvasPorts, connectCanvasPorts } from '../../shared/canvas-ports';
+import { connectCanvasPorts } from '../../shared/canvas-ports';
 import { CanvasNodeView } from './node-renderers';
 import type { CanvasNodePluginDefinition } from '../../shared/canvas';
 import { nodeBounds } from '../../shared/canvas-editing';
@@ -9,7 +11,7 @@ import { createPortal } from 'react-dom';
 import { FolderOutput, MoveDiagonal2, Settings2, Trash2 } from 'lucide-react';
 import { CanvasPreview, resourceKey, type CanvasPreviewItem } from './CanvasPreview';
 import type { Canvas, CanvasNode, CanvasNodeRun, CanvasResource } from '../../shared/canvas';
-import { canvasNodeKinds } from '../../shared/canvas';
+import { canvasNodeKinds as raw_canvasNodeKinds } from '../../shared/canvas';
 import type { TongzhouAPI } from '../../shared/types';
 
 export function ResourceThumbnail({
@@ -57,14 +59,14 @@ export function ResourceThumbnail({
         src={image}
         controls
         preload="metadata"
-        aria-label="音频预览"
+        aria-label={tr('音频预览')}
         onPointerDown={(e) => e.stopPropagation()}
       />
     );
   const media = video ? (
-    <video src={image} muted preload="metadata" playsInline aria-label="视频预览" />
+    <video src={image} muted preload="metadata" playsInline aria-label={tr('视频预览')} />
   ) : (
-    <img src={image} alt="资源预览" draggable={false} />
+    <img src={image} alt={tr('资源预览')} draggable={false} />
   );
   return !image ? (
     caption ? (
@@ -73,12 +75,12 @@ export function ResourceThumbnail({
   ) : onPreview ? (
     <button
       className="canvas-thumbnail"
-      aria-label="预览媒体"
+      aria-label={tr('预览媒体')}
       onPointerDown={(e) => e.stopPropagation()}
       onClick={onPreview}
     >
       {media}
-      <span>预览</span>
+      <span>{tr('预览')}</span>
     </button>
   ) : (
     media
@@ -295,19 +297,19 @@ export function CanvasBoard({
     return () => element.removeEventListener('wheel', wheel);
   }, [onChange]);
   const statusLabels: Record<string, string> = {
-    pending: '等待',
-    running: '运行中',
-    completed: '完成',
-    cached: '已复用',
-    failed: '失败',
-    cancelled: '未执行',
+    pending: tr('等待'),
+    running: tr('运行中'),
+    completed: tr('完成'),
+    cached: tr('已复用'),
+    failed: tr('失败'),
+    cancelled: tr('未执行'),
   };
   return (
     <div
       className="canvas-board"
       ref={board}
       tabIndex={0}
-      aria-label="通用画布，拖动空白处平移，按住 Command 或 Ctrl 滚轮缩放"
+      aria-label={tr('通用画布，拖动空白处平移，按住 Command 或 Ctrl 滚轮缩放')}
       onKeyDown={(e) => {
         if (e.key === 'Escape' && connecting) {
           e.stopPropagation();
@@ -507,7 +509,7 @@ export function CanvasBoard({
                 width: node.width ?? 240,
                 height: node.height ?? 180,
               }}
-              aria-label={`${node.title}，${definition?.view ? definition.name : canvasNodeKinds[node.kind]}`}
+              aria-label={`${node.title}，${definition?.view ? tr(definition.name) : canvasNodeKinds[node.kind]}`}
               onContextMenu={(e) => {
                 if ((e.target as Element).closest('input,textarea,[contenteditable="true"]'))
                   return;
@@ -571,17 +573,17 @@ export function CanvasBoard({
                 (['image', 'video', 'audio'].includes(node.kind) || node.resource) && (
                   <button
                     className="canvas-node-save"
-                    aria-label={`${node.title}保存位置`}
-                    title="选择保存位置，默认作品"
+                    aria-label={tr('{0}保存位置', [node.title])}
+                    title={tr('选择保存位置，默认作品')}
                     onPointerDown={(e) => e.stopPropagation()}
                     onClick={() => onConfigure(node.id)}
                   >
                     <FolderOutput size={12} />
                     {node.media?.destination?.kind === 'directory'
-                      ? '本地目录'
+                      ? tr('本地目录')
                       : node.media?.destination?.kind === 'content'
-                        ? '内容库'
-                        : '作品'}
+                        ? tr('内容库')
+                        : tr('作品')}
                   </button>
                 )}
               {step?.generation?.length ? (
@@ -597,12 +599,12 @@ export function CanvasBoard({
                       <small>
                         {item.index + 1} ·{' '}
                         {item.status === 'completed'
-                          ? '完成'
+                          ? tr('完成')
                           : item.status === 'failed'
-                            ? '失败'
+                            ? tr('失败')
                             : item.status === 'running'
-                              ? '生成中'
-                              : '等待'}
+                              ? tr('生成中')
+                              : tr('等待')}
                       </small>
                     </div>
                   ))}
@@ -621,8 +623,8 @@ export function CanvasBoard({
                     output?.text ||
                     node.text ||
                     (node.resource
-                      ? `${node.resource.kind} · ${'version' in node.resource ? 'v' + node.resource.version : '引用原件'}`
-                      : '选择节点以配置')}
+                      ? `${node.resource.kind} · ${'version' in node.resource ? 'v' + node.resource.version : tr('引用原件')}`
+                      : tr('选择节点以配置'))}
                 </p>
               )}
               {(['inputs', 'outputs'] as const).flatMap((direction) =>
@@ -632,7 +634,7 @@ export function CanvasBoard({
                     className={`canvas-node-port ${direction === 'inputs' ? 'input' : 'output'}`}
                     style={{ top: `calc(${((index + 1) / (ports.length + 1)) * 100}% - 5px)` }}
                     title={`${port.label} · ${port.types.join(' / ')}`}
-                    aria-label={`${node.title} ${direction === 'inputs' ? '输入' : '输出'} ${port.label}`}
+                    aria-label={`${node.title} ${direction === 'inputs' ? tr('输入') : tr('输出')} ${port.label}`}
                     data-port={port.id}
                     data-direction={direction}
                     onPointerEnter={(e) => {
@@ -689,8 +691,8 @@ export function CanvasBoard({
               )}
               <button
                 className="canvas-node-resize"
-                aria-label={`调整${node.title}大小`}
-                title="拖动调整大小；方向键微调"
+                aria-label={tr('调整{0}大小', [node.title])}
+                title={tr('拖动调整大小；方向键微调')}
                 onPointerDown={(e) => {
                   e.stopPropagation();
                   if (e.button !== 0) return;
@@ -765,7 +767,7 @@ export function CanvasBoard({
           <div
             ref={menu}
             role="menu"
-            aria-label="节点操作"
+            aria-label={tr('节点操作')}
             className="canvas-node-menu"
             style={{ left: contextMenu.x, top: contextMenu.y }}
             onPointerDown={(e) => e.stopPropagation()}
@@ -789,7 +791,8 @@ export function CanvasBoard({
                 setContextMenu(undefined);
               }}
             >
-              <Settings2 size={14} /> 配置节点
+              <Settings2 size={14} />
+              {tr(' 配置节点')}
             </button>
             <button
               role="menuitem"
@@ -801,21 +804,21 @@ export function CanvasBoard({
             >
               <Trash2 size={14} />
               {contextMenu.ids.length > 1
-                ? `删除选中节点（${contextMenu.ids.length}）`
-                : '删除节点'}
+                ? tr('删除选中节点（{0}）', [contextMenu.ids.length])
+                : tr('删除节点')}
             </button>
           </div>,
           document.body,
         )}
       {!canvas.nodes.length && (
         <div className="canvas-empty">
-          添加文本、资源或能力节点
+          {tr('添加文本、资源或能力节点')}
           <br />
-          <small>连线组织上下文与执行依赖</small>
+          <small>{tr('连线组织上下文与执行依赖')}</small>
         </div>
       )}
       <button className="canvas-gallery-open" onClick={() => openPreview()}>
-        媒体预览
+        {tr('媒体预览')}
       </button>
       {preview && (
         <CanvasPreview
@@ -859,18 +862,20 @@ export function CanvasBoard({
             });
           }}
         >
-          适应
+          {tr('适应')}
         </button>
-        <button aria-label="缩小画布" onClick={() => zoom(0.8, 300, 200)}>
+        <button aria-label={tr('缩小画布')} onClick={() => zoom(0.8, 300, 200)}>
           −
         </button>
         <button onClick={() => onChange({ ...canvas, viewport: { x: 40, y: 40, zoom: 1 } })}>
           {Math.round(canvas.viewport.zoom * 100)}%
         </button>
-        <button aria-label="放大画布" onClick={() => zoom(1.25, 300, 200)}>
+        <button aria-label={tr('放大画布')} onClick={() => zoom(1.25, 300, 200)}>
           ＋
         </button>
       </div>
     </div>
   );
 }
+
+const canvasNodeKinds = localized(raw_canvasNodeKinds);

@@ -1,9 +1,10 @@
+import { t as tr, localize as localized } from '../../shared/i18n';
 import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ListPlus, MessageSquarePlus, RotateCcw } from 'lucide-react';
 import type { PendingInput } from '../../shared/types';
 
-export const inputModes = [
+export const inputModes = localized([
   {
     value: 'supplement',
     label: '补充当前任务',
@@ -17,7 +18,7 @@ export const inputModes = [
     detail: '停止本轮，再用补充内容开启下一轮',
     icon: RotateCcw,
   },
-] as const;
+] as const);
 
 export function InputModePicker({
   value,
@@ -63,8 +64,8 @@ export function InputModePicker({
       <button
         ref={trigger}
         className="icon-button input-mode-trigger"
-        aria-label="补充方式"
-        title={`补充方式：${selected.label}`}
+        aria-label={tr('补充方式')}
+        title={tr('补充方式：{0}', [selected.label])}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? id : undefined}
@@ -80,7 +81,7 @@ export function InputModePicker({
             className="input-mode-menu"
             style={position}
             role="menu"
-            aria-label="补充方式"
+            aria-label={tr('补充方式')}
             onBlur={(e) => {
               if (!e.currentTarget.contains(e.relatedTarget as Node)) setOpen(false);
             }}

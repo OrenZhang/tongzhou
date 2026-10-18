@@ -1,6 +1,6 @@
 # 本地文件工作区
 
-同舟托管的文档保存在用户数据目录内的 `.tzhou`。设置 `TONGZHOU_USER_DATA` 时，位置为该目录下的 `.tzhou`；用户选择的项目目录、指定的导出路径不移动。
+CoSail托管的文档保存在用户数据目录内的 `.tzhou`。设置 `TONGZHOU_USER_DATA` 时，位置为该目录下的 `.tzhou`；用户选择的项目目录、指定的导出路径不移动。
 
 ```text
 .tzhou/

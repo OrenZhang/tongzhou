@@ -67,10 +67,10 @@ try {
   assert.equal(result, 'ok');
   const { version } = JSON.parse(await readFile('package.json', 'utf8'));
   assert.deepEqual(received, [
-    { ua: `Tongzhou/${version}`, auth: 'Bearer fixture', cookie: undefined, body: 'fixture-body' },
+    { ua: `CoSail/${version}`, auth: 'Bearer fixture', cookie: undefined, body: 'fixture-body' },
   ]);
   console.log(
-    'PASS: Electron session sends Tongzhou identity, preserves auth/body and omits cookies.',
+    'PASS: Electron session sends CoSail identity, preserves auth/body and omits cookies.',
   );
 } finally {
   await app?.close();

@@ -408,7 +408,7 @@ export class TaskScheduler implements TaskService {
       sessionId: session.id,
       providerId: provider.id,
       model: localReply ? builtinReplyModel : input.model,
-      agentName: localReply ? '同舟' : agent.name,
+      agentName: localReply ? 'CoSail' : agent.name,
       status: 'running',
       startedAt: Date.now(),
       inputTokens: 0,
@@ -484,7 +484,7 @@ export class TaskScheduler implements TaskService {
           controller.signal.throwIfAborted();
           this.ledger.add(session.id, 'assistant', localReply, {
             runId: run.id,
-            agent: '同舟',
+            agent: 'CoSail',
             model: builtinReplyModel,
           });
           run.status = 'completed';
@@ -542,16 +542,31 @@ export class TaskScheduler implements TaskService {
                 this.approvalQueue.ask(input.sessionId, title, detail, scopeSignal, force),
               async (name, args, result) => {
                 if (!result.isError && result.artifacts?.length) {
-                  const saved = await this.artifacts.collect(result.artifacts, {
-                    sessionId: session.id,
-                    runId: run.id,
-                    toolName: name,
-                  });
+                  const saved = await this.artifacts.collect(
+                    result.artifacts,
+                    {
+                      sessionId: session.id,
+                      runId: run.id,
+                      toolName: name,
+                    },
+                    scopeSignal,
+                  );
                   result.artifactIds = [
                     ...(result.artifactIds ?? []),
                     ...saved.items.map((a) => a.id),
                   ];
                   delete result.artifacts;
+                  if (saved.items.length)
+                    result.text +=
+                      '\n生成作品已登记并显示在聊天中，无需重复创建：' +
+                      JSON.stringify(
+                        saved.items.map((item) => ({
+                          id: item.id,
+                          name: item.name,
+                          kind: item.kind,
+                          local: !item.remoteUrl,
+                        })),
+                      );
                   if (saved.errors.length)
                     result.text += '\n作品保存提示：' + saved.errors.join('；');
                   this.changed();
@@ -870,7 +885,7 @@ export class TaskScheduler implements TaskService {
           parent.id,
           'assistant',
           `已完成协作分析，以下是各 Agent 的结果。可以继续让主助手整合并实施。\n\n${reports.join('\n\n')}`,
-          { agent: '同舟协作', runId: teamId },
+          { agent: 'CoSail协作', runId: teamId },
         );
         const failed = children.some((c) =>
           this.store.list<Run>('run').some((r) => r.sessionId === c.id && r.status !== 'completed'),

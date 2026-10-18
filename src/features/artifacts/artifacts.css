@@ -41,6 +41,22 @@
   text-align: left;
   cursor: zoom-in;
 }
+.artifact-image-loading {
+  display: grid;
+  gap: 6px;
+  max-width: 100%;
+}
+.artifact-image-loading > small,
+.artifact-image-error small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.artifact-image-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 .artifact-image-card img {
   display: block;
   width: auto;

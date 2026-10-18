@@ -1,4 +1,4 @@
-# 参与同舟
+# 参与CoSail
 
 欢迎 Issue、兼容性报告和 Pull Request。请先阅读 README 的已实现范围、架构和安全边界。
 
@@ -9,7 +9,7 @@
 3. 修改共享接口时，同时更新 preload、IPC 参数校验与 UI。
 4. 提交前执行 `npm test`、`npm run build`；涉及桌面边界或关键用户流程时执行 `npm run test:desktop`。
 
-macOS 的 `npm run dev` 会在 `work/macos-development/同舟.app` 准备带同舟名称与图标的开发运行环境，并进行本地临时签名。电脑控制授权引导指向此固定应用；安装正式版后需为正式应用重新授权。修改授权界面或系统差异时，可执行 `npm run test:mac-permissions`，验证 macOS 原生拖动桥接、设置入口及模拟 Windows/Linux 的显示分支。
+macOS 的 `npm run dev` 会在 `work/macos-development/CoSail.app` 准备带CoSail名称与图标的开发运行环境，并进行本地临时签名。电脑控制授权引导指向此固定应用；安装正式版后需为正式应用重新授权。修改授权界面或系统差异时，可执行 `npm run test:mac-permissions`，验证 macOS 原生拖动桥接、设置入口及模拟 Windows/Linux 的显示分支。
 
 本地预览数据统一放在 `work/` 下，例如设置 `TONGZHOU_USER_DATA` 指向 `work/tongzhou-preview-profile`；自动化测试使用 `test-results/` 或 `.test-data/` 中的独立目录。这些目录及本地环境配置、数据库、日志、缓存、编辑器设置和打包产物均由 `.gitignore` 排除。可提交只含占位值的 `.env.example` / `.env.sample`；不要把真实凭据写入示例。
 
@@ -32,3 +32,9 @@ macOS 的 `npm run dev` 会在 `work/macos-development/同舟.app` 准备带同�
 建议使用 `feat:`、`fix:`、`docs:`、`test:` 前缀。PR 描述解释具体问题、最终行为和验证；涉及数据格式时提供迁移/回滚方案。禁止提交用户数据库、API 密钥、真实会话、node_modules 和构建产物。
 
 贡献默认按项目 Apache-2.0 许可证提供。引入第三方代码时保留其许可证、版权说明和修改来源。
+
+## 界面语言
+
+界面支持 `zh-CN` 和 `en`，英文文案位于 `src/shared/locales/en.json`。在 React 界面使用 `t(中文原文, [插值])`，用 `{0}`、`{1}` 表示动态数据；不要翻译用户输入、文档、消息、标识符或密钥。静态界面目录可使用 `localize()` 保持切换时标签更新，后端注册信息只在显示处翻译。
+
+新增功能同时补充英文条目，运行 `npm run check:i18n` 和 `npm run typecheck`。语言回归使用 `npm run build` 后运行 `npm run test:language`，覆盖各模块、插件详情、节点配置、草稿保留及重启恢复。

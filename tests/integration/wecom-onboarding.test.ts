@@ -23,14 +23,14 @@ function fixture() {
   return { service, publish, fetcher, save };
 }
 
-it('uses Tongzhou as source, returns a QR image and saves credentials only after authorization', async () => {
+it('uses CoSail as source, returns a QR image and saves credentials only after authorization', async () => {
   const f = fixture();
   f.fetcher.mockResolvedValueOnce(
     response({ status: 'success', bot_info: { botid: 'bot-1', secret: 'private-secret' } }),
   );
   const qr = await f.service.onboard('local-1', f.save);
   expect(f.fetcher.mock.calls[0][0]).toBe(
-    'https://work.weixin.qq.com/ai/qc/generate?source=tongzhou',
+    'https://work.weixin.qq.com/ai/qc/generate?source=cosail',
   );
   expect(qr.image).toMatch(/^data:image\/png;base64,/);
   expect(f.save).not.toHaveBeenCalled();

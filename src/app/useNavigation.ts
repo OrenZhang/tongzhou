@@ -21,6 +21,7 @@ export function useNavigation(api: TongzhouAPI) {
         setPaletteOpen(true);
       }
       if (
+        view === 'workspace' &&
         e.key.toLowerCase() === 'b' &&
         !document.querySelector('.modal-backdrop') &&
         !(e.target instanceof Element && e.target.closest('input,textarea,[contenteditable=true]'))
@@ -31,7 +32,7 @@ export function useNavigation(api: TongzhouAPI) {
     };
     window.addEventListener('keydown', shortcuts);
     return () => window.removeEventListener('keydown', shortcuts);
-  }, []);
+  }, [view]);
   useEffect(
     () =>
       api.onEvent((event) => {

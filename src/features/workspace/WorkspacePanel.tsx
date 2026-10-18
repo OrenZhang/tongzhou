@@ -1,3 +1,4 @@
+import { t as tr } from '../../shared/i18n';
 import { WorkspaceFrame } from './WorkspaceFrame';
 import { Files, GitBranch, PanelBottom, PanelRight, Terminal } from 'lucide-react';
 import type { Project, Session, TongzhouAPI } from '../../shared/types';
@@ -37,12 +38,12 @@ export function WorkspacePanel({
       onExpand={() => update({ expanded: !layout.expanded })}
       onClose={() => update({ open: false })}
       header={
-        <div role="tablist" aria-label="工作区工具">
+        <div role="tablist" aria-label={tr('工作区工具')}>
           {(
             [
-              ['files', '文件', Files],
-              ['review', '审阅', GitBranch],
-              ['terminal', '终端', Terminal],
+              ['files', tr('文件'), Files],
+              ['review', tr('审阅'), GitBranch],
+              ['terminal', tr('终端'), Terminal],
             ] as const
           ).map(([id, label, Icon]) => (
             <button
@@ -76,25 +77,25 @@ export function WorkspacePanel({
         ) : (
           <div className="workspace-empty">
             <Files size={28} />
-            <strong>此会话未关联项目</strong>
-            <p>可在终端查看会话工作目录。打开项目后，可在这里浏览文件和预览源码。</p>
+            <strong>{tr('此会话未关联项目')}</strong>
+            <p>{tr('可在终端查看会话工作目录。打开项目后，可在这里浏览文件和预览源码。')}</p>
           </div>
         ))}
       {layout.tab === 'review' && (
         <>
-          <div className="review-scope" role="group" aria-label="审阅范围">
+          <div className="review-scope" role="group" aria-label={tr('审阅范围')}>
             <button
               aria-pressed={layout.scope === 'task'}
               onClick={() => update({ scope: 'task' })}
             >
-              本次任务改动
+              {tr('本次任务改动')}
             </button>
             <button
               aria-pressed={layout.scope === 'directory'}
               disabled={!project}
               onClick={() => update({ scope: 'directory' })}
             >
-              工作目录全部改动
+              {tr('工作目录全部改动')}
             </button>
           </div>
           {layout.scope === 'directory' && project ? (
@@ -128,22 +129,22 @@ export function WorkspacePanel({
       {layout.tab === 'terminal' && (
         <>
           <div className="workspace-terminal-position">
-            <span>终端停靠位置</span>
+            <span>{tr('终端停靠位置')}</span>
             <button
-              aria-label="停靠右侧"
+              aria-label={tr('停靠右侧')}
               aria-pressed={layout.dock === 'right'}
               onClick={() => update({ dock: 'right', terminalOpen: true })}
             >
               <PanelRight size={14} />
-              右侧
+              {tr('右侧')}
             </button>
             <button
-              aria-label="停靠底部"
+              aria-label={tr('停靠底部')}
               aria-pressed={layout.dock === 'bottom'}
               onClick={() => update({ dock: 'bottom', terminalOpen: true, open: false })}
             >
               <PanelBottom size={14} />
-              底部
+              {tr('底部')}
             </button>
           </div>
           {layout.dock === 'right' && layout.terminalOpen ? (
@@ -159,12 +160,12 @@ export function WorkspacePanel({
           ) : (
             <div className="workspace-empty">
               <Terminal size={28} />
-              <p>终端已停靠在会话底部。</p>
+              <p>{tr('终端已停靠在会话底部。')}</p>
               <button
                 className="secondary"
                 onClick={() => update({ dock: 'right', terminalOpen: true })}
               >
-                移到右侧
+                {tr('移到右侧')}
               </button>
             </div>
           )}

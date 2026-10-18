@@ -7,12 +7,12 @@ await mkdir('test-results', { recursive: true });
 if (process.env.TONGZHOU_PACKAGE_AUTO === '1' && !process.env.TONGZHOU_SMOKE_EXECUTABLE) {
   const candidates =
     process.platform === 'win32'
-      ? ['release/win-unpacked/Tongzhou.exe']
+      ? ['release/win-unpacked/CoSail.exe']
       : process.platform === 'linux'
-        ? ['release/linux-unpacked/tongzhou']
+        ? ['release/linux-unpacked/cosail']
         : [
-            'release/mac-arm64/Tongzhou.app/Contents/MacOS/Tongzhou',
-            'release/mac/Tongzhou.app/Contents/MacOS/Tongzhou',
+            'release/mac-arm64/CoSail.app/Contents/MacOS/CoSail',
+            'release/mac/CoSail.app/Contents/MacOS/CoSail',
           ];
   for (const file of candidates) {
     try {

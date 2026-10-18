@@ -14,13 +14,11 @@ import { redact } from './services/storage/validation';
 import { DesktopApplication } from './application/application';
 import type { Updates } from './services/desktop/updates';
 
-if (process.env.TONGZHOU_USER_DATA) app.setPath('userData', process.env.TONGZHOU_USER_DATA);
-app.setName('Tongzhou');
-// Pin the existing profile before applying the Chinese display name on every platform.
-const profile = app.getPath('userData');
+// Keep the original profile and encryption keys across the CoSail rename.
+const profile = process.env.TONGZHOU_USER_DATA || path.join(app.getPath('appData'), 'Tongzhou');
 mkdirSync(profile, { recursive: true });
 app.setPath('userData', profile);
-app.setName('同舟');
+app.setName('CoSail');
 app.on('session-created', (s) => s.setUserAgent(browserUserAgent(s.getUserAgent())));
 const linuxStore = linuxPasswordStore(process.platform, process.env, process.argv);
 if (linuxStore) app.commandLine.appendSwitch('password-store', linuxStore);
@@ -31,6 +29,8 @@ const computer = new DesktopComputer();
 const computerPermissions = new ComputerPermissions();
 const computerPermissionPanel = new ComputerPermissionPanel(computerPermissions);
 let quitting = false;
+let nativeLanguage: 'zh-CN' | 'en' = 'zh-CN';
+const nativeText = (zh: string, en: string) => (nativeLanguage === 'en' ? en : zh);
 const pendingImports = new Map<string, ProviderInput>();
 const page = path.join(__dirname, '../dist/index.html');
 function trusted(url: string) {
@@ -39,6 +39,10 @@ function trusted(url: string) {
     : url === pathToFileURL(page).href;
 }
 function emit(event: AppEvent) {
+  if (event.type === 'appearance' && event.value.language) {
+    nativeLanguage = event.value.language;
+    refreshNativeMenus();
+  }
   if (window && !window.isDestroyed()) window.webContents.send('tongzhou:event', event);
 }
 async function setup() {
@@ -64,16 +68,36 @@ function showWindow() {
 function createTray() {
   if (process.platform !== 'win32') return;
   tray = new Tray(path.join(__dirname, '../build/icon.ico'));
-  tray.setToolTip('同舟 Tongzhou');
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: '打开同舟', click: showWindow },
-      { type: 'separator' },
-      { label: '退出同舟', click: () => app.quit() },
-    ]),
-  );
+  tray.setToolTip('CoSail');
+  refreshNativeMenus();
   tray.on('click', showWindow);
   tray.on('double-click', showWindow);
+}
+function refreshNativeMenus() {
+  tray?.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: nativeText('打开CoSail', 'Open CoSail'), click: showWindow },
+      { type: 'separator' },
+      { label: nativeText('退出CoSail', 'Quit CoSail'), click: () => app.quit() },
+    ]),
+  );
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate([
+      ...(process.platform === 'darwin' ? [{ role: 'appMenu' as const }] : []),
+      {
+        label: nativeText('编辑', 'Edit'),
+        submenu: [
+          { role: 'undo', label: nativeText('撤销', 'Undo') },
+          { role: 'redo', label: nativeText('重做', 'Redo') },
+          { type: 'separator' },
+          { role: 'cut', label: nativeText('剪切', 'Cut') },
+          { role: 'copy', label: nativeText('复制', 'Copy') },
+          { role: 'paste', label: nativeText('粘贴', 'Paste') },
+          { role: 'selectAll', label: nativeText('全选', 'Select All') },
+        ],
+      },
+    ]),
+  );
 }
 async function createWindow() {
   const icon = path.join(
@@ -81,29 +105,13 @@ async function createWindow() {
     process.platform === 'darwin' ? '../build/icon-mac.png' : '../build/icon.png',
   );
   if (process.platform === 'darwin') app.dock?.setIcon(icon);
-  Menu.setApplicationMenu(
-    Menu.buildFromTemplate([
-      ...(process.platform === 'darwin' ? [{ role: 'appMenu' as const }] : []),
-      {
-        label: '编辑',
-        submenu: [
-          { role: 'undo', label: '撤销' },
-          { role: 'redo', label: '重做' },
-          { type: 'separator' },
-          { role: 'cut', label: '剪切' },
-          { role: 'copy', label: '复制' },
-          { role: 'paste', label: '粘贴' },
-          { role: 'selectAll', label: '全选' },
-        ],
-      },
-    ]),
-  );
+  refreshNativeMenus();
   window = new BrowserWindow({
     width: 1440,
     height: 940,
     minWidth: 1000,
     minHeight: 700,
-    title: '同舟 Tongzhou',
+    title: 'CoSail',
     icon,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#17191e' : '#fafbfc',
     show: false,
@@ -146,11 +154,17 @@ async function createWindow() {
   window.webContents.on('will-attach-webview', (event) => event.preventDefault());
   window.webContents.on('context-menu', (_event, params) => {
     const items: Electron.MenuItemConstructorOptions[] = [];
-    if (params.selectionText) items.push({ label: '复制', role: 'copy' });
+    if (params.selectionText) items.push({ label: nativeText('复制', 'Copy'), role: 'copy' });
     if (params.isEditable)
-      items.push({ label: '剪切', role: 'cut' }, { label: '粘贴', role: 'paste' });
+      items.push(
+        { label: nativeText('剪切', 'Cut'), role: 'cut' },
+        { label: nativeText('粘贴', 'Paste'), role: 'paste' },
+      );
     if (!items.length) return;
-    items.push({ type: 'separator' }, { label: '全选', role: 'selectAll' });
+    items.push(
+      { type: 'separator' },
+      { label: nativeText('全选', 'Select All'), role: 'selectAll' },
+    );
     Menu.buildFromTemplate(items).popup({ window });
   });
   window.once('ready-to-show', () => window?.show());
@@ -177,7 +191,7 @@ else {
       });
     })
     .catch((error) => {
-      dialog.showErrorBox('同舟启动失败', redact(String(error)));
+      dialog.showErrorBox('CoSail启动失败', redact(String(error)));
       app.exit(1);
     });
   app.on('activate', () => {

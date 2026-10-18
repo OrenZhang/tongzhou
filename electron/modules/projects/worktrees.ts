@@ -189,7 +189,7 @@ export class Worktrees {
   }
   async remove(projectId: string) {
     const o = this.store.list<Owned>('worktree').find((x) => x.id === projectId);
-    if (!o) throw new Error('只能移除由同舟创建的工作树');
+    if (!o) throw new Error('只能移除由CoSail创建的工作树');
     return this.lock(o.sourceProjectId, async (root) => {
       this.removing.add(projectId);
       try {
@@ -203,10 +203,10 @@ export class Worktrees {
           !equalPath(path.join(managedRoot, o.id), target) ||
           (await lstat(o.path)).isSymbolicLink()
         )
-          throw new Error('工作树路径不在同舟管理目录内');
+          throw new Error('工作树路径不在CoSail管理目录内');
         const row = (await this.list(o.sourceProjectId)).find((r) => equalPath(r.path, target));
         if (!row || row.main || !row.managed || row.locked || row.prunable)
-          throw new Error('此工作树不是可移除的同舟工作树');
+          throw new Error('此工作树不是可移除的CoSail工作树');
         const sessions = this.store
           .list<Session>('session')
           .filter((s) => s.projectId === projectId);

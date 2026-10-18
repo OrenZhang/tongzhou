@@ -1,3 +1,4 @@
+import { t as tr } from '../../shared/i18n';
 import { Component, type ComponentType, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -15,7 +16,7 @@ export interface CanvasRendererProps {
 const renderers = new Map<string, ComponentType<CanvasRendererProps>>();
 /** Register from a bundled frontend extension; dispose when the extension unloads. */
 export function registerCanvasRenderer(id: string, renderer: ComponentType<CanvasRendererProps>) {
-  if (renderers.has(id)) throw new Error('节点预览已注册：' + id);
+  if (renderers.has(id)) throw new Error(tr('节点预览已注册：') + id);
   renderers.set(id, renderer);
   return () => {
     if (renderers.get(id) === renderer) renderers.delete(id);
@@ -48,7 +49,7 @@ registerCanvasRenderer('markdown', ({ node }) => (
       remarkPlugins={[remarkGfm]}
       components={{
         a: ({ children }) => <span>{children}</span>,
-        img: ({ alt }) => <span>{alt || '图片'}</span>,
+        img: ({ alt }) => <span>{alt || tr('图片')}</span>,
       }}
     >
       {node.text ?? ''}
@@ -58,7 +59,7 @@ registerCanvasRenderer('markdown', ({ node }) => (
 for (const id of ['svg', 'html'])
   registerCanvasRenderer(id, ({ node }) => (
     <iframe
-      title={id === 'svg' ? 'SVG 预览' : 'HTML 预览'}
+      title={id === 'svg' ? tr('SVG 预览') : tr('HTML 预览')}
       tabIndex={-1}
       sandbox=""
       referrerPolicy="no-referrer"
@@ -69,7 +70,7 @@ registerCanvasRenderer('sticky-note', ({ node }) => (
   <div
     className={`canvas-sticky-note note-${['yellow', 'pink', 'blue', 'green'].includes(String(node.config?.color)) ? node.config?.color : 'yellow'}`}
   >
-    {node.text || '空白便签'}
+    {node.text || tr('空白便签')}
   </div>
 ));
 registerCanvasRenderer('panorama', CanvasPanorama);
@@ -81,7 +82,7 @@ class RendererBoundary extends Component<{ children: ReactNode }, { failed: bool
   }
   render() {
     return this.state.failed ? (
-      <p role="alert">节点预览失败，请检查节点内容</p>
+      <p role="alert">{tr('节点预览失败，请检查节点内容')}</p>
     ) : (
       this.props.children
     );
@@ -110,7 +111,10 @@ export function CanvasNodeView({
         {Renderer ? (
           <Renderer {...props} />
         ) : (
-          <p role="alert">此插件的预览组件未安装：{definition.view?.renderer}</p>
+          <p role="alert">
+            {tr('此插件的预览组件未安装：')}
+            {definition.view?.renderer}
+          </p>
         )}
       </RendererBoundary>
     </div>

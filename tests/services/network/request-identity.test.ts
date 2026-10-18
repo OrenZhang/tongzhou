@@ -21,10 +21,11 @@ afterEach(() => {
 });
 
 it('keeps browser compatibility and replaces old app versions without duplicate tokens', () => {
-  const original = 'Mozilla/5.0 Chrome/140.0 Safari/537.36 Tongzhou/0.1';
+  const original = 'Mozilla/5.0 Chrome/140.0 Safari/537.36 CoSail/0.1';
   const branded = browserUserAgent(original);
   expect(branded).toBe(`Mozilla/5.0 Chrome/140.0 Safari/537.36 ${userAgent}`);
   expect(browserUserAgent(branded)).toBe(branded);
+  expect(browserUserAgent(original.replace('CoSail/0.1', 'Tongzhou/0.1'))).toBe(branded);
 });
 
 it.each([
@@ -47,7 +48,7 @@ it.each([
       redirect: 'error',
     });
     expect([...new Headers(headers)]).toEqual(before);
-    expect(new Headers(result.headers).get('user-agent')).toBe(`Tongzhou/${version}`);
+    expect(new Headers(result.headers).get('user-agent')).toBe(`CoSail/${version}`);
     expect(new Headers(result.headers).get('authorization')).toBe('Bearer fixture');
     expect(result).toMatchObject({ method: 'POST', body: 'fixture', signal, redirect: 'error' });
   },

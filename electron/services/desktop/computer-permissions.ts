@@ -18,7 +18,7 @@ export function macApplicationPath(executable: string) {
     path.basename(contents) !== 'Contents' ||
     !bundle.endsWith('.app')
   )
-    throw new Error('未找到正在运行的 macOS 应用，请使用应用安装包启动同舟。');
+    throw new Error('未找到正在运行的 macOS 应用，请使用应用安装包启动CoSail。');
   return bundle;
 }
 
@@ -42,9 +42,9 @@ export class ComputerPermissions {
   private async load() {
     const applicationPath = macApplicationPath(await realpath(app.getPath('exe')));
     if (!(await stat(applicationPath)).isDirectory())
-      throw new Error('应用文件不存在，请重新启动同舟。');
+      throw new Error('应用文件不存在，请重新启动CoSail。');
     const icon = nativeImage.createFromPath(path.join(__dirname, '../build/icon.png'));
-    if (icon.isEmpty()) throw new Error('无法加载应用图标，请重新启动同舟。');
+    if (icon.isEmpty()) throw new Error('无法加载应用图标，请重新启动CoSail。');
     const guide: ComputerPermissionGuide = {
       name: path.basename(applicationPath),
       path: applicationPath,

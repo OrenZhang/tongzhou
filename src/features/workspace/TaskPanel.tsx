@@ -1,3 +1,4 @@
+import { t as tr, getLocale } from '../../shared/i18n';
 import { useEffect, useState } from 'react';
 import type { TongzhouAPI } from '../../shared/types';
 import { toolLabel } from '../../shared/tool-labels';
@@ -74,7 +75,7 @@ export function TaskPanel({
   return (
     <div className="task-panel">
       <div className="task-scope">
-        <label htmlFor="review-run">运行范围</label>
+        <label htmlFor="review-run">{tr('运行范围')}</label>
         <select
           id="review-run"
           value={runId}
@@ -85,25 +86,28 @@ export function TaskPanel({
             setNotice('');
           }}
         >
-          <option value="">全部运行</option>
+          <option value="">{tr('全部运行')}</option>
           {state?.runs.map((r) => (
             <option key={r.id} value={r.id}>
-              {new Date(r.startedAt).toLocaleString()} · {r.model} ·{' '}
+              {new Date(r.startedAt).toLocaleString(getLocale())} · {r.model} ·{' '}
               {
-                { running: '进行中', completed: '已结束', failed: '失败', interrupted: '已中断' }[
-                  r.status
-                ]
+                {
+                  running: tr('进行中'),
+                  completed: tr('已结束'),
+                  failed: tr('失败'),
+                  interrupted: tr('已中断'),
+                }[r.status]
               }
             </option>
           ))}
         </select>
       </div>
-      <div className="task-tabs" role="tablist" aria-label="交付审阅内容">
+      <div className="task-tabs" role="tablist" aria-label={tr('交付审阅内容')}>
         {[
-          ['task', '任务记忆'],
-          ['changes', '改动审阅'],
-          ['evidence', '验证记录'],
-          ['history', '搜索历史'],
+          ['task', tr('任务记忆')],
+          ['changes', tr('改动审阅')],
+          ['evidence', tr('验证记录')],
+          ['history', tr('搜索历史')],
         ].map(([id, label]) => (
           <button role="tab" aria-selected={tab === id} key={id} onClick={() => setTab(id)}>
             {label}
@@ -114,7 +118,7 @@ export function TaskPanel({
         <div className="task-error" role="alert">
           {error}
           <button className="text-button" disabled={busy} onClick={() => void act(refresh)}>
-            重试读取
+            {tr('重试读取')}
           </button>
         </div>
       )}
@@ -123,30 +127,31 @@ export function TaskPanel({
           {notice}
         </p>
       )}
-      {!state && !error && <p role="status">正在读取任务…</p>}
+      {!state && !error && <p role="status">{tr('正在读取任务…')}</p>}
       {tab === 'task' && state && (
         <>
           {last && (
             <section className="task-block">
               <h3>
-                {runId ? '所选运行' : '最近一次运行'} ·{' '}
+                {runId ? tr('所选运行') : tr('最近一次运行')} ·{' '}
                 {
                   {
-                    running: '进行中',
-                    completed: '已结束',
-                    failed: '失败',
-                    interrupted: '已中断',
+                    running: tr('进行中'),
+                    completed: tr('已结束'),
+                    failed: tr('失败'),
+                    interrupted: tr('已中断'),
                   }[last.status]
                 }
               </h3>
               <p className="muted">
-                {last.model} · {last.agentName} · {new Date(last.startedAt).toLocaleString()}
+                {last.model} · {last.agentName} ·{' '}
+                {new Date(last.startedAt).toLocaleString(getLocale())}
               </p>
-              <p>{last.error || last.phase || '已保存运行记录'}</p>
+              <p>{last.error || last.phase || tr('已保存运行记录')}</p>
               {last.id === state.runs[0]?.id && ['failed', 'interrupted'].includes(last.status) && (
                 <>
                   <p className="muted">
-                    继续时先核对文件、工具结果和终端状态；不会自动重放上次操作。
+                    {tr('继续时先核对文件、工具结果和终端状态；不会自动重放上次操作。')}
                   </p>
                   <button
                     className="primary"
@@ -158,24 +163,24 @@ export function TaskPanel({
                       })
                     }
                   >
-                    检查并继续任务
+                    {tr('检查并继续任务')}
                   </button>
                 </>
               )}
             </section>
           )}
           <section className="task-block">
-            <h3>任务记忆</h3>
-            <p className="muted">会话当前记忆；运行范围用于筛选改动和验证记录。</p>
+            <h3>{tr('任务记忆')}</h3>
+            <p className="muted">{tr('会话当前记忆；运行范围用于筛选改动和验证记录。')}</p>
             {state.memory ? (
               <>
                 <p>{state.memory.goal}</p>
                 {(
                   [
-                    ['constraints', '用户约束'],
-                    ['decisions', '已定方案'],
-                    ['completed', '已完成记录'],
-                    ['nextSteps', '下一步'],
+                    ['constraints', tr('用户约束')],
+                    ['decisions', tr('已定方案')],
+                    ['completed', tr('已完成记录')],
+                    ['nextSteps', tr('下一步')],
                   ] as const
                 ).map(([key, label]) => (
                   <div key={key}>
@@ -187,16 +192,17 @@ export function TaskPanel({
                         ))}
                       </ul>
                     ) : (
-                      <p className="muted">暂无记录</p>
+                      <p className="muted">{tr('暂无记录')}</p>
                     )}
                   </div>
                 ))}
-                <p className="muted">记忆由 Agent 维护，完成情况请结合验证记录检查。</p>
+                <p className="muted">{tr('记忆由 Agent 维护，完成情况请结合验证记录检查。')}</p>
               </>
             ) : (
               <p className="muted">
-                尚未保存任务记忆。长任务中 Agent
-                可以自动记录目标、约束和下一步；原始要求可在“搜索历史”找回。
+                {tr(
+                  '尚未保存任务记忆。长任务中 Agent 可以自动记录目标、约束和下一步；原始要求可在“搜索历史”找回。',
+                )}
               </p>
             )}
           </section>
@@ -205,7 +211,7 @@ export function TaskPanel({
       {tab === 'changes' && (
         <>
           {!changes?.length && (
-            <p className="task-empty">项目任务结束后，在这里查看本轮前后的文本改动。</p>
+            <p className="task-empty">{tr('项目任务结束后，在这里查看本轮前后的文本改动。')}</p>
           )}
           {changes
             ?.slice()
@@ -213,11 +219,12 @@ export function TaskPanel({
             .map((c) => (
               <section className="task-block" key={c.id}>
                 <h3>
-                  {new Date(c.createdAt).toLocaleString()} · {c.files.length} 个文件
+                  {new Date(c.createdAt).toLocaleString(getLocale())} · {c.files.length}
+                  {tr(' 个文件')}
                 </h3>
                 <p className="muted">
-                  文本检查点；不包含依赖、构建产物、密钥文件及超大文件。跳过 {c.skipped}{' '}
-                  项。工作区并发修改也可能包含在差异中。
+                  {tr('文本检查点；不包含依赖、构建产物、密钥文件及超大文件。跳过 ')}
+                  {c.skipped} {tr('项。工作区并发修改也可能包含在差异中。')}
                 </p>
                 {c.files.map((f) => (
                   <div className="task-file" key={f.path}>
@@ -229,13 +236,13 @@ export function TaskPanel({
                     >
                       {f.path}
                     </button>
-                    <span>{f.restored ? '已恢复' : ''}</span>
+                    <span>{f.restored ? tr('已恢复') : ''}</span>
                     <button
                       className="secondary"
                       disabled={busy || f.restored}
                       onClick={() => void act(() => api.stageRunFile(c.id, f.path))}
                     >
-                      暂存
+                      {tr('暂存')}
                     </button>
                     {confirmRestore === c.id + f.path ? (
                       <button
@@ -249,7 +256,7 @@ export function TaskPanel({
                           })
                         }
                       >
-                        确认恢复本轮前内容
+                        {tr('确认恢复本轮前内容')}
                       </button>
                     ) : (
                       <button
@@ -257,7 +264,7 @@ export function TaskPanel({
                         disabled={busy || f.restored}
                         onClick={() => setConfirmRestore(c.id + f.path)}
                       >
-                        恢复…
+                        {tr('恢复…')}
                       </button>
                     )}
                   </div>
@@ -278,7 +285,7 @@ export function TaskPanel({
           )}
           {projectId && (
             <section className="task-block">
-              <h3>提交已暂存内容</h3>
+              <h3>{tr('提交已暂存内容')}</h3>
               <button
                 className="secondary"
                 disabled={busy}
@@ -292,7 +299,7 @@ export function TaskPanel({
                   })
                 }
               >
-                检查已暂存文件
+                {tr('检查已暂存文件')}
               </button>
               {staged.length > 0 && (
                 <ul>
@@ -303,8 +310,8 @@ export function TaskPanel({
               )}
               <div className="task-toolbar">
                 <input
-                  aria-label="提交说明"
-                  placeholder="描述此次修改"
+                  aria-label={tr('提交说明')}
+                  placeholder={tr('描述此次修改')}
                   value={commit}
                   onChange={(e) => setCommit(e.target.value)}
                 />
@@ -320,7 +327,7 @@ export function TaskPanel({
                     })
                   }
                 >
-                  提交全部已暂存内容
+                  {tr('提交全部已暂存内容')}
                 </button>
               </div>
             </section>
@@ -330,19 +337,20 @@ export function TaskPanel({
       {tab === 'evidence' && (
         <>
           <p className="muted">
-            以下为实际工具记录。运行结束和工具执行成功，不自动等于项目测试通过。
+            {tr('以下为实际工具记录。运行结束和工具执行成功，不自动等于项目测试通过。')}
           </p>
           {evidence?.length ? (
             evidence.map((e) => (
               <details key={e.id} className="task-block">
                 <summary>
-                  {toolLabel(e.toolName, '工具')} · {e.status === 'error' ? '失败' : '已返回结果'}
+                  {toolLabel(e.toolName, tr('工具'))} ·{' '}
+                  {e.status === 'error' ? tr('失败') : tr('已返回结果')}
                 </summary>
                 <pre>{e.content}</pre>
               </details>
             ))
           ) : (
-            <p className="task-empty">暂无工具验证记录</p>
+            <p className="task-empty">{tr('暂无工具验证记录')}</p>
           )}
         </>
       )}
@@ -410,17 +418,17 @@ export function HistorySearch({
         }}
       >
         <input
-          aria-label="搜索消息内容"
-          placeholder="搜索消息内容，留空浏览最近消息"
+          aria-label={tr('搜索消息内容')}
+          placeholder={tr('搜索消息内容，留空浏览最近消息')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
         <label>
           <input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} />
-          全部会话
+          {tr('全部会话')}
         </label>
         <button className="primary" disabled={busy}>
-          搜索
+          {tr('搜索')}
         </button>
       </form>
       {error && (
@@ -428,35 +436,35 @@ export function HistorySearch({
           {error}
         </p>
       )}
-      {busy && <p role="status">正在读取…</p>}
+      {busy && <p role="status">{tr('正在读取…')}</p>}
       {matches.map((m) => (
         <button key={m.id} className="history-hit" disabled={busy} onClick={() => void read(m)}>
           <small>
-            {new Date(m.createdAt).toLocaleString()} ·{' '}
-            {m.role === 'user' ? '你' : m.role === 'tool' ? '工具' : '助手'}
+            {new Date(m.createdAt).toLocaleString(getLocale())} ·{' '}
+            {m.role === 'user' ? tr('你') : m.role === 'tool' ? tr('工具') : tr('助手')}
           </small>
           <span>{m.excerpt}</span>
         </button>
       ))}
       {matches.length >= 30 && (
         <button className="secondary" disabled={busy} onClick={() => void search(true)}>
-          加载更早结果
+          {tr('加载更早结果')}
         </button>
       )}
       {selected && (
         <section className="task-block">
           <div className="task-toolbar">
             <button className="secondary" onClick={() => onSelectSession(selected.sessionId)}>
-              打开所属会话
+              {tr('打开所属会话')}
             </button>
             <button className="secondary" onClick={() => void api.copyText(content)}>
-              复制已加载原文
+              {tr('复制已加载原文')}
             </button>
           </div>
           <pre>{content}</pre>
           {next !== null && (
             <button className="secondary" disabled={busy} onClick={() => void read(selected, next)}>
-              继续读取原文
+              {tr('继续读取原文')}
             </button>
           )}
         </section>

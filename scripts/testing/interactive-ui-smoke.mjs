@@ -61,8 +61,8 @@ try {
   const frame = () => page.frameLocator('.html-preview iframe');
   await frame().getByRole('button', { name: '点击 0' }).dispatchEvent('click');
   await frame().getByRole('button', { name: '点击 1' }).waitFor();
-  await frame().getByRole('textbox', { name: '名字' }).fill('同舟');
-  await frame().getByText('你好，同舟').waitFor();
+  await frame().getByRole('textbox', { name: '名字' }).fill('CoSail');
+  await frame().getByText('你好，CoSail').waitFor();
   await page.getByRole('button', { name: '源码', exact: true }).dispatchEvent('click');
   await page.locator('.html-preview-source').waitFor();
   await page.getByRole('button', { name: '预览', exact: true }).dispatchEvent('click');

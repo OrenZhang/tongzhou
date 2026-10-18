@@ -5,7 +5,7 @@ import TOML from '@iarna/toml';
 import YAML from 'yaml';
 import type { NativeEngine } from '../../../src/shared/types';
 
-/** Managed CLI homes only. Native tools are replaced by Tongzhou's per-run MCP scope. */
+/** Managed CLI homes only. Native tools are replaced by CoSail's per-run MCP scope. */
 export function configureNativeTools(kind: NativeEngine, home: string) {
   const target = path.join(home, kind === 'kimi' ? 'config.toml' : 'config.yaml');
   const before = existsSync(target) ? readFileSync(target, 'utf8') : '';

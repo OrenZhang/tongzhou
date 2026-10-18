@@ -44,6 +44,16 @@ export function registerArtifactServices(
   define('artifactList', '查看聊天生成的作品', [artifactQuerySchema.optional()], (p) => a.list(p));
   define('artifactRead', '读取作品信息', [id], (v) => a.read(v));
   define('artifactPreview', '预览作品', [id], (v) => a.preview(v));
+  define(
+    'artifactDownload',
+    '下载远程作品到本地缓存，保留原作品 ID；失败可重试，不会重新生成',
+    [id],
+    async (v) => {
+      const item = await a.download(v, AbortSignal.timeout(120000));
+      services.changed();
+      return item;
+    },
+  );
   define('artifactOpen', '打开作品原件或外部链接', [id], async (v) => {
     const item = a.read(v);
     if (item.remoteUrl) {

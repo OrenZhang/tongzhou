@@ -1,3 +1,4 @@
+import { t as tr, getLocale } from '../../shared/i18n';
 import { Copy, GitBranch, Quote, Terminal, Brain, Pencil } from 'lucide-react';
 import type { Message } from '../../shared/types';
 import { toolLabel } from '../../shared/tool-labels';
@@ -33,8 +34,8 @@ function MessageActions({
       {onEdit && (
         <button
           className="icon-button"
-          aria-label="编辑并重发"
-          title="编辑这条未收到回复的消息后重新发送"
+          aria-label={tr('编辑并重发')}
+          title={tr('编辑这条未收到回复的消息后重新发送')}
           onClick={onEdit}
         >
           <Pencil size={14} />
@@ -42,24 +43,24 @@ function MessageActions({
       )}
       <button
         className="icon-button"
-        aria-label="复制消息"
-        title="复制完整消息"
+        aria-label={tr('复制消息')}
+        title={tr('复制完整消息')}
         onClick={() => onCopy(message)}
       >
         <Copy size={14} />
       </button>
       <button
         className="icon-button"
-        aria-label="引用补充"
-        title="引用补充：将这段内容放入输入框，继续当前会话"
+        aria-label={tr('引用补充')}
+        title={tr('引用补充：将这段内容放入输入框，继续当前会话')}
         onClick={() => onQuote(message)}
       >
         <Quote size={14} />
       </button>
       <button
         className="icon-button"
-        aria-label="从此处新建分支"
-        title="从此处新建分支：复制截至这里的历史，开启独立会话"
+        aria-label={tr('从此处新建分支')}
+        title={tr('从此处新建分支：复制截至这里的历史，开启独立会话')}
         disabled={branchDisabled}
         onClick={() => onBranch(message)}
       >
@@ -125,7 +126,7 @@ export function ConversationTurn({
           <section key={entry.key} className="process-reasoning" data-entry-kind="reasoning">
             <div className="process-reasoning-label">
               <Brain size={13} />
-              思考摘要
+              {tr('思考摘要')}
             </div>
             <Markdown text={event.text} />
           </section>
@@ -149,10 +150,10 @@ export function ConversationTurn({
                 {' '}
                 ·{' '}
                 {turn.run?.agents?.find((agent) => agent.threadId === m.sourceThreadId)?.name ??
-                  '子 Agent'}
+                  tr('子 Agent')}
               </small>
             )}
-            {m.status === 'error' ? ' · 未完成' : ''}
+            {m.status === 'error' ? tr(' · 未完成') : ''}
           </summary>
           <pre>{entry.text}</pre>
         </details>
@@ -165,7 +166,7 @@ export function ConversationTurn({
           data-message-id={m.id}
           data-entry-kind="supplement"
         >
-          <span>你补充</span>
+          <span>{tr('你补充')}</span>
           <AttachmentCards items={m.attachments} />
           <Markdown text={entry.text} />
           <MessageActions message={m} {...actions} />
@@ -187,13 +188,13 @@ export function ConversationTurn({
       className="conversation-turn"
       data-run-id={turn.runId}
       data-turn-key={turn.key}
-      aria-label="会话轮次"
+      aria-label={tr('会话轮次')}
     >
       {prompt &&
         (editing && editable ? (
           <form
             className="message-editor"
-            aria-label="编辑未完成消息"
+            aria-label={tr('编辑未完成消息')}
             onSubmit={async (event) => {
               event.preventDefault();
               if (
@@ -215,7 +216,7 @@ export function ConversationTurn({
           >
             <AttachmentCards items={prompt.attachments} />
             <textarea
-              aria-label="编辑未完成的消息"
+              aria-label={tr('编辑未完成的消息')}
               rows={1}
               autoFocus
               value={editedText}
@@ -232,7 +233,7 @@ export function ConversationTurn({
                 disabled={resending}
                 onClick={() => setEditing(false)}
               >
-                取消
+                {tr('取消')}
               </button>
               <button
                 type="submit"
@@ -240,7 +241,7 @@ export function ConversationTurn({
                   resending || resendDisabled || (!editedText.trim() && !prompt.attachments?.length)
                 }
               >
-                {resending ? '发送中…' : '重新发送'}
+                {resending ? tr('发送中…') : tr('重新发送')}
               </button>
             </div>
           </form>
@@ -283,9 +284,11 @@ export function ConversationTurn({
                   <details key={group.key} className="process-tool-group">
                     <summary>
                       <Terminal size={13} />
-                      工具调用 · {group.entries.length} 项
+                      {tr('工具调用 · ')}
+                      {group.entries.length}
+                      {tr(' 项')}
                       {group.entries.some((e) => 'message' in e && e.message.status === 'error') &&
-                        ' · 有未完成项'}
+                        tr(' · 有未完成项')}
                     </summary>
                     <div className="process-tool-list">{group.entries.map(renderEntry)}</div>
                   </details>
@@ -316,7 +319,7 @@ export function ConversationTurn({
                   <MessageActions message={{ ...endpoint, content: text }} {...actions} />
                 )}
                 <div className="message-meta">
-                  {agentName && agentName !== '同舟' && <strong>{agentName}</strong>}
+                  {agentName && agentName !== 'CoSail' && <strong>{agentName}</strong>}
                   {(assistant?.model || turn.run?.model) && (
                     <span
                       className="message-model"
@@ -330,10 +333,10 @@ export function ConversationTurn({
                   <time>
                     {new Date(
                       assistant?.createdAt ?? turn.run?.startedAt ?? first?.createdAt ?? 0,
-                    ).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                    ).toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit' })}
                   </time>
-                  {status === 'interrupted' && <span>已中断</span>}
-                  {(status === 'failed' || status === 'error') && <span>未完成</span>}
+                  {status === 'interrupted' && <span>{tr('已中断')}</span>}
+                  {(status === 'failed' || status === 'error') && <span>{tr('未完成')}</span>}
                 </div>
               </div>
             )}

@@ -42,7 +42,7 @@ const server = createServer(async (req, res) => {
       ? {
           choices: [
             {
-              delta: { content: '已创建 hello.txt，内容为同舟。验证完成。' },
+              delta: { content: '已创建 hello.txt，内容为CoSail。验证完成。' },
               finish_reason: 'stop',
             },
           ],
@@ -59,7 +59,7 @@ const server = createServer(async (req, res) => {
                     id: 'test_call',
                     function: {
                       name: 'write_file',
-                      arguments: JSON.stringify({ path: 'hello.txt', content: '同舟' }),
+                      arguments: JSON.stringify({ path: 'hello.txt', content: 'CoSail' }),
                     },
                   },
                 ],
@@ -262,15 +262,15 @@ try {
     .getByRole('button', { name: '当前模型', exact: true })
     .filter({ hasText: 'fixture-model' })
     .waitFor();
-  await page.getByLabel('消息', { exact: true }).fill('创建 hello.txt，写入“同舟”。');
+  await page.getByLabel('消息', { exact: true }).fill('创建 hello.txt，写入“CoSail”。');
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
   await page
     .getByRole('region', { name: '写入 hello.txt', exact: true })
     .waitFor({ timeout: 15000 });
   await page.screenshot({ path: 'test-results/04-approval.png' });
   await page.getByRole('button', { name: '批准本次', exact: true }).click();
-  await page.getByText('已创建 hello.txt，内容为同舟。验证完成。', { exact: true }).waitFor();
-  assert.equal(await readFile(path.join(project, 'hello.txt'), 'utf8'), '同舟');
+  await page.getByText('已创建 hello.txt，内容为CoSail。验证完成。', { exact: true }).waitFor();
+  assert.equal(await readFile(path.join(project, 'hello.txt'), 'utf8'), 'CoSail');
   let state;
   for (let attempt = 0; attempt < 200; attempt++) {
     state = await page.evaluate(() => window.tongzhou.snapshot());

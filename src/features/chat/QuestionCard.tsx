@@ -1,3 +1,4 @@
+import { t as tr } from '../../shared/i18n';
 import { useState } from 'react';
 import type { Approval } from '../../shared/types';
 import type { QuestionAnswers } from '../../shared/agent-execution';
@@ -40,7 +41,7 @@ export function QuestionCard({
   return (
     <form
       className="question-card"
-      aria-label="待回答问题"
+      aria-label={tr('待回答问题')}
       aria-busy={busy}
       onSubmit={(e) => {
         e.preventDefault();
@@ -49,7 +50,7 @@ export function QuestionCard({
     >
       {questions.map((q) => (
         <fieldset key={q.id} disabled={busy}>
-          <legend>{q.header || '需要你的补充'}</legend>
+          <legend>{q.header || tr('需要你的补充')}</legend>
           <p>{q.question}</p>
           {q.options?.map((option) => (
             <label className="question-option" key={option.label}>
@@ -74,7 +75,7 @@ export function QuestionCard({
                 checked={selected[q.id] === '__other'}
                 onChange={() => setSelected({ ...selected, [q.id]: '__other' })}
               />
-              <span>自定义回答</span>
+              <span>{tr('自定义回答')}</span>
             </label>
           )}
           {(!q.options?.length || (q.isOther && selected[q.id] === '__other')) && (
@@ -91,7 +92,7 @@ export function QuestionCard({
       ))}
       <div className="question-actions">
         <small className="muted">
-          {request.isBlocking ? '回答后继续当前任务' : '可补充回答，任务会继续进行'}
+          {request.isBlocking ? tr('回答后继续当前任务') : tr('可补充回答，任务会继续进行')}
         </small>
         <button
           type="button"
@@ -99,10 +100,10 @@ export function QuestionCard({
           disabled={busy}
           onClick={() => void submit(null)}
         >
-          跳过
+          {tr('跳过')}
         </button>
         <button type="submit" disabled={busy || questions.some((q) => !answers[q.id][0])}>
-          {busy ? '提交中…' : '提交回答'}
+          {busy ? tr('提交中…') : tr('提交回答')}
         </button>
       </div>
       {error && <p role="alert">{error}</p>}

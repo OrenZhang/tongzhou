@@ -305,7 +305,7 @@ try {
           globalThis.weixinSmoke.sent.some(
             (m) =>
               m.context_token === 'natural-context' &&
-              m.item_list[0].text_item.text.includes('同舟'),
+              m.item_list[0].text_item.text.includes('CoSail'),
           ),
         )
       )
@@ -315,7 +315,7 @@ try {
     let natural = await app.evaluate(() =>
       globalThis.weixinSmoke.sent.filter((m) => m.context_token === 'natural-context'),
     );
-    assert.ok(natural.some((m) => m.item_list[0].text_item.text.includes('同舟')));
+    assert.ok(natural.some((m) => m.item_list[0].text_item.text.includes('CoSail')));
     assert.ok(!natural.some((m) => m.item_list[0].text_item.text.includes('/use')));
     assert.equal(natural.length, 1, 'one user greeting produces one reply, no acknowledgement');
     const conversation = await page.evaluate(async () =>

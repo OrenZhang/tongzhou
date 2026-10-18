@@ -1,3 +1,5 @@
+import { uiCanvasPorts as canvasPorts } from './port-labels';
+import { t as tr } from '../../shared/i18n';
 import { useState } from 'react';
 import type {
   Canvas,
@@ -5,7 +7,7 @@ import type {
   CanvasNodePluginDefinition,
   CanvasEdge,
 } from '../../shared/canvas';
-import { canvasPorts, connectCanvasPorts } from '../../shared/canvas-ports';
+import { connectCanvasPorts } from '../../shared/canvas-ports';
 
 export function CanvasConnections({
   canvas,
@@ -35,19 +37,23 @@ export function CanvasConnections({
   return (
     <div className="canvas-connections">
       {['image', 'video'].includes(node.kind) && (
-        <small>连接参考图片会自动启用参考图模式；视频首帧、尾帧按端口匹配，需生成服务支持。</small>
+        <small>
+          {tr('连接参考图片会自动启用参考图模式；视频首帧、尾帧按端口匹配，需生成服务支持。')}
+        </small>
       )}
-      <h3>输入与输出</h3>
+      <h3>{tr('输入与输出')}</h3>
       <small>
-        输入：{ports.inputs.map((p) => p.label).join('、') || '无'}
+        {tr('输入：')}
+        {ports.inputs.map((p) => p.label).join('、') || tr('无')}
         <br />
-        输出：{ports.outputs.map((p) => p.label).join('、') || '无'}
+        {tr('输出：')}
+        {ports.outputs.map((p) => p.label).join('、') || tr('无')}
       </small>
-      <h3>连线</h3>
+      <h3>{tr('连线')}</h3>
       <label>
-        输出端口
+        {tr('输出端口')}
         <select
-          aria-label="输出端口"
+          aria-label={tr('输出端口')}
           value={outputId}
           onChange={(e) => setFromPort(e.target.value)}
         >
@@ -59,9 +65,13 @@ export function CanvasConnections({
         </select>
       </label>
       <label>
-        目标节点
-        <select aria-label="目标节点" value={target} onChange={(e) => setTarget(e.target.value)}>
-          <option value="">选择目标</option>
+        {tr('目标节点')}
+        <select
+          aria-label={tr('目标节点')}
+          value={target}
+          onChange={(e) => setTarget(e.target.value)}
+        >
+          <option value="">{tr('选择目标')}</option>
           {canvas.nodes
             .filter((n) => n.id !== node.id && canvasPorts(n, definition(n)).inputs.length)
             .map((n) => (
@@ -72,9 +82,13 @@ export function CanvasConnections({
         </select>
       </label>
       <label>
-        输入端口
-        <select aria-label="输入端口" value={inputId} onChange={(e) => setToPort(e.target.value)}>
-          <option value="">选择输入</option>
+        {tr('输入端口')}
+        <select
+          aria-label={tr('输入端口')}
+          value={inputId}
+          onChange={(e) => setToPort(e.target.value)}
+        >
+          <option value="">{tr('选择输入')}</option>
           {targets.map((p) => (
             <option key={p.id} value={p.id}>
               {p.label}
@@ -83,12 +97,12 @@ export function CanvasConnections({
         </select>
       </label>
       <select
-        aria-label="连线类型"
+        aria-label={tr('连线类型')}
         value={kind}
         onChange={(e) => setKind(e.target.value as CanvasEdge['kind'])}
       >
-        <option value="dependency">执行依赖 →</option>
-        <option value="reference">资料引用 ⇢</option>
+        <option value="dependency">{tr('执行依赖 →')}</option>
+        <option value="reference">{tr('资料引用 ⇢')}</option>
       </select>
       <button
         disabled={!target || !outputId || !inputId}
@@ -113,7 +127,7 @@ export function CanvasConnections({
           }
         }}
       >
-        连接
+        {tr('连接')}
       </button>
       {canvas.edges
         .filter((e) => e.from === node.id || e.to === node.id)
@@ -129,11 +143,11 @@ export function CanvasConnections({
           return (
             <div className="canvas-edge-row" key={e.id}>
               <span>
-                {source.title} · {out ?? '全部'} → {target.title} · {input ?? '默认'}
-                <small>{e.kind === 'dependency' ? '执行依赖' : '资料引用'}</small>
+                {source.title} · {out ?? tr('全部')} → {target.title} · {input ?? tr('默认')}
+                <small>{e.kind === 'dependency' ? tr('执行依赖') : tr('资料引用')}</small>
               </span>
               <button
-                aria-label="删除连线"
+                aria-label={tr('删除连线')}
                 onClick={() =>
                   onChange({ ...canvas, edges: canvas.edges.filter((v) => v.id !== e.id) })
                 }

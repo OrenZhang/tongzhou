@@ -1,8 +1,10 @@
+import { uiCanvasPorts as canvasPorts } from './port-labels';
+import { t as tr } from '../../shared/i18n';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Plus, Link, X } from 'lucide-react';
 import type { Canvas, CanvasNodePluginDefinition } from '../../shared/canvas';
-import { canvasPorts, connectCanvasPorts, validateCanvasPorts } from '../../shared/canvas-ports';
+import { connectCanvasPorts, validateCanvasPorts } from '../../shared/canvas-ports';
 import { appendConnectedCanvasNode, pluginCanvasNode } from '../../shared/canvas-editing';
 
 export interface CanvasPortAnchor {
@@ -111,7 +113,7 @@ export function CanvasPortMenu({
       ref={panel}
       className="canvas-port-menu"
       role="dialog"
-      aria-label="选择后续节点"
+      aria-label={tr('选择后续节点')}
       style={{
         left: Math.max(8, Math.min(anchor.x, window.innerWidth - 308)),
         top: Math.max(8, Math.min(anchor.y, window.innerHeight - 408)),
@@ -133,8 +135,8 @@ export function CanvasPortMenu({
       }}
     >
       <header>
-        <strong>选择后续节点</strong>
-        <button aria-label="关闭后续节点菜单" onClick={onClose}>
+        <strong>{tr('选择后续节点')}</strong>
+        <button aria-label={tr('关闭后续节点菜单')} onClick={onClose}>
           <X size={14} />
         </button>
       </header>
@@ -144,23 +146,23 @@ export function CanvasPortMenu({
       <div className="canvas-port-menu-tabs">
         <button aria-pressed={mode === 'new'} onClick={() => setMode('new')}>
           <Plus size={13} />
-          新建节点
+          {tr('新建节点')}
         </button>
         <button aria-pressed={mode === 'existing'} onClick={() => setMode('existing')}>
           <Link size={13} />
-          已有节点
+          {tr('已有节点')}
         </button>
       </div>
       <input
-        aria-label="搜索后续节点"
-        placeholder="搜索节点或输入端口"
+        aria-label={tr('搜索后续节点')}
+        placeholder={tr('搜索节点或输入端口')}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
       <div className="canvas-port-menu-options">
         {mode === 'new'
           ? available
-              .filter(({ definition, port }) => matches(definition.name + ' ' + port.label))
+              .filter(({ definition, port }) => matches(tr(definition.name) + ' ' + port.label))
               .map(({ definition, port }) => (
                 <button
                   key={definition.id + ':' + port.id}
@@ -177,8 +179,11 @@ export function CanvasPortMenu({
                     )
                   }
                 >
-                  <strong>{definition.name}</strong>
-                  <small>输入：{port.label}</small>
+                  <strong>{tr(definition.name)}</strong>
+                  <small>
+                    {tr('输入：')}
+                    {port.label}
+                  </small>
                 </button>
               ))
           : existing
@@ -197,17 +202,21 @@ export function CanvasPortMenu({
                   }
                 >
                   <strong>{node.title}</strong>
-                  <small>输入：{port.label}</small>
+                  <small>
+                    {tr('输入：')}
+                    {port.label}
+                  </small>
                 </button>
               ))}
         {!(mode === 'new'
-          ? available.filter(({ definition, port }) => matches(definition.name + ' ' + port.label))
-              .length
+          ? available.filter(({ definition, port }) =>
+              matches(tr(definition.name) + ' ' + port.label),
+            ).length
           : existing.filter(({ node, port }) => matches(node.title + ' ' + port.label)).length) && (
-          <p>没有匹配的可连接节点</p>
+          <p>{tr('没有匹配的可连接节点')}</p>
         )}
       </div>
-      <small>选择后自动连线，也可按住输出点拖到目标输入点。</small>
+      <small>{tr('选择后自动连线，也可按住输出点拖到目标输入点。')}</small>
     </div>,
     document.body,
   );

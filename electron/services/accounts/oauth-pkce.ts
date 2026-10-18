@@ -52,11 +52,11 @@ export async function gitlabLogin(
         'Content-Type': 'text/plain; charset=utf-8',
         'Cache-Control': 'no-store',
       });
-      res.end('同舟：账号授权已验证，可以关闭此页面。');
+      res.end('CoSail：账号授权已验证，可以关闭此页面。');
     } catch {
       if (!signal.aborted) failed();
       res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
-      res.end('授权未完成，请回到同舟重新连接。');
+      res.end('授权未完成，请回到CoSail重新连接。');
     } finally {
       // Flush the callback response before closing keep-alive sockets.
       if (res.writableFinished) close();

@@ -22,6 +22,7 @@ const api: TongzhouAPI = {
   artifactList: (query) => call('artifactList', query),
   artifactRead: (id) => call('artifactRead', id),
   artifactPreview: (id) => call('artifactPreview', id),
+  artifactDownload: (id) => call('artifactDownload', id),
   artifactOpen: (id) => call('artifactOpen', id),
   artifactExport: (id) => call('artifactExport', id),
   artifactDelete: (id) => call('artifactDelete', id),

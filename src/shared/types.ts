@@ -75,7 +75,7 @@ export interface AgentProfile {
   computerEnabled?: boolean;
 }
 export interface PluginConfig {
-  /** Reuse a Tongzhou subscription account; no token is copied into plugin settings. */
+  /** Reuse a CoSail subscription account; no token is copied into plugin settings. */
   accountProviderId?: string;
   /** Live account binding; credentials stay in the main process. */
   connectorId?: string;
@@ -437,6 +437,7 @@ export interface TongzhouAPI {
   ): Promise<import('./artifacts').ArtifactPage>;
   artifactRead(id: string): Promise<import('./artifacts').Artifact>;
   artifactPreview(id: string): Promise<import('./artifacts').ArtifactPreview>;
+  artifactDownload(id: string): Promise<import('./artifacts').Artifact>;
   artifactOpen(id: string): Promise<void>;
   artifactExport(id: string): Promise<boolean>;
   artifactDelete(id: string): Promise<void>;

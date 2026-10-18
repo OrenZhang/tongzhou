@@ -4,7 +4,7 @@ import { redact } from '../../../electron/services/storage/validation';
 
 describe('model error presentation', () => {
   it('extracts a gateway error transported as a serialized HTTP response', () => {
-    const text = '当前同舟版本不支持此 Kimi 模型协议';
+    const text = '当前CoSail版本不支持此 Kimi 模型协议';
     expect(modelErrorMessage(new Error(JSON.stringify({ error: { message: text } })))).toBe(text);
   });
   it('unwraps nested gateway errors', () => {

@@ -10,7 +10,7 @@ await mkdir('test-results', { recursive: true });
 const root = await mkdtemp(path.resolve('test-results/workbench-')),
   repo = path.join(root, '示例仓库');
 await mkdir(repo);
-await writeFile(path.join(repo, 'README.md'), '# 同舟测试项目\n');
+await writeFile(path.join(repo, 'README.md'), '# CoSail测试项目\n');
 const git = (args) => execFileSync('git', args, { cwd: repo, windowsHide: true, stdio: 'pipe' });
 git(['init', '-b', 'main']);
 git(['config', 'user.name', 'Fixture']);
@@ -469,7 +469,7 @@ try {
   await detail.getByRole('button', { name: '使用 GitHub 登录', exact: true }).click();
   await detail
     .getByRole('alert')
-    .filter({ hasText: /尚未配置同舟的 GitHub 登录应用/ })
+    .filter({ hasText: /尚未配置CoSail的 GitHub 登录应用/ })
     .waitFor();
   assert.ok(!(await detail.innerText()).includes('Error invoking remote method'));
   await capture('github-oauth-requirements');

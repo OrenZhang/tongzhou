@@ -13,7 +13,7 @@ const project = path.join(root, 'project');
 await mkdir(project);
 await writeFile(
   path.join(project, 'hello.ts'),
-  'export const welcome = "同舟";\nexport const version = "0.1.0";\n',
+  'export const welcome = "CoSail";\nexport const version = "0.1.0";\n',
 );
 const git = (...args) =>
   execFileSync('git', args, { cwd: project, windowsHide: true, stdio: 'pipe' });
@@ -34,7 +34,7 @@ const store = new Store(path.join(root, 'profile/tongzhou.db'), {
   encrypt: (s) => s,
   decrypt: (s) => s,
 });
-store.put('project', { id: 'project', name: '同舟客户端', path: project, createdAt: Date.now() });
+store.put('project', { id: 'project', name: 'CoSail客户端', path: project, createdAt: Date.now() });
 const session = store.createSession('project'),
   ordinary = store.createSession();
 store.put('session', { ...session, title: '优化客户端工作区' });
@@ -44,7 +44,7 @@ store.put('run', {
   sessionId: session.id,
   providerId: 'fixture',
   model: 'fixture',
-  agentName: '同舟',
+  agentName: 'CoSail',
   status: 'completed',
   startedAt: Date.now() - 10000,
   endedAt: Date.now(),
@@ -109,7 +109,7 @@ for (const [index, kind] of ['chat', 'failed-chat', 'tools', 'validation', 'file
     sessionId: deliverySession.id,
     providerId: 'fixture',
     model: 'fixture',
-    agentName: '同舟',
+    agentName: 'CoSail',
     status: kind === 'failed-chat' || kind === 'tools' ? 'failed' : 'completed',
     startedAt: time,
     endedAt: time + 50,
@@ -222,7 +222,7 @@ try {
   );
   await page.getByLabel('执行上下文').getByText('main', { exact: true }).waitFor();
   assert.equal(await page.getByLabel('会话工作区').count(), 0);
-  assert.ok((await page.getByLabel('执行上下文').innerText()).includes('同舟客户端'));
+  assert.ok((await page.getByLabel('执行上下文').innerText()).includes('CoSail客户端'));
   await page.getByLabel('消息', { exact: true }).fill('请保留我的草稿');
   await page.getByRole('button', { name: 'hello.ts', exact: true }).click();
   await page.locator('.source-line.selected').filter({ hasText: '0.1.0' }).waitFor();

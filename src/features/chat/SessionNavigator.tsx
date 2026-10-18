@@ -1,3 +1,4 @@
+import { t as tr } from '../../shared/i18n';
 import { useEffect, useId, useState } from 'react';
 import {
   Archive,
@@ -89,7 +90,10 @@ export function SessionNavigator({
           data-project-id={s.projectId ?? ''}
           title={
             s.projectId
-              ? `${s.title}\n项目：${data.projects.find((p) => p.id === s.projectId)?.path ?? s.projectId}`
+              ? tr('{0}\n项目：{1}', [
+                  s.title,
+                  data.projects.find((p) => p.id === s.projectId)?.path ?? s.projectId,
+                ])
               : s.title
           }
           onClick={() => onSelect(s)}
@@ -97,9 +101,9 @@ export function SessionNavigator({
           <span className={'session-dot ' + (running ? 'live' : '')} />
           {s.projectId &&
             (isolated ? (
-              <GitBranch size={12} aria-label="隔离工作目录会话" />
+              <GitBranch size={12} aria-label={tr('隔离工作目录会话')} />
             ) : (
-              <Folder size={12} aria-label="项目会话" />
+              <Folder size={12} aria-label={tr('项目会话')} />
             ))}
           <span className="session-title-text">
             {s.parentId ? '↳ ' : ''}
@@ -107,14 +111,14 @@ export function SessionNavigator({
           </span>
           {(waiting || running) && (
             <small className={`session-state ${waiting ? 'waiting' : ''}`}>
-              {waiting ? '待处理' : '运行中'}
+              {waiting ? tr('待处理') : tr('运行中')}
             </small>
           )}
         </button>
         <div className="session-actions">
           <button
-            aria-label={s.archived ? '恢复会话' : '归档会话'}
-            title={running ? '停止任务后可归档' : s.archived ? '恢复会话' : '归档会话'}
+            aria-label={s.archived ? tr('恢复会话') : tr('归档会话')}
+            title={running ? tr('停止任务后可归档') : s.archived ? tr('恢复会话') : tr('归档会话')}
             disabled={running}
             onClick={() => onToggleArchive(s)}
           >
@@ -122,8 +126,8 @@ export function SessionNavigator({
           </button>
           {s.archived && (
             <button
-              aria-label="删除会话"
-              title={running ? '停止任务后可删除' : '删除会话'}
+              aria-label={tr('删除会话')}
+              title={running ? tr('停止任务后可删除') : tr('删除会话')}
               className="session-delete"
               disabled={running}
               onClick={() => onDelete(s)}
@@ -138,10 +142,10 @@ export function SessionNavigator({
   return (
     <div className="sidebar-history">
       <div className="section-label">
-        {archived ? '已归档会话' : '会话'}
+        {archived ? tr('已归档会话') : tr('会话')}
         <button
-          aria-label="切换归档会话"
-          title={archived ? '查看活动会话' : '查看归档会话'}
+          aria-label={tr('切换归档会话')}
+          title={archived ? tr('查看活动会话') : tr('查看归档会话')}
           aria-pressed={archived}
           onClick={onArchive}
         >
@@ -151,8 +155,8 @@ export function SessionNavigator({
       <div className="search-box">
         <Search size={13} />
         <input
-          aria-label="搜索会话"
-          placeholder="搜索会话或项目"
+          aria-label={tr('搜索会话')}
+          placeholder={tr('搜索会话或项目')}
           value={query}
           onChange={(e) => onQuery(e.target.value)}
         />
@@ -165,7 +169,7 @@ export function SessionNavigator({
           onClick={() => setCollapsed((old) => ({ ...old, 'section:projects': projectsExpanded }))}
         >
           <ChevronRight size={13} className={projectsExpanded ? 'expanded' : ''} />
-          项目空间
+          {tr('项目空间')}
           <small>
             {
               data.projects.filter(
@@ -174,7 +178,7 @@ export function SessionNavigator({
             }
           </small>
         </button>
-        <button aria-label="打开项目" title="添加项目" onClick={onOpenProject}>
+        <button aria-label={tr('打开项目')} title={tr('添加项目')} onClick={onOpenProject}>
           <Plus size={15} />
         </button>
       </div>
@@ -206,7 +210,7 @@ export function SessionNavigator({
                   <button
                     className={activeProject === project.id ? 'selected' : ''}
                     title={project.path}
-                    aria-label={`项目 ${project.name}`}
+                    aria-label={tr('项目 {0}', [project.name])}
                     aria-expanded={expanded}
                     onClick={() => setCollapsed((old) => ({ ...old, [project.id]: expanded }))}
                   >
@@ -218,16 +222,16 @@ export function SessionNavigator({
                   <button
                     className="icon-button"
                     disabled={project.removed}
-                    title="在此项目中新建会话"
-                    aria-label={`在 ${project.name} 中新建会话`}
+                    title={tr('在此项目中新建会话')}
+                    aria-label={tr('在 {0} 中新建会话', [project.name])}
                     onClick={() => onNew(project.id)}
                   >
                     <Plus size={14} />
                   </button>
                   <button
                     className="icon-button project-delete"
-                    title="删除项目"
-                    aria-label={`删除项目 ${project.name}`}
+                    title={tr('删除项目')}
+                    aria-label={tr('删除项目 {0}', [project.name])}
                     onClick={() => onDeleteProject(project)}
                   >
                     <Trash2 size={14} />
@@ -238,7 +242,7 @@ export function SessionNavigator({
                     {sessions.map(row)}
                     {!sessions.length && (
                       <p className="project-empty">
-                        {archived ? '暂无归档会话' : '暂无会话，点击 + 开始'}
+                        {archived ? tr('暂无归档会话') : tr('暂无会话，点击 + 开始')}
                       </p>
                     )}
                   </div>
@@ -249,7 +253,7 @@ export function SessionNavigator({
         {!data.projects.length && (
           <button className="subtle" onClick={onOpenProject}>
             <FolderOpen size={15} />
-            添加第一个项目
+            {tr('添加第一个项目')}
           </button>
         )}
       </div>
@@ -261,12 +265,12 @@ export function SessionNavigator({
           onClick={() => setCollapsed((old) => ({ ...old, 'section:ordinary': ordinaryExpanded }))}
         >
           <ChevronRight size={13} className={ordinaryExpanded ? 'expanded' : ''} />
-          普通会话
+          {tr('普通会话')}
           <small>{data.sessions.filter((s) => !s.projectId && matching(s)).length}</small>
         </button>
         <button
-          aria-label="新建普通会话"
-          title="新建普通会话"
+          aria-label={tr('新建普通会话')}
+          title={tr('新建普通会话')}
           onClick={() => {
             setCollapsed((old) => ({ ...old, 'section:ordinary': false }));
             onNew();
@@ -284,7 +288,7 @@ export function SessionNavigator({
       </div>
       {!data.sessions.filter(matching).length && (
         <p className="sidebar-empty">
-          {query ? '没有匹配的会话' : archived ? '暂无归档会话' : '想法从这里开始。'}
+          {query ? tr('没有匹配的会话') : archived ? tr('暂无归档会话') : tr('想法从这里开始。')}
         </p>
       )}
     </div>

@@ -1,3 +1,4 @@
+import { t as tr, localize as localized } from '../../shared/i18n';
 import { ConnectionDiagnostics } from '../../features/connections/ConnectionDiagnostics';
 import { Check, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
 import type {
@@ -17,8 +18,8 @@ import { ModelProtocolFields } from './ModelProtocolFields';
 import { reasoningEfforts, reasoningLabels } from '../../shared/model-reasoning';
 import {
   automaticModel,
-  modelScenes,
-  modelStages,
+  modelScenes as raw_modelScenes,
+  modelStages as raw_modelStages,
   type ModelPoolEntry,
 } from '../../shared/model-protocol';
 
@@ -58,8 +59,12 @@ export function ProviderConnectionDialog({
 }: Props) {
   return (
     <Modal
-      title={data.providers.some((p) => p.id === providerEdit.id) ? '管理模型连接' : '添加模型连接'}
-      subtitle="选择服务与认证方式，保存后即可获取并选择模型。"
+      title={
+        data.providers.some((p) => p.id === providerEdit.id)
+          ? tr('管理模型连接')
+          : tr('添加模型连接')
+      }
+      subtitle={tr('选择服务与认证方式，保存后即可获取并选择模型。')}
       onClose={() => !busy && setProviderEdit(null)}
       wide
     >
@@ -92,13 +97,13 @@ export function ProviderConnectionDialog({
           </div>
         )}
         <div className="form-grid">
-          <Field label="连接名称">
+          <Field label={tr('连接名称')}>
             <input
               value={providerEdit.name}
               onChange={(e) => setProviderEdit({ ...providerEdit, name: e.target.value })}
             />
           </Field>
-          <Field label="接口协议">
+          <Field label={tr('接口协议')}>
             <select
               value={providerEdit.protocol}
               disabled={['codex', 'kimi', 'minimax'].includes(providerEdit.protocol)}
@@ -124,7 +129,7 @@ export function ProviderConnectionDialog({
         {['codex', 'kimi', 'minimax'].includes(providerEdit.protocol) ? (
           <div className="info-strip">
             <ShieldCheck size={18} />
-            <span>通过官方引擎完成账号授权，完成后自动同步可选模型。</span>
+            <span>{tr('通过官方引擎完成账号授权，完成后自动同步可选模型。')}</span>
             <button
               className="text-button"
               disabled={busy}
@@ -140,14 +145,14 @@ export function ProviderConnectionDialog({
                 })
               }
             >
-              前往登录
+              {tr('前往登录')}
             </button>
           </div>
         ) : (
           <>
             <Field
               label="API Base URL"
-              hint="填写协议根地址，例如 https://api.openai.com/v1；本地 HTTP 服务也受支持。"
+              hint={tr('填写协议根地址，例如 https://api.openai.com/v1；本地 HTTP 服务也受支持。')}
             >
               <input
                 placeholder="https://…/v1"
@@ -156,7 +161,7 @@ export function ProviderConnectionDialog({
               />
             </Field>
             <div className="form-grid">
-              <Field label="认证方式">
+              <Field label={tr('认证方式')}>
                 <select
                   value={providerEdit.auth}
                   onChange={(e) =>
@@ -166,9 +171,9 @@ export function ProviderConnectionDialog({
                     })
                   }
                 >
-                  <option value="api-key">API Key（按协议设置请求头）</option>
+                  <option value="api-key">{tr('API Key（按协议设置请求头）')}</option>
                   <option value="bearer">Bearer Token</option>
-                  <option value="none">无需认证（本地 / 自建）</option>
+                  <option value="none">{tr('无需认证（本地 / 自建）')}</option>
                 </select>
               </Field>
               <ProviderSecretField
@@ -186,7 +191,7 @@ export function ProviderConnectionDialog({
                     setProviderEdit({ ...providerEdit, clearSecret: e.target.checked })
                   }
                 />
-                清除已保存的密钥
+                {tr('清除已保存的密钥')}
               </label>
             )}
           </>
@@ -215,17 +220,18 @@ export function ProviderConnectionDialog({
         />
         <button className="secondary" disabled={busy} onClick={fetchModels}>
           {busy ? <Spinner /> : <RefreshCw size={14} />}
-          保存连接并获取模型
+          {tr('保存连接并获取模型')}
         </button>
         <p className="muted">
-          {providerEdit.models.filter(Boolean).length} 个模型已配置，可在会话和 Agent 中搜索选择。
+          {providerEdit.models.filter(Boolean).length}
+          {tr(' 个模型已配置，可在会话和 Agent 中搜索选择。')}
         </p>
         <details>
-          <summary>高级：手动维护模型 ID</summary>
-          <Field label="模型列表（每行一个 ID）">
+          <summary>{tr('高级：手动维护模型 ID')}</summary>
+          <Field label={tr('模型列表（每行一个 ID）')}>
             <textarea
               rows={4}
-              placeholder="模型 ID，以服务商实际支持为准"
+              placeholder={tr('模型 ID，以服务商实际支持为准')}
               value={providerEdit.models.join('\n')}
               onChange={(e) =>
                 setProviderEdit({ ...providerEdit, models: e.target.value.split('\n') })
@@ -244,37 +250,41 @@ export function ProviderConnectionDialog({
         />
         <details className="thinking-settings">
           <summary>
-            高级：模型思考 ·{' '}
+            {tr('高级：模型思考 ·')}{' '}
             {providerEdit.thinkingEnabled === false
-              ? '关闭（支持时）'
+              ? tr('关闭（支持时）')
               : providerEdit.reasoningEffort
                 ? `${reasoningLabels[providerEdit.reasoningEffort]} · ${providerEdit.reasoningEffort}`
-                : '默认开启'}
+                : tr('默认开启')}
           </summary>
           <Field
-            label="模型思考"
-            hint="默认开启，供使用此连接的会话共用；保存后从下一轮生效。仅控制模型生成行为，思考摘要由服务决定是否返回。"
+            label={tr('模型思考')}
+            hint={tr(
+              '默认开启，供使用此连接的会话共用；保存后从下一轮生效。仅控制模型生成行为，思考摘要由服务决定是否返回。',
+            )}
           >
             <select
-              aria-label="模型思考"
+              aria-label={tr('模型思考')}
               value={providerEdit.thinkingEnabled !== false ? 'on' : 'off'}
               onChange={(e) =>
                 setProviderEdit({ ...providerEdit, thinkingEnabled: e.target.value === 'on' })
               }
             >
-              <option value="on">开启（默认）</option>
-              <option value="off">关闭（模型支持时）</option>
+              <option value="on">{tr('开启（默认）')}</option>
+              <option value="off">{tr('关闭（模型支持时）')}</option>
             </select>
           </Field>
           {['codex', 'openai-chat', 'openai-responses', 'anthropic'].includes(
             providerEdit.protocol,
           ) && (
             <Field
-              label="思考强度"
-              hint="仅应用到支持档位的模型。旧版 Claude 使用下方 Token 预算；API 网关以服务实际支持为准。保存后从下一轮生效。"
+              label={tr('思考强度')}
+              hint={tr(
+                '仅应用到支持档位的模型。旧版 Claude 使用下方 Token 预算；API 网关以服务实际支持为准。保存后从下一轮生效。',
+              )}
             >
               <select
-                aria-label="思考强度"
+                aria-label={tr('思考强度')}
                 disabled={providerEdit.thinkingEnabled === false}
                 value={providerEdit.reasoningEffort ?? ''}
                 onChange={(e) =>
@@ -288,8 +298,8 @@ export function ProviderConnectionDialog({
               >
                 <option value="">
                   {['codex', 'anthropic'].includes(providerEdit.protocol)
-                    ? '模型默认'
-                    : '默认 · medium（支持时）'}
+                    ? tr('模型默认')
+                    : tr('默认 · medium（支持时）')}
                 </option>
                 {reasoningEfforts.map((effort) => (
                   <option key={effort} value={effort}>
@@ -301,8 +311,10 @@ export function ProviderConnectionDialog({
           )}
           {providerEdit.protocol === 'anthropic' && (
             <Field
-              label="旧版 Claude 思考预算 Tokens"
-              hint="仅用于手动思考模型；留空沿用现有默认。至少 1024，且小于单次最大输出 Tokens。自适应模型使用上方强度。"
+              label={tr('旧版 Claude 思考预算 Tokens')}
+              hint={tr(
+                '仅用于手动思考模型；留空沿用现有默认。至少 1024，且小于单次最大输出 Tokens。自适应模型使用上方强度。',
+              )}
             >
               <input
                 type="number"
@@ -321,13 +333,17 @@ export function ProviderConnectionDialog({
             </Field>
           )}
           <p className="muted">
-            始终思考的模型无法彻底关闭，会使用支持的最低强度。未识别的兼容模型和未提供开关的订阅模型沿用服务默认，并在运行记录中说明。
+            {tr(
+              '始终思考的模型无法彻底关闭，会使用支持的最低强度。未识别的兼容模型和未提供开关的订阅模型沿用服务默认，并在运行记录中说明。',
+            )}
           </p>
         </details>
         <div className="form-grid">
           <Field
-            label="单次最大输出 Tokens"
-            hint="每次模型请求的输出预算；部分服务会将思考计入预算。服务或网关仍可能另设更低上限。"
+            label={tr('单次最大输出 Tokens')}
+            hint={tr(
+              '每次模型请求的输出预算；部分服务会将思考计入预算。服务或网关仍可能另设更低上限。',
+            )}
           >
             <input
               type="number"
@@ -340,8 +356,8 @@ export function ProviderConnectionDialog({
             />
           </Field>
           <Field
-            label="历史上下文"
-            hint="所有模型均由 Codex 自动压缩上下文并继续任务，完整记录保留在本地。"
+            label={tr('历史上下文')}
+            hint={tr('所有模型均由 Codex 自动压缩上下文并继续任务，完整记录保留在本地。')}
           >
             <select
               value={providerEdit.contextChars === 0 ? 'unlimited' : 'compact'}
@@ -352,14 +368,16 @@ export function ProviderConnectionDialog({
                 })
               }
             >
-              <option value="unlimited">自动压缩（不设手动上限）</option>
-              <option value="compact">自定义压缩阈值</option>
+              <option value="unlimited">{tr('自动压缩（不设手动上限）')}</option>
+              <option value="compact">{tr('自定义压缩阈值')}</option>
             </select>
           </Field>
           {providerEdit.contextChars !== 0 && (
             <Field
-              label="自动整理阈值（字符）"
-              hint="上下文字符预算，按约 4 字符折算 1 Token，Codex 在窗口的 80% 处自动整理；不是模型实际容量。"
+              label={tr('自动整理阈值（字符）')}
+              hint={tr(
+                '上下文字符预算，按约 4 字符折算 1 Token，Codex 在窗口的 80% 处自动整理；不是模型实际容量。',
+              )}
             >
               <input
                 type="number"
@@ -391,7 +409,7 @@ export function ProviderConnectionDialog({
               }
             >
               <Trash2 size={15} />
-              删除连接
+              {tr('删除连接')}
             </button>
           )}
         <span className="spacer" />
@@ -401,11 +419,12 @@ export function ProviderConnectionDialog({
           onClick={() => saveProvider(true)}
         >
           {providerEdit.protocol === 'codex' || ['kimi', 'minimax'].includes(providerEdit.protocol)
-            ? '保存并检查账号'
-            : '保存并测试调用'}
+            ? tr('保存并检查账号')
+            : tr('保存并测试调用')}
         </button>
         <button className="primary" disabled={busy} onClick={() => saveProvider()}>
-          {busy ? <Spinner /> : <Check size={15} />}保存连接
+          {busy ? <Spinner /> : <Check size={15} />}
+          {tr('保存连接')}
         </button>
       </div>
     </Modal>
@@ -427,17 +446,22 @@ function ModelPoolFields({
     onChange(pool.map((entry, i) => (i === index ? { ...entry, ...patch } : entry)));
   return (
     <details className="model-pool-settings" open={pool.length > 0 || undefined}>
-      <summary>自动模型路由{pool.length ? ` · ${pool.length} 项` : ' · 未配置'}</summary>
-      <p className="muted">具体规则优先，未匹配时使用通用默认；每轮开始选择，执行中保持不变。</p>
+      <summary>
+        {tr('自动模型路由')}
+        {pool.length ? tr(' · {0} 项', [pool.length]) : tr(' · 未配置')}
+      </summary>
+      <p className="muted">
+        {tr('具体规则优先，未匹配时使用通用默认；每轮开始选择，执行中保持不变。')}
+      </p>
       <div className="model-pool-table">
         {!!pool.length && (
           <div className="model-pool-header" aria-hidden="true">
-            <span>连接</span>
-            <span>模型</span>
-            <span>场景</span>
-            <span>阶段</span>
-            <span>思考</span>
-            <span>图片</span>
+            <span>{tr('连接')}</span>
+            <span>{tr('模型')}</span>
+            <span>{tr('场景')}</span>
+            <span>{tr('阶段')}</span>
+            <span>{tr('思考')}</span>
+            <span>{tr('图片')}</span>
             <span />
           </div>
         )}
@@ -446,7 +470,7 @@ function ModelPoolFields({
           return (
             <div className="model-pool-entry" key={index}>
               <select
-                aria-label={`路由 ${index + 1} 连接`}
+                aria-label={tr('路由 {0} 连接', [index + 1])}
                 title={target?.name}
                 value={entry.providerId}
                 onChange={(e) =>
@@ -456,22 +480,25 @@ function ModelPoolFields({
                   })
                 }
               >
-                {!target && <option value={entry.providerId}>连接已删除</option>}
+                {!target && <option value={entry.providerId}>{tr('连接已删除')}</option>}
                 {connections.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
-                    {p.enabled === false ? '（已停用）' : ''}
+                    {p.enabled === false ? tr('（已停用）') : ''}
                   </option>
                 ))}
               </select>
               <select
-                aria-label={`路由 ${index + 1} 模型`}
+                aria-label={tr('路由 {0} 模型', [index + 1])}
                 title={entry.model}
                 value={entry.model}
                 onChange={(e) => update(index, { model: e.target.value })}
               >
                 {!target?.models.includes(entry.model) && (
-                  <option value={entry.model}>{entry.model || '请先获取模型'}（不可用）</option>
+                  <option value={entry.model}>
+                    {entry.model || tr('请先获取模型')}
+                    {tr('（不可用）')}
+                  </option>
                 )}
                 {target?.models
                   .filter((m) => m.trim() && m !== automaticModel)
@@ -482,13 +509,13 @@ function ModelPoolFields({
                   ))}
               </select>
               <select
-                aria-label={`路由 ${index + 1} 场景`}
+                aria-label={tr('路由 {0} 场景', [index + 1])}
                 value={entry.scene}
                 onChange={(e) =>
                   update(index, { scene: e.target.value as ModelPoolEntry['scene'] })
                 }
               >
-                <option value="any">通用默认</option>
+                <option value="any">{tr('通用默认')}</option>
                 {Object.entries(modelScenes).map(([v, label]) => (
                   <option key={v} value={v}>
                     {label}
@@ -496,13 +523,13 @@ function ModelPoolFields({
                 ))}
               </select>
               <select
-                aria-label={`路由 ${index + 1} 阶段`}
+                aria-label={tr('路由 {0} 阶段', [index + 1])}
                 value={entry.stage}
                 onChange={(e) =>
                   update(index, { stage: e.target.value as ModelPoolEntry['stage'] })
                 }
               >
-                <option value="any">所有阶段</option>
+                <option value="any">{tr('所有阶段')}</option>
                 {Object.entries(modelStages).map(([v, label]) => (
                   <option key={v} value={v}>
                     {label}
@@ -510,7 +537,7 @@ function ModelPoolFields({
                 ))}
               </select>
               <select
-                aria-label={`路由 ${index + 1} 思考强度`}
+                aria-label={tr('路由 {0} 思考强度', [index + 1])}
                 value={entry.reasoningEffort ?? ''}
                 onChange={(e) =>
                   update(index, {
@@ -519,24 +546,24 @@ function ModelPoolFields({
                   })
                 }
               >
-                <option value="">跟随连接</option>
+                <option value="">{tr('跟随连接')}</option>
                 {reasoningEfforts.map((v) => (
                   <option key={v} value={v}>
                     {reasoningLabels[v]} · {v}
                   </option>
                 ))}
               </select>
-              <label className="model-pool-images" title="按模型实际能力启用图片支持">
+              <label className="model-pool-images" title={tr('按模型实际能力启用图片支持')}>
                 <input
                   type="checkbox"
-                  aria-label={`路由 ${index + 1} 支持图片`}
+                  aria-label={tr('路由 {0} 支持图片', [index + 1])}
                   checked={!!entry.images}
                   onChange={(e) => update(index, { images: e.target.checked })}
                 />
               </label>
               <button
                 className="icon-button"
-                aria-label={`删除路由 ${index + 1}`}
+                aria-label={tr('删除路由 {0}', [index + 1])}
                 onClick={() => onChange(pool.filter((_, i) => i !== index))}
               >
                 <Trash2 size={14} />
@@ -546,7 +573,7 @@ function ModelPoolFields({
         })}
       </div>
       {!!pool.length && !pool.some((e) => e.scene === 'any' && e.stage === 'any') && (
-        <p className="danger">请保留至少一项通用默认模型。</p>
+        <p className="danger">{tr('请保留至少一项通用默认模型。')}</p>
       )}
       <button
         className="secondary"
@@ -564,9 +591,12 @@ function ModelPoolFields({
           ]);
         }}
       >
-        添加模型到池
+        {tr('添加模型到池')}
       </button>
-      <p className="muted">保存后在会话选择“自动路由”。图片支持按模型实际能力勾选。</p>
+      <p className="muted">{tr('保存后在会话选择“自动路由”。图片支持按模型实际能力勾选。')}</p>
     </details>
   );
 }
+
+const modelScenes = localized(raw_modelScenes);
+const modelStages = localized(raw_modelStages);

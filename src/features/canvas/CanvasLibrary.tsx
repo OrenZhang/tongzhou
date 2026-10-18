@@ -1,3 +1,4 @@
+import { t as tr } from '../../shared/i18n';
 import { useEffect, useRef, useState } from 'react';
 import { Modal } from '../../components/components';
 import type { TongzhouAPI } from '../../shared/types';
@@ -74,7 +75,7 @@ export function CanvasLibrary({
     }
   };
   const catalog: Prompt[] = [...(mode === 'prompt' ? canvasPrompts : []), ...items];
-  const categoryOf = (p: Prompt) => p.category ?? (p.version ? '自定义' : '同舟内置');
+  const categoryOf = (p: Prompt) => p.category ?? (p.version ? tr('自定义') : tr('CoSail内置'));
   const visible = catalog.filter(
     (p) =>
       (!category || categoryOf(p) === category) &&
@@ -83,25 +84,25 @@ export function CanvasLibrary({
         .includes(query.trim().toLowerCase()),
   );
   return (
-    <Modal title={mode === 'prompt' ? '提示词库' : '工作流模板'} onClose={onClose} wide>
+    <Modal title={mode === 'prompt' ? tr('提示词库') : tr('工作流模板')} onClose={onClose} wide>
       <div className="canvas-library">
         <aside>
           <input
             ref={search}
-            aria-label="搜索名称或标签"
-            placeholder="搜索名称或标签"
+            aria-label={tr('搜索名称或标签')}
+            placeholder={tr('搜索名称或标签')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
           {mode === 'prompt' && (
             <label>
-              分类
+              {tr('分类')}
               <select
-                aria-label="提示词分类"
+                aria-label={tr('提示词分类')}
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
               >
-                <option value="">全部分类</option>
+                <option value="">{tr('全部分类')}</option>
                 {[...new Set(catalog.map(categoryOf))].map((c) => (
                   <option key={c}>{c}</option>
                 ))}
@@ -118,15 +119,21 @@ export function CanvasLibrary({
                 setEditing(true);
               }}
             >
-              新建提示词
+              {tr('新建提示词')}
             </button>
           )}
-          <small role="status">共 {visible.length} 条</small>
+          <small role="status">
+            {tr('共 ')}
+            {visible.length}
+            {tr(' 条')}
+          </small>
           {visible.map((p) => (
             <button key={p.id} aria-pressed={selected?.id === p.id} onClick={() => choose(p)}>
               <strong>{p.title}</strong>
               {mode === 'prompt' && <small>{categoryOf(p)}</small>}
-              <small>{p.tags.join(' · ') || (mode === 'template' ? '工作流模板' : '自定义')}</small>
+              <small>
+                {p.tags.join(' · ') || (mode === 'template' ? tr('工作流模板') : tr('自定义'))}
+              </small>
             </button>
           ))}
         </aside>
@@ -134,22 +141,22 @@ export function CanvasLibrary({
           {editing ? (
             <>
               <label>
-                名称
+                {tr('名称')}
                 <input value={title} maxLength={180} onChange={(e) => setTitle(e.target.value)} />
               </label>
               <label>
-                标签（逗号分隔）
+                {tr('标签（逗号分隔）')}
                 <input value={tags} onChange={(e) => setTags(e.target.value)} />
               </label>
               <label>
-                提示词
+                {tr('提示词')}
                 <textarea
-                  aria-label="提示词"
+                  aria-label={tr('提示词')}
                   rows={10}
                   value={content}
                   maxLength={32000}
                   onChange={(e) => setContent(e.target.value)}
-                  placeholder="使用 {{变量名}} 定义填写项"
+                  placeholder={tr('使用 {{变量名}} 定义填写项')}
                 />
               </label>
               <button
@@ -172,7 +179,7 @@ export function CanvasLibrary({
                   })
                 }
               >
-                保存到内容库
+                {tr('保存到内容库')}
               </button>
             </>
           ) : selected ? (
@@ -181,7 +188,9 @@ export function CanvasLibrary({
               {mode === 'template' ? (
                 <>
                   <p>
-                    恢复节点、连线、分组和提示词。使用前重新选择素材与插件连接，执行不会自动启动。
+                    {tr(
+                      '恢复节点、连线、分组和提示词。使用前重新选择素材与插件连接，执行不会自动启动。',
+                    )}
                   </p>
                   <button
                     disabled={busy}
@@ -192,7 +201,7 @@ export function CanvasLibrary({
                       })
                     }
                   >
-                    使用模板创建画布
+                    {tr('使用模板创建画布')}
                   </button>
                 </>
               ) : (
@@ -200,7 +209,7 @@ export function CanvasLibrary({
                   {selected.source && (
                     <div className="canvas-prompt-source">
                       <span>
-                        来源：
+                        {tr('来源：')}
                         <a
                           href={selected.source.url}
                           onClick={(e) => {
@@ -215,31 +224,34 @@ export function CanvasLibrary({
                         · {selected.source.author}
                       </span>
                       <small>
-                        版本 {selected.source.revision.slice(0, 12)} · {selected.source.changes}
+                        {tr('版本 ')}
+                        {selected.source.revision.slice(0, 12)} · {selected.source.changes}
                       </small>
                       {selected.category === 'AI-drwa · 执行规范' && (
                         <small>
-                          执行规范需配合对应的完整原始模板与统一适配规则使用；文中的项目路径需按实际工作区准备。
+                          {tr(
+                            '执行规范需配合对应的完整原始模板与统一适配规则使用；文中的项目路径需按实际工作区准备。',
+                          )}
                         </small>
                       )}
                     </div>
                   )}
-                  <pre className="canvas-prompt-content" tabIndex={0} aria-label="提示词全文">
+                  <pre className="canvas-prompt-content" tabIndex={0} aria-label={tr('提示词全文')}>
                     {selected.content}
                   </pre>
                   {promptVariables(selected.content).map((name) => (
                     <label key={name}>
                       {name}
                       <textarea
-                        aria-label={`变量 ${name}`}
+                        aria-label={tr('变量 {0}', [name])}
                         value={values[name] ?? ''}
                         onChange={(e) => setValues({ ...values, [name]: e.target.value })}
                       />
                     </label>
                   ))}
                   <div className="canvas-inline-actions">
-                    <button onClick={() => insert(false)}>插入为文本节点</button>
-                    <button onClick={() => insert(true)}>填入选中节点</button>
+                    <button onClick={() => insert(false)}>{tr('插入为文本节点')}</button>
+                    <button onClick={() => insert(true)}>{tr('填入选中节点')}</button>
                     <button
                       onClick={() => {
                         setTitle(selected.title);
@@ -248,7 +260,7 @@ export function CanvasLibrary({
                         setEditing(true);
                       }}
                     >
-                      {selected.version ? '编辑' : '另存为自定义'}
+                      {selected.version ? tr('编辑') : tr('另存为自定义')}
                     </button>
                   </div>
                 </>
@@ -257,8 +269,8 @@ export function CanvasLibrary({
           ) : (
             <p>
               {mode === 'template'
-                ? '选择已保存的模板，或先在画布工具栏“保存为模板”。'
-                : '选择提示词，填写变量后插入画布。自定义内容保存在内容库的“画布提示词”目录。'}
+                ? tr('选择已保存的模板，或先在画布工具栏“保存为模板”。')
+                : tr('选择提示词，填写变量后插入画布。自定义内容保存在内容库的“画布提示词”目录。')}
             </p>
           )}
           {error && <p role="alert">{error}</p>}

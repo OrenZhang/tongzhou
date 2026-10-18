@@ -278,7 +278,8 @@ try {
   await copyFeedback.filter({ hasText: /已复制示例|系统剪贴板暂不可用/ }).waitFor();
   const clipboardUnavailable = (await copyFeedback.innerText()).includes('剪贴板暂不可用');
   if (clipboardUnavailable) assert.equal(await copyFeedback.getAttribute('role'), 'alert');
-  else assert.match(await app.evaluate(({ clipboard }) => clipboard.readText()), /同舟有哪些会话/);
+  else
+    assert.match(await app.evaluate(({ clipboard }) => clipboard.readText()), /CoSail有哪些会话/);
   await card.locator('.client-capability-catalog > summary').click();
   await card.getByLabel('搜索客户端功能').fill('机器人');
   await card.getByText('重新连接已有机器人', { exact: true }).waitFor();

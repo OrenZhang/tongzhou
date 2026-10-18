@@ -66,7 +66,7 @@ export const projectsPlugin: Plugin.Object<void> = {
       operation(
         '项目与 Git',
         'change',
-        '移除同舟创建且无未保存或未推送更改的工作树',
+        '移除CoSail创建且无未保存或未推送更改的工作树',
         [idSchema.describe('worktreeProjectId')],
         { confirmation: 'always' },
       ),

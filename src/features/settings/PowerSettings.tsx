@@ -1,3 +1,4 @@
+import { t as tr } from '../../shared/i18n';
 import { useEffect, useState } from 'react';
 import { PlugZap } from 'lucide-react';
 import type { PowerPreferences, PowerState } from '../../shared/power';
@@ -43,24 +44,24 @@ export function PowerSettings({ api }: { api: TongzhouAPI }) {
     }
   }
   return (
-    <section className="settings-card power-settings" aria-label="电源与睡眠">
+    <section className="settings-card power-settings" aria-label={tr('电源与睡眠')}>
       <div className="settings-card-title">
         <PlugZap size={22} />
         <div>
-          <h3>电源与睡眠</h3>
-          <p>接通电源时让同舟继续运行，屏幕仍可正常熄灭。</p>
+          <h3>{tr('电源与睡眠')}</h3>
+          <p>{tr('接通电源时让CoSail继续运行，屏幕仍可正常熄灭。')}</p>
         </div>
       </div>
       {state && (
         <>
           <p role="status">
             {!state.supported
-              ? '此功能目前支持 Windows 和 macOS。'
+              ? tr('此功能目前支持 Windows 和 macOS。')
               : state.onBatteryPower
-                ? '当前使用电池 · 保持唤醒已暂停，遵循系统睡眠设置'
+                ? tr('当前使用电池 · 保持唤醒已暂停，遵循系统睡眠设置')
                 : state.active
-                  ? '已接通电源 · 正在保持唤醒'
-                  : '已接通电源 · 遵循系统睡眠设置'}
+                  ? tr('已接通电源 · 正在保持唤醒')
+                  : tr('已接通电源 · 遵循系统睡眠设置')}
           </p>
           <label className="task-confirm">
             <input
@@ -74,9 +75,11 @@ export function PowerSettings({ api }: { api: TongzhouAPI }) {
                 })
               }
             />
-            接通电源时保持唤醒
+            {tr('接通电源时保持唤醒')}
           </label>
-          <p>防止空闲自动睡眠。最小化或隐藏到托盘后继续生效；拔掉电源或退出同舟后恢复。</p>
+          <p>
+            {tr('防止空闲自动睡眠。最小化或隐藏到托盘后继续生效；拔掉电源或退出CoSail后恢复。')}
+          </p>
           <label className="task-confirm">
             <input
               type="checkbox"
@@ -93,22 +96,29 @@ export function PowerSettings({ api }: { api: TongzhouAPI }) {
                 })
               }
             />
-            接通电源时合盖不睡眠
+            {tr('接通电源时合盖不睡眠')}
           </label>
           <p>
             {state.platform === 'darwin'
-              ? '无需外接显示器。启用时需管理员授权，会临时禁用系统睡眠（包括手动睡眠）；拔电、关闭功能或退出后恢复。每次启动同舟后需重新开启合盖模式。'
-              : '临时修改接通电源时的合盖动作，电池合盖策略保持不变；关闭功能或退出同舟后恢复原设置。'}
+              ? tr(
+                  '无需外接显示器。启用时需管理员授权，会临时禁用系统睡眠（包括手动睡眠）；拔电、关闭功能或退出后恢复。每次启动CoSail后需重新开启合盖模式。',
+                )
+              : tr(
+                  '临时修改接通电源时的合盖动作，电池合盖策略保持不变；关闭功能或退出CoSail后恢复原设置。',
+                )}
           </p>
           {state.keepAwakeWhenLidClosed && (
             <p role="status">
-              {state.lidActive && state.active ? '合盖保持唤醒已生效' : '合盖保持唤醒尚未生效'}
+              {state.lidActive && state.active
+                ? tr('合盖保持唤醒已生效')
+                : tr('合盖保持唤醒尚未生效')}
             </p>
           )}
-          <p>合盖运行时请保持散热通畅，勿将运行中的电脑放入包内。</p>
+          <p>{tr('合盖运行时请保持散热通畅，勿将运行中的电脑放入包内。')}</p>
           {busy && (
             <p role="status">
-              正在应用电源设置{state.platform === 'darwin' ? '，如弹出系统授权窗口请完成授权' : ''}…
+              {tr('正在应用电源设置')}
+              {state.platform === 'darwin' ? tr('，如弹出系统授权窗口请完成授权') : ''}…
             </p>
           )}
           {(error || state.error) && (
@@ -124,13 +134,13 @@ export function PowerSettings({ api }: { api: TongzhouAPI }) {
                   })
                 }
               >
-                重试电源设置
+                {tr('重试电源设置')}
               </button>
             </div>
           )}
         </>
       )}
-      {!state && <p role={error ? 'alert' : 'status'}>{error || '正在读取电源状态…'}</p>}
+      {!state && <p role={error ? 'alert' : 'status'}>{error || tr('正在读取电源状态…')}</p>}
     </section>
   );
 }

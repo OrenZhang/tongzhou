@@ -124,7 +124,7 @@ try {
   await page.getByLabel('回复语言', { exact: true }).selectOption('zh');
   assert.equal(await page.getByLabel('回答长度', { exact: true }).inputValue(), 'concise');
   await page.getByText('调整助手性格（高级）', { exact: true }).click();
-  await page.getByLabel('同舟的通用性格', { exact: true }).fill('温暖但直截了当，像可靠的同事');
+  await page.getByLabel('CoSail的通用性格', { exact: true }).fill('温暖但直截了当，像可靠的同事');
   await page.getByLabel('补充要求', { exact: true }).fill('称呼我小林，使用中文');
   await page.getByLabel('沟通方式', { exact: true }).check();
   await page.getByRole('button', { name: '保存偏好', exact: true }).click();

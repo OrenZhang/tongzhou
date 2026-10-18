@@ -12,7 +12,7 @@ await mkdir('test-results', { recursive: true });
 const root = await mkdtemp(path.resolve('test-results/computer-'));
 await writeFile(
   path.join(root, 'fixture.html'),
-  `<html><head><title>同舟电脑控制测试</title><meta charset="utf-8"></head><body><h1>同舟电脑控制测试</h1><input autofocus id="sample" style="font-size:24px"/><p>此窗口仅供自动化测试，输入不会发送到外部服务。</p><button id="click-test" onclick="this.textContent=confirm('同舟独立测试确认框，请取消')?'已确认':'已取消'">验证点击</button></body></html>`,
+  `<html><head><title>CoSail电脑控制测试</title><meta charset="utf-8"></head><body><h1>CoSail电脑控制测试</h1><input autofocus id="sample" style="font-size:24px"/><p>此窗口仅供自动化测试，输入不会发送到外部服务。</p><button id="click-test" onclick="this.textContent=confirm('CoSail独立测试确认框，请取消')?'已确认':'已取消'">验证点击</button></body></html>`,
 );
 let stage = 0,
   frame,
@@ -60,7 +60,7 @@ const server = createServer(async (req, res) => {
     }
     if (stage === 1) {
       const windows = JSON.parse(result.content);
-      const target = windows.find((w) => w.title === '同舟电脑控制测试');
+      const target = windows.find((w) => w.title === 'CoSail电脑控制测试');
       windowId = target?.id;
       windowBounds = target?.bounds;
     }
@@ -68,7 +68,7 @@ const server = createServer(async (req, res) => {
   const actions = [
     ['computer_windows', {}],
     ['computer_screenshot', { windowId }],
-    ['computer_type', { frameId: frame, text: '同舟输入测试' }],
+    ['computer_type', { frameId: frame, text: 'CoSail输入测试' }],
     ['computer_screenshot', { windowId }],
     ['computer_key', { frameId: frame, key: 'CTRL+A' }],
     ['computer_screenshot', { windowId }],
@@ -123,12 +123,12 @@ try {
   await page.waitForSelector('.app-shell');
   inspectPointer = () =>
     app.evaluate(({ BrowserWindow }) => {
-      return BrowserWindow.getAllWindows().some((w) => w.getTitle() === '同舟操作指针');
+      return BrowserWindow.getAllWindows().some((w) => w.getTitle() === 'CoSail操作指针');
     });
   await app.evaluate(({ app }) => {
     globalThis.pointerObservations = [];
     app.on('browser-window-created', (_event, window) => {
-      if (window.getTitle() !== '同舟操作指针') return;
+      if (window.getTitle() !== 'CoSail操作指针') return;
       globalThis.pointerObservations.push(window.getTitle());
     });
   });
@@ -137,7 +137,7 @@ try {
       const fixture = new BrowserWindow({
         width: 720,
         height: 400,
-        title: '同舟电脑控制测试',
+        title: 'CoSail电脑控制测试',
         webPreferences: { nodeIntegration: false, contextIsolation: true },
       });
       await fixture.loadFile(file);
@@ -162,7 +162,7 @@ try {
   await chooseOption(page, '当前连接', 'computer-fixture');
   await page
     .getByLabel('消息', { exact: true })
-    .fill('仅操作同舟电脑控制测试窗口，验证中文输入和快捷键');
+    .fill('仅操作CoSail电脑控制测试窗口，验证中文输入和快捷键');
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
   for (let i = 0; i < 12; i++) {
     await app.evaluate(({ app, BrowserWindow }) => {

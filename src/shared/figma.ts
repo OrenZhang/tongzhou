@@ -7,7 +7,7 @@ export const figmaDocsUrl =
 export const figmaToolsUrl =
   'https://developers.figma.com/docs/figma-mcp-server/tools-and-prompts/';
 export const figmaAccessMessage =
-  '同舟已申请全部读写工具接入，尚未获批。Figma 当前暂停新增远程 MCP 客户端；注册 REST OAuth 应用不代表获得 MCP 接入资格。可使用桌面 MCP 读取设计上下文，FigJam 图表生成需要远程服务。';
+  'CoSail已申请全部读写工具接入，尚未获批。Figma 当前暂停新增远程 MCP 客户端；注册 REST OAuth 应用不代表获得 MCP 接入资格。可使用桌面 MCP 读取设计上下文，FigJam 图表生成需要远程服务。';
 
 export function figmaConnection(config: Pick<PluginConfig, 'transport' | 'url'>) {
   if (config.transport !== 'http') return;
@@ -15,7 +15,7 @@ export function figmaConnection(config: Pick<PluginConfig, 'transport' | 'url'>)
   return url === figmaRemoteUrl ? 'remote' : url === figmaDesktopUrl ? 'desktop' : undefined;
 }
 
-/** Official Figma connections use a client managed by Tongzhou, not a user's REST OAuth app. */
+/** Official Figma connections use a client managed by CoSail, not a user's REST OAuth app. */
 export function configureFigmaPlugin(input: PluginInput): PluginInput {
   const mode = figmaConnection(input);
   return mode

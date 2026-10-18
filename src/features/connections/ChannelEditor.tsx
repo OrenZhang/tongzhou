@@ -1,3 +1,4 @@
+import { t as tr } from '../../shared/i18n';
 import { useState } from 'react';
 import { Modal } from '../../components/components';
 import { EmailFields } from '../chat/NotificationControls';
@@ -30,7 +31,7 @@ export function ChannelEditor({
     }
   };
   return (
-    <Modal title="配置通知渠道" onClose={() => onClose()}>
+    <Modal title={tr('配置通知渠道')} onClose={() => onClose()}>
       <form
         className="connection-form"
         onSubmit={(e) => {
@@ -49,7 +50,7 @@ export function ChannelEditor({
         )}
 
         <label>
-          名称
+          {tr('名称')}
           <input
             required
             value={channel.name}
@@ -59,7 +60,7 @@ export function ChannelEditor({
         {channel.kind === 'email' && <EmailFields channel={channel} onChange={setChannel} />}
         {channel.kind !== 'email' && channel.mode !== 'app' && (
           <label>
-            Webhook（留空保留）
+            {tr('Webhook（留空保留）')}
             <input
               type="password"
               autoComplete="off"
@@ -70,7 +71,7 @@ export function ChannelEditor({
         )}
         {channel.kind !== 'email' && channel.mode !== 'app' && channel.kind !== 'wecom' && (
           <label>
-            签名密钥（修改时填写）
+            {tr('签名密钥（修改时填写）')}
             <input
               type="password"
               autoComplete="off"
@@ -82,9 +83,9 @@ export function ChannelEditor({
         {channel.mode === 'app' && (
           <>
             <label>
-              收件人类型
+              {tr('收件人类型')}
               <select
-                aria-label="收件人类型"
+                aria-label={tr('收件人类型')}
                 value={channel.receiveIdType ?? 'open_id'}
                 onChange={(e) =>
                   setChannel({
@@ -93,12 +94,12 @@ export function ChannelEditor({
                   })
                 }
               >
-                <option value="open_id">个人 open_id</option>
-                <option value="chat_id">群 chat_id</option>
+                <option value="open_id">{tr('个人 open_id')}</option>
+                <option value="chat_id">{tr('群 chat_id')}</option>
               </select>
             </label>
             <label>
-              收件人 / 群 ID
+              {tr('收件人 / 群 ID')}
               <input
                 value={channel.receiveId ?? ''}
                 onChange={(e) => setChannel({ ...channel, receiveId: e.target.value })}
@@ -108,10 +109,10 @@ export function ChannelEditor({
         )}
         <div className="row">
           <button className="primary" disabled={!!busy}>
-            保存
+            {tr('保存')}
           </button>
           <button type="button" onClick={() => onClose()}>
-            取消
+            {tr('取消')}
           </button>
         </div>
       </form>

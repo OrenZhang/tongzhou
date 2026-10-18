@@ -1,3 +1,4 @@
+import { t as tr } from '../../shared/i18n';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, Search, type LucideIcon } from 'lucide-react';
 import { Modal } from '../components';
@@ -25,18 +26,18 @@ export function CommandPalette({ actions, onClose }: { actions: QuickAction[]; o
     list.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
   }, [active, query]);
   return (
-    <Modal title="搜索与快捷操作" onClose={onClose}>
+    <Modal title={tr('搜索与快捷操作')} onClose={onClose}>
       <div className="command-palette">
         <div className="command-search">
           <Search size={18} />
           <input
             autoFocus
             role="combobox"
-            aria-label="搜索操作或会话"
+            aria-label={tr('搜索操作或会话')}
             aria-expanded="true"
             aria-controls="quick-action-list"
             aria-activedescendant={matches[active] ? `quick-action-${active}` : undefined}
-            placeholder="搜索会话、项目或功能…"
+            placeholder={tr('搜索会话、项目或功能…')}
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -65,7 +66,7 @@ export function CommandPalette({ actions, onClose }: { actions: QuickAction[]; o
           className="command-results"
           role="listbox"
           id="quick-action-list"
-          aria-label="快捷操作结果"
+          aria-label={tr('快捷操作结果')}
           ref={list}
         >
           {matches.map((action, index) => (
@@ -89,19 +90,21 @@ export function CommandPalette({ actions, onClose }: { actions: QuickAction[]; o
           {!matches.length && (
             <div className="empty-state compact">
               <Search size={24} />
-              <p>没有找到匹配项，试试其他关键词。</p>
+              <p>{tr('没有找到匹配项，试试其他关键词。')}</p>
             </div>
           )}
         </div>
         <div className="command-footer">
           <span>
             <kbd>↑</kbd>
-            <kbd>↓</kbd> 选择
+            <kbd>↓</kbd>
+            {tr(' 选择')}
           </span>
           <span>
-            <kbd>Enter</kbd> 打开
+            <kbd>Enter</kbd>
+            {tr(' 打开')}
           </span>
-          <span>只搜索本地会话与功能</span>
+          <span>{tr('只搜索本地会话与功能')}</span>
         </div>
       </div>
     </Modal>

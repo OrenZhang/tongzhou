@@ -860,7 +860,7 @@ describe('conversation input and lifecycle changes', () => {
         expect(f.store.get<Run>('run', id)).toMatchObject({
           status: 'completed',
           model: builtinReplyModel,
-          agentName: '同舟',
+          agentName: 'CoSail',
           inputTokens: 0,
           outputTokens: 0,
         });
@@ -893,7 +893,7 @@ describe('conversation input and lifecycle changes', () => {
     expect(f.requests).toHaveLength(2);
     for (const request of f.requests) {
       const system = request.messages.find((m: any) => m.role === 'system').content;
-      expect(system).toContain('【同舟通用提示词】');
+      expect(system).toContain('【CoSail通用提示词】');
       expect(system).toContain('"mock"');
       expect(system).toContain('Use tools when needed.');
     }
@@ -944,7 +944,7 @@ describe('conversation input and lifecycle changes', () => {
       expect(system).not.toContain('称呼我小林');
       expect(system).toContain('温和的技术导师');
       expect(system).toContain('用小例子解释代码');
-      expect(system).toContain('【同舟通用提示词】');
+      expect(system).toContain('【CoSail通用提示词】');
     }
   });
   it('persists a queued next turn and runs it once after the current turn', async () => {

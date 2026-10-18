@@ -1,3 +1,4 @@
+import { t as tr } from '../../shared/i18n';
 import { useState } from 'react';
 import type { Provider, TongzhouAPI } from '../../shared/types';
 import type { ConnectionCheck } from '../../shared/connection-diagnostics';
@@ -18,21 +19,21 @@ export function ConnectionDiagnostics({
   const selected = models.includes(model) ? model : models[0] || '';
   return (
     <section className="task-block">
-      <h3>分项连接检测</h3>
-      <p className="muted">分别检查网络、账号与模型。授权通过不会被标记为推理通过。</p>
+      <h3>{tr('分项连接检测')}</h3>
+      <p className="muted">{tr('分别检查网络、账号与模型。授权通过不会被标记为推理通过。')}</p>
       <label className="checkbox-line">
         <input
           type="checkbox"
           checked={inference}
           onChange={(e) => setInference(e.target.checked)}
         />
-        直接 API 同时做一次真实推理和无副作用工具测试（可能计费）
+        {tr('直接 API 同时做一次真实推理和无副作用工具测试（可能计费）')}
       </label>
       {inference && (
         <label>
-          检测模型
+          {tr('检测模型')}
           <select
-            aria-label="检测模型"
+            aria-label={tr('检测模型')}
             value={selected}
             disabled={busy}
             onChange={(e) => {
@@ -62,12 +63,12 @@ export function ConnectionDiagnostics({
             .finally(() => setBusy(false));
         }}
       >
-        {busy ? '正在检测…' : checks.length ? '重新检测' : '保存并分项检测'}
+        {busy ? tr('正在检测…') : checks.length ? tr('重新检测') : tr('保存并分项检测')}
       </button>
       {checks.map((c, i) => (
         <div className="settings-row" key={i}>
           <span>
-            {c.name} · {{ passed: '通过', failed: '失败', unknown: '待验证' }[c.status]}
+            {c.name} · {{ passed: tr('通过'), failed: tr('失败'), unknown: tr('待验证') }[c.status]}
           </span>
           <span>
             {c.detail} {c.ms > 0 ? `(${c.ms} ms)` : ''}

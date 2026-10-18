@@ -1,3 +1,5 @@
+import { providerLabel } from '../../shared/provider-label';
+import { t as tr } from '../../shared/i18n';
 import { Minus, Settings2, Check, LoaderCircle, AlertCircle, ArrowUp, Square } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { canvasChatTurns, canvasChatError, canvasToolLabels } from '../../shared/canvas-chat';
@@ -197,7 +199,7 @@ export function CanvasAssistant({
     .flatMap((p) =>
       p.models.map((model) => ({
         key: JSON.stringify([p.id, model]),
-        label: `${p.name} · ${p.modelLabels?.[model] ?? model}`,
+        label: `${providerLabel(p)} · ${p.modelLabels?.[model] ?? model}`,
       })),
     );
   const currentModel = session ? JSON.stringify([session.providerId, session.model]) : '';
@@ -208,41 +210,43 @@ export function CanvasAssistant({
   const activeTools = messages.filter((m) => m.runId === running?.id && m.role === 'tool');
   const activeTool = activeTools.at(-1);
   const status = approvals.length
-    ? '等待你确认'
+    ? tr('等待你确认')
     : activeTool?.status === 'streaming'
-      ? (canvasToolLabels[activeTool.toolName ?? ''] ?? '正在执行操作')
+      ? (canvasToolLabels[activeTool.toolName ?? ''] ?? tr('正在执行操作'))
       : /参数格式不完整/.test(activity?.text ?? '')
-        ? '正在重新整理修改参数…'
-        : '正在分析并配置画布…';
+        ? tr('正在重新整理修改参数…')
+        : tr('正在分析并配置画布…');
   return (
-    <section className="canvas-assistant" aria-label="画布助手">
+    <section className="canvas-assistant" aria-label={tr('画布助手')}>
       <header className="canvas-chat-heading">
-        <strong>画布助手</strong>
+        <strong>{tr('画布助手')}</strong>
         <div className="canvas-inline-actions">
           <button
-            aria-label="会话设置"
-            title="模型与会话设置"
+            aria-label={tr('会话设置')}
+            title={tr('模型与会话设置')}
             aria-expanded={settingsOpen}
             onClick={() => setSettingsOpen(!settingsOpen)}
           >
             <Settings2 size={16} />
           </button>
-          <button aria-label="收起画布聊天" title="收起" onClick={onCollapse}>
+          <button aria-label={tr('收起画布聊天')} title={tr('收起')} onClick={onCollapse}>
             <Minus size={16} />
           </button>
         </div>
       </header>
       {settingsOpen && (
         <div className="canvas-chat-settings">
-          <small>画布聊天默认完全开放；沿用会话中已明确设置的权限。权限修改也适用于该会话。</small>
+          <small>
+            {tr('画布聊天默认完全开放；沿用会话中已明确设置的权限。权限修改也适用于该会话。')}
+          </small>
           <div className="canvas-chat-session">
             <select
-              aria-label="画布聊天会话"
+              aria-label={tr('画布聊天会话')}
               value={session?.id ?? ''}
               disabled={busy || working}
               onChange={(e) => void perform(() => onBind(e.target.value))}
             >
-              <option value="">选择会话</option>
+              <option value="">{tr('选择会话')}</option>
               {data.sessions
                 .filter((s) => isUserSession(s) && !s.archived)
                 .map((s) => (
@@ -252,15 +256,15 @@ export function CanvasAssistant({
                 ))}
             </select>
             <button disabled={busy || working} onClick={() => void perform(createSession)}>
-              新建会话
+              {tr('新建会话')}
             </button>
           </div>
           {session && (
             <>
               <label>
-                执行权限
+                {tr('执行权限')}
                 <select
-                  aria-label="画布聊天权限"
+                  aria-label={tr('画布聊天权限')}
                   value={permission}
                   disabled={busy || agent?.permission === 'read-only'}
                   onChange={(e) =>
@@ -276,14 +280,14 @@ export function CanvasAssistant({
                   ))}
                 </select>
               </label>
-              <button onClick={() => onSession(session)}>完整会话</button>
+              <button onClick={() => onSession(session)}>{tr('完整会话')}</button>
             </>
           )}
         </div>
       )}
       {session && (
         <select
-          aria-label="画布聊天模型"
+          aria-label={tr('画布聊天模型')}
           value={currentModel}
           disabled={busy || working}
           onChange={(e) =>
@@ -294,7 +298,7 @@ export function CanvasAssistant({
           }
         >
           {!models.some((m) => m.key === currentModel) && (
-            <option value={currentModel}>{session.model || '请选择模型'}</option>
+            <option value={currentModel}>{session.model || tr('请选择模型')}</option>
           )}
           {models.map((m) => (
             <option key={m.key} value={m.key}>
@@ -304,14 +308,16 @@ export function CanvasAssistant({
         </select>
       )}
       <small>
-        {canvas.selection.length ? `当前选中 ${canvas.selection.length} 个节点` : '围绕整个画布'} ·{' '}
-        {readOnly ? '当前会话只读，仅讨论' : '按需求直接配置，修改实时同步'}
+        {canvas.selection.length
+          ? tr('当前选中 {0} 个节点', [canvas.selection.length])
+          : tr('围绕整个画布')}{' '}
+        · {readOnly ? tr('当前会话只读，仅讨论') : tr('按需求直接配置，修改实时同步')}
       </small>
       <div
         className="canvas-chat-messages"
         ref={feed}
         role="log"
-        aria-label="画布聊天记录"
+        aria-label={tr('画布聊天记录')}
         onWheel={(e) => {
           if (e.deltaY < 0) follow.current = false;
         }}
@@ -353,14 +359,14 @@ export function CanvasAssistant({
               })
             }
           >
-            加载更早对话
+            {tr('加载更早对话')}
           </button>
         )}
         {!turns.length && (
           <div className="canvas-chat-empty">
-            <strong>你描述需求，我来配置画布</strong>
-            <p>创建节点、连接流程、调整参数，修改会直接显示在画布上。</p>
-            {['创建一个小猫图片生成节点', '搭建小说人物和场景提取流程'].map((text) => (
+            <strong>{tr('你描述需求，我来配置画布')}</strong>
+            <p>{tr('创建节点、连接流程、调整参数，修改会直接显示在画布上。')}</p>
+            {[tr('创建一个小猫图片生成节点'), tr('搭建小说人物和场景提取流程')].map((text) => (
               <button
                 key={text}
                 onClick={() => {
@@ -393,13 +399,14 @@ export function CanvasAssistant({
                     <details className="canvas-chat-steps">
                       <summary>
                         {applied
-                          ? `已更新画布 · ${applied} 次修改`
+                          ? tr('已更新画布 · {0} 次修改', [applied])
                           : run?.status === 'running'
-                            ? '正在处理'
+                            ? tr('正在处理')
                             : failed
-                              ? '处理未完成'
-                              : '处理记录'}{' '}
-                        · {tools.length} 步
+                              ? tr('处理未完成')
+                              : tr('处理记录')}{' '}
+                        · {tools.length}
+                        {tr(' 步')}
                       </summary>
                       {tools.map((tool) => (
                         <div key={tool.id}>
@@ -410,13 +417,13 @@ export function CanvasAssistant({
                           ) : (
                             <LoaderCircle size={12} className="spin" />
                           )}
-                          {canvasToolLabels[tool.toolName ?? ''] ?? tool.toolName ?? '工具操作'}
+                          {canvasToolLabels[tool.toolName ?? ''] ?? tool.toolName ?? tr('工具操作')}
                           <small>
                             {tool.status === 'complete'
-                              ? '完成'
+                              ? tr('完成')
                               : tool.status === 'error'
-                                ? '失败'
-                                : '进行中'}
+                                ? tr('失败')
+                                : tr('进行中')}
                           </small>
                         </div>
                       ))}
@@ -432,14 +439,14 @@ export function CanvasAssistant({
                   ))}
                   {final && !failed && run?.status === 'completed' && (
                     <details className="canvas-chat-actions">
-                      <summary>更多操作</summary>
+                      <summary>{tr('更多操作')}</summary>
                       <div className="canvas-inline-actions">
-                        <button onClick={() => onInsert(final, false)}>插入画布</button>
+                        <button onClick={() => onInsert(final, false)}>{tr('插入画布')}</button>
                         <button
                           disabled={canvas.selection.length !== 1}
                           onClick={() => onInsert(final, true)}
                         >
-                          替换选中节点
+                          {tr('替换选中节点')}
                         </button>
                       </div>
                     </details>
@@ -452,10 +459,10 @@ export function CanvasAssistant({
         {lastWorkflow && (
           <div className="canvas-chat-workflow" role="status">
             {lastWorkflow.status === 'running'
-              ? '工作流正在执行，结果会显示在节点上'
+              ? tr('工作流正在执行，结果会显示在节点上')
               : lastWorkflow.status === 'completed'
-                ? '工作流执行完成，可在节点中查看结果'
-                : '工作流未完成'}
+                ? tr('工作流执行完成，可在节点中查看结果')
+                : tr('工作流未完成')}
             {lastWorkflow.error && <small>{lastWorkflow.error}</small>}
           </div>
         )}
@@ -475,10 +482,10 @@ export function CanvasAssistant({
       {error && <p role="alert">{error}</p>}
       {!working && lastRun?.error && (
         <div className="canvas-chat-error" role="alert">
-          <strong>这次没有完成</strong>
+          <strong>{tr('这次没有完成')}</strong>
           <p>{canvasChatError(lastRun.error)}</p>
           <details>
-            <summary>错误详情</summary>
+            <summary>{tr('错误详情')}</summary>
             <p>{lastRun.error}</p>
           </details>
           {lastUser && (
@@ -487,12 +494,12 @@ export function CanvasAssistant({
                 disabled={busy || blocked}
                 onClick={() =>
                   void send(
-                    '继续完成：' +
+                    tr('继续完成：') +
                       canvasChatUserText(lastUser.content).replace(/^(继续完成：)+/, ''),
                   )
                 }
               >
-                继续完成
+                {tr('继续完成')}
               </button>
               <button
                 onClick={() => {
@@ -500,22 +507,22 @@ export function CanvasAssistant({
                   composer.current?.focus();
                 }}
               >
-                修改需求
+                {tr('修改需求')}
               </button>
             </div>
           )}
         </div>
       )}
       {!working && lastRun?.status === 'interrupted' && (
-        <small>回复已停止，可以继续描述需求。</small>
+        <small>{tr('回复已停止，可以继续描述需求。')}</small>
       )}
-      {blocked && <p role="alert">画布有并发修改，请先处理上方冲突，再继续发送。</p>}
+      {blocked && <p role="alert">{tr('画布有并发修改，请先处理上方冲突，再继续发送。')}</p>}
       <textarea
         ref={composer}
-        aria-label="向画布助手提问"
+        aria-label={tr('向画布助手提问')}
         value={prompt}
         onChange={(e) => editPrompt(e.target.value)}
-        placeholder="例如：搭建小说人物提取流程，再连接到图片生成节点"
+        placeholder={tr('例如：搭建小说人物提取流程，再连接到图片生成节点')}
         maxLength={12000}
         rows={3}
         onKeyDown={(e) => {
@@ -526,7 +533,7 @@ export function CanvasAssistant({
         }}
       />
       <div className="canvas-chat-send">
-        <small>Enter 发送 · Shift+Enter 换行</small>
+        <small>{tr('Enter 发送 · Shift+Enter 换行')}</small>
         {working ? (
           <button
             disabled={busy}
@@ -537,7 +544,8 @@ export function CanvasAssistant({
               })
             }
           >
-            <Square size={14} /> 停止回复
+            <Square size={14} />
+            {tr(' 停止回复')}
           </button>
         ) : (
           <button
@@ -545,13 +553,13 @@ export function CanvasAssistant({
             disabled={busy || blocked || !session?.providerId || !session.model || !prompt.trim()}
             onClick={() => void send()}
           >
-            <ArrowUp size={15} /> {busy ? '发送中…' : '发送'}
+            <ArrowUp size={15} /> {busy ? tr('发送中…') : tr('发送')}
           </button>
         )}
       </div>
       {!session && (
         <button disabled={busy} onClick={() => void perform(createSession)}>
-          新建画布会话，开始配置
+          {tr('新建画布会话，开始配置')}
         </button>
       )}
     </section>

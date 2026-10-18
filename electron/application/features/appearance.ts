@@ -13,9 +13,14 @@ export const appearancePlugin: Plugin.Object<void> = {
     const store = ctx.tzStore;
     const { emit, getWindow } = ctx.tzDesktop;
     const appearance = store
-      .list<{ id: string; theme: 'system' | 'light' | 'dark' }>('preferences')
+      .list<{
+        id: string;
+        theme: 'system' | 'light' | 'dark';
+        language?: 'zh-CN' | 'en';
+      }>('preferences')
       .find((p) => p.id === 'appearance');
     nativeTheme.themeSource = appearance?.theme ?? 'system';
+    emit({ type: 'appearance', value: normalizeAppearance(appearance) });
     const updateWindowTheme = () =>
       getWindow()?.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#17191e' : '#fafbfc');
     nativeTheme.on('updated', updateWindowTheme);
@@ -37,6 +42,7 @@ export const appearancePlugin: Plugin.Object<void> = {
       return store.list<any>('preferences').find((p) => p.id === 'appearance') ?? {};
     });
     const appearanceSchema = z.object({
+      language: z.enum(['zh-CN', 'en']).optional(),
       theme: z.enum(['system', 'light', 'dark']),
       style: z.enum(['graphite', 'blue', 'sand']),
       font: z.enum(['modern', 'system', 'serif']),
@@ -48,7 +54,8 @@ export const appearancePlugin: Plugin.Object<void> = {
         appearanceSchema,
       ]),
       (raw) => {
-        const value = normalizeAppearance(appearanceSchema.parse(raw));
+        const current = store.list<any>('preferences').find((p) => p.id === 'appearance');
+        const value = normalizeAppearance({ ...current, ...appearanceSchema.parse(raw) });
         store.put('preferences', { id: 'appearance', ...value });
         nativeTheme.themeSource = value.theme;
         updateWindowTheme();

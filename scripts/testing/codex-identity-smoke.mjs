@@ -157,14 +157,14 @@ try {
   });
   const { version } = JSON.parse(await readFile('package.json', 'utf8'));
   assert.ok(received.some((r) => r.url === '/v1/responses'));
-  for (const r of received) assert.equal(r.ua, `Tongzhou/${version}`);
+  for (const r of received) assert.equal(r.ua, `CoSail/${version}`);
   if (transport === 'auto')
     assert.ok(
       received.some((r) => r.websocket),
       'Must observe a real WebSocket handshake',
     );
   console.log(
-    `PASS: real bundled Codex ${transport} transport sends Tongzhou identity to the local Responses server.`,
+    `PASS: real bundled Codex ${transport} transport sends CoSail identity to the local Responses server.`,
   );
 } finally {
   child.stdin.end();

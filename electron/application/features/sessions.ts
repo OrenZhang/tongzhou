@@ -330,12 +330,12 @@ export const sessionsPlugin: Plugin.Object<void> = {
         const s = store.get<Session>('session', id);
         const result = await dialog.showSaveDialog(getWindow()!, {
           title: '导出会话',
-          defaultPath: `Tongzhou-${s.id.slice(0, 8)}.md`,
+          defaultPath: `CoSail-${s.id.slice(0, 8)}.md`,
           filters: [{ name: 'Markdown', extensions: ['md'] }],
         });
         if (result.canceled || !result.filePath) return null;
         const content =
-          `# ${s.title}\n\n导出自同舟 · ${new Date().toISOString()}\n\n` +
+          `# ${s.title}\n\n导出自CoSail · ${new Date().toISOString()}\n\n` +
           store
             .messages(id)
             .map(

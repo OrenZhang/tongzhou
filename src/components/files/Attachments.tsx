@@ -1,3 +1,4 @@
+import { t as tr } from '../../shared/i18n';
 import { FilePreviewContext } from './FilePreviewContext';
 import { WorkspaceFrame } from '../../features/workspace/WorkspaceFrame';
 import type { WorkspaceLayout } from '../../features/workspace/workspace-state';
@@ -39,21 +40,21 @@ export function useAttachmentDraft(sessionId: string, report: (error: unknown) =
     });
   const addFiles = async (files: File[]) => {
     if (uploading.current) {
-      report('附件仍在添加，请稍后再试');
+      report(tr('附件仍在添加，请稍后再试'));
       return false;
     }
     uploading.current = true;
     setPending(true);
     try {
       if (items.length + files.length > MAX_ATTACHMENTS)
-        throw new Error('每条消息最多添加 6 个附件');
+        throw new Error(tr('每条消息最多添加 6 个附件'));
       if (
         items.reduce((sum, a) => sum + a.size, 0) + files.reduce((sum, f) => sum + f.size, 0) >
         MAX_TURN_ATTACHMENT_BYTES
       )
-        throw new Error('本条消息的附件总大小不能超过 12 MB');
+        throw new Error(tr('本条消息的附件总大小不能超过 12 MB'));
       for (const file of files) {
-        if (file.size > MAX_ATTACHMENT_BYTES) throw new Error(`${file.name} 超过 5 MB`);
+        if (file.size > MAX_ATTACHMENT_BYTES) throw new Error(tr('{0} 超过 5 MB', [file.name]));
         const mimeType =
           file.type ||
           (/\.(txt|md|json|csv|log|[cm]?[jt]sx?|py|ya?ml|css|html)$/i.test(file.name)
@@ -62,15 +63,15 @@ export function useAttachmentDraft(sessionId: string, report: (error: unknown) =
         const mime =
           mimeType.startsWith('text/') || mimeType === 'application/json' ? 'text/plain' : mimeType;
         if (!['image/png', 'image/jpeg', 'image/webp', 'text/plain'].includes(mime))
-          throw new Error('支持 PNG、JPEG、WebP 图片和 UTF-8 文本文件');
+          throw new Error(tr('支持 PNG、JPEG、WebP 图片和 UTF-8 文本文件'));
         const data = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
-          reader.onerror = () => reject(new Error('读取附件失败'));
+          reader.onerror = () => reject(new Error(tr('读取附件失败')));
           reader.onload = () => resolve(String(reader.result).split(',')[1]);
           reader.readAsDataURL(file);
         });
         const saved = await window.tongzhou.uploadAttachment({
-          name: file.name || '粘贴图片.png',
+          name: file.name || tr('粘贴图片.png'),
           mimeType: mime as AttachmentUpload['mimeType'],
           data,
         });
@@ -111,8 +112,11 @@ function AttachmentCard({
         className="attachment-open"
         onOpen={onOpen}
         name={item.name}
-        title={`预览 ${item.name} · ${item.size < 1024 ? item.size + ' B' : Math.ceil(item.size / 1024) + ' KB'}`}
-        label={`预览附件 ${item.name}`}
+        title={tr('预览 {0} · {1}', [
+          item.name,
+          item.size < 1024 ? item.size + ' B' : Math.ceil(item.size / 1024) + ' KB',
+        ])}
+        label={tr('预览附件 {0}', [item.name])}
         icon={item.mimeType !== 'text/plain' ? <ImageIcon size={15} /> : undefined}
       />
       {onRemove && (
@@ -120,8 +124,8 @@ function AttachmentCard({
           type="button"
           className="attachment-remove"
           onClick={onRemove}
-          title="移除附件"
-          aria-label={`移除附件 ${item.name}`}
+          title={tr('移除附件')}
+          aria-label={tr('移除附件 {0}', [item.name])}
         >
           <X size={12} />
         </button>
@@ -174,7 +178,7 @@ export function AttachmentPreview({
         if (live) setContent(value);
       })
       .catch(() => {
-        if (live) setError('附件无法读取，请重新添加');
+        if (live) setError(tr('附件无法读取，请重新添加'));
       });
     return () => {
       live = false;
@@ -183,7 +187,7 @@ export function AttachmentPreview({
   return (
     <WorkspaceFrame
       className="attachment-workspace"
-      label="文件工作区"
+      label={tr('文件工作区')}
       width={layout.width}
       expanded={layout.expanded}
       onResize={(width) => updateLayout({ width, expanded: false })}
@@ -199,7 +203,7 @@ export function AttachmentPreview({
         {error ? (
           <p role="alert">{error}</p>
         ) : content === undefined ? (
-          <p>正在加载…</p>
+          <p>{tr('正在加载…')}</p>
         ) : item.mimeType === 'text/plain' ? (
           <pre>{content}</pre>
         ) : (

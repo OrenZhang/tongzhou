@@ -1,5 +1,5 @@
 /*
- * Tongzhou Linux computer control (X11/XWayland).
+ * CoSail Linux computer control (X11/XWayland).
  *
  * N-API is ABI-stable: this addon is built once against Node headers and
  * loads in the Electron main process without a per-version rebuild.

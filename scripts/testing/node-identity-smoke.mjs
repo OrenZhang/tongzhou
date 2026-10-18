@@ -56,7 +56,7 @@ try {
     process.platform === 'win32' ? 'node.exe' : 'node',
   );
   const { version } = JSON.parse(await readFile('package.json', 'utf8'));
-  const ua = `Tongzhou/${version}`;
+  const ua = `CoSail/${version}`;
   await new Promise((resolve, reject) => {
     const child = spawn(node, ['--require', bootstrap, fixture, url, ua], {
       windowsHide: true,

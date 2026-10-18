@@ -308,7 +308,7 @@ export class CodexExecution implements ExecutionAdapter {
       if (request.method === 'item/tool/call') {
         try {
           if ((p.namespace ?? null) !== (deferred ? BUSINESS_TOOL_NAMESPACE : null))
-            throw new Error('工具请求不属于同舟工具目录');
+            throw new Error('工具请求不属于CoSail工具目录');
           const tools = await tree.tools(p.threadId, p.tool);
           const result = await tools.call(p.tool, p.arguments, `${p.threadId}:${p.callId}`);
           client.reply(request.id, {
@@ -338,7 +338,7 @@ export class CodexExecution implements ExecutionAdapter {
       ) {
         client.reject(
           request.id,
-          'Tongzhou does not implement this interaction; stop and ask in chat.',
+          'CoSail does not implement this interaction; stop and ask in chat.',
         );
         return;
       }

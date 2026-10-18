@@ -27,10 +27,8 @@ try {
   await navigate();
   const computer = page.getByRole('region', { name: '电脑控制能力', exact: true });
   const management = page.getByRole('region', { name: '客户端管理能力', exact: true });
-  const computerSupported = (await page.evaluate(() => window.tongzhou.computerStatus()))
-    .supported;
-  if (computerSupported)
-    await computer.getByText('尚未检测电脑控制', { exact: true }).waitFor();
+  const computerSupported = (await page.evaluate(() => window.tongzhou.computerStatus())).supported;
+  if (computerSupported) await computer.getByText('尚未检测电脑控制', { exact: true }).waitFor();
   else
     await computer
       .getByText('当前系统暂不支持此能力。可以继续在会话中使用项目文件、终端和客户端管理。', {
@@ -41,8 +39,13 @@ try {
   const computerSwitch = computer.getByRole('switch', { name: '启用电脑控制', exact: true });
   if (computerSupported) {
     await computerSwitch.check();
-    await computer.getByText('已启用。Agent 从下一轮对话起可使用此能力。', { exact: true }).waitFor();
-    assert.equal((await page.evaluate(() => window.tongzhou.snapshot())).capabilities.computer, true);
+    await computer
+      .getByText('已启用。Agent 从下一轮对话起可使用此能力。', { exact: true })
+      .waitFor();
+    assert.equal(
+      (await page.evaluate(() => window.tongzhou.snapshot())).capabilities.computer,
+      true,
+    );
   }
   const managementSwitch = management.getByRole('switch', { name: '启用客户端管理', exact: true });
   await managementSwitch.uncheck();
@@ -70,7 +73,7 @@ try {
   );
   await management.getByRole('button', { name: '复制客户端管理示例' }).click();
   await management.getByText('已复制示例。前往会话粘贴并发送即可。', { exact: true }).waitFor();
-  assert.match(await app.evaluate(({ clipboard }) => clipboard.readText()), /同舟有哪些会话/);
+  assert.match(await app.evaluate(({ clipboard }) => clipboard.readText()), /CoSail有哪些会话/);
   if (process.platform === 'darwin' && process.env.TONGZHOU_COMPUTER_SMOKE !== '1') {
     await app.evaluate(({ ipcMain }) => {
       ipcMain.removeHandler('tongzhou:computerPermission');

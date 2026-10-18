@@ -1,3 +1,5 @@
+import { providerLabel } from '../../shared/provider-label';
+import { t as tr, localize as localized, getLocale } from '../../shared/i18n';
 import { Fragment, useEffect, useState } from 'react';
 import type { Snapshot, TongzhouAPI, Session } from '../../shared/types';
 import type {
@@ -13,21 +15,21 @@ import { knowledgeFolderPath } from '../../shared/knowledge';
 import './automation.css';
 import { ModelAgentFields, ScheduleFields, defaultSchedule } from './AutomationFields';
 
-const statuses = {
+const statuses = localized({
   queued: '排队中',
   running: '执行中',
   completed: '已完成',
   failed: '失败',
   cancelled: '已取消',
-};
-const triggers = {
+});
+const triggers = localized({
   manual: '手动',
   import: '导入完成',
   ready: '标记就绪',
   schedule: '定时',
   idle: '空闲时',
-};
-const date = (v?: number) => (v ? new Date(v).toLocaleString() : '—');
+});
+const date = (v?: number) => (v ? new Date(v).toLocaleString(getLocale()) : '—');
 export function AutomationCenter({
   api,
   data,
@@ -160,10 +162,10 @@ export function AutomationCenter({
     !s
       ? ''
       : s.kind === 'interval'
-        ? `每 ${s.minutes} 分钟`
+        ? tr('每 {0} 分钟', [s.minutes])
         : s.kind === 'once'
-          ? `单次 ${date(s.at)}`
-          : `${s.kind === 'daily' ? '每天' : '每周 ' + s.weekdays.map((v) => '日一二三四五六'[v]).join('、')} ${s.time} · ${s.timezone}`;
+          ? tr('单次 {0}', [date(s.at)])
+          : `${s.kind === 'daily' ? tr('每天') : tr('每周 ') + s.weekdays.map((v) => tr('日一二三四五六')[v]).join('、')} ${s.time} · ${s.timezone}`;
   const resultPanel = (
     <article className="automation-result">
       {job ? (
@@ -174,7 +176,8 @@ export function AutomationCenter({
           </p>
           {job.flow && (
             <p className="muted">
-              流程：{job.flow.name} v{job.flow.version}
+              {tr('流程：')}
+              {job.flow.name} v{job.flow.version}
             </p>
           )}
           <div className="row">
@@ -183,7 +186,7 @@ export function AutomationCenter({
                 disabled={busy}
                 onClick={() => void action(() => api.automationCancel(job.id))}
               >
-                停止执行
+                {tr('停止执行')}
               </button>
             )}
             {['failed', 'cancelled'].includes(job.status) && (
@@ -191,7 +194,7 @@ export function AutomationCenter({
                 disabled={busy}
                 onClick={() => void action(() => api.automationRetry(job.id))}
               >
-                重试
+                {tr('重试')}
               </button>
             )}
             {job.sessionId && onSession && job.rule.kind !== 'memory' && (
@@ -200,12 +203,12 @@ export function AutomationCenter({
                   void action(async () => {
                     const snapshot = await api.snapshot();
                     const s = snapshot.sessions.find((s) => s.id === job.sessionId);
-                    if (!s) throw new Error('执行会话已删除');
+                    if (!s) throw new Error(tr('执行会话已删除'));
                     onSession(s);
                   })
                 }
               >
-                打开执行会话
+                {tr('打开执行会话')}
               </button>
             )}
             {job.outputId && (
@@ -217,16 +220,16 @@ export function AutomationCenter({
                       void action(async () => {
                         const r = await api.knowledgeRead(job.outputId!);
                         await api.knowledgeReview(r.document.id, r.document.version);
-                        setNotice('派生草稿已核对收录');
+                        setNotice(tr('派生草稿已核对收录'));
                       })
                     }
                   >
-                    核对收录
+                    {tr('核对收录')}
                   </button>
                 )}
                 {onDocument && (
                   <button onClick={() => onDocument(job.outputId!, job.rule.libraryId ?? '')}>
-                    {job.rule.kind === 'memory' ? '查看记忆' : '打开派生文档'}
+                    {job.rule.kind === 'memory' ? tr('查看记忆') : tr('打开派生文档')}
                   </button>
                 )}
               </>
@@ -236,17 +239,18 @@ export function AutomationCenter({
                 disabled={busy}
                 onClick={() => void action(() => api.automationReview(job.id))}
               >
-                标为已查看
+                {tr('标为已查看')}
               </button>
             )}
           </div>
           {job.source && (
             <p className="muted">
-              来源：{job.source.title} · v{job.source.version}
+              {tr('来源：')}
+              {job.source.title} · v{job.source.version}
               {job.sourceState === 'changed'
-                ? ' · 原文已更新，可重新运行生成新草稿'
+                ? tr(' · 原文已更新，可重新运行生成新草稿')
                 : job.sourceState === 'missing'
-                  ? ' · 原文已删除，保留本次来源记录'
+                  ? tr(' · 原文已删除，保留本次来源记录')
                   : ''}
             </p>
           )}
@@ -254,13 +258,13 @@ export function AutomationCenter({
           {job.result && <Markdown text={job.result} />}
           {(job.flow?.prompt || job.rule.prompt) && (
             <details>
-              <summary>本次任务指令</summary>
+              <summary>{tr('本次任务指令')}</summary>
               <pre>{job.flow?.prompt ?? job.rule.prompt}</pre>
             </details>
           )}
         </>
       ) : (
-        <p className="muted">选择一次执行，查看结果与处理记录。</p>
+        <p className="muted">{tr('选择一次执行，查看结果与处理记录。')}</p>
       )}
     </article>
   );
@@ -273,12 +277,12 @@ export function AutomationCenter({
   );
   return (
     <div className="automation-center">
-      <nav className="automation-tabs" aria-label="自动化分区">
+      <nav className="automation-tabs" aria-label={tr('自动化分区')}>
         {(
           [
-            ['flows', '处理流程'],
-            ['rules', '自动化与定时'],
-            ['jobs', '任务与结果'],
+            ['flows', tr('处理流程')],
+            ['rules', tr('自动化与定时')],
+            ['jobs', tr('任务与结果')],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -286,10 +290,10 @@ export function AutomationCenter({
             className={tab === id ? 'selected' : ''}
             title={
               id === 'flows'
-                ? '保存常用处理要求，供文档、目录或定时规则使用'
+                ? tr('保存常用处理要求，供文档、目录或定时规则使用')
                 : id === 'rules'
-                  ? '设置触发条件或运行时间'
-                  : '查看独立执行记录，核对内容处理生成的草稿'
+                  ? tr('设置触发条件或运行时间')
+                  : tr('查看独立执行记录，核对内容处理生成的草稿')
             }
             onClick={() => {
               setTab(id);
@@ -300,12 +304,12 @@ export function AutomationCenter({
             {label}
             {id === 'jobs' &&
             state.jobs.some((j) => !j.reviewedAt && ['completed', 'failed'].includes(j.status))
-              ? ' · 有新结果'
+              ? tr(' · 有新结果')
               : ''}
           </button>
         ))}
       </nav>
-      <p className="muted">任务在本机运行，请保持同舟开启。</p>
+      <p className="muted">{tr('任务在本机运行，请保持CoSail开启。')}</p>
       {error && (
         <p role="alert" className="danger">
           {error}
@@ -315,30 +319,31 @@ export function AutomationCenter({
       {tab === 'flows' && !flow && (
         <>
           <div className="automation-heading">
-            <h2>处理流程</h2>
+            <h2>{tr('处理流程')}</h2>
             <button
               className="primary"
-              title="保存常用处理要求，再绑定文档、目录或定时规则"
+              title={tr('保存常用处理要求，再绑定文档、目录或定时规则')}
               onClick={() => setFlow({ name: '', prompt: '', ...connection() })}
             >
-              新建流程
+              {tr('新建流程')}
             </button>
           </div>
           {!state.flows.length && (
             <div className="automation-empty">
-              <strong>从一个通用处理流程开始</strong>
-              <p>例如摘要、提取要点、校对、改写。具体领域由提示词、技能和 Agent 定义。</p>
+              <strong>{tr('从一个通用处理流程开始')}</strong>
+              <p>{tr('例如摘要、提取要点、校对、改写。具体领域由提示词、技能和 Agent 定义。')}</p>
               <button
                 onClick={() =>
                   setFlow({
-                    name: '摘要与要点',
-                    prompt:
+                    name: tr('摘要与要点'),
+                    prompt: tr(
                       '基于输入资料生成简明摘要、关键要点与待核对事项。保留原意，不补造事实。直接输出可保存的 Markdown 正文。',
+                    ),
                     ...connection(),
                   })
                 }
               >
-                使用摘要模板
+                {tr('使用摘要模板')}
               </button>
             </div>
           )}
@@ -351,12 +356,12 @@ export function AutomationCenter({
                 <p className="automation-excerpt">{f.prompt}</p>
                 <small>{f.model}</small>
                 <div className="row">
-                  <button onClick={() => setFlow(f)}>编辑流程</button>
+                  <button onClick={() => setFlow(f)}>{tr('编辑流程')}</button>
                   <button
                     disabled={busy}
                     onClick={() => void action(() => api.contentFlowDelete(f.id))}
                   >
-                    删除
+                    {tr('删除')}
                   </button>
                 </div>
               </article>
@@ -376,22 +381,22 @@ export function AutomationCenter({
           }}
         >
           <fieldset disabled={busy}>
-            <h2>{flow.id ? '编辑处理流程' : '新建处理流程'}</h2>
-            <Field label="流程名称">
+            <h2>{flow.id ? tr('编辑处理流程') : tr('新建处理流程')}</h2>
+            <Field label={tr('流程名称')}>
               <input
                 required
                 maxLength={100}
-                aria-label="流程名称"
+                aria-label={tr('流程名称')}
                 value={flow.name}
                 onChange={(e) => setFlow({ ...flow, name: e.target.value })}
               />
             </Field>
-            <Field label="处理要求">
+            <Field label={tr('处理要求')}>
               <textarea
                 required
                 maxLength={16000}
                 rows={7}
-                aria-label="处理要求"
+                aria-label={tr('处理要求')}
                 value={flow.prompt}
                 onChange={(e) => setFlow({ ...flow, prompt: e.target.value })}
               />
@@ -402,14 +407,14 @@ export function AutomationCenter({
               onChange={(p) => setFlow({ ...flow, ...p })}
             />
             <p className="muted">
-              可在处理要求中指定已启用的技能。保存后的修改只影响后续入队任务。
+              {tr('可在处理要求中指定已启用的技能。保存后的修改只影响后续入队任务。')}
             </p>
             <div className="row">
               <button className="primary" type="submit">
-                保存流程
+                {tr('保存流程')}
               </button>
               <button type="button" onClick={() => setFlow(undefined)}>
-                取消
+                {tr('取消')}
               </button>
             </div>
           </fieldset>
@@ -418,36 +423,36 @@ export function AutomationCenter({
       {tab === 'rules' && !rule && (
         <>
           <div className="automation-heading">
-            <h2>自动化任务</h2>
+            <h2>{tr('自动化任务')}</h2>
             <div className="row">
-              <button onClick={() => newRule('content')}>新建内容自动化</button>
+              <button onClick={() => newRule('content')}>{tr('新建内容自动化')}</button>
               <button className="primary" onClick={() => newRule('task')}>
-                新建定时任务
+                {tr('新建定时任务')}
               </button>
             </div>
           </div>
           {!state.rules.length && (
             <div className="automation-empty">
-              还没有自动化。内容自动化可处理导入资料，定时任务可独立执行提示词或检查项目。
+              {tr('还没有自动化。内容自动化可处理导入资料，定时任务可独立执行提示词或检查项目。')}
             </div>
           )}
           {!!state.rules.length && (
             <div
               className="automation-table-scroll"
               role="region"
-              aria-label="自动化任务列表"
+              aria-label={tr('自动化任务列表')}
               tabIndex={0}
             >
-              <table className="automation-rule-table" aria-label="自动化任务">
+              <table className="automation-rule-table" aria-label={tr('自动化任务')}>
                 <thead>
                   <tr>
-                    <th scope="col">任务名称</th>
-                    <th scope="col">类型</th>
-                    <th scope="col">触发方式</th>
-                    <th scope="col">状态</th>
-                    <th scope="col">下次执行</th>
+                    <th scope="col">{tr('任务名称')}</th>
+                    <th scope="col">{tr('类型')}</th>
+                    <th scope="col">{tr('触发方式')}</th>
+                    <th scope="col">{tr('状态')}</th>
+                    <th scope="col">{tr('下次执行')}</th>
                     <th scope="col" className="automation-actions-heading">
-                      操作
+                      {tr('操作')}
                     </th>
                   </tr>
                 </thead>
@@ -455,13 +460,19 @@ export function AutomationCenter({
                   {state.rules.map((r) => (
                     <tr key={r.id}>
                       <th scope="row" className="automation-task-name">
-                        <h3 title={capability(r.kind)?.description}>{r.name}</h3>
+                        <h3 title={tr(capability(r.kind)?.description ?? '')}>
+                          {capability(r.kind)?.builtinRuleId === r.id && r.name === '记忆整理'
+                            ? tr(r.name)
+                            : r.name}
+                        </h3>
                         {capability(r.kind)?.builtinRuleId === r.id && (
-                          <span className="automation-builtin">内置</span>
+                          <span className="automation-builtin">{tr('内置')}</span>
                         )}
                         {r.error && <p className="danger">{r.error}</p>}
                       </th>
-                      <td className="automation-task-kind">{capability(r.kind)?.name ?? r.kind}</td>
+                      <td className="automation-task-kind">
+                        {tr(capability(r.kind)?.name ?? r.kind)}
+                      </td>
                       <td className="automation-task-trigger">
                         <span>{triggers[r.trigger]}</span>
                         {r.trigger === 'schedule' && <small>{scheduleLabel(r.schedule)}</small>}
@@ -470,7 +481,7 @@ export function AutomationCenter({
                         <span
                           className={`automation-rule-status ${r.enabled ? 'enabled' : 'paused'}`}
                         >
-                          {r.enabled ? '已启用' : '已暂停'}
+                          {r.enabled ? tr('已启用') : tr('已暂停')}
                         </span>
                       </td>
                       <td className="automation-next-run">
@@ -482,30 +493,30 @@ export function AutomationCenter({
                             disabled={busy || (!!capability(r.kind)?.builtinRuleId && !r.enabled)}
                             title={
                               r.trigger === 'idle'
-                                ? '有新内容时加入队列，当前任务结束后执行'
-                                : '立即加入执行队列'
+                                ? tr('有新内容时加入队列，当前任务结束后执行')
+                                : tr('立即加入执行队列')
                             }
                             onClick={() =>
                               void action(async () => {
                                 const result = await api.automationRun(r.id);
                                 setNotice(
                                   result.queued
-                                    ? '已加入执行队列，可在任务与结果中查看'
-                                    : (result.reason ?? '没有新增任务'),
+                                    ? tr('已加入执行队列，可在任务与结果中查看')
+                                    : (result.reason ?? tr('没有新增任务')),
                                 );
                               })
                             }
                           >
-                            立即运行
+                            {tr('立即运行')}
                           </button>
-                          <button onClick={() => setRule(r)}>编辑</button>
+                          <button onClick={() => setRule(r)}>{tr('编辑')}</button>
                           <button
                             disabled={busy}
                             onClick={() =>
                               void action(() => api.automationSave({ ...r, enabled: !r.enabled }))
                             }
                           >
-                            {r.enabled ? '暂停' : '启用'}
+                            {r.enabled ? tr('暂停') : tr('启用')}
                           </button>
                           {!capability(r.kind)?.builtinRuleId && (
                             <button
@@ -513,7 +524,7 @@ export function AutomationCenter({
                               disabled={busy}
                               onClick={() => void action(() => api.automationDelete(r.id))}
                             >
-                              删除
+                              {tr('删除')}
                             </button>
                           )}
                         </div>
@@ -539,18 +550,18 @@ export function AutomationCenter({
         >
           <fieldset disabled={busy}>
             <h2>
-              {rule.id ? '编辑' : '新建'}
+              {rule.id ? tr('编辑') : tr('新建')}
               {capability(rule.kind)?.builtinRuleId
-                ? capability(rule.kind)?.name
+                ? tr(capability(rule.kind)?.name ?? '')
                 : rule.kind === 'content'
-                  ? '内容自动化'
-                  : '定时任务'}
+                  ? tr('内容自动化')
+                  : tr('定时任务')}
             </h2>
-            <Field label="任务名称">
+            <Field label={tr('任务名称')}>
               <input
                 required
                 maxLength={100}
-                aria-label="任务名称"
+                aria-label={tr('任务名称')}
                 value={rule.name}
                 onChange={(e) => setRule({ ...rule, name: e.target.value })}
               />
@@ -558,14 +569,14 @@ export function AutomationCenter({
             {rule.kind === 'content' ? (
               <>
                 <div className="automation-grid">
-                  <Field label="处理流程">
+                  <Field label={tr('处理流程')}>
                     <select
                       required
-                      aria-label="处理流程"
+                      aria-label={tr('处理流程')}
                       value={rule.flowId ?? ''}
                       onChange={(e) => setRule({ ...rule, flowId: e.target.value })}
                     >
-                      <option value="">请选择流程</option>
+                      <option value="">{tr('请选择流程')}</option>
                       {state.flows.map((f) => (
                         <option key={f.id} value={f.id}>
                           {f.name}
@@ -573,9 +584,9 @@ export function AutomationCenter({
                       ))}
                     </select>
                   </Field>
-                  <Field label="目标内容库">
+                  <Field label={tr('目标内容库')}>
                     <select
-                      aria-label="目标内容库"
+                      aria-label={tr('目标内容库')}
                       value={rule.libraryId}
                       onChange={(e) =>
                         setRule({
@@ -596,9 +607,9 @@ export function AutomationCenter({
                   </Field>
                 </div>
                 <div className="automation-grid">
-                  <Field label="输入目录">
+                  <Field label={tr('输入目录')}>
                     <select
-                      aria-label="输入目录"
+                      aria-label={tr('输入目录')}
                       value={rule.folderId ?? ''}
                       onChange={(e) =>
                         setRule({
@@ -608,7 +619,7 @@ export function AutomationCenter({
                         })
                       }
                     >
-                      <option value="">全部目录</option>
+                      <option value="">{tr('全部目录')}</option>
                       {contents?.folders.map((f) => (
                         <option key={f.id} value={f.id}>
                           {knowledgeFolderPath(contents.folders, f.id)}
@@ -616,15 +627,15 @@ export function AutomationCenter({
                       ))}
                     </select>
                   </Field>
-                  <Field label="输入文档">
+                  <Field label={tr('输入文档')}>
                     <select
-                      aria-label="输入文档"
+                      aria-label={tr('输入文档')}
                       value={rule.documentId ?? ''}
                       onChange={(e) =>
                         setRule({ ...rule, documentId: e.target.value || undefined })
                       }
                     >
-                      <option value="">范围内原始文档（每篇单独处理）</option>
+                      <option value="">{tr('范围内原始文档（每篇单独处理）')}</option>
                       {contents?.documents
                         .filter((d) => !rule.folderId || d.folderId === rule.folderId)
                         .map((d) => (
@@ -634,15 +645,15 @@ export function AutomationCenter({
                         ))}
                     </select>
                   </Field>
-                  <Field label="输出目录">
+                  <Field label={tr('输出目录')}>
                     <select
-                      aria-label="输出目录"
+                      aria-label={tr('输出目录')}
                       value={rule.outputFolderId ?? ''}
                       onChange={(e) =>
                         setRule({ ...rule, outputFolderId: e.target.value || undefined })
                       }
                     >
-                      <option value="">未分类</option>
+                      <option value="">{tr('未分类')}</option>
                       {contents?.folders.map((f) => (
                         <option key={f.id} value={f.id}>
                           {knowledgeFolderPath(contents.folders, f.id)}
@@ -652,20 +663,22 @@ export function AutomationCenter({
                   </Field>
                 </div>
                 <p className="muted">
-                  目录只匹配当前层级。批量处理默认排除派生文档，防止结果反复触发；指定单篇时可继续加工派生文档。
+                  {tr(
+                    '目录只匹配当前层级。批量处理默认排除派生文档，防止结果反复触发；指定单篇时可继续加工派生文档。',
+                  )}
                 </p>
               </>
             ) : rule.kind === 'task' ? (
               <>
-                <Field label="完成后发送到">
+                <Field label={tr('完成后发送到')}>
                   <select
-                    aria-label="完成后发送到"
+                    aria-label={tr('完成后发送到')}
                     value={rule.notificationTargetId ?? ''}
                     onChange={(e) =>
                       setRule({ ...rule, notificationTargetId: e.target.value || undefined })
                     }
                   >
-                    <option value="">不发送</option>
+                    <option value="">{tr('不发送')}</option>
                     {[
                       ...(data.notificationTargets ?? []),
                       ...(data.channels ?? []).map((c) => ({
@@ -676,17 +689,17 @@ export function AutomationCenter({
                     ].map((t) => (
                       <option key={t.id} value={t.id} disabled={!t.available}>
                         {t.name}
-                        {!t.available ? '（不可用）' : ''}
+                        {!t.available ? tr('（不可用）') : ''}
                       </option>
                     ))}
                   </select>
                 </Field>
-                <Field label="任务指令">
+                <Field label={tr('任务指令')}>
                   <textarea
                     required
                     maxLength={16000}
                     rows={6}
-                    aria-label="任务指令"
+                    aria-label={tr('任务指令')}
                     value={rule.prompt ?? ''}
                     onChange={(e) => setRule({ ...rule, prompt: e.target.value })}
                   />
@@ -697,50 +710,58 @@ export function AutomationCenter({
                   onChange={(p) => setRule({ ...rule, ...p })}
                 />
                 <div className="automation-grid">
-                  <Field label="关联项目">
+                  <Field label={tr('关联项目')}>
                     <select
-                      aria-label="关联项目"
+                      aria-label={tr('关联项目')}
                       value={rule.projectId ?? ''}
                       onChange={(e) => setRule({ ...rule, projectId: e.target.value || undefined })}
                     >
-                      <option value="">不关联项目</option>
+                      <option value="">{tr('不关联项目')}</option>
                       {data.projects
                         .filter((p) => !p.removed)
                         .map((p) => (
                           <option key={p.id} value={p.id}>
-                            {p.name}
+                            {providerLabel(p)}
                           </option>
                         ))}
                     </select>
                   </Field>
-                  <Field label="执行权限">
+                  <Field label={tr('执行权限')}>
                     <select
-                      aria-label="执行权限"
+                      aria-label={tr('执行权限')}
                       value={rule.permission}
                       onChange={(e) =>
                         setRule({ ...rule, permission: e.target.value as 'ask' | 'read-only' })
                       }
                     >
-                      <option value="read-only">只读检查</option>
-                      <option value="ask">修改前询问</option>
+                      <option value="read-only">{tr('只读检查')}</option>
+                      <option value="ask">{tr('修改前询问')}</option>
                     </select>
                   </Field>
                 </div>
                 <p className="muted">
-                  每次在独立会话中执行。需要批准操作时，在执行会话中处理；项目任务使用原项目目录。
+                  {tr(
+                    '每次在独立会话中执行。需要批准操作时，在执行会话中处理；项目任务使用原项目目录。',
+                  )}
                 </p>
               </>
             ) : rule.kind === 'canvas' ? (
               <p className="muted">
-                画布工作流 · 发布版本 v{rule.canvas?.version}
-                。在画布的“定时触发”节点修改并重新发布流程；这里可调整时间或暂停。工具操作沿用需确认权限。
+                {tr('画布工作流 · 发布版本 v')}
+                {rule.canvas?.version}
+                {tr(
+                  '。在画布的“定时触发”节点修改并重新发布流程；这里可调整时间或暂停。工具操作沿用需确认权限。',
+                )}
               </p>
             ) : (
-              <p className="muted">{capability(rule.kind)?.description} 整理会消耗所选模型额度。</p>
+              <p className="muted">
+                {tr(capability(rule.kind)?.description ?? '')}
+                {tr(' 整理会消耗所选模型额度。')}
+              </p>
             )}
-            <Field label="触发方式">
+            <Field label={tr('触发方式')}>
               <select
-                aria-label="触发方式"
+                aria-label={tr('触发方式')}
                 value={rule.trigger}
                 onChange={(e) =>
                   setRule({
@@ -777,14 +798,14 @@ export function AutomationCenter({
                 checked={rule.enabled}
                 onChange={(e) => setRule({ ...rule, enabled: e.target.checked })}
               />
-              启用此规则
+              {tr('启用此规则')}
             </label>
             <div className="row">
               <button className="primary" type="submit">
-                保存任务
+                {tr('保存任务')}
               </button>
               <button type="button" onClick={() => setRule(undefined)}>
-                取消
+                {tr('取消')}
               </button>
             </div>
           </fieldset>
@@ -793,16 +814,16 @@ export function AutomationCenter({
       {tab === 'jobs' && (
         <>
           <div className="automation-heading">
-            <p title="后台同时执行一个任务；记忆整理最长 3 分钟，其他任务最长 30 分钟">
-              最近 200 次执行
+            <p title={tr('后台同时执行一个任务；记忆整理最长 3 分钟，其他任务最长 30 分钟')}>
+              {tr('最近 200 次执行')}
             </p>
             <select
-              aria-label="任务状态"
+              aria-label={tr('任务状态')}
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
             >
-              <option value="all">全部状态</option>
-              <option value="unread">待查看</option>
+              <option value="all">{tr('全部状态')}</option>
+              <option value="unread">{tr('待查看')}</option>
               {Object.entries(statuses).map(([k, v]) => (
                 <option key={k} value={k}>
                   {v}
@@ -813,18 +834,21 @@ export function AutomationCenter({
           <div
             className="automation-table-scroll automation-job-table-scroll"
             role="region"
-            aria-label="执行记录列表"
+            aria-label={tr('执行记录列表')}
             tabIndex={0}
           >
-            <table className="automation-rule-table automation-job-table" aria-label="执行记录">
+            <table
+              className="automation-rule-table automation-job-table"
+              aria-label={tr('执行记录')}
+            >
               <thead>
                 <tr>
-                  <th scope="col">任务名称</th>
-                  <th scope="col">状态</th>
-                  <th scope="col">执行时间</th>
-                  <th scope="col">尝试次数</th>
+                  <th scope="col">{tr('任务名称')}</th>
+                  <th scope="col">{tr('状态')}</th>
+                  <th scope="col">{tr('执行时间')}</th>
+                  <th scope="col">{tr('尝试次数')}</th>
                   <th scope="col" className="automation-actions-heading">
-                    操作
+                    {tr('操作')}
                   </th>
                 </tr>
               </thead>
@@ -857,7 +881,7 @@ export function AutomationCenter({
                             aria-expanded={selected === j.id}
                             aria-controls={`automation-result-${j.id}`}
                           >
-                            {selected === j.id ? '收起结果' : '查看结果'}
+                            {selected === j.id ? tr('收起结果') : tr('查看结果')}
                           </button>
                         </div>
                       </td>
@@ -875,8 +899,8 @@ export function AutomationCenter({
                   <tr>
                     <td colSpan={5} className="automation-job-empty">
                       {state.jobs.length
-                        ? '没有符合当前筛选条件的执行记录。'
-                        : '执行结果会出现在这里。'}
+                        ? tr('没有符合当前筛选条件的执行记录。')
+                        : tr('执行结果会出现在这里。')}
                     </td>
                   </tr>
                 )}

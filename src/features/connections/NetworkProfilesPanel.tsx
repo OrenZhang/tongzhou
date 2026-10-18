@@ -1,3 +1,4 @@
+import { t as tr, localize as localized } from '../../shared/i18n';
 import { useEffect, useState } from 'react';
 import { Network, Plus, RefreshCw, Download, Play, Square } from 'lucide-react';
 import { Field, Modal } from '../../components/components';
@@ -10,18 +11,25 @@ import type {
   NetworkProfileInput,
 } from '../../shared/network-profile';
 
-const labels = { stopped: '按需启动', starting: '启动中', running: '运行中', error: '异常' };
+const labels = localized({
+  stopped: '按需启动',
+  starting: '启动中',
+  running: '运行中',
+  error: '异常',
+});
 function template(type: string) {
   return JSON.stringify(
     {
       proxies: [
         {
-          name: '我的节点',
+          name: tr('我的节点'),
           type,
-          server: '填写服务器地址',
+          server: tr('填写服务器地址'),
           port: 443,
-          ...(['ss', 'trojan', 'hysteria2', 'tuic'].includes(type) ? { password: '填写密码' } : {}),
-          ...(['vmess', 'vless', 'tuic'].includes(type) ? { uuid: '填写UUID' } : {}),
+          ...(['ss', 'trojan', 'hysteria2', 'tuic'].includes(type)
+            ? { password: tr('填写密码') }
+            : {}),
+          ...(['vmess', 'vless', 'tuic'].includes(type) ? { uuid: tr('填写UUID') } : {}),
           ...(type === 'ss' ? { cipher: 'aes-128-gcm' } : {}),
           ...(['vmess', 'vless'].includes(type) ? { tls: true } : {}),
         },
@@ -75,8 +83,12 @@ export function NetworkProfilesPanel({ api }: { api: TongzhouAPI }) {
     <div className="network-profiles">
       <div className="collection-toolbar">
         <div>
-          <h2>网络配置</h2>
-          <p>同舟运行自己的代理内核。导入节点后，在 ChatGPT 连接中选择使用，无需另开代理软件。</p>
+          <h2>{tr('网络配置')}</h2>
+          <p>
+            {tr(
+              'CoSail运行自己的代理内核。导入节点后，在 ChatGPT 连接中选择使用，无需另开代理软件。',
+            )}
+          </p>
         </div>
         <button
           className="primary"
@@ -87,7 +99,7 @@ export function NetworkProfilesPanel({ api }: { api: TongzhouAPI }) {
           }}
         >
           <Plus size={14} />
-          添加配置
+          {tr('添加配置')}
         </button>
       </div>
       {notice && (
@@ -103,20 +115,23 @@ export function NetworkProfilesPanel({ api }: { api: TongzhouAPI }) {
           </strong>
           <p>
             {data?.core.installed
-              ? '内核已安装 · 随账号使用自动启动 · 退出同舟时停止'
-              : '首次使用安装内核，此后无需重复下载。不会开启系统代理或 TUN。'}
+              ? tr('内核已安装 · 随账号使用自动启动 · 退出CoSail时停止')
+              : tr('首次使用安装内核，此后无需重复下载。不会开启系统代理或 TUN。')}
           </p>
           {!data?.core.installed && (
-            <small className="muted">离线压缩包：{data?.core.asset || '读取中…'}</small>
+            <small className="muted">
+              {tr('离线压缩包：')}
+              {data?.core.asset || tr('读取中…')}
+            </small>
           )}
           <p className="muted">
-            独立进程 · GPL-3.0 ·{' '}
+            {tr('独立进程 · GPL-3.0 ·')}{' '}
             <a
               href="https://github.com/MetaCubeX/mihomo/releases/tag/v1.19.32"
               target="_blank"
               rel="noreferrer"
             >
-              官方发布与源码
+              {tr('官方发布与源码')}
             </a>
           </p>
         </div>
@@ -125,17 +140,17 @@ export function NetworkProfilesPanel({ api }: { api: TongzhouAPI }) {
             <button
               disabled={!!busy}
               className="secondary"
-              onClick={() => void act('install', () => api.installNetworkCore(false), '已安装')}
+              onClick={() => void act('install', () => api.installNetworkCore(false), tr('已安装'))}
             >
               <Download size={14} />
-              {busy === 'install' ? '正在下载并校验…' : '安装内核'}
+              {busy === 'install' ? tr('正在下载并校验…') : tr('安装内核')}
             </button>
             <button
               disabled={!!busy}
               className="secondary"
-              onClick={() => void act('offline', () => api.installNetworkCore(true), '已安装')}
+              onClick={() => void act('offline', () => api.installNetworkCore(true), tr('已安装'))}
             >
-              离线安装
+              {tr('离线安装')}
             </button>
           </div>
         )}
@@ -151,11 +166,14 @@ export function NetworkProfilesPanel({ api }: { api: TongzhouAPI }) {
               </span>
             </div>
             <p className="muted">
-              {p.source === 'subscription' ? '订阅' : '本地配置'} · {p.nodes.length} 个节点 ·{' '}
-              {p.usedBy.length ? '用于 ' + p.usedBy.join('、') : '尚未绑定账号'}
+              {p.source === 'subscription' ? tr('订阅') : tr('本地配置')} · {p.nodes.length}
+              {tr(' 个节点 ·')}{' '}
+              {p.usedBy.length ? tr('用于 ') + p.usedBy.join('、') : tr('尚未绑定账号')}
             </p>
             {!p.usedBy.length && (
-              <p className="info-strip">此配置尚未用于聊天。导入订阅不会自动修改账号网络。</p>
+              <p className="info-strip">
+                {tr('此配置尚未用于聊天。导入订阅不会自动修改账号网络。')}
+              </p>
             )}
             <button
               className="text-button"
@@ -173,18 +191,18 @@ export function NetworkProfilesPanel({ api }: { api: TongzhouAPI }) {
                 )
               }
             >
-              绑定 ChatGPT 账号…
+              {tr('绑定 ChatGPT 账号…')}
             </button>
-            <Field label="出口节点">
+            <Field label={tr('出口节点')}>
               <select
-                aria-label={`${p.name}的出口节点`}
+                aria-label={tr('{0}的出口节点', [p.name])}
                 value={p.selected}
                 disabled={!!busy}
                 onChange={(e) =>
                   void act(
                     p.id,
                     () => api.selectNetworkNode(p.id, e.target.value),
-                    '出口节点已切换',
+                    tr('出口节点已切换'),
                   )
                 }
               >
@@ -212,12 +230,14 @@ export function NetworkProfilesPanel({ api }: { api: TongzhouAPI }) {
                       p.status === 'running'
                         ? api.stopNetworkProfile(p.id)
                         : api.startNetworkProfile(p.id),
-                    p.status === 'running' ? '已停止；账号下次使用时会自动启动' : '内核已启动',
+                    p.status === 'running'
+                      ? tr('已停止；账号下次使用时会自动启动')
+                      : tr('内核已启动'),
                   )
                 }
               >
                 {p.status === 'running' ? <Square size={13} /> : <Play size={13} />}{' '}
-                {p.status === 'running' ? '停止' : '启动'}
+                {p.status === 'running' ? tr('停止') : tr('启动')}
               </button>
               {p.source === 'subscription' && (
                 <button
@@ -227,12 +247,12 @@ export function NetworkProfilesPanel({ api }: { api: TongzhouAPI }) {
                     void act(
                       p.id,
                       () => api.refreshNetworkProfile(p.id),
-                      '订阅已更新；下次使用时重新启动',
+                      tr('订阅已更新；下次使用时重新启动'),
                     )
                   }
                 >
                   <RefreshCw size={13} />
-                  更新订阅
+                  {tr('更新订阅')}
                 </button>
               )}
               <button
@@ -243,14 +263,14 @@ export function NetworkProfilesPanel({ api }: { api: TongzhouAPI }) {
                   setEdit({ id: p.id, name: p.name, source: p.source });
                 }}
               >
-                编辑
+                {tr('编辑')}
               </button>
               <button
                 disabled={!!busy}
                 className="text-button danger"
                 onClick={() => setDeleting(p)}
               >
-                删除
+                {tr('删除')}
               </button>
             </div>
           </article>
@@ -258,13 +278,17 @@ export function NetworkProfilesPanel({ api }: { api: TongzhouAPI }) {
       </div>
       {binding && (
         <Modal
-          title="绑定 ChatGPT 账号"
+          title={tr('绑定 ChatGPT 账号')}
           onClose={() => {
             if (!busy) setBinding(null);
           }}
         >
           <div className="modal-content">
-            <p>将所选账号的授权和后续聊天切换到“{binding.name}”。现有会话和登录状态保留。</p>
+            <p>
+              {tr('将所选账号的授权和后续聊天切换到“')}
+              {binding.name}
+              {tr('”。现有会话和登录状态保留。')}
+            </p>
             {providers.map((p) => (
               <button
                 key={p.id}
@@ -280,12 +304,12 @@ export function NetworkProfilesPanel({ api }: { api: TongzhouAPI }) {
                       });
                       setBinding(null);
                     },
-                    '账号已绑定此网络配置',
+                    tr('账号已绑定此网络配置'),
                   )
                 }
               >
                 {p.name}
-                {p.network?.profileId === binding.id ? ' · 已绑定' : ''}
+                {p.network?.profileId === binding.id ? tr(' · 已绑定') : ''}
               </button>
             ))}
             {notice && <p role="status">{notice}</p>}
@@ -295,15 +319,19 @@ export function NetworkProfilesPanel({ api }: { api: TongzhouAPI }) {
       {data && !data.profiles.length && (
         <div className="empty-state compact">
           <Network size={28} />
-          <h3>添加你的第一个网络配置</h3>
+          <h3>{tr('添加你的第一个网络配置')}</h3>
           <p>
-            支持 Clash / Mihomo YAML、JSON 与节点订阅。需要有效的节点或订阅；同舟不提供网络出口。
+            {tr(
+              '支持 Clash / Mihomo YAML、JSON 与节点订阅。需要有效的节点或订阅；CoSail不提供网络出口。',
+            )}
           </p>
         </div>
       )}
       {edit && (
         <Modal
-          title={data?.profiles.some((p) => p.id === edit.id) ? '编辑网络配置' : '添加网络配置'}
+          title={
+            data?.profiles.some((p) => p.id === edit.id) ? tr('编辑网络配置') : tr('添加网络配置')
+          }
           onClose={() => {
             if (!busy) setEdit(null);
           }}
@@ -318,20 +346,20 @@ export function NetworkProfilesPanel({ api }: { api: TongzhouAPI }) {
                   await api.saveNetworkProfile(edit);
                   setEdit(null);
                 },
-                '网络配置已保存，可在 ChatGPT 连接中选择使用',
+                tr('网络配置已保存，可在 ChatGPT 连接中选择使用'),
               );
             }}
           >
-            <Field label="名称">
+            <Field label={tr('名称')}>
               <input
                 required
                 maxLength={80}
                 value={edit.name}
                 onChange={(e) => setEdit({ ...edit, name: e.target.value })}
-                placeholder="例如：日常工作网络"
+                placeholder={tr('例如：日常工作网络')}
               />
             </Field>
-            <Field label="配置来源">
+            <Field label={tr('配置来源')}>
               <select
                 value={edit.source}
                 onChange={(e) =>
@@ -343,14 +371,16 @@ export function NetworkProfilesPanel({ api }: { api: TongzhouAPI }) {
                   })
                 }
               >
-                <option value="config">文件 / 手动配置</option>
-                <option value="subscription">订阅地址</option>
+                <option value="config">{tr('文件 / 手动配置')}</option>
+                <option value="subscription">{tr('订阅地址')}</option>
               </select>
             </Field>
             {edit.source === 'subscription' ? (
               <Field
-                label="HTTPS 订阅地址"
-                hint="使用提供商的 Clash / Mihomo 节点订阅。地址加密保存；编辑时留空保留原地址。下载使用当前系统网络。"
+                label={tr('HTTPS 订阅地址')}
+                hint={tr(
+                  '使用提供商的 Clash / Mihomo 节点订阅。地址加密保存；编辑时留空保留原地址。下载使用当前系统网络。',
+                )}
               >
                 <input
                   type="password"
@@ -364,36 +394,36 @@ export function NetworkProfilesPanel({ api }: { api: TongzhouAPI }) {
               <>
                 <div className="row">
                   <label className="secondary network-file-input">
-                    导入 YAML / JSON
+                    {tr('导入 YAML / JSON')}
                     <input
-                      aria-label="导入网络配置文件"
+                      aria-label={tr('导入网络配置文件')}
                       type="file"
                       accept=".yaml,.yml,.json"
                       onChange={async (e) => {
                         const file = e.target.files?.[0];
                         if (!file) return;
                         if (file.size > 2_000_000) {
-                          setNotice('配置文件不能超过 2 MB');
+                          setNotice(tr('配置文件不能超过 2 MB'));
                           return;
                         }
                         try {
                           const config = await file.text();
                           setEdit((v) => (v ? { ...v, config } : v));
                         } catch {
-                          setNotice('读取文件失败');
+                          setNotice(tr('读取文件失败'));
                         }
                       }}
                     />
                   </label>
                   <select
-                    aria-label="插入协议模板"
+                    aria-label={tr('插入协议模板')}
                     defaultValue=""
                     onChange={(e) => {
                       if (e.target.value) setEdit({ ...edit, config: template(e.target.value) });
                       e.target.value = '';
                     }}
                   >
-                    <option value="">协议模板…</option>
+                    <option value="">{tr('协议模板…')}</option>
                     {['ss', 'vmess', 'vless', 'trojan', 'hysteria2', 'tuic', 'http', 'socks5'].map(
                       (p) => (
                         <option value={p} key={p}>
@@ -404,8 +434,10 @@ export function NetworkProfilesPanel({ api }: { api: TongzhouAPI }) {
                   </select>
                 </div>
                 <Field
-                  label="节点配置"
-                  hint="保存时只提取 proxies 节点。同舟自行管理出口选择，原文件的规则、TUN、DNS 和监听设置不生效。已有配置留空则保留。"
+                  label={tr('节点配置')}
+                  hint={tr(
+                    '保存时只提取 proxies 节点。CoSail自行管理出口选择，原文件的规则、TUN、DNS 和监听设置不生效。已有配置留空则保留。',
+                  )}
                 >
                   <textarea
                     className="network-config-editor"
@@ -414,14 +446,15 @@ export function NetworkProfilesPanel({ api }: { api: TongzhouAPI }) {
                     autoComplete="off"
                     value={edit.config || ''}
                     onChange={(e) => setEdit({ ...edit, config: e.target.value })}
-                    placeholder={'proxies:\n  - name: 我的节点\n    type: …'}
+                    placeholder={tr('proxies:\n  - name: 我的节点\n    type: …')}
                   />
                 </Field>
               </>
             )}
             <p className="muted">
-              节点密码与订阅地址加密保存在本机，不会提供给模型。暂不支持 OpenVPN 文件、Base64
-              订阅及仅含远程 proxy-providers 的配置。
+              {tr(
+                '节点密码与订阅地址加密保存在本机，不会提供给模型。暂不支持 OpenVPN 文件、Base64 订阅及仅含远程 proxy-providers 的配置。',
+              )}
             </p>
             {notice && (
               <p role="status" className="info-strip">
@@ -435,10 +468,10 @@ export function NetworkProfilesPanel({ api }: { api: TongzhouAPI }) {
                 disabled={!!busy}
                 onClick={() => setEdit(null)}
               >
-                取消
+                {tr('取消')}
               </button>
               <button className="primary" disabled={!!busy}>
-                {busy === 'save' ? '正在验证并保存…' : '保存配置'}
+                {busy === 'save' ? tr('正在验证并保存…') : tr('保存配置')}
               </button>
             </div>
           </form>
@@ -446,17 +479,21 @@ export function NetworkProfilesPanel({ api }: { api: TongzhouAPI }) {
       )}
       {deleting && (
         <Modal
-          title="删除网络配置"
+          title={tr('删除网络配置')}
           onClose={() => {
             if (!busy) setDeleting(null);
           }}
         >
           <div className="modal-content">
-            <p>删除“{deleting.name}”及其保存的节点凭据？已绑定账号的配置需要先解除绑定。</p>
+            <p>
+              {tr('删除“')}
+              {deleting.name}
+              {tr('”及其保存的节点凭据？已绑定账号的配置需要先解除绑定。')}
+            </p>
             {notice && <p role="status">{notice}</p>}
             <div className="row">
               <button className="secondary" disabled={!!busy} onClick={() => setDeleting(null)}>
-                取消
+                {tr('取消')}
               </button>
               <button
                 disabled={!!busy}
@@ -467,11 +504,11 @@ export function NetworkProfilesPanel({ api }: { api: TongzhouAPI }) {
                       await api.deleteNetworkProfile(deleting.id);
                       setDeleting(null);
                     },
-                    '网络配置已删除',
+                    tr('网络配置已删除'),
                   )
                 }
               >
-                确认删除
+                {tr('确认删除')}
               </button>
             </div>
           </div>

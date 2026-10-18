@@ -1,3 +1,4 @@
+import { t as tr, getLocale } from '../../shared/i18n';
 import { useEffect, useState } from 'react';
 import type { Canvas, CanvasNode } from '../../shared/canvas';
 import type { AutomationRule, TaskSchedule } from '../../shared/automation';
@@ -90,15 +91,19 @@ export function CanvasWorkflowFields({
             onMissed={(missed) => patch({ config: { ...config, missed } })}
           />
           <small>
-            连接下游节点后发布。仅在同舟运行且电脑唤醒时调度；修改画布后需重新发布。执行权限为“需确认”，涉及工具操作时可能等待审批。
+            {tr(
+              '连接下游节点后发布。仅在CoSail运行且电脑唤醒时调度；修改画布后需重新发布。执行权限为“需确认”，涉及工具操作时可能等待审批。',
+            )}
           </small>
           {rule && (
             <small role="status">
-              {rule.enabled ? '已启用' : '已暂停'} · 发布版本 v{rule.canvas?.version}
+              {rule.enabled ? tr('已启用') : tr('已暂停')}
+              {tr(' · 发布版本 v')}
+              {rule.canvas?.version}
               {rule.nextRunAt && rule.enabled
-                ? ' · 下次 ' + new Date(rule.nextRunAt).toLocaleString()
+                ? tr(' · 下次 ') + new Date(rule.nextRunAt).toLocaleString(getLocale())
                 : ''}
-              {canvas.version !== rule.canvas?.version ? ' · 画布版本已变化' : ''}
+              {canvas.version !== rule.canvas?.version ? tr(' · 画布版本已变化') : ''}
             </small>
           )}
           {rule?.error && <small role="alert">{rule.error}</small>}
@@ -106,15 +111,15 @@ export function CanvasWorkflowFields({
             disabled={busy || !loaded || !owner}
             onClick={() =>
               void act(async () => {
-                if (!owner) throw new Error('请先选择执行会话');
+                if (!owner) throw new Error(tr('请先选择执行会话'));
                 const saved = await save();
-                if (!saved || saved.id !== canvas.id) throw new Error('请先保存当前画布');
+                if (!saved || saved.id !== canvas.id) throw new Error(tr('请先保存当前画布'));
                 const latest = (await api.automationState()).rules.find(
                   (r) =>
                     r.kind === 'canvas' && r.canvas?.id === saved.id && r.canvas.nodeId === node.id,
                 );
                 const savedNode = saved.nodes.find((n) => n.id === node.id);
-                if (!savedNode) throw new Error('定时触发节点已删除');
+                if (!savedNode) throw new Error(tr('定时触发节点已删除'));
                 setRule(
                   await api.automationSave({
                     id: latest?.id,
@@ -141,7 +146,7 @@ export function CanvasWorkflowFields({
               })
             }
           >
-            {rule ? '保存并重新发布定时流程' : '保存并启用定时流程'}
+            {rule ? tr('保存并重新发布定时流程') : tr('保存并启用定时流程')}
           </button>
           {rule?.enabled && (
             <button
@@ -150,43 +155,52 @@ export function CanvasWorkflowFields({
                 void act(async () => setRule(await api.automationSave({ ...rule, enabled: false })))
               }
             >
-              暂停定时流程
+              {tr('暂停定时流程')}
             </button>
           )}
-          {!owner && <small>请先在画布顶部选择执行会话。</small>}
+          {!owner && <small>{tr('请先在画布顶部选择执行会话。')}</small>}
           <small>
-            执行记录、立即运行、取消和重试可在“自动化”中管理。暂停只停止后续调度，已开始的流程需要单独取消。
+            {tr(
+              '执行记录、立即运行、取消和重试可在“自动化”中管理。暂停只停止后续调度，已开始的流程需要单独取消。',
+            )}
           </small>
         </>
       ) : (
         <>
           <label>
-            通知渠道
+            {tr('通知渠道')}
             <select
-              aria-label="通知渠道"
+              aria-label={tr('通知渠道')}
               value={String(config.targetId ?? '')}
               onChange={(e) => patch({ config: { ...config, targetId: e.target.value } })}
             >
-              <option value="">选择已配置的通知目标</option>
+              <option value="">{tr('选择已配置的通知目标')}</option>
               {config.targetId && !targets.some((t) => t.id === config.targetId) ? (
-                <option value={String(config.targetId)}>原渠道不可用，请重新选择</option>
+                <option value={String(config.targetId)}>{tr('原渠道不可用，请重新选择')}</option>
               ) : null}
               {targets.map((t) => (
                 <option key={t.id} value={t.id} disabled={!t.available}>
                   {t.name}
-                  {t.available ? '' : '（不可用）'}
+                  {t.available ? '' : tr('（不可用）')}
                 </option>
               ))}
             </select>
           </label>
           <small>
-            正文支持 {'{{input}}'}（合并上游正文）、{'{{input.1}}'}（第一个输入），最多 4000
-            字。请在“渠道”中配置账号或机器人；节点不保存密钥。
+            {tr('正文支持 ')}
+            {'{{input}}'}
+            {tr('（合并上游正文）、')}
+            {'{{input.1}}'}
+            {tr('（第一个输入），最多 4000 字。请在“渠道”中配置账号或机器人；节点不保存密钥。')}
           </small>
           <small>
-            发送前沿用会话审批。执行后输出回执；不确定是否送达时请查看渠道记录，重试不会重复投递同一定时任务的通知。
+            {tr(
+              '发送前沿用会话审批。执行后输出回执；不确定是否送达时请查看渠道记录，重试不会重复投递同一定时任务的通知。',
+            )}
           </small>
-          {loaded && !targets.length && <small>暂无通知目标，请先在“渠道”中添加并启用。</small>}
+          {loaded && !targets.length && (
+            <small>{tr('暂无通知目标，请先在“渠道”中添加并启用。')}</small>
+          )}
         </>
       )}
       {error && (

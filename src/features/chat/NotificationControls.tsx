@@ -1,3 +1,4 @@
+import { t as tr, localize as localized } from '../../shared/i18n';
 import { useState } from 'react';
 import { Bell, BellRing } from 'lucide-react';
 import { Modal } from '../../components/components';
@@ -10,15 +11,15 @@ import type {
   Snapshot,
   TongzhouAPI,
 } from '../../shared/types';
-export const defaultSmtp = {
+export const defaultSmtp = localized({
   host: '',
   port: 465,
   secure: true,
   user: '',
   from: '',
   to: [] as string[],
-  subject: '同舟 · 会话进展',
-};
+  subject: 'CoSail · 会话进展',
+});
 export function EmailFields({
   channel,
   onChange,
@@ -32,7 +33,7 @@ export function EmailFields({
     <>
       <div className="form-columns">
         <label>
-          SMTP 服务器
+          {tr('SMTP 服务器')}
           <input
             required
             value={s.host}
@@ -41,7 +42,7 @@ export function EmailFields({
           />
         </label>
         <label>
-          端口
+          {tr('端口')}
           <input
             type="number"
             min={1}
@@ -53,24 +54,24 @@ export function EmailFields({
         </label>
       </div>
       <label>
-        传输加密
+        {tr('传输加密')}
         <select
-          aria-label="传输加密"
+          aria-label={tr('传输加密')}
           value={s.secure ? 'tls' : 'starttls'}
           onChange={(e) =>
             set({ secure: e.target.value === 'tls', port: e.target.value === 'tls' ? 465 : 587 })
           }
         >
-          <option value="tls">TLS（通常 465）</option>
-          <option value="starttls">STARTTLS（通常 587）</option>
+          <option value="tls">{tr('TLS（通常 465）')}</option>
+          <option value="starttls">{tr('STARTTLS（通常 587）')}</option>
         </select>
       </label>
       <label>
-        登录账号
+        {tr('登录账号')}
         <input autoComplete="off" value={s.user} onChange={(e) => set({ user: e.target.value })} />
       </label>
       <label>
-        邮箱授权码 / 密码（留空保留）
+        {tr('邮箱授权码 / 密码（留空保留）')}
         <input
           type="password"
           autoComplete="new-password"
@@ -79,7 +80,7 @@ export function EmailFields({
         />
       </label>
       <label>
-        发件邮箱
+        {tr('发件邮箱')}
         <input
           type="email"
           required
@@ -88,14 +89,14 @@ export function EmailFields({
         />
       </label>
       <label>
-        收件人
-        <MultiValueInput label="收件人邮箱" value={s.to} onChange={(to) => set({ to })} />
+        {tr('收件人')}
+        <MultiValueInput label={tr('收件人邮箱')} value={s.to} onChange={(to) => set({ to })} />
       </label>
       <label>
-        邮件主题
+        {tr('邮件主题')}
         <input required value={s.subject} onChange={(e) => set({ subject: e.target.value })} />
       </label>
-      <p>保存不会发信。可先验证连接，再通过通知规则或发送测试邮件确认送达。</p>
+      <p>{tr('保存不会发信。可先验证连接，再通过通知规则或发送测试邮件确认送达。')}</p>
     </>
   );
 }
@@ -110,16 +111,16 @@ export function RuleConditions({
 }) {
   return (
     <details className="rule-conditions">
-      <summary>条件筛选</summary>
+      <summary>{tr('条件筛选')}</summary>
       <div className="connection-form">
         <label>
-          所属项目
+          {tr('所属项目')}
           <select
-            aria-label="所属项目"
+            aria-label={tr('所属项目')}
             value={rule.projectId ?? ''}
             onChange={(e) => onChange({ ...rule, projectId: e.target.value || undefined })}
           >
-            <option value="">不限项目</option>
+            <option value="">{tr('不限项目')}</option>
             {data.projects.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -128,15 +129,15 @@ export function RuleConditions({
           </select>
         </label>
         <label>
-          模型（空白表示不限）
+          {tr('模型（空白表示不限）')}
           <MultiValueInput
-            label="筛选模型"
+            label={tr('筛选模型')}
             value={rule.models ?? []}
             onChange={(models) => onChange({ ...rule, models })}
           />
         </label>
         <label>
-          仅执行超过这些秒数时通知
+          {tr('仅执行超过这些秒数时通知')}
           <input
             type="number"
             min={0}
@@ -173,8 +174,8 @@ export function SessionNotification({
     <>
       <button
         className="icon-button"
-        aria-label="会话通知"
-        title={rules.length ? `已启用 ${rules.length} 条提醒` : '会话通知'}
+        aria-label={tr('会话通知')}
+        title={rules.length ? tr('已启用 {0} 条提醒', [rules.length]) : tr('会话通知')}
         onClick={() => {
           setChannelId(channels[0]?.id ?? '');
           setOpen(true);
@@ -183,16 +184,16 @@ export function SessionNotification({
         {rules.length ? <BellRing size={16} /> : <Bell size={16} />}
       </button>
       {open && (
-        <Modal title="会话通知" onClose={() => setOpen(false)}>
+        <Modal title={tr('会话通知')} onClose={() => setOpen(false)}>
           <div className="modal-content connection-form">
             <p>
-              {run ? '当前轮次结束时提醒一次。' : '下一轮结束时提醒一次。'}
-              持续提醒和条件筛选可在渠道的通知规则中配置。
+              {run ? tr('当前轮次结束时提醒一次。') : tr('下一轮结束时提醒一次。')}
+              {tr('持续提醒和条件筛选可在渠道的通知规则中配置。')}
             </p>
             <label>
-              通知目标
+              {tr('通知目标')}
               <select value={channelId} onChange={(e) => setChannelId(e.target.value)}>
-                {!channels.length && <option value="">请先在渠道中添加通知目标</option>}
+                {!channels.length && <option value="">{tr('请先在渠道中添加通知目标')}</option>}
                 {channels.map((c) => (
                   <option value={c.id} key={c.id}>
                     {c.name}
@@ -214,7 +215,7 @@ export function SessionNotification({
                     enabled: true,
                     events: ['ended'],
                     targetRunId: run?.id,
-                    template: '同舟：{title} · {status}（{model}）',
+                    template: 'CoSail：{title} · {status}（{model}）',
                   });
                   setOpen(false);
                 } catch (e) {
@@ -224,13 +225,13 @@ export function SessionNotification({
                 }
               }}
             >
-              {run ? '提醒本轮结束' : '提醒下一轮结束'}
+              {run ? tr('提醒本轮结束') : tr('提醒下一轮结束')}
             </button>
             {rules.map((r) => (
               <div className="row" key={r.id}>
                 <span>
-                  {channels.find((c) => c.id === r.channelId)?.name ?? '已停用目标'} ·{' '}
-                  {r.once ? '一次' : '持续'}
+                  {channels.find((c) => c.id === r.channelId)?.name ?? tr('已停用目标')} ·{' '}
+                  {r.once ? tr('一次') : tr('持续')}
                 </span>
                 <button
                   disabled={busy}
@@ -240,7 +241,7 @@ export function SessionNotification({
                       .catch(onError)
                   }
                 >
-                  停用提醒
+                  {tr('停用提醒')}
                 </button>
               </div>
             ))}

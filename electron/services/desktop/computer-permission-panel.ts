@@ -35,7 +35,7 @@ export function permissionPanelBounds(settings: Rectangle | null, area: Rectangl
 }
 
 function panelHTML(guide: ComputerPermissionGuide, permission: ComputerPermission) {
-  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline';"><title>同舟授权助手</title><style>
+  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline';"><title>CoSail授权助手</title><style>
   :root{color-scheme:light dark}*{box-sizing:border-box}body{margin:0;padding:12px 16px;font:13px -apple-system,BlinkMacSystemFont,sans-serif;color:light-dark(#292b30,#eee);background:light-dark(#fafafa,#242528);user-select:none;border:1px solid light-dark(#e3e4e7,#424449);border-radius:12px;height:100vh}header{display:flex;align-items:center;justify-content:space-between;-webkit-app-region:drag;font-size:12px;color:light-dark(#62656c,#b6b8be)}button{-webkit-app-region:no-drag;cursor:pointer;font:inherit;color:inherit;border:0;background:transparent}#close{font-size:19px;line-height:18px;padding:0 2px}#application{margin:10px 0 8px;width:100%;display:flex;align-items:center;gap:12px;border:1px dashed light-dark(#c9ccd3,#60636b);border-radius:9px;padding:10px 12px;text-align:left;cursor:grab}#application:active{cursor:grabbing}#application img{width:40px;height:40px;border-radius:9px}#application strong{font-size:15px;font-weight:600;display:block}#application small{display:block;margin-top:4px;color:light-dark(#666a73,#b6b8be);font-size:12px}.grip{margin-left:auto;font-size:22px;color:light-dark(#757982,#a0a4ad)}p{font-size:11px;line-height:16px;margin:0;color:light-dark(#62656c,#b6b8be)}#reveal{padding:4px 0;font-size:11px;text-decoration:underline;text-underline-offset:2px}#feedback{color:light-dark(#b73737,#f19494);font-size:11px}button:focus-visible{outline:2px solid #627bad;outline-offset:2px}
   </style></head><body><header><span>${permission === 'accessibility' ? '辅助功能' : '屏幕录制'}授权</span><button id="close" aria-label="关闭授权助手">×</button></header><button id="application" draggable="true" aria-label="拖动 ${escape(guide.name)} 到系统设置"><img src="${escape(guide.icon)}" alt="" draggable="false"><span><strong>${escape(guide.name)}</strong><small>拖动此图标添加应用</small></span><span class="grip" aria-hidden="true">⠿</span></button><p>拖入系统设置的应用列表，再打开开关。</p><button id="reveal">在 Finder 中显示</button><span id="feedback" role="alert"></span></body></html>`;
 }
@@ -78,7 +78,7 @@ export class ComputerPermissionPanel {
     this.close();
     const panel = new BrowserWindow({
       ...permissionPanelBounds(settings, area),
-      title: '同舟授权助手',
+      title: 'CoSail授权助手',
       type: 'panel',
       frame: false,
       focusable: false,

@@ -1,3 +1,4 @@
+import { t as tr } from '../../shared/i18n';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, Plus, Square, Terminal, X } from 'lucide-react';
 import type { TongzhouAPI } from '../../shared/types';
@@ -91,14 +92,14 @@ export function TerminalDock({
     <section
       ref={host}
       className={`terminal-dock ${fill ? 'fill' : ''} ${collapsed ? 'collapsed' : ''}`}
-      aria-label="会话终端面板"
+      aria-label={tr('会话终端面板')}
       style={fill ? undefined : { height: collapsed ? 42 : Math.min(height, limit) }}
     >
       {!collapsed && !fill && (
         <div
           className="terminal-resizer"
           role="separator"
-          aria-label="调整终端高度"
+          aria-label={tr('调整终端高度')}
           aria-orientation="horizontal"
           aria-valuemin={120}
           aria-valuemax={Math.round(limit)}
@@ -132,14 +133,14 @@ export function TerminalDock({
         />
       )}
       <div className="terminal-dock-header">
-        <div className="terminal-tabs" role="tablist" aria-label="终端标签">
+        <div className="terminal-tabs" role="tablist" aria-label={tr('终端标签')}>
           {state?.terminals.map((t, index) => (
             <button
               key={t.id}
               role="tab"
               aria-selected={selected === t.id}
               aria-controls="terminal-content"
-              title={`${t.cwd ?? ''} · ${t.status === 'running' ? '运行中' : '已结束'}`}
+              title={`${t.cwd ?? ''} · ${t.status === 'running' ? tr('运行中') : tr('已结束')}`}
               onClick={() => {
                 setSelected(t.id);
                 setCollapsed(false);
@@ -151,14 +152,14 @@ export function TerminalDock({
                 {t.title} {index + 1}
               </span>
               <i className={`terminal-status ${t.status}`} />
-              <small>{t.status === 'running' ? '运行中' : '已结束'}</small>
+              <small>{t.status === 'running' ? tr('运行中') : tr('已结束')}</small>
             </button>
           ))}
         </div>
         <button
           className="icon-button"
-          aria-label="新建终端"
-          title="新建终端"
+          aria-label={tr('新建终端')}
+          title={tr('新建终端')}
           disabled={busy || disabled}
           onClick={() =>
             void act(async () => {
@@ -176,8 +177,8 @@ export function TerminalDock({
           {onDockRight && (
             <button
               className="icon-button"
-              aria-label="停靠右侧"
-              title="将终端移到右侧工作区"
+              aria-label={tr('停靠右侧')}
+              title={tr('将终端移到右侧工作区')}
               onClick={onDockRight}
             >
               <Terminal size={14} />
@@ -185,8 +186,8 @@ export function TerminalDock({
           )}
           <button
             className="icon-button"
-            aria-label="停止终端"
-            title="停止当前终端及其进程"
+            aria-label={tr('停止终端')}
+            title={tr('停止当前终端及其进程')}
             disabled={busy || current?.status !== 'running'}
             onClick={() =>
               void act(async () => {
@@ -199,8 +200,8 @@ export function TerminalDock({
           {!fill && (
             <button
               className="icon-button"
-              aria-label={collapsed ? '展开终端' : '折叠终端'}
-              title={collapsed ? '展开终端' : '折叠终端'}
+              aria-label={collapsed ? tr('展开终端') : tr('折叠终端')}
+              title={collapsed ? tr('展开终端') : tr('折叠终端')}
               aria-expanded={!collapsed}
               onClick={() => setCollapsed(!collapsed)}
             >
@@ -209,8 +210,8 @@ export function TerminalDock({
           )}
           <button
             className="icon-button"
-            aria-label="关闭终端面板"
-            title="关闭面板，进程继续运行"
+            aria-label={tr('关闭终端面板')}
+            title={tr('关闭面板，进程继续运行')}
             onClick={onClose}
           >
             <X size={16} />
@@ -220,8 +221,8 @@ export function TerminalDock({
       {!collapsed && (
         <>
           <div className="terminal-location" title={current?.cwd ?? state?.cwd}>
-            <code>{current?.cwd ?? state?.cwd ?? '正在读取…'}</code>
-            <span>关闭面板不停止进程</span>
+            <code>{current?.cwd ?? state?.cwd ?? tr('正在读取…')}</code>
+            <span>{tr('关闭面板不停止进程')}</span>
           </div>
           {error && (
             <div className="task-error" role="alert">
@@ -230,7 +231,7 @@ export function TerminalDock({
           )}
           <div id="terminal-content" role="tabpanel" className="terminal-content">
             {selected ? (
-              <Suspense fallback={<p role="status">正在打开终端…</p>}>
+              <Suspense fallback={<p role="status">{tr('正在打开终端…')}</p>}>
                 <TerminalView
                   key={selected}
                   api={api}
@@ -242,7 +243,9 @@ export function TerminalDock({
               </Suspense>
             ) : (
               <p className="task-empty">
-                {disabled ? '此会话没有终端记录，恢复会话后可新建终端。' : '点击加号新建终端。'}
+                {disabled
+                  ? tr('此会话没有终端记录，恢复会话后可新建终端。')
+                  : tr('点击加号新建终端。')}
               </p>
             )}
           </div>
