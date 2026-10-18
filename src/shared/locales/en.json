@@ -1568,6 +1568,7 @@
   "打开：": "Open:",
   "打开对应页面": "Open the corresponding page",
   "选择画布资源": "Select canvas resource",
+  "导入外部文件到内容库并返回画布资源引用": "Import external files into the content library and return canvas resource references",
   "引用已有内容；原件仍由来源模块管理。": "Reference existing content. Originals remain managed by their source module.",
   "资源来源": "Resource source",
   "会话消息": "Conversation messages",
