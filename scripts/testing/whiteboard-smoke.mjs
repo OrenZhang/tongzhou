@@ -269,8 +269,11 @@ try {
   );
   await page.getByTestId('toolbar-image').locator('..').click();
   await poll(async () => Object.keys((await read()).whiteboard.files).length > 0);
-  // File ingestion precedes the native image decode/placement state.
-  await page.waitForTimeout(500);
+  // File ingestion precedes image decoding. The native image cursor signals
+  // placement readiness; a fixed delay races slower CI renderers.
+  await page.waitForFunction(() =>
+    document.querySelector('.excalidraw canvas.interactive')?.style.cursor.startsWith('url('),
+  );
   const imageBounds = await board.boundingBox();
   await page.mouse.move(imageBounds.x + 550, imageBounds.y + 550);
   await page.mouse.down();

@@ -263,6 +263,17 @@ try {
   );
   await page.getByLabel('停靠底部', { exact: true }).click();
   await page.locator('.conversation > .terminal-dock .xterm').waitFor();
+  // Docking remounts xterm; ResizeObserver fits its rows on the next layout frame.
+  await page.waitForFunction(() => {
+    const el = document.querySelector('.conversation > .terminal-dock .xterm');
+    const screen = el?.querySelector('.xterm-screen');
+    if (!el || !screen) return false;
+    const style = getComputedStyle(el);
+    const available =
+      el.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+    const height = screen.getBoundingClientRect().height;
+    return height > 0 && height <= available + 1;
+  });
   const terminalBox = await page.locator('.conversation > .terminal-dock .xterm').evaluate((el) => {
     const style = getComputedStyle(el),
       screen = el.querySelector('.xterm-screen');
