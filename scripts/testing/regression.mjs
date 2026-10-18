@@ -1,7 +1,7 @@
 // Run after npm run build. Each suite owns an isolated profile and test fixtures.
 import { spawn } from 'node:child_process';
 import { createWriteStream } from 'node:fs';
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 const suites = [
   'canvas',
@@ -107,7 +107,7 @@ async function worker() {
       });
     });
     clearTimeout(timer);
-    log.end();
+    await new Promise((resolve) => log.end(resolve));
     results.push({ name, exitCode, timedOut, durationMs: Date.now() - startedAt, logFile });
     await writeFile(
       path.join(root, 'report.json'),
@@ -118,6 +118,7 @@ async function worker() {
       ),
     );
     console.log(`${exitCode === 0 ? 'PASS' : 'FAIL'} ${name}`);
+    if (exitCode !== 0) console.error((await readFile(logFile, 'utf8')).slice(-16000));
   }
 }
 // Desktop suites share the system clipboard and focus; run them sequentially.

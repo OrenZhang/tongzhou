@@ -83,6 +83,9 @@ jobs:
           path: |
             test-results/*.png
             test-results/*report.json
+            test-results/**/*.png
+            test-results/**/report.json
+            test-results/regression-*/*.log
   linux-verify:
     runs-on: ubuntu-latest
     timeout-minutes: 30

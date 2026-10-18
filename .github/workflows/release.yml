@@ -99,6 +99,9 @@ jobs:
           path: |
             test-results/*.png
             test-results/*report.json
+            test-results/**/*.png
+            test-results/**/report.json
+            test-results/regression-*/*.log
           retention-days: 7
   publish:
     needs: package
