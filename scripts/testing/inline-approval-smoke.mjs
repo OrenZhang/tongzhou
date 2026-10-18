@@ -148,14 +148,14 @@ try {
       animations: 'disabled',
     });
   }
-  await page.getByRole('button', { name: '待批准 · 1', exact: true }).click();
+  await page.getByRole('button', { name: '待处理 · 1', exact: true }).click();
   await card('deny').waitFor();
   assert.equal(await card('allow').count(), 0);
   await card('deny').getByRole('button', { name: '拒绝', exact: true }).click();
   await count(1);
   await assert.rejects(readFile(path.join(project, 'deny.txt')), { code: 'ENOENT' });
   await openSidebar(page, '智库');
-  await page.getByRole('button', { name: '待批准 · 1', exact: true }).click();
+  await page.getByRole('button', { name: '待处理 · 1', exact: true }).click();
   await card('allow').waitFor();
   await card('allow').getByRole('button', { name: '批准本次', exact: true }).click();
   await count(0);

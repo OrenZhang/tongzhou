@@ -1,4 +1,5 @@
 import { chooseOption } from './choice-helper.mjs';
+import { openSidebar } from './navigation-helper.mjs';
 import { _electron as electron } from 'playwright';
 import { createServer } from 'node:http';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
@@ -133,6 +134,7 @@ try {
   await waitingTurn.getByText(/包含网络与服务端等待/).waitFor();
   // Reopening the session resets presentation, without restarting the running task.
   await page.getByRole('button', { name: /设置/ }).click();
+  await openSidebar(page, '会话');
   await page.locator(`[data-session-id="${session.id}"]`).click();
   releaseFirst();
   await page.getByText('文件已检查，继续整理。', { exact: true }).waitFor();

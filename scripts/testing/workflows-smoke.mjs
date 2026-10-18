@@ -17,7 +17,16 @@ const server = createServer(async (req, res) => {
   res.write(
     'data: ' +
       JSON.stringify({
-        choices: [{ delta: { reasoning_content: '公开思考摘要：正在处理合成测试任务。' } }],
+        choices: [
+          {
+            delta: {
+              reasoning_content: '公开思考摘要：正在处理合成测试任务。',
+              ...(body.messages.filter((m) => m.role === 'user').at(-1).content === '第三轮任务'
+                ? { content: '第三轮已开始处理。' }
+                : {}),
+            },
+          },
+        ],
       }) +
       '\n\n',
   );
@@ -140,6 +149,7 @@ try {
 
   await page.getByLabel('消息', { exact: true }).fill('第三轮任务');
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
+  await page.getByText('第三轮已开始处理。', { exact: true }).waitFor();
   await mode.click();
   await page.getByRole('menuitemradio', { name: '补充当前任务', exact: true }).click();
   await page.getByLabel('消息', { exact: true }).fill('本轮补充内容');
