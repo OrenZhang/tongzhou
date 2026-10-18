@@ -629,6 +629,7 @@ try {
     'light/dark persistence, system change response, all new screens at two viewport sizes',
   );
   await page.evaluate((id) => window.tongzhou.removeWorktree(id), managed.id);
+  await openSidebar(page, '会话');
   await page.getByRole('button', { name: '切换归档会话', exact: true }).click();
   await grouped.locator('[data-session-id="' + isolated.id + '"]').click();
   assert.equal(await page.locator('.project-group').count(), 1);
