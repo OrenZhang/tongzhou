@@ -3,6 +3,11 @@ import { canvasVisualPlugins } from '../../../src/shared/canvas-plugins';
 import type { CanvasNode, CanvasOutput } from '../../../src/shared/canvas';
 import type { CanvasNodePlugins } from './node-plugins';
 
+export const textSourceOutput = (node: CanvasNode): CanvasOutput => ({
+  text: node.text ?? '',
+  resources: [],
+});
+
 export function registerVisualPlugins(
   registry: CanvasNodePlugins,
   resolve: (node: CanvasNode) => Promise<CanvasOutput>,
@@ -34,7 +39,7 @@ export function registerVisualPlugins(
           if (!node.resource) throw new Error('请先选择全景图片');
           return resolve(node);
         }
-        return { text: node.text ?? '', resources: [] };
+        return textSourceOutput(node);
       },
     }),
   );

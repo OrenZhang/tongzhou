@@ -92,28 +92,30 @@ export function CanvasNodePalette({
         {expanded && <span>{tr('点击或拖入画布')}</span>}
       </header>
       <div id={listId} className="canvas-node-palette-list">
-        {plugins.map((plugin) => {
-          const Icon = icons[plugin.id] ?? icons[plugin.kind] ?? Puzzle;
-          return (
-            <button
-              key={plugin.id}
-              type="button"
-              data-node-plugin={plugin.id}
-              disabled={disabled}
-              draggable={!disabled}
-              title={tr(plugin.name) + (plugin.description ? ' · ' + tr(plugin.description) : '')}
-              aria-label={tr('添加{0}节点', [tr(plugin.name)])}
-              onClick={() => onAdd(plugin.id)}
-              onDragStart={(event) => {
-                event.dataTransfer.setData(canvasNodeDragType, plugin.id);
-                event.dataTransfer.effectAllowed = 'copy';
-              }}
-            >
-              <Icon size={17} aria-hidden="true" />
-              {expanded && <span>{tr(plugin.name)}</span>}
-            </button>
-          );
-        })}
+        {plugins
+          .filter((p) => p.adapter !== 'comfyui')
+          .map((plugin) => {
+            const Icon = icons[plugin.id] ?? icons[plugin.kind] ?? Puzzle;
+            return (
+              <button
+                key={plugin.id}
+                type="button"
+                data-node-plugin={plugin.id}
+                disabled={disabled}
+                draggable={!disabled}
+                title={tr(plugin.name) + (plugin.description ? ' · ' + tr(plugin.description) : '')}
+                aria-label={tr('添加{0}节点', [tr(plugin.name)])}
+                onClick={() => onAdd(plugin.id)}
+                onDragStart={(event) => {
+                  event.dataTransfer.setData(canvasNodeDragType, plugin.id);
+                  event.dataTransfer.effectAllowed = 'copy';
+                }}
+              >
+                <Icon size={17} aria-hidden="true" />
+                {expanded && <span>{tr(plugin.name)}</span>}
+              </button>
+            );
+          })}
       </div>
     </aside>
   );

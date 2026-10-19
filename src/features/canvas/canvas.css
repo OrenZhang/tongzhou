@@ -2112,3 +2112,20 @@
 .canvas-text-source small {
   line-height: 1.5;
 }
+
+.canvas-comfy-fields {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.canvas-comfy-binding {
+  display: grid;
+  grid-template-columns: minmax(68px, 1fr) minmax(52px, 1fr) minmax(60px, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+.canvas-comfy-binding input,
+.canvas-comfy-binding select {
+  min-width: 0;
+}

@@ -1,3 +1,4 @@
+import { mediaFieldNames } from '../../../src/shared/canvas-media-settings';
 import path from 'node:path';
 import { mkdir, writeFile, readdir } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -94,7 +95,7 @@ export async function mediaArguments(
     if (!properties[key]) throw new Error('插件不支持扩展参数：' + key);
   await mkdir(root, { recursive: true });
   const field = (names: string[]) => names.find((n) => properties[n]);
-  const promptKey = field(['prompt', 'text', 'description']);
+  const promptKey = field(mediaFieldNames.prompt);
   if (!promptKey) throw new Error('所选工具未提供提示词参数，请选择生成工具');
   const textInputs = inputs
     .filter((o) => !['reference', 'firstFrame', 'lastFrame'].includes(o.inputPort ?? ''))
@@ -116,13 +117,13 @@ export async function mediaArguments(
   args[promptKey] = [node.text, ...textInputs].filter(Boolean).join('\n\n');
   if (!args[promptKey]) throw new Error('请填写生成提示词，或连接文本节点');
   for (const [value, names] of [
-    [m.model, ['model', 'model_name']],
-    [m.voice, ['voice_id', 'voice']],
-    [m.speed, ['speed', 'speech_rate']],
-    [m.aspectRatio, ['aspect_ratio', 'ratio']],
-    [m.resolution, ['resolution']],
-    [node.kind === 'video' ? (m.duration ?? 6) : undefined, ['duration', 'seconds']],
-    [1, ['n', 'count', 'num_images', 'number_of_images']],
+    [m.model, mediaFieldNames.model],
+    [m.voice, mediaFieldNames.voice],
+    [m.speed, mediaFieldNames.speed],
+    [m.aspectRatio, mediaFieldNames.aspectRatio],
+    [m.resolution, mediaFieldNames.resolution],
+    [node.kind === 'video' ? (m.duration ?? 6) : undefined, mediaFieldNames.duration],
+    [1, mediaFieldNames.count],
   ] as const) {
     if (value === undefined || value === '') continue;
     const key = field([...names]);
@@ -159,16 +160,8 @@ export async function mediaArguments(
   if (m.mode && m.mode !== 'text') {
     const key = field(
       m.mode === 'frames' || m.mode === 'first-frame'
-        ? ['first_frame_image', 'first_frame_image_url', 'input_image_url', 'image_url']
-        : [
-            'input_urls',
-            'image_urls',
-            'reference_images',
-            'image_path',
-            'subject_reference',
-            'image_url',
-            'input_image_url',
-          ],
+        ? mediaFieldNames.firstFrame
+        : mediaFieldNames.reference,
     );
     if (!key) throw new Error('所选工具不支持参考图模式');
     const explicit =
@@ -235,7 +228,7 @@ export async function mediaArguments(
       args[key] = values[0];
     }
     if (m.mode === 'frames' && images.length > 1) {
-      const last = field(['last_frame_image', 'last_frame_image_url', 'end_image_url']);
+      const last = field(mediaFieldNames.lastFrame);
       if (!last) throw new Error('所选工具不支持尾帧，不能忽略第二张参考图');
       args[last] = values[1];
     }

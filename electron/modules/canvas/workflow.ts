@@ -1,9 +1,11 @@
+import { ComfyWorkflows } from './comfyui';
+import { ComfyNodePlugins } from './comfyui-plugin';
 import { sessionWorkspace } from '../sessions/session-workspace';
 import path from 'node:path';
 import { readFile, stat } from 'node:fs/promises';
 import { z } from 'zod';
 import type { CanvasNodeContext, CanvasNodePlugin } from './node-plugins';
-import { registerVisualPlugins } from './visual-plugins';
+import { registerVisualPlugins, textSourceOutput } from './visual-plugins';
 import { checkedNodeText } from './text-source';
 import { splitPlugin } from './split-plugin';
 import { registerWorkflowPlugins, type CanvasNotify } from './workflow-plugins';
@@ -189,6 +191,7 @@ export class CanvasWorkflows {
   private events?: ApplicationEvents;
   private notify?: CanvasNotify;
   readonly resources: CanvasResources;
+  readonly comfy: ComfyWorkflows;
   constructor(
     private store: Store,
     readonly canvases: Canvases,
@@ -197,6 +200,8 @@ export class CanvasWorkflows {
     private dataDir = path.dirname(store.path),
   ) {
     this.resources = new CanvasResources(store, domains);
+    this.comfy = new ComfyWorkflows(store, canvases);
+    new ComfyNodePlugins(this.comfy, canvases, this.resources, domains, (run) => this.persist(run));
     const register = (
       kind: CanvasNode['kind'],
       inputs: CanvasNodePlugin['definition']['inputs'],
@@ -232,7 +237,7 @@ export class CanvasWorkflows {
       await this.media(c.node, c.run, c.inputs, c.permission, c.options, c.signal);
       return c.run.nodes[c.node.id].output!;
     };
-    register('text', [], ['text'], ({ node }) => ({ text: node.text ?? '', resources: [] }));
+    register('text', [], ['text'], ({ node }) => textSourceOutput(node));
     registerVisualPlugins(canvases.plugins, (node) => {
       if (this.resources.preview(node.resource!).type !== 'image')
         throw new Error('全景节点需要图片素材');
@@ -348,7 +353,9 @@ export class CanvasWorkflows {
       throw new Error('当前会话为只读模式');
     if (this.canvases.runs.list().some((r) => r.canvasId === canvas.id && r.status === 'running'))
       throw new Error('此画布正在执行');
-    const order = p.saveResource ? (p.nodeIds ?? []) : executionOrder(canvas, p.nodeIds);
+    const order = p.saveResource
+      ? (p.nodeIds ?? [])
+      : this.canvases.plugins.plan(canvas, executionOrder(canvas, p.nodeIds));
     if (
       p.saveResource &&
       (order.length !== 1 ||
@@ -466,6 +473,7 @@ export class CanvasWorkflows {
     try {
       for (const id of order) {
         signal.throwIfAborted();
+        if (run.nodes[id].status === 'completed') continue;
         current = id;
         const node = run.definition.nodes.find((n) => n.id === id)!,
           step = run.nodes[id];
@@ -478,38 +486,11 @@ export class CanvasWorkflows {
         step.status = 'running';
         step.startedAt = Date.now();
         this.persist(run);
-        const inputs: CanvasOutput[] = [];
-        for (const edge of options.saveResource
-          ? []
-          : run.definition.edges.filter((e) => e.to === id)) {
-          const push = (value: CanvasOutput) => inputs.push(routeCanvasOutput(value, edge));
-          const output = run.nodes[edge.from]?.output;
-          if (output) push(output);
-          else if (edge.kind === 'reference') {
-            const source = run.definition.nodes.find((n) => n.id === edge.from)!;
-            if (
-              (source.kind === 'resource' || source.media?.mode === 'existing') &&
-              source.resource
-            )
-              push(await this.resources.resolveNode(source));
-            else if (source.kind === 'text') push({ text: source.text ?? '', resources: [] });
-            else if (this.canvases.plugins.get(source).definition.source)
-              push(
-                await this.canvases.plugins.execute({
-                  node: source,
-                  run,
-                  inputs: [],
-                  options,
-                  permission: 'read-only',
-                  signal,
-                  task: async () => {
-                    throw new Error('静态来源不能执行任务');
-                  },
-                }),
-              );
-            else throw new Error('引用节点尚无本次结果，请添加执行依赖：' + source.title);
-          }
+        if (this.canvases.plugins.groupKey(node)) {
+          await this.executeGroup(run, node, order, options, signal);
+          continue;
         }
+        const inputs = await this.inputsFor(run, id, options, signal);
         if (inputs.reduce((size, value) => size + value.text.length, 0) > 120000)
           throw new Error('节点输入超过 120000 字符，请缩小处理范围');
         signal.throwIfAborted();
@@ -647,6 +628,111 @@ export class CanvasWorkflows {
       run.endedAt = Date.now();
       this.persist(run);
     }
+  }
+  private async executeGroup(
+    run: CanvasRun,
+    node: CanvasNode,
+    order: string[],
+    options: CanvasExecute,
+    signal: AbortSignal,
+  ) {
+    const plugins = this.canvases.plugins;
+    const key = plugins.groupKey(node);
+    const nodes = run.definition.nodes.filter(
+      (n) => order.includes(n.id) && plugins.groupKey(n) === key,
+    );
+    const ids = new Set(nodes.map((n) => n.id));
+    const inputs = new Map<string, CanvasOutput[]>();
+    try {
+      for (const n of nodes) {
+        const step = run.nodes[n.id];
+        step.status = 'running';
+        step.startedAt = Date.now();
+        inputs.set(n.id, await this.inputsFor(run, n.id, options, signal, ids));
+      }
+      this.persist(run);
+      const owner = this.store.get<Session>('session', run.sessionId);
+      const permission = effectivePermission(
+        owner,
+        this.store.defaultPermission(),
+        owner.agentId ? agentProfile(this.store, owner.agentId) : undefined,
+      );
+      if (permission === 'read-only') throw new Error('当前会话为只读模式');
+      const outputs = await plugins.executeGroup({
+        node,
+        nodes,
+        run,
+        inputs,
+        options,
+        permission,
+        signal,
+        task: (operation, connection = { providerId: 'canvas', model: node.title, agentId: '' }) =>
+          this.task(
+            node,
+            run,
+            [...inputs.values()].flat(),
+            connection,
+            permission,
+            signal,
+            operation,
+          ),
+      });
+      const leader = run.nodes[node.id];
+      for (const n of nodes)
+        Object.assign(run.nodes[n.id], {
+          output: outputs[n.id],
+          taskSessionId: leader.taskSessionId,
+          taskRunId: leader.taskRunId,
+          status: 'completed',
+          endedAt: Date.now(),
+        });
+    } catch (error) {
+      for (const n of nodes) {
+        run.nodes[n.id].status = signal.aborted ? 'cancelled' : 'failed';
+        run.nodes[n.id].error = String(error);
+      }
+      throw error;
+    } finally {
+      this.persist(run);
+    }
+  }
+  private async inputsFor(
+    run: CanvasRun,
+    id: string,
+    options: CanvasExecute,
+    signal: AbortSignal,
+    excluded = new Set<string>(),
+  ) {
+    const inputs: CanvasOutput[] = [];
+    for (const edge of options.saveResource
+      ? []
+      : run.definition.edges.filter((e) => e.to === id && !excluded.has(e.from))) {
+      const push = (value: CanvasOutput) => inputs.push(routeCanvasOutput(value, edge));
+      const output = run.nodes[edge.from]?.output;
+      if (output) push(output);
+      else if (edge.kind === 'reference') {
+        const source = run.definition.nodes.find((n) => n.id === edge.from)!;
+        if ((source.kind === 'resource' || source.media?.mode === 'existing') && source.resource)
+          push(await this.resources.resolveNode(source));
+        else if (source.kind === 'text') push({ text: source.text ?? '', resources: [] });
+        else if (this.canvases.plugins.get(source).definition.source)
+          push(
+            await this.canvases.plugins.execute({
+              node: source,
+              run,
+              inputs: [],
+              options,
+              permission: 'read-only',
+              signal,
+              task: async () => {
+                throw new Error('静态来源不能执行任务');
+              },
+            }),
+          );
+        else throw new Error('引用节点尚无本次结果，请添加执行依赖：' + source.title);
+      }
+    }
+    return inputs;
   }
   private async saveContent({ node, run, inputs }: CanvasNodeContext): Promise<CanvasOutput> {
     const libraryId = node.libraryId ?? 'default';

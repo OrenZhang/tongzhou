@@ -15,12 +15,22 @@ export const canvasNodeKinds = {
   plugin: '工具调用',
 } as const;
 export type CanvasNodeKind = keyof typeof canvasNodeKinds;
-export type CanvasValueType = 'text' | 'image' | 'video' | 'audio' | 'resource';
+export type CanvasValueType =
+  | 'text'
+  | 'image'
+  | 'video'
+  | 'audio'
+  | 'resource'
+  | 'number'
+  | 'boolean'
+  | 'json'
+  | `comfyui:${string}`;
 export interface CanvasPort {
   id: string;
   label: string;
   types: CanvasValueType[];
   description?: string;
+  multiple?: boolean;
 }
 export interface CanvasNodePluginDefinition {
   id: string;
@@ -29,7 +39,7 @@ export interface CanvasNodePluginDefinition {
   version: number;
   /** SDK contract version; omitted by legacy registrations (v1). */
   apiVersion?: 1;
-  adapter?: 'native' | 'mcp' | 'visual';
+  adapter?: 'native' | 'mcp' | 'visual' | 'comfyui';
   description?: string;
   ports?: { inputs: CanvasPort[]; outputs: CanvasPort[] };
   dynamicOutputs?: 'categories';
@@ -39,8 +49,8 @@ export interface CanvasNodePluginDefinition {
   cache?: 'never';
   view?: { renderer: string; textLabel?: string; resource?: 'image' };
   defaults?: Pick<CanvasNode, 'text' | 'config' | 'width' | 'height'>;
-  inputs: ('text' | 'image' | 'video' | 'audio' | 'resource')[];
-  outputs: ('text' | 'image' | 'video' | 'audio' | 'resource')[];
+  inputs: CanvasValueType[];
+  outputs: CanvasValueType[];
   configKey?: 'config' | 'media';
   configSchema: Record<string, any>;
 }
@@ -83,6 +93,8 @@ export interface CanvasNode {
   kind: CanvasNodeKind;
   pluginId?: string;
   config?: Record<string, unknown>;
+  /** Declarative definition snapshot for imported nodes; executable code stays in the registry. */
+  definition?: CanvasNodePluginDefinition;
   title: string;
   x: number;
   y: number;
@@ -126,15 +138,23 @@ export type CanvasWrite = Omit<Canvas, 'id' | 'version' | 'updatedAt'> & {
 };
 export interface CanvasOutput {
   text: string;
+  value?: unknown;
   prompt?: string;
   resources: CanvasResource[];
   inputPort?: string;
   ports?: Record<
     string,
-    { text: string; resources: CanvasResource[]; items?: { name: string; description: string }[] }
+    {
+      text: string;
+      value?: unknown;
+      resources: CanvasResource[];
+      items?: { name: string; description: string }[];
+    }
   >;
 }
 export interface CanvasNodeRun {
+  progress?: { value: number; max: number };
+  externalStatus?: string;
   plugin?: { id: string; version: number };
   status: 'pending' | 'running' | 'completed' | 'cached' | 'failed' | 'cancelled';
   generation?: CanvasGenerationItem[];
@@ -153,6 +173,20 @@ export interface CanvasRun {
   canvasId: string;
   sessionId: string;
   definition: Canvas;
+  external?: Record<
+    string,
+    {
+      connectionId: string;
+      promptId?: string;
+      clientId: string;
+      fingerprint: string;
+      nodeIds: string[];
+      submittedAt: number;
+      uncertain?: boolean;
+      submittedPrompt?: Record<string, unknown>;
+      controls?: Record<string, { base: number; value: number; mode: string }>;
+    }
+  >;
   status: 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
   nodes: Record<string, CanvasNodeRun>;
   startedAt: number;
@@ -165,6 +199,8 @@ export interface CanvasExecute {
   sessionId: string;
   nodeIds?: string[];
   reuse?: boolean;
+  /** Query an existing external task without submitting again. */
+  resumeRunId?: string;
   saveResource?: boolean;
   regenerate?: {
     sourceRunId?: string;

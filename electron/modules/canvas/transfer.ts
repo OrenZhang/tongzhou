@@ -1,3 +1,5 @@
+import { comfyConfig, comfyHash } from './comfyui-format';
+import { randomUUID as sourceUUID } from 'node:crypto';
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { canvasWriteSchema, executionOrder } from './canvas';
@@ -21,10 +23,22 @@ const assetSchema = z
 const packageSchema = z
   .object({
     format: z.literal('tongzhou-canvas'),
-    version: z.literal(1),
+    version: z.union([z.literal(1), z.literal(2)]),
     mode: z.enum(['template', 'project']),
     canvas: canvasWriteSchema.omit({ id: true, version: true }),
     assets: z.array(assetSchema).max(400),
+    imports: z
+      .array(
+        z.object({
+          id: z.uuid(),
+          raw: z.json(),
+          hash: z.string(),
+          format: z.enum(['api', 'ui']),
+          warnings: z.array(z.string()),
+        }),
+      )
+      .max(20)
+      .optional(),
   })
   .strict();
 const hash = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
@@ -53,6 +67,10 @@ function portable(node: CanvasNode): CanvasNode {
   if (n.config) {
     n.config = publicConfig(n.config);
     if (n.kind === 'plugin') delete n.config!.pluginId;
+    if (n.definition?.adapter === 'comfyui' || n.pluginId === 'comfyui.workflow')
+      delete n.config!.connectionId;
+    if (n.pluginId === 'comfyui.workflow' && typeof n.config!.workflow === 'string')
+      n.config!.workflow = JSON.stringify(publicConfig(JSON.parse(n.config!.workflow)));
     if (n.pluginId === 'workflow.notify') delete n.config!.targetId;
   }
   if (n.media) {
@@ -168,8 +186,24 @@ export class CanvasTransfer {
         throw new Error('连同生成结果超过 200 个节点，请拆分项目后导出');
     }
     for (const node of canvas.nodes) await mapResources(node, map);
+    const imports = [
+      ...new Set(
+        source.nodes.map((n) => comfyConfig(n)?.sourceId).filter((id): id is string => !!id),
+      ),
+    ].map((id) => {
+      const original = this.canvases.imports.get(id);
+      const raw = publicConfig(original.raw);
+      return { ...original, raw, hash: comfyHash(raw) };
+    });
     const text = JSON.stringify(
-      { format: 'tongzhou-canvas', version: 1, mode, canvas, assets },
+      {
+        format: 'tongzhou-canvas',
+        version: imports.length ? 2 : 1,
+        mode,
+        canvas,
+        assets,
+        ...(imports.length ? { imports } : {}),
+      },
       null,
       2,
     );
@@ -195,6 +229,20 @@ export class CanvasTransfer {
       return { ...a, bytes };
     });
     const nodes = pack.canvas.nodes.map(portable);
+    const sources = new Map(
+      (pack.imports ?? []).map((source) => {
+        if (comfyHash(source.raw) !== source.hash) throw new Error('ComfyUI 导入原件校验失败');
+        return [source.id, { ...source, id: sourceUUID() }];
+      }),
+    );
+    for (const node of nodes) {
+      const c = comfyConfig(node);
+      if (c) {
+        const source = sources.get(c.sourceId);
+        if (!source) throw new Error('项目缺少 ComfyUI 导入原件');
+        node.config = { ...node.config, sourceId: source.id };
+      }
+    }
     // Validate every reference before writing any content. Never resolve foreign machine IDs.
     for (const node of nodes)
       await mapResources(structuredClone(node), async (ref) => {
@@ -205,6 +253,7 @@ export class CanvasTransfer {
     const before = new Set(this.knowledge.all().map((d) => d.id)),
       created: string[] = [];
     try {
+      for (const source of sources.values()) this.canvases.imports.put(source);
       const mapped = new Map<string, CanvasResource>();
       for (const asset of decoded) {
         const d = this.knowledge.importFile(asset.name, asset.bytes, undefined, 'default');
@@ -218,6 +267,7 @@ export class CanvasTransfer {
         await mapResources(node, async (r) => mapped.get('id' in r ? r.id : '')!);
       return this.canvases.save({ ...pack.canvas, nodes, selection: [] });
     } catch (error) {
+      for (const source of sources.values()) this.canvases.imports.remove(source.id);
       for (const id of created.reverse()) this.knowledge.delete(id, this.knowledge.get(id).version);
       throw error;
     }

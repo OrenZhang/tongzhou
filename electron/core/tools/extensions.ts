@@ -364,7 +364,9 @@ export class ToolScope {
     try {
       const plugins = store
         .list<PluginConfig>('plugin')
-        .filter((p) => p.enabled && (!onlyPluginId || p.id === onlyPluginId));
+        .filter(
+          (p) => p.enabled && p.protocol !== 'comfyui' && (!onlyPluginId || p.id === onlyPluginId),
+        );
       const largeCatalog = plugins.reduce((total, p) => total + (p.catalog?.length ?? 1), 0) > 64;
       if (plugins.some((p) => codeHost(p)))
         this.add(

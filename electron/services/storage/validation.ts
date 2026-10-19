@@ -159,6 +159,7 @@ export const agentSchema = z.object({
 });
 export const pluginSchema = z
   .object({
+    protocol: z.enum(['mcp', 'comfyui']).optional(),
     accountProviderId: id.optional(),
     connectorId: id.optional(),
     authMode: z.enum(['headers', 'oauth']).optional(),
@@ -178,6 +179,11 @@ export const pluginSchema = z
     clearSecret: z.boolean().optional(),
   })
   .superRefine((p, ctx) => {
+    if (
+      p.protocol === 'comfyui' &&
+      (p.transport !== 'http' || p.authMode === 'oauth' || p.accountProviderId || p.connectorId)
+    )
+      ctx.addIssue({ code: 'custom', message: 'ComfyUI 使用 HTTP 服务连接及可选请求头认证' });
     if (p.authMode === 'oauth' && p.transport !== 'http')
       ctx.addIssue({ code: 'custom', message: 'OAuth 仅适用于远程 HTTP 插件' });
     if (p.oauthClientId && (!p.oauthIssuer || !/^https:\/\//.test(p.oauthIssuer)))

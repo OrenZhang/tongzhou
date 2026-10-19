@@ -75,6 +75,7 @@ export interface AgentProfile {
   computerEnabled?: boolean;
 }
 export interface PluginConfig {
+  protocol?: 'mcp' | 'comfyui';
   /** Reuse a CoSail subscription account; no token is copied into plugin settings. */
   accountProviderId?: string;
   /** Live account binding; credentials stay in the main process. */
@@ -399,6 +400,12 @@ export interface TongzhouAPI {
   /** Resolve only a browser File supplied by a user drop; virtual files return an empty string. */
   droppedFilePath(file: File): string;
   canvasExport(id: string, version: number, mode: 'template' | 'project'): Promise<string | null>;
+  canvasConfigureComfy(
+    id: string,
+    version: number,
+    connectionId: string,
+  ): Promise<{ canvas: import('./canvas').Canvas; warnings: string[] }>;
+  canvasExportComfy(id: string, version: number): Promise<string | null>;
   canvasImport(): Promise<import('./canvas').Canvas | null>;
   whiteboardImport(): Promise<import('./canvas').Canvas | null>;
   whiteboardExport(input: {

@@ -1,3 +1,4 @@
+import { ComfyClient } from '../canvas/comfyui';
 import { subscriptionPlugin, subscriptionPluginAccount } from './subscription-plugin';
 import type { ChangePublisher } from '../../core/task-contracts';
 import { pluginStartupTimeout } from '../../../src/shared/vendor-plugins';
@@ -135,6 +136,7 @@ export function registerPluginServices(
       const identityChanged =
         !!previous &&
         (pluginAuthIdentity(previous) !== pluginAuthIdentity(config) ||
+          previous.protocol !== config.protocol ||
           previous.command !== config.command ||
           previous.connectorId !== config.connectorId ||
           JSON.stringify(previous.args) !== JSON.stringify(config.args));
@@ -183,6 +185,7 @@ export function registerPluginServices(
         !secret &&
         !clearSecret &&
         !clientSecretChanged &&
+        previous.protocol === config.protocol &&
         previous.transport === config.transport &&
         previous.command === config.command &&
         previous.url === config.url &&
@@ -239,6 +242,18 @@ export function registerPluginServices(
     operation('插件', 'change', '连接插件并发现其工具', [idSchema.describe('pluginId')]),
     async (raw) => {
       const p = store.get<PluginConfig>('plugin', idSchema.parse(raw));
+      if (p.protocol === 'comfyui') {
+        const client = new ComfyClient(store, p.id, false);
+        const catalog = await client.catalog(AbortSignal.timeout(30000));
+        client.current();
+        store.put('plugin', { ...p, catalog: [], checkedAt: Date.now() });
+        services.changed();
+        return Object.entries(catalog).map(([name, info]) => ({
+          name,
+          description: info.display_name ?? name,
+          inputSchema: { type: 'object', properties: {} },
+        }));
+      }
       const credentials = pluginCredentialVersion(store, p);
       let c: PluginConnection | undefined;
       try {

@@ -6,6 +6,7 @@ import path from 'node:path';
 const suites = [
   'canvas',
   'canvas-chat',
+  'comfyui',
   'canvas-import',
   'canvas-media-node',
   'canvas-node-config',

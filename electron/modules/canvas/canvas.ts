@@ -1,6 +1,9 @@
 import { CanvasNodePlugins } from './node-plugins';
 import { canvasAgentId, builtinAgent, isCanvasAgent } from '../../../src/shared/builtin-agents';
-import { validateCanvasPorts } from '../../../src/shared/canvas-ports';
+import {
+  validateCanvasPorts,
+  validateCanvasPortMultiplicity,
+} from '../../../src/shared/canvas-ports';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -25,11 +28,41 @@ export const resourceSchema = z.discriminatedUnion('kind', [
       .optional(),
   }),
 ]);
+const valueTypeSchema = z.union([
+  z.enum(['text', 'image', 'video', 'audio', 'resource', 'number', 'boolean', 'json']),
+  z.templateLiteral(['comfyui:', z.string().max(100)]),
+]);
+const portSchema = z.object({
+  id,
+  label: z.string().max(200),
+  types: z.array(valueTypeSchema).min(1).max(20),
+  multiple: z.boolean().optional(),
+});
 export const nodeSchema = z
   .object({
     id,
     kind: z.enum(['text', 'resource', 'agent', 'image', 'video', 'audio', 'save', 'plugin']),
     pluginId: id.optional(),
+    definition: z
+      .object({
+        id: z.string().regex(/^comfyui\.[a-f0-9]{24}$/),
+        name: z.string().min(1).max(200),
+        kind: z.literal('plugin'),
+        version: z.literal(1),
+        apiVersion: z.literal(1),
+        adapter: z.literal('comfyui'),
+        cache: z.literal('never'),
+        description: z.string().max(200).optional(),
+        inputs: z.array(valueTypeSchema).max(200),
+        outputs: z.array(valueTypeSchema).max(200),
+        ports: z.object({
+          inputs: z.array(portSchema).max(200),
+          outputs: z.array(portSchema).max(200),
+        }),
+        configSchema: z.record(z.string(), z.json()),
+      })
+      .refine((value) => JSON.stringify(value).length <= 64000, '节点定义过大')
+      .optional(),
     config: z
       .record(z.string(), z.json())
       .refine((v) => JSON.stringify(v).length <= 32000, '节点配置过大')
@@ -129,6 +162,7 @@ export const executeSchema = z
     sessionId: z.uuid(),
     nodeIds: z.array(id).min(1).max(50).optional(),
     reuse: z.boolean().optional(),
+    resumeRunId: z.uuid().optional(),
     saveResource: z.boolean().optional(),
     regenerate: z
       .object({
@@ -177,6 +211,7 @@ export class Canvases {
   readonly plugins = new CanvasNodePlugins();
   readonly definitions: FileRecords<Canvas>;
   readonly runs: FileRecords<CanvasRun>;
+  readonly imports: FileRecords<import('./comfyui').ComfySource>;
   constructor(
     private store: Store,
     dataDir: string,
@@ -184,6 +219,7 @@ export class Canvases {
     const root = managedDirectory(dataDir, 'canvas');
     this.definitions = new FileRecords(path.join(root, 'definitions'));
     this.runs = new FileRecords(path.join(root, 'runs'));
+    this.imports = new FileRecords(path.join(root, 'imports'));
     this.migrate('canvas', this.definitions);
     this.migrate('canvasRun', this.runs);
     for (const run of this.runs.list())
@@ -212,7 +248,7 @@ export class Canvases {
   }
   state(id?: string): CanvasState {
     return {
-      plugins: this.plugins.list(),
+      plugins: this.plugins.list(id ? this.get(id).nodes : []),
       canvases: this.definitions
         .list()
         .sort((a, b) => b.updatedAt - a.updatedAt)
@@ -244,13 +280,16 @@ export class Canvases {
     if (old && old.mode !== p.mode && (old.mode === 'whiteboard' || p.mode === 'whiteboard'))
       throw new Error('请新建另一种类型的画布，不能覆盖现有画布类型');
     executionOrder(p);
-    const definitions = this.plugins.list();
+    const definitions = this.plugins.list(p.nodes);
     for (const edge of p.edges) {
       const source = p.nodes.find((n) => n.id === edge.from)!,
         target = p.nodes.find((n) => n.id === edge.to)!;
       const from = definitions.find((d) => d.id === (source.pluginId ?? source.kind)),
         to = definitions.find((d) => d.id === (target.pluginId ?? target.kind));
-      if (from && to) validateCanvasPorts(edge, source, target, from, to);
+      if (from && to) {
+        validateCanvasPorts(edge, source, target, from, to);
+        validateCanvasPortMultiplicity(p, edge, target, to);
+      }
     }
     if (p.selection.some((v) => !p.nodes.some((n) => n.id === v)))
       throw new Error('选区包含不存在的节点');

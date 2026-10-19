@@ -1,37 +1,30 @@
 import type { CanvasMedia } from './canvas';
 import type { PluginTool } from './types';
 
+export const mediaFieldNames = {
+  prompt: ['prompt', 'text', 'description'],
+  model: ['model', 'model_name'],
+  voice: ['voice_id', 'voice'],
+  speed: ['speed', 'speech_rate'],
+  aspectRatio: ['aspect_ratio', 'ratio'],
+  resolution: ['resolution'],
+  duration: ['duration', 'seconds'],
+  count: ['n', 'count', 'num_images', 'number_of_images'],
+  reference: [
+    'input_urls',
+    'image_urls',
+    'reference_images',
+    'image_path',
+    'subject_reference',
+    'image_url',
+    'input_image_url',
+  ],
+  firstFrame: ['first_frame_image', 'first_frame_image_url', 'input_image_url', 'image_url'],
+  lastFrame: ['last_frame_image', 'last_frame_image_url', 'end_image_url'],
+};
+
 export const mediaManagedFields = new Set([
-  'prompt',
-  'text',
-  'description',
-  'model',
-  'model_name',
-  'voice_id',
-  'voice',
-  'speed',
-  'speech_rate',
-  'aspect_ratio',
-  'ratio',
-  'resolution',
-  'duration',
-  'seconds',
-  'n',
-  'count',
-  'num_images',
-  'number_of_images',
-  'input_urls',
-  'image_urls',
-  'reference_images',
-  'image_path',
-  'subject_reference',
-  'image_url',
-  'input_image_url',
-  'first_frame_image',
-  'first_frame_image_url',
-  'last_frame_image',
-  'last_frame_image_url',
-  'end_image_url',
+  ...Object.values(mediaFieldNames).flat(),
   'output_directory',
   'output_dir',
   'output_file',
@@ -85,21 +78,9 @@ export function switchCanvasMediaTool(
     return key === 'model' ? (schema?.default ?? schema?.enum?.[0]) : undefined;
   };
   let mode = current.mode ?? 'text';
-  const reference = [
-    'input_urls',
-    'image_urls',
-    'reference_images',
-    'image_path',
-    'subject_reference',
-    'image_url',
-    'input_image_url',
-  ].some((key) => fields[key]);
-  const first = ['first_frame_image', 'first_frame_image_url', 'input_image_url', 'image_url'].some(
-    (key) => fields[key],
-  );
-  const last = ['last_frame_image', 'last_frame_image_url', 'end_image_url'].some(
-    (key) => fields[key],
-  );
+  const reference = mediaFieldNames.reference.some((key) => fields[key]);
+  const first = mediaFieldNames.firstFrame.some((key) => fields[key]);
+  const last = mediaFieldNames.lastFrame.some((key) => fields[key]);
   if (
     (mode === 'reference' && !reference) ||
     (mode === 'first-frame' && !first) ||
@@ -115,12 +96,12 @@ export function switchCanvasMediaTool(
     pluginId,
     tool: tool?.name,
     mode,
-    model: keep('model', ['model', 'model_name']) as string | undefined,
-    aspectRatio: keep('aspectRatio', ['aspect_ratio', 'ratio']) as string | undefined,
-    resolution: keep('resolution', ['resolution']) as string | undefined,
-    duration: keep('duration', ['duration', 'seconds']) as number | undefined,
-    voice: keep('voice', ['voice_id', 'voice']) as string | undefined,
-    speed: keep('speed', ['speed', 'speech_rate']) as number | undefined,
+    model: keep('model', mediaFieldNames.model) as string | undefined,
+    aspectRatio: keep('aspectRatio', mediaFieldNames.aspectRatio) as string | undefined,
+    resolution: keep('resolution', mediaFieldNames.resolution) as string | undefined,
+    duration: keep('duration', mediaFieldNames.duration) as number | undefined,
+    voice: keep('voice', mediaFieldNames.voice) as string | undefined,
+    speed: keep('speed', mediaFieldNames.speed) as number | undefined,
     parameters: sameTool ? current.parameters : undefined,
   };
   return { media, reset };

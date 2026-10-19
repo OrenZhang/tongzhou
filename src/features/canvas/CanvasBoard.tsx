@@ -602,7 +602,16 @@ export function CanvasBoard({
                   {label}
                 </small>
                 <span className="canvas-node-status">
-                  {step ? statusLabels[step.status] : ''}
+                  {step
+                    ? definition?.adapter === 'comfyui' &&
+                      step.status === 'completed' &&
+                      step.externalStatus === 'not-observed'
+                      ? tr('图已完成')
+                      : statusLabels[step.status]
+                    : ''}
+                  {step?.status === 'running' && step.progress
+                    ? ` ${Math.min(100, Math.round((step.progress.value / step.progress.max) * 100))}%`
+                    : ''}
                   {step?.generation
                     ? ` ${step.generation.filter((i) => i.status === 'completed').length}/${step.generation.length}`
                     : ''}

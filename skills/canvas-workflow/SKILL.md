@@ -1,6 +1,6 @@
 ---
 name: canvas-workflow
-description: 在 CoSail 工作流画布搭建、配置、运行和持续修改节点流程；涵盖人物设定与三视图、参考图生成、图生视频、资源入库、工具插件、定时触发和渠道通知。可编辑几何流程图改用 whiteboard-design。
+description: 在 CoSail 工作流画布搭建、配置、运行和持续修改节点流程；涵盖人物设定与三视图、参考图生成、图生视频、资源入库、工具插件、ComfyUI 工作流导入与 API 节点、定时触发和渠道通知。可编辑几何流程图改用 whiteboard-design。
 ---
 
 # 工作流编排
@@ -16,6 +16,7 @@ description: 在 CoSail 工作流画布搭建、配置、运行和持续修改�
 - 节点、端口、定时与通知：[工具与连接](references/tools-and-connections.md)。
 - 人物外观、参考图、六格设定、图生视频：[人物与媒体](references/characters-and-media.md)。角色故事改编/导演场记/分镜文本需要时另读现有 `tongzhou-manju-production` 技能，不要求每个简单人物图任务都走漫剧全流程。
 - 失败继续、下载、结果展示、保存：[运行与验收](references/execution-and-checks.md)。
+- 导入 ComfyUI、绑定流程 API、检查依赖及继续查询：[ComfyUI 工作流](references/comfyui.md)。
 - 官方资料与实际封装差异：[来源](references/sources.md)。
 
 ## 修改和执行

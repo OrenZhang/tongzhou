@@ -17,6 +17,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:canvas": "node scripts/testing/canvas-smoke.mjs",
+    "test:comfyui": "node scripts/testing/comfyui-smoke.mjs",
     "test:canvas-chat": "node scripts/testing/canvas-chat-smoke.mjs",
     "test:desktop": "node scripts/testing/smoke.mjs",
     "test:tray": "node scripts/testing/tray-smoke.mjs",

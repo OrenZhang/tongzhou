@@ -1,3 +1,4 @@
+import { mediaFieldNames } from '../../shared/canvas-media-settings';
 import { pluginLabel } from '../../shared/plugin-label';
 import { t as tr } from '../../shared/i18n';
 import { useEffect, useId, useState } from 'react';
@@ -223,8 +224,8 @@ export function CanvasMediaFields({
     const key = names.find((k) => props[k]);
     return key ? (props[key].enum as string[] | undefined) : undefined;
   };
-  const models = options(['model', 'model_name']) ?? [],
-    ratios = options(['aspect_ratio', 'ratio']) ?? [
+  const models = options(mediaFieldNames.model) ?? [],
+    ratios = options(mediaFieldNames.aspectRatio) ?? [
       '1:1',
       '16:9',
       '9:16',
@@ -236,7 +237,7 @@ export function CanvasMediaFields({
       '9:21',
     ],
     resolutions =
-      options(['resolution']) ??
+      options(mediaFieldNames.resolution) ??
       (kind === 'image' ? ['1K', '2K', '4K'] : ['480P', '720P', '768P', '1080P', '2K', '4K']);
   const chooseTool = (name: string) =>
     switchTool(
@@ -296,26 +297,13 @@ export function CanvasMediaFields({
             <>
               <option
                 value="first-frame"
-                disabled={
-                  !!tool &&
-                  ![
-                    'first_frame_image',
-                    'first_frame_image_url',
-                    'input_image_url',
-                    'image_url',
-                  ].some((k) => props[k])
-                }
+                disabled={!!tool && !mediaFieldNames.firstFrame.some((k) => props[k])}
               >
                 {tr('首帧生成')}
               </option>
               <option
                 value="frames"
-                disabled={
-                  !!tool &&
-                  !['last_frame_image', 'last_frame_image_url', 'end_image_url'].some(
-                    (k) => props[k],
-                  )
-                }
+                disabled={!!tool && !mediaFieldNames.lastFrame.some((k) => props[k])}
               >
                 {tr('首尾帧生成')}
               </option>
@@ -525,7 +513,7 @@ export function CanvasMediaFields({
                   list={modelId + '-voices'}
                 />
                 <datalist id={modelId + '-voices'}>
-                  {(options(['voice_id', 'voice']) ?? []).map((v) => (
+                  {(options(mediaFieldNames.voice) ?? []).map((v) => (
                     <option key={v} value={v} />
                   ))}
                 </datalist>

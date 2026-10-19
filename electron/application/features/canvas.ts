@@ -182,10 +182,54 @@ export const canvasPlugin: Plugin.Object<void> = {
       if (result.canceled || !result.filePaths[0]) return null;
       if ((await stat(result.filePaths[0])).size > MAX_CANVAS_PACKAGE)
         throw new Error('画布项目包超过 96 MB');
-      const next = await transfer.decode(await readFile(result.filePaths[0], 'utf8'));
+      const text = await readFile(result.filePaths[0], 'utf8');
+      const next =
+        JSON.parse(text).format === 'tongzhou-canvas'
+          ? await transfer.decode(text)
+          : await workflows.comfy.import(text);
       ctx.tzEvents.changed();
       return next;
     });
+    define(
+      'canvasConfigureComfy',
+      '检查并绑定 ComfyUI 服务',
+      [z.uuid(), versionSchema, z.string().min(1).max(120)],
+      true,
+      async (id, version, connectionId) => {
+        const canvas = canvases.get(id);
+        if (canvas.version !== version) throw new Error('画布已更新，请重新保存后检查');
+        const result = await workflows.comfy.configure(canvas, connectionId);
+        ctx.tzEvents.changed();
+        return result;
+      },
+    );
+    define(
+      'canvasExportComfy',
+      '导出 ComfyUI API 工作流',
+      [z.uuid(), versionSchema],
+      false,
+      async (id, version) => {
+        const canvas = canvases.get(id);
+        if (canvas.version !== version) throw new Error('画布已更新，请重新保存后导出');
+        const text = workflows.comfy.export(canvas);
+        const result = await dialog.showSaveDialog({
+          title: '导出 ComfyUI 工作流',
+          defaultPath: canvas.title.replace(/[<>:"/\\|?*]/g, '_') + '.comfy.json',
+          filters: [{ name: 'ComfyUI API', extensions: ['json'] }],
+        });
+        if (result.canceled || !result.filePath) return null;
+        const previous = await readFile(result.filePath).catch((e: NodeJS.ErrnoException) => {
+          if (e.code === 'ENOENT') return undefined;
+          throw e;
+        });
+        await writeLocalFile(
+          result.filePath,
+          Buffer.from(text),
+          previous ? createHash('sha256').update(previous).digest('hex') : undefined,
+        );
+        return result.filePath;
+      },
+    );
     define(
       'canvasSaveTemplate',
       '将可复用工作流保存到内容库',

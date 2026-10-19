@@ -22,6 +22,15 @@ export function attachCanvasTools(
 ) {
   const activeId = store.get<Session>('session', session.id).activeCanvasId;
   const mode = activeId ? (canvases.get(activeId).mode ?? 'workflow') : undefined;
+  const comfyAvailable =
+    store.list<PluginConfig>('plugin').some((p) => p.enabled && p.protocol === 'comfyui') ||
+    (activeId
+      ? canvases
+          .get(activeId)
+          .nodes.some(
+            (n) => n.definition?.adapter === 'comfyui' || n.pluginId === 'comfyui.workflow',
+          )
+      : false);
   const define = (
     name: string,
     description: string,
@@ -29,6 +38,8 @@ export function attachCanvasTools(
     write: boolean,
     fn: (p: any) => unknown,
   ) => {
+    if ((name.startsWith('canvas_comfy_') || name === 'canvas_import_comfy') && !comfyAvailable)
+      return;
     if (write && (readOnly || session.canvasContext)) return;
     if (mode === 'whiteboard' && ['canvas_apply', 'canvas_execute', 'canvas_cancel'].includes(name))
       return;
@@ -81,6 +92,10 @@ export function attachCanvasTools(
         .state()
         .canvases.filter((c) => !session.canvasContext || c.id === session.canvasContext.canvasId),
       activeCanvasId: store.get<Session>('session', session.id).activeCanvasId,
+      comfyuiConnections: store
+        .list<PluginConfig>('plugin')
+        .filter((p) => p.protocol === 'comfyui')
+        .map(({ id, name, enabled }) => ({ id, name, enabled })),
       nodePlugins: canvases.plugins
         .list()
         .map(({ id, name, kind, description, ports }) => ({ id, name, kind, description, ports })),
@@ -131,13 +146,38 @@ export function attachCanvasTools(
         };
       return {
         nodePlugins: p.pluginIds
-          ? canvases.plugins.list().filter((v) => p.pluginIds.includes(v.id))
+          ? (state.plugins ?? []).filter((v) => p.pluginIds.includes(v.id))
           : undefined,
         canvas: {
           ...canvas,
           nodes: canvas.nodes
             .filter((n) => !p.nodeIds || p.nodeIds.includes(n.id))
-            .map((n) => (p.nodeIds ? n : { ...n, text: n.text?.slice(0, 180) })),
+            .map((n) =>
+              p.nodeIds
+                ? n
+                : {
+                    ...n,
+                    text: n.text?.slice(0, 180),
+                    ...(n.definition?.adapter === 'comfyui'
+                      ? {
+                          definition: undefined,
+                          config: {
+                            sourceId: n.config?.sourceId,
+                            nodeId: n.config?.nodeId,
+                            classType: n.config?.classType,
+                            connectionId: n.config?.connectionId,
+                            issues: n.config?.issues,
+                          },
+                        }
+                      : {}),
+                    ...(n.pluginId === 'comfyui.workflow'
+                      ? {
+                          config: { connectionId: n.config?.connectionId },
+                          detail: '使用 nodeIds 读取 API JSON 与参数绑定',
+                        }
+                      : {}),
+                  },
+            ),
         },
         runs: state.runs.map(({ id, status, nodes, error }) => ({
           id,
@@ -148,6 +188,8 @@ export function attachCanvasTools(
               key,
               {
                 status: n.status,
+                progress: n.progress,
+                externalStatus: n.externalStatus,
                 generation: n.generation,
                 error: n.error,
                 taskSessionId: n.taskSessionId,
@@ -169,6 +211,52 @@ export function attachCanvasTools(
         })),
       };
     },
+  );
+  define(
+    'canvas_import_comfy',
+    '导入 ComfyUI API 或 UI JSON 为可编辑画布；不会执行生成。connectionId 可选，来自已配置的 ComfyUI 服务。',
+    z
+      .object({
+        workflow: z.string().max(4 * 1024 * 1024),
+        connectionId: z.string().max(120).optional(),
+      })
+      .strict(),
+    true,
+    async (p) => {
+      const canvas = await workflows.comfy.import(p.workflow, p.connectionId);
+      canvases.bind(session.id, canvas.id);
+      changed();
+      return canvas;
+    },
+  );
+  define(
+    'canvas_comfy_configure',
+    '检查 ComfyUI 节点并绑定已启用的服务，更新定义和参数表单；不提交生成。',
+    z
+      .object({
+        canvasId: z.uuid(),
+        version: z.number().int().positive(),
+        connectionId: z.string().min(1).max(120),
+      })
+      .strict(),
+    true,
+    async (p) => {
+      const canvas = canvases.get(target(p.canvasId));
+      if (canvas.version !== p.version) throw new Error('画布已更新，请重新读取版本');
+      const result = await workflows.comfy.configure(canvas, p.connectionId);
+      changed();
+      return result;
+    },
+  );
+  define(
+    'canvas_comfy_export',
+    '将当前 ComfyUI 图导出为 API 格式，保留参数与连线修改。',
+    z.object({ canvasId: z.uuid().optional() }).strict(),
+    false,
+    (p) => ({
+      format: 'comfyui-api',
+      workflow: JSON.parse(workflows.comfy.export(canvases.get(target(p.canvasId)))),
+    }),
   );
   define(
     'canvas_apply',

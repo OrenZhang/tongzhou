@@ -87,14 +87,15 @@ export function canvasPorts(
   >,
 ) {
   const base =
-    definition?.ports ??
+    (definition ?? node.definition)?.ports ??
     defaultCanvasPorts(
-      definition ?? {
-        id: node.pluginId ?? node.kind,
-        kind: node.kind,
-        inputs: ['text', 'resource'],
-        outputs: ['text', 'resource'],
-      },
+      definition ??
+        node.definition ?? {
+          id: node.pluginId ?? node.kind,
+          kind: node.kind,
+          inputs: ['text', 'resource'],
+          outputs: ['text', 'resource'],
+        },
     );
   if (definition?.dynamicOutputs === 'categories' || node.pluginId === splitPluginId)
     return {
@@ -121,10 +122,31 @@ export function validateCanvasPorts(
     input &&
     !out.types.some(
       (type) =>
-        input.types.includes(type) || type === 'resource' || input.types.includes('resource'),
+        input.types.includes(type) ||
+        (type.startsWith('comfyui:') &&
+          input.types.some(
+            (t) =>
+              t.startsWith('comfyui:') && (t === 'comfyui:UNKNOWN' || type === 'comfyui:UNKNOWN'),
+          )) ||
+        (!type.startsWith('comfyui:') &&
+          !input.types.some((t) => t.startsWith('comfyui:')) &&
+          (type === 'resource' || input.types.includes('resource'))),
     )
   )
     throw new Error(`${out.label} 与 ${input.label} 的类型不兼容`);
+}
+export function validateCanvasPortMultiplicity(
+  canvas: Pick<Canvas, 'edges'>,
+  edge: CanvasEdge,
+  target: CanvasNode,
+  definition?: CanvasNodePluginDefinition,
+) {
+  const input = canvasPorts(target, definition).inputs.find((p) => p.id === edge.toPort);
+  if (
+    input?.multiple === false &&
+    canvas.edges.filter((e) => e.to === edge.to && e.toPort === edge.toPort).length > 1
+  )
+    throw new Error(input.label + ' 只接受一个上游输入，请先合并内容');
 }
 export function routeCanvasOutput(output: CanvasOutput, edge: CanvasEdge): CanvasOutput {
   const selected =
@@ -132,6 +154,7 @@ export function routeCanvasOutput(output: CanvasOutput, edge: CanvasEdge): Canva
   if (!selected) throw new Error('运行结果中缺少输出端口：' + edge.fromPort);
   return {
     text: selected.text,
+    ...('value' in selected ? { value: selected.value } : {}),
     resources: edge.toPort === 'prompt' ? [] : selected.resources,
     ...('prompt' in selected && selected.prompt ? { prompt: selected.prompt } : {}),
     ...(edge.toPort ? { inputPort: edge.toPort } : {}),
@@ -177,5 +200,12 @@ export function connectCanvasPorts(
       );
     }
   }
-  return { ...canvas, edges: [...canvas.edges, edge] };
+  const next = { ...canvas, edges: [...canvas.edges, edge] };
+  validateCanvasPortMultiplicity(
+    next,
+    edge,
+    target,
+    definitions.find((d) => d.id === (target.pluginId ?? target.kind)) ?? target.definition,
+  );
+  return next;
 }

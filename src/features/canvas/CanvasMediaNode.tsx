@@ -1,3 +1,4 @@
+import { mediaFieldNames } from '../../shared/canvas-media-settings';
 import { useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -95,17 +96,7 @@ export function CanvasMediaNode({
   const tools = plugin ? canvasMediaTools(plugin, kind) : [];
   const tool = tools.find((t) => t.name === media.tool);
   const props = tool?.inputSchema.properties ?? {};
-  const canReference =
-    !tool ||
-    [
-      'input_urls',
-      'image_urls',
-      'reference_images',
-      'image_path',
-      'subject_reference',
-      'image_url',
-      'input_image_url',
-    ].some((key) => props[key]);
+  const canReference = !tool || mediaFieldNames.reference.some((key) => props[key]);
   const existing = media.mode === 'existing';
   const running = step?.status === 'running' || step?.status === 'pending';
   const items = step?.generation ?? [];
@@ -438,26 +429,13 @@ export function CanvasMediaNode({
                           <>
                             <option
                               value="first-frame"
-                              disabled={
-                                !!tool &&
-                                ![
-                                  'first_frame_image',
-                                  'first_frame_image_url',
-                                  'input_image_url',
-                                  'image_url',
-                                ].some((k) => props[k])
-                              }
+                              disabled={!!tool && !mediaFieldNames.firstFrame.some((k) => props[k])}
                             >
                               {tr('首帧生成')}
                             </option>
                             <option
                               value="frames"
-                              disabled={
-                                !!tool &&
-                                !['last_frame_image', 'last_frame_image_url', 'end_image_url'].some(
-                                  (k) => props[k],
-                                )
-                              }
+                              disabled={!!tool && !mediaFieldNames.lastFrame.some((k) => props[k])}
                             >
                               {tr('首尾帧生成')}
                             </option>
@@ -468,18 +446,21 @@ export function CanvasMediaNode({
                     </label>
                     {!existing && (
                       <>
-                        {parameter(tr('生成模型'), ['model', 'model_name'], media.model, (model) =>
+                        {parameter(tr('生成模型'), mediaFieldNames.model, media.model, (model) =>
                           update({ model }),
                         )}
                         {parameter(
                           tr('画面比例'),
-                          ['aspect_ratio', 'ratio'],
+                          mediaFieldNames.aspectRatio,
                           media.aspectRatio,
                           (aspectRatio) => update({ aspectRatio }),
                           ['1:1', '16:9', '9:16', '4:3'],
                         )}
-                        {parameter(tr('分辨率'), ['resolution'], media.resolution, (resolution) =>
-                          update({ resolution }),
+                        {parameter(
+                          tr('分辨率'),
+                          mediaFieldNames.resolution,
+                          media.resolution,
+                          (resolution) => update({ resolution }),
                         )}
                         <label>
                           {tr('生成数量')}
@@ -540,13 +521,7 @@ export function CanvasMediaNode({
                               <button
                                 type="button"
                                 disabled={
-                                  !!tool &&
-                                  ![
-                                    'first_frame_image',
-                                    'first_frame_image_url',
-                                    'input_image_url',
-                                    'image_url',
-                                  ].some((k) => props[k])
+                                  !!tool && !mediaFieldNames.firstFrame.some((k) => props[k])
                                 }
                                 onClick={() => setPicker('firstFrame')}
                               >
@@ -555,12 +530,7 @@ export function CanvasMediaNode({
                               <button
                                 type="button"
                                 disabled={
-                                  !!tool &&
-                                  ![
-                                    'last_frame_image',
-                                    'last_frame_image_url',
-                                    'end_image_url',
-                                  ].some((k) => props[k])
+                                  !!tool && !mediaFieldNames.lastFrame.some((k) => props[k])
                                 }
                                 onClick={() => setPicker('lastFrame')}
                               >

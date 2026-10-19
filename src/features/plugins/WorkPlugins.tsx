@@ -25,6 +25,16 @@ import {
 } from '../../shared/code-hosting';
 export const workPluginCatalog = localized([
   {
+    id: 'comfyui',
+    name: 'ComfyUI',
+    category: '媒体生成',
+    description:
+      '连接本机或远程 ComfyUI，在画布导入、配置和执行工作流。模型及自定义节点由 ComfyUI 服务管理。',
+    url: 'http://127.0.0.1:8188',
+    authMode: 'headers' as const,
+    docs: 'https://docs.comfy.org/',
+  },
+  {
     id: 'github',
     name: 'GitHub 仓库工具',
     category: '代码协作',
@@ -77,7 +87,7 @@ export function workPluginDefinition(plugin: PluginConfig) {
   return plugin.transport === 'http'
     ? workPluginCatalog.find(
         (p) =>
-          plugin.url === p.url ||
+          (p.id === 'comfyui' ? plugin.protocol === 'comfyui' : plugin.url === p.url) ||
           p.id === codeHost(plugin) ||
           (p.id === 'figma' && !!figmaConnection(plugin)),
       )
@@ -325,6 +335,7 @@ export function WorkPlugins({
           : {
               id: crypto.randomUUID(),
               name: p.name,
+              ...(p.id === 'comfyui' ? { protocol: 'comfyui' as const } : {}),
               transport: 'http',
               url: p.url,
               command: '',
@@ -425,6 +436,18 @@ export function WorkPlugins({
                 <p role="status" className="info-strip">
                   {notice}
                 </p>
+              )}
+              {edit.protocol === 'comfyui' && (
+                <label>
+                  {tr('ComfyUI 服务地址')}
+                  <input
+                    type="url"
+                    required
+                    aria-label={tr('ComfyUI 服务地址')}
+                    value={edit.url}
+                    onChange={(e) => setEdit({ ...edit, url: e.target.value })}
+                  />
+                </label>
               )}
               {editingService === 'gitlab' && (
                 <>
@@ -599,7 +622,7 @@ export function WorkPlugins({
                   <small>{tr('可复用本地检测保存的 Token；调用时仍会检查账号和连接权限。')}</small>
                 </label>
               )}
-              {edit.url !== figmaDesktopUrl && (
+              {edit.url !== figmaDesktopUrl && edit.protocol !== 'comfyui' && (
                 <OAuthFields edit={edit} onChange={setEdit} showAuthentication={!codeHost(edit)} />
               )}
               {edit.authMode !== 'oauth' && edit.url !== figmaDesktopUrl && !source && (
@@ -693,7 +716,7 @@ export function WorkPlugins({
                   checked={edit.enabled}
                   onChange={(e) => setEdit({ ...edit, enabled: e.target.checked })}
                 />
-                {tr('在会话中启用此插件')}
+                {edit.protocol === 'comfyui' ? tr('启用 ComfyUI 服务') : tr('在会话中启用此插件')}
               </label>
               <p>
                 {tr(
@@ -708,15 +731,20 @@ export function WorkPlugins({
                   type="button"
                   disabled={busy}
                   onClick={() =>
-                    void act(async () => {
-                      await save();
-                      await api.testPlugin(edit.id);
-                    }, tr('✓ 认证、工具目录及只读配置检查通过；未执行写操作'))
+                    void act(
+                      async () => {
+                        await save();
+                        await api.testPlugin(edit.id);
+                      },
+                      edit.protocol === 'comfyui'
+                        ? tr('✓ ComfyUI 服务和节点目录检查通过；未提交生成')
+                        : tr('✓ 认证、工具目录及只读配置检查通过；未执行写操作'),
+                    )
                   }
                 >
                   {tr('保存并检查')}
                 </button>
-                {current && (
+                {current && edit.protocol !== 'comfyui' && (
                   <button
                     type="button"
                     disabled={busy}
@@ -797,13 +825,19 @@ export function WorkPlugins({
               />
             </PluginDetailSection>
           )}
-          {edit && pluginPermissionState(edit, current).catalog && (
+          {edit && edit.protocol !== 'comfyui' && pluginPermissionState(edit, current).catalog && (
             <PluginDetailSection title={tr('可用工具')}>
               <PluginToolList plugin={pluginPermissionState(edit, current)} />
             </PluginDetailSection>
           )}
           <PluginDetailSection title={tr('权限与连接校验')}>
-            <McpPermissions plugin={pluginPermissionState(edit, current)} />
+            {edit.protocol === 'comfyui' ? (
+              <p>
+                {tr('工作流执行沿用会话审批。停止只中止本地跟踪，不会中断共享服务上的其他任务。')}
+              </p>
+            ) : (
+              <McpPermissions plugin={pluginPermissionState(edit, current)} />
+            )}
           </PluginDetailSection>
           <PluginDetailSection title={tr('使用说明')}>
             <a

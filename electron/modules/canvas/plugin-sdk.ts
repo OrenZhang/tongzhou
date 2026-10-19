@@ -37,6 +37,7 @@ export function createMcpNodePlugin(
       description: options.description,
       kind: 'plugin',
       adapter: 'mcp',
+      cache: 'never',
       inputs: ['text', 'resource'],
       outputs: ['text', 'resource'],
       defaults: {

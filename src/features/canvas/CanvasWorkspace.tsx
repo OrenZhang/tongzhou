@@ -1,3 +1,4 @@
+import { CanvasComfyFields } from './CanvasComfyFields';
 import { providerLabel } from '../../shared/provider-label';
 import { t as tr, getLocale, localize as localized } from '../../shared/i18n';
 import { Modal } from '../../components/components';
@@ -710,6 +711,8 @@ export function CanvasWorkspace({
               </>
             ) : (
               node.kind !== 'save' &&
+              node.definition?.adapter !== 'comfyui' &&
+              node.pluginId !== 'comfyui.workflow' &&
               !inlineMedia && (
                 <label>
                   {tr(state.plugins?.find((p) => p.id === node.pluginId)?.view?.textLabel ?? '') ||
@@ -748,6 +751,8 @@ export function CanvasWorkspace({
               />
             )}
             {node.kind === 'plugin' &&
+              node.definition?.adapter !== 'comfyui' &&
+              node.pluginId !== 'comfyui.workflow' &&
               !['workflow.schedule', 'workflow.notify'].includes(node.pluginId ?? '') && (
                 <CanvasPluginFields
                   data={data}
@@ -756,6 +761,47 @@ export function CanvasWorkspace({
                   patch={patch}
                 />
               )}
+            {(node.definition?.adapter === 'comfyui' || node.pluginId === 'comfyui.workflow') && (
+              <CanvasComfyFields
+                data={data}
+                canvas={canvas}
+                node={node}
+                run={shownRun}
+                disabled={busy || readOnly || !!activeRun}
+                patch={patch}
+                onCheck={async (connectionId) =>
+                  (await perform(async () => {
+                    await flush.current();
+                    const c = current.current;
+                    if (!c) return [];
+                    const result = await api.canvasConfigureComfy(c.id, c.version, connectionId);
+                    await load(c.id);
+                    return result.warnings.length
+                      ? result.warnings
+                      : [tr('ComfyUI 节点定义已更新')];
+                  })) ?? []
+                }
+                onExport={async () => {
+                  await flush.current();
+                  const c = current.current;
+                  if (c) await api.canvasExportComfy(c.id, c.version);
+                }}
+                onResume={async () => {
+                  await flush.current();
+                  const c = current.current;
+                  if (!c || !shownRun || !owner) throw new Error(tr('请选择执行会话'));
+                  const r = await api.canvasExecute({
+                    canvasId: c.id,
+                    version: c.version,
+                    sessionId: owner,
+                    nodeIds: [node.id],
+                    resumeRunId: shownRun.id,
+                  });
+                  setRunId(r.id);
+                  await load(c.id);
+                }}
+              />
+            )}
             {state.plugins?.find((p) => p.id === node.pluginId)?.view?.resource === 'image' && (
               <button onClick={() => setPicker('replace')}>
                 {node.resource ? tr('更换全景图片') : tr('选择全景图片')}
