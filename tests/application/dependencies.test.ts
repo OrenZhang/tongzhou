@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import ts from 'typescript';
@@ -52,6 +53,26 @@ describe('architectural dependency boundaries', () => {
       ).toBe(true);
     },
   );
+  it('keeps the transitive execution entry independent of Electron, including its contracts', async () => {
+    const pending = [path.resolve('electron/application/execution-application.ts')];
+    const visited = new Set<string>();
+    const violations: string[] = [];
+    while (pending.length) {
+      const file = pending.pop()!;
+      if (visited.has(file)) continue;
+      visited.add(file);
+      for (const reference of await imports(file)) {
+        if (/^(electron|electron-updater)(\/|$)/.test(reference))
+          violations.push(`${path.relative(process.cwd(), file)} -> ${reference}`);
+        if (path.isAbsolute(reference)) {
+          const target = [reference + '.ts', path.join(reference, 'index.ts')].find(existsSync);
+          if (target) pending.push(target);
+        }
+      }
+    }
+    expect(visited.size).toBeGreaterThan(100);
+    expect(violations).toEqual([]);
+  });
   it('keeps business modules and channels independent of the concrete scheduler and Codex engine', async () => {
     const sources = [
       ...(await files('electron/modules')),
@@ -72,6 +93,7 @@ describe('architectural dependency boundaries', () => {
     for (const file of [
       'electron/core/task-contracts.ts',
       'electron/application/context.ts',
+      'electron/application/execution-context.ts',
       'electron/core/runtime/task-scheduler.ts',
     ]) {
       const references = await imports(file);

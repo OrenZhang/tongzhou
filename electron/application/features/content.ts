@@ -1,16 +1,24 @@
-import { desktopDocumentHost } from '../../services/desktop/document-host';
 import { registerContentServices } from '../../modules/content/content-services';
 import type { Plugin } from 'cordis';
-import '../context';
+import '../execution-context';
 
 export const contentPlugin: Plugin.Object<void> = {
   name: 'tongzhou-content',
-  inject: ['tzIpc', 'tzStore', 'tzContent', 'tzKnowledge', 'tzEvents', 'tzTasks', 'tzAutomations'],
+  inject: [
+    'tzEnvironment',
+    'tzClient',
+    'tzStore',
+    'tzContent',
+    'tzKnowledge',
+    'tzEvents',
+    'tzTasks',
+    'tzAutomations',
+  ],
   apply(ctx) {
-    const register = ctx.tzIpc.scoped(ctx);
+    const register = ctx.tzClient.scoped(ctx);
     const store = ctx.tzStore;
     const services = {
-      files: desktopDocumentHost,
+      files: ctx.tzEnvironment.host.documents,
       content: ctx.tzContent,
       knowledge: ctx.tzKnowledge,
       changed: ctx.tzEvents.changed,

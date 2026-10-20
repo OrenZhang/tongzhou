@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { desktopPlugin } from '../../../electron/application/features/desktop';
+import { workspacePlugin } from '../../../electron/application/features/workspace';
 import type { ClientOperation } from '../../../electron/core/tools/client-commands';
 vi.mock('electron', () => ({ clipboard: {}, shell: {} }));
 import path from 'node:path';
@@ -233,9 +233,9 @@ describe('unified drama skill resources', () => {
         files: { 'references/format.md': 'Personal rules' },
       });
       const snapshot = { skills: store.list<SkillRecord>('skill') };
-      desktopPlugin.apply(
+      workspacePlugin.apply(
         {
-          tzIpc: {
+          tzClient: {
             scoped:
               () =>
               (name: string, definition: ClientOperation, handler: (...args: any[]) => any) => {
@@ -246,7 +246,7 @@ describe('unified drama skill resources', () => {
           tzStore: store,
           tzTasks: { snapshot: () => snapshot },
           tzCommands: commands,
-          tzDesktop: { emit() {} },
+          tzEnvironment: { emit() {} },
         } as any,
         undefined,
       );

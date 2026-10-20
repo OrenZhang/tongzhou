@@ -10,9 +10,9 @@ import '../context';
 
 export const networkPlugin: Plugin.Object<void> = {
   name: 'tongzhou-network',
-  inject: ['tzIpc', 'tzStore', 'tzNetworks', 'tzEvents'],
+  inject: ['tzClient', 'tzStore', 'tzNetworks', 'tzEvents'],
   apply(ctx) {
-    const register = ctx.tzIpc.scoped(ctx);
+    const register = ctx.tzClient.scoped(ctx);
     const store = ctx.tzStore;
     const networks = ctx.tzNetworks;
     register(

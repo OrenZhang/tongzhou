@@ -1,12 +1,12 @@
-import { desktopDocumentHost } from '../../services/desktop/document-host';
 import { registerArtifactServices } from '../../modules/artifacts/artifact-services';
 import type { Plugin } from 'cordis';
-import '../context';
+import '../execution-context';
 
 export const artifactsPlugin: Plugin.Object<void> = {
   name: 'tongzhou-artifacts',
   inject: [
-    'tzIpc',
+    'tzEnvironment',
+    'tzClient',
     'tzArtifacts',
     'tzStore',
     'tzContent',
@@ -15,9 +15,9 @@ export const artifactsPlugin: Plugin.Object<void> = {
     'tzEvents',
   ],
   apply(ctx) {
-    const register = ctx.tzIpc.scoped(ctx);
+    const register = ctx.tzClient.scoped(ctx);
     const services = {
-      files: desktopDocumentHost,
+      files: ctx.tzEnvironment.host.documents,
       artifacts: ctx.tzArtifacts,
       store: ctx.tzStore,
       content: ctx.tzContent,

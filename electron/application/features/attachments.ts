@@ -2,13 +2,13 @@ import { z } from 'zod';
 import { manual } from '../../core/tools/client-commands';
 import { attachmentUploadSchema } from '../../modules/artifacts/attachments';
 import type { Plugin } from 'cordis';
-import '../context';
+import '../execution-context';
 
 export const attachmentsPlugin: Plugin.Object<void> = {
   name: 'tongzhou-attachments',
-  inject: ['tzIpc', 'tzAttachments'],
+  inject: ['tzClient', 'tzAttachments'],
   apply(ctx) {
-    const register = ctx.tzIpc.scoped(ctx);
+    const register = ctx.tzClient.scoped(ctx);
     const attachments = ctx.tzAttachments;
     register(
       'uploadAttachment',

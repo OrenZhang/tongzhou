@@ -11,7 +11,6 @@ import {
 } from '../../../src/shared/plugin-permissions';
 import type { PluginConfig, PluginTool } from '../../../src/shared/types';
 
-vi.mock('electron', () => ({ dialog: {} }));
 const cleanup: (() => void)[] = [];
 afterEach(() => {
   for (const close of cleanup.splice(0)) close();
@@ -53,7 +52,7 @@ function fixture() {
     { changed: () => {}, invalidateNative: () => {} },
     auth,
     {} as any,
-    () => undefined,
+    {} as any,
   );
   return { store, handlers };
 }

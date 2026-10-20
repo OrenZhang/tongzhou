@@ -5,7 +5,7 @@ import '../context';
 export const providersPlugin: Plugin.Object<void> = {
   name: 'tongzhou-providers',
   inject: [
-    'tzIpc',
+    'tzClient',
     'tzStore',
     'tzTasks',
     'tzNetworks',
@@ -15,7 +15,7 @@ export const providersPlugin: Plugin.Object<void> = {
     'tzEvents',
   ],
   apply(ctx) {
-    const register = ctx.tzIpc.scoped(ctx);
+    const register = ctx.tzClient.scoped(ctx);
     const store = ctx.tzStore;
     const services = ctx.tzTasks;
     const networks = ctx.tzNetworks;

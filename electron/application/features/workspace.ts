@@ -1,22 +1,20 @@
 import { taskSnapshot } from '../../core/runtime/snapshot';
-import { clipboard, shell } from 'electron';
 import { z } from 'zod';
 import { manual, operation, workspaceOperation } from '../../core/tools/client-commands';
-import { writeClipboardText } from '../../services/desktop/clipboard';
 import { idSchema } from '../../services/storage/validation';
 import type { Plugin } from 'cordis';
-import '../context';
+import '../execution-context';
 import { isBuiltinSkill } from '../../../src/shared/builtin-skills';
 
-export const desktopPlugin: Plugin.Object<void> = {
-  name: 'tongzhou-desktop',
-  inject: ['tzIpc', 'tzStore', 'tzTasks', 'tzCommands', 'tzDesktop', 'tzApprovals'],
+export const workspacePlugin: Plugin.Object<void> = {
+  name: 'tongzhou-workspace',
+  inject: ['tzClient', 'tzStore', 'tzTasks', 'tzCommands', 'tzEnvironment', 'tzApprovals'],
   apply(ctx) {
-    const register = ctx.tzIpc.scoped(ctx);
+    const register = ctx.tzClient.scoped(ctx);
     const store = ctx.tzStore;
     const services = ctx.tzTasks;
     const clientCommands = ctx.tzCommands;
-    const { emit } = ctx.tzDesktop;
+    const { emit } = ctx.tzEnvironment;
     register(
       'snapshot',
       operation(
@@ -82,7 +80,7 @@ export const desktopPlugin: Plugin.Object<void> = {
       workspaceOperation(store, '客户端', 'change', '复制内容到系统剪贴板', [
         z.string().max(2000000),
       ]),
-      (text) => writeClipboardText(clipboard, z.string().max(2000000).parse(text)),
+      (text) => ctx.tzEnvironment.host.writeClipboard(z.string().max(2000000).parse(text)),
     );
     register(
       'openExternalLink',
@@ -93,7 +91,7 @@ export const desktopPlugin: Plugin.Object<void> = {
         const url = new URL(z.string().max(8192).parse(value));
         if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password)
           throw new Error('只支持打开 HTTP 或 HTTPS 网页链接');
-        await shell.openExternal(url.href);
+        await ctx.tzEnvironment.host.documents.openExternal(url.href);
       },
     );
     register(

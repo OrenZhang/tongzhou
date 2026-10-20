@@ -1,4 +1,3 @@
-import { dialog } from 'electron';
 import { randomUUID } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 import { z } from 'zod';
@@ -6,26 +5,26 @@ import type { Project, Session } from '../../../src/shared/types';
 import { manual, operation, workspaceOperation } from '../../core/tools/client-commands';
 import { idSchema, redact, runSchema } from '../../services/storage/validation';
 import type { Plugin } from 'cordis';
-import '../context';
+import '../execution-context';
 
 export const sessionsPlugin: Plugin.Object<void> = {
   name: 'tongzhou-sessions',
   inject: [
-    'tzIpc',
+    'tzClient',
     'tzStore',
     'tzTasks',
     'tzChannels',
-    'tzDesktop',
+    'tzEnvironment',
     'tzEvents',
     'tzSessions',
     'tzApprovals',
   ],
   apply(ctx) {
-    const register = ctx.tzIpc.scoped(ctx);
+    const register = ctx.tzClient.scoped(ctx);
     const store = ctx.tzStore;
     const tasks = ctx.tzTasks;
     const channels = ctx.tzChannels;
-    const { getWindow } = ctx.tzDesktop;
+    const dialog = ctx.tzEnvironment.host.dialogs;
     register(
       'branchSession',
       operation('会话', 'change', '从指定消息创建会话分支', [
@@ -328,7 +327,7 @@ export const sessionsPlugin: Plugin.Object<void> = {
       async (raw) => {
         const id = idSchema.parse(raw);
         const s = store.get<Session>('session', id);
-        const result = await dialog.showSaveDialog(getWindow()!, {
+        const result = await dialog.showSaveDialog({
           title: '导出会话',
           defaultPath: `CoSail-${s.id.slice(0, 8)}.md`,
           filters: [{ name: 'Markdown', extensions: ['md'] }],

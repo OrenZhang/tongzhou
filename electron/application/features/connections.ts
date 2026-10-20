@@ -1,15 +1,14 @@
-import { shell } from 'electron';
 import { operation, workspaceOperation } from '../../core/tools/client-commands';
 import { connectorSchema } from '../../services/accounts/connectors';
 import { idSchema } from '../../services/storage/validation';
 import type { Plugin } from 'cordis';
-import '../context';
+import '../execution-context';
 
 export const connectionsPlugin: Plugin.Object<void> = {
   name: 'tongzhou-connections',
-  inject: ['tzIpc', 'tzStore', 'tzConnectors'],
+  inject: ['tzEnvironment', 'tzClient', 'tzStore', 'tzConnectors'],
   apply(ctx) {
-    const register = ctx.tzIpc.scoped(ctx);
+    const register = ctx.tzClient.scoped(ctx);
     const store = ctx.tzStore;
     const connectors = ctx.tzConnectors;
     register(
@@ -40,7 +39,7 @@ export const connectionsPlugin: Plugin.Object<void> = {
       ]),
       async (id) => {
         const result = await connectors.login(idSchema.parse(id));
-        await shell.openExternal(result.url);
+        await ctx.tzEnvironment.host.documents.openExternal(result.url);
         return result;
       },
     );

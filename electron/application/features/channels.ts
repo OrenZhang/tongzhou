@@ -3,13 +3,13 @@ import { manual, operation } from '../../core/tools/client-commands';
 import { channelSchema, notificationRuleSchema } from '../../services/channels/channels';
 import { idSchema } from '../../services/storage/validation';
 import type { Plugin } from 'cordis';
-import '../context';
+import '../execution-context';
 
 export const channelsPlugin: Plugin.Object<void> = {
   name: 'tongzhou-channels',
-  inject: ['tzIpc', 'tzStore', 'tzChannels', 'tzFeishu', 'tzEvents'],
+  inject: ['tzClient', 'tzStore', 'tzChannels', 'tzFeishu', 'tzEvents'],
   apply(ctx) {
-    const register = ctx.tzIpc.scoped(ctx);
+    const register = ctx.tzClient.scoped(ctx);
     const store = ctx.tzStore;
     const channels = ctx.tzChannels;
     const feishu = ctx.tzFeishu;

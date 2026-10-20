@@ -1,16 +1,23 @@
-import { desktopDocumentHost } from '../../services/desktop/document-host';
 import { registerKnowledgeServices } from '../../modules/knowledge/knowledge-services';
 import type { Plugin } from 'cordis';
-import '../context';
+import '../execution-context';
 
 export const knowledgePlugin: Plugin.Object<void> = {
   name: 'tongzhou-knowledge',
-  inject: ['tzIpc', 'tzStore', 'tzKnowledge', 'tzEvents', 'tzAutomations', 'tzTasks'],
+  inject: [
+    'tzEnvironment',
+    'tzClient',
+    'tzStore',
+    'tzKnowledge',
+    'tzEvents',
+    'tzAutomations',
+    'tzTasks',
+  ],
   apply(ctx) {
-    const register = ctx.tzIpc.scoped(ctx);
+    const register = ctx.tzClient.scoped(ctx);
     const store = ctx.tzStore;
     const services = {
-      files: desktopDocumentHost,
+      files: ctx.tzEnvironment.host.documents,
       knowledge: ctx.tzKnowledge,
       changed: ctx.tzEvents.changed,
       processMemory: ctx.tzAutomations.processMemory.bind(ctx.tzAutomations),

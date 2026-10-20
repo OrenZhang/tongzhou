@@ -4,7 +4,7 @@ import type { ChangePublisher } from '../../core/task-contracts';
 import { pluginStartupTimeout } from '../../../src/shared/vendor-plugins';
 import { installVendorDependencies } from './vendor-dependencies';
 import type { ApplicationEvents } from '../../core/application-events';
-import { dialog, type BrowserWindow } from 'electron';
+import type { ApplicationHost } from '../../application/host';
 import type { Store } from '../../services/storage/store';
 import {
   operation,
@@ -39,7 +39,7 @@ export function registerPluginServices(
   services: ChangePublisher & { invalidateNative: ApplicationEvents['invalidateNative'] },
   mcpAuth: McpAuth,
   connectors: Connectors,
-  getWindow: () => BrowserWindow | undefined,
+  dialog: ApplicationHost['dialogs'],
 ) {
   const localGithub = new LocalGithubAccounts(store);
   register(
@@ -350,7 +350,7 @@ export function registerPluginServices(
     async (directory) => {
       const chosen = directory
         ? { canceled: false, filePaths: [absolutePathSchema.parse(directory)] }
-        : await dialog.showOpenDialog(getWindow()!, {
+        : await dialog.showOpenDialog({
             title: '选择包含 SKILL.md 的目录',
             properties: ['openDirectory'],
           });

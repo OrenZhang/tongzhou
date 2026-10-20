@@ -6,9 +6,9 @@ import '../context';
 
 export const computerPlugin: Plugin.Object<void> = {
   name: 'tongzhou-computer',
-  inject: ['tzIpc', 'tzStore', 'tzTasks', 'tzDesktop', 'tzTerminals'],
+  inject: ['tzClient', 'tzStore', 'tzTasks', 'tzDesktop', 'tzTerminals'],
   apply(ctx) {
-    const register = ctx.tzIpc.scoped(ctx);
+    const register = ctx.tzClient.scoped(ctx);
     const store = ctx.tzStore;
     const services = ctx.tzTasks;
     const { computer, computerPermissions, computerPermissionPanel } = ctx.tzDesktop;

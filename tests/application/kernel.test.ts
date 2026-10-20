@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { BrowserWindow, IpcMain } from 'electron';
 import { ApplicationKernel } from '../../electron/application/kernel';
+import { ApplicationCommands } from '../../electron/application/commands';
 import { ClientIpc } from '../../electron/application/client-ipc';
 import { ClientCommands, operation } from '../../electron/core/tools/client-commands';
 
@@ -29,6 +30,36 @@ function ipcFixture(kernel: ApplicationKernel) {
 }
 
 describe('Cordis application lifecycle', () => {
+  it('drains in-process commands through the same catalog and rejects new work during shutdown', async () => {
+    const kernel = new ApplicationKernel();
+    const catalog = new ClientCommands();
+    const client = new ApplicationCommands(catalog, () => kernel.accepting);
+    let finish!: (value: string) => void;
+    const result = new Promise<string>((resolve) => {
+      finish = resolve;
+    });
+    await kernel.mount({
+      name: 'node-feature',
+      apply(ctx) {
+        client.scoped(ctx)('save', operation('fixture', 'change', 'save'), () => result);
+      },
+    });
+    const pending = client.invoke('save');
+    let closed = false;
+    const stopping = kernel
+      .stop(() => client.waitForIdle())
+      .then(() => {
+        closed = true;
+      });
+    await Promise.resolve();
+    expect(closed).toBe(false);
+    expect(() => client.invoke('save')).toThrow('正在退出');
+    finish('saved');
+    expect(await pending).toBe('saved');
+    await stopping;
+    expect(catalog.describe().methods).toEqual([]);
+  });
+
   it('injects dependencies and quiesces before releasing consumers, network and storage', async () => {
     const kernel = new ApplicationKernel();
     const order: string[] = [];

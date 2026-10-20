@@ -2,7 +2,7 @@ import type { DomainServices } from '../domain-services';
 import type { TaskService } from '../../core/task-contracts';
 import type { Terminals } from '../../services/desktop/terminals';
 import { z } from 'zod';
-import { app, dialog } from 'electron';
+import type { ApplicationHost } from '../../application/host';
 import { readFile, writeFile, stat } from 'node:fs/promises';
 import type { Store } from '../../services/storage/store';
 import type { Session, Run } from '../../../src/shared/types';
@@ -17,7 +17,9 @@ export function registerTaskServices(
   services: Pick<DomainServices, 'memories' | 'checkpoints'> &
     Pick<TaskService, 'snapshot' | 'start'> & { terminals: Terminals },
   dataDir: string,
+  host: ApplicationHost,
 ) {
+  const dialog = host.dialogs;
   const session = idSchema.describe('sessionId'),
     terminal = idSchema.describe('terminalId');
   const idle = (projectId?: string) => {
@@ -275,8 +277,7 @@ export function registerTaskServices(
       const file = choice.filePaths[0];
       if ((await stat(file)).size > 256 * 1024 * 1024) throw new Error('备份超过 256 MB');
       maintenance.prepareRestore(await readFile(file), pass);
-      app.relaunch();
-      app.quit();
+      await host.restart();
       return '恢复已准备，正在重启';
     },
   );
@@ -297,7 +298,7 @@ export function registerTaskServices(
       if (file.canceled || !file.filePath) return null;
       await writeFile(
         file.filePath,
-        JSON.stringify(maintenance.diagnostics(app.getVersion()), null, 2),
+        JSON.stringify(maintenance.diagnostics(host.version), null, 2),
       );
       return file.filePath;
     },
@@ -326,14 +327,14 @@ export function registerTaskServices(
       );
       if (r.status === 404)
         return {
-          current: app.getVersion(),
+          current: host.version,
           latest: null,
           url: 'https://github.com/OrenZhang/tongzhou/releases',
         };
       if (!r.ok) throw new Error('检查版本失败：HTTP ' + r.status);
       const data: any = await r.json();
       return {
-        current: app.getVersion(),
+        current: host.version,
         latest: String(data.tag_name).slice(0, 100),
         url: 'https://github.com/OrenZhang/tongzhou/releases',
       };

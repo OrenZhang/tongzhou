@@ -119,6 +119,13 @@ export class ClientCommands {
     };
   }
 
+  /** Trusted application entry only; agent calls use the scoped policies in attach(). */
+  invoke(name: string, args: unknown[]) {
+    const entry = this.handlers.get(name);
+    if (!entry) throw new Error('未注册操作：' + name);
+    return entry.handler(...args);
+  }
+
   describe(filter: { module?: string; method?: string } = {}): ClientCatalog {
     const methods: ClientMethod[] = [...this.handlers]
       .filter(

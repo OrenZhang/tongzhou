@@ -1,20 +1,20 @@
 import { registerTaskServices } from '../../modules/sessions/task-services';
 import type { Plugin } from 'cordis';
-import '../context';
+import '../execution-context';
 
 export const tasksPlugin: Plugin.Object<void> = {
   name: 'tongzhou-tasks',
   inject: [
-    'tzIpc',
+    'tzClient',
     'tzStore',
     'tzTasks',
     'tzTerminals',
     'tzMemories',
     'tzCheckpoints',
-    'tzDesktop',
+    'tzEnvironment',
   ],
   apply(ctx) {
-    const register = ctx.tzIpc.scoped(ctx);
+    const register = ctx.tzClient.scoped(ctx);
     const store = ctx.tzStore;
     const services = {
       snapshot: ctx.tzTasks.snapshot.bind(ctx.tzTasks),
@@ -23,7 +23,7 @@ export const tasksPlugin: Plugin.Object<void> = {
       checkpoints: ctx.tzCheckpoints,
       start: ctx.tzTasks.start.bind(ctx.tzTasks),
     };
-    const { dataDir } = ctx.tzDesktop;
-    registerTaskServices(register, store, services, dataDir);
+    const { dataDir } = ctx.tzEnvironment;
+    registerTaskServices(register, store, services, dataDir, ctx.tzEnvironment.host);
   },
 };

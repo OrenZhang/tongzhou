@@ -29,6 +29,7 @@
     "dist:win": "npm run build && electron-builder --win --publish never",
     "dist:mac": "npm run build && electron-builder --mac --publish never",
     "test:extensions": "node scripts/testing/extensions-smoke.mjs",
+    "test:execution": "node scripts/testing/execution-smoke.mjs",
     "test:dynamic-tools": "node scripts/testing/dynamic-tools-smoke.mjs",
     "test:workflows": "node scripts/testing/workflows-smoke.mjs",
     "test:turns": "node scripts/testing/turn-process-smoke.mjs",

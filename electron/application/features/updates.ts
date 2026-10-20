@@ -5,9 +5,9 @@ import '../context';
 
 export const updatesPlugin: Plugin.Object<void> = {
   name: 'tongzhou-updates',
-  inject: ['tzIpc', 'tzStore', 'tzUpdates'],
+  inject: ['tzClient', 'tzStore', 'tzUpdates'],
   apply(ctx) {
-    const register = ctx.tzIpc.scoped(ctx);
+    const register = ctx.tzClient.scoped(ctx);
     const store = ctx.tzStore;
     const updates = ctx.tzUpdates;
     register('updateStatus', operation('客户端更新', 'query', '读取当前版本与更新状态'), () =>

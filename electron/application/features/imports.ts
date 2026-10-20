@@ -6,9 +6,9 @@ import '../context';
 
 export const importsPlugin: Plugin.Object<void> = {
   name: 'tongzhou-imports',
-  inject: ['tzIpc', 'tzDesktop'],
+  inject: ['tzClient', 'tzDesktop'],
   apply(ctx) {
-    const register = ctx.tzIpc.scoped(ctx);
+    const register = ctx.tzClient.scoped(ctx);
     const { getWindow, pendingImports } = ctx.tzDesktop;
     register(
       'importCCSwitch',

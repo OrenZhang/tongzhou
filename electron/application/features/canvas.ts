@@ -9,7 +9,6 @@ import { CanvasTransfer, MAX_CANVAS_PACKAGE } from '../../modules/canvas/transfe
 import { whiteboardSceneSchema } from '../../modules/canvas/whiteboard';
 import { fetchCanvasText } from '../../modules/canvas/text-source';
 import { basename } from 'node:path';
-import { dialog } from 'electron';
 import type { Plugin } from 'cordis';
 import { z } from 'zod';
 import { manual } from '../../core/tools/client-commands';
@@ -17,12 +16,13 @@ import { canvasWriteSchema, executeSchema, resourceSchema } from '../../modules/
 import { isUserSession } from '../../../src/shared/session-scope';
 import type { Session } from '../../../src/shared/types';
 import type { CanvasResource } from '../../../src/shared/canvas';
-import '../context';
+import '../execution-context';
 
 export const canvasPlugin: Plugin.Object<void> = {
   name: 'tongzhou-canvas',
   inject: [
-    'tzIpc',
+    'tzEnvironment',
+    'tzClient',
     'tzStore',
     'tzCanvases',
     'tzCanvasWorkflows',
@@ -34,7 +34,8 @@ export const canvasPlugin: Plugin.Object<void> = {
     'tzChannels',
   ],
   apply(ctx) {
-    const register = ctx.tzIpc.scoped(ctx),
+    const dialog = ctx.tzEnvironment.host.dialogs;
+    const register = ctx.tzClient.scoped(ctx),
       store = ctx.tzStore,
       canvases = ctx.tzCanvases,
       workflows = ctx.tzCanvasWorkflows;

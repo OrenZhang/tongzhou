@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { taskToolPreparation } from './task-tools';
 import type { ExecutionNetwork } from '../core/task-contracts';
 import type { Store } from '../services/storage/store';
@@ -24,12 +25,22 @@ export async function createTaskSystem(
   computer?: ComputerAdapter,
   commands?: ClientCommands,
   projectUnavailable?: (id: string) => boolean,
+  bundleDir?: string,
 ) {
   let tasks: TaskScheduler | undefined;
   let execution: CodexExecution | undefined;
   let automations: Automations | undefined;
   let workflowStop: Promise<void> | undefined;
-  const terminals = new Terminals(store, events.changed, dataDir);
+  const terminals = new Terminals(
+    store,
+    events.changed,
+    dataDir,
+    bundleDir
+      ? path
+          .join(bundleDir, 'terminal-host.cjs')
+          .replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep)
+      : undefined,
+  );
   const sessions = new SessionLifecycle(store, dataDir, {
     isActive: (id) => tasks!.isActive(id),
     removeEngineSession: (id) => {

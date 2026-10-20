@@ -7,9 +7,9 @@ import '../context';
 
 export const appearancePlugin: Plugin.Object<void> = {
   name: 'tongzhou-appearance',
-  inject: ['tzIpc', 'tzStore', 'tzDesktop'],
+  inject: ['tzClient', 'tzStore', 'tzDesktop'],
   apply(ctx) {
-    const register = ctx.tzIpc.scoped(ctx);
+    const register = ctx.tzClient.scoped(ctx);
     const store = ctx.tzStore;
     const { emit, getWindow } = ctx.tzDesktop;
     const appearance = store

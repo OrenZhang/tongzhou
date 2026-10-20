@@ -8,9 +8,9 @@ import '../context';
 
 export const accountsPlugin: Plugin.Object<void> = {
   name: 'tongzhou-accounts',
-  inject: ['tzIpc', 'tzStore', 'tzAccounts', 'tzAccountBrowser', 'tzEvents'],
+  inject: ['tzClient', 'tzStore', 'tzAccounts', 'tzAccountBrowser', 'tzEvents'],
   apply(ctx) {
-    const register = ctx.tzIpc.scoped(ctx);
+    const register = ctx.tzClient.scoped(ctx);
     const store = ctx.tzStore;
     const accounts = ctx.tzAccounts;
     const accountBrowser = ctx.tzAccountBrowser;

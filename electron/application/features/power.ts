@@ -12,9 +12,9 @@ const preferences = z
 
 export const powerPlugin: Plugin.Object<void> = {
   name: 'tongzhou-power',
-  inject: ['tzIpc', 'tzPower'],
+  inject: ['tzClient', 'tzPower'],
   apply(ctx) {
-    const register = ctx.tzIpc.scoped(ctx);
+    const register = ctx.tzClient.scoped(ctx);
     register('powerStatus', operation('电源与睡眠', 'query', '读取电源、保持唤醒与合盖状态'), () =>
       ctx.tzPower.snapshot(),
     );

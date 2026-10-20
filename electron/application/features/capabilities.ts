@@ -3,13 +3,13 @@ import { builtinPlugins } from '../../../src/shared/builtin-plugins';
 import type { PluginConfig } from '../../../src/shared/types';
 import { operation } from '../../core/tools/client-commands';
 import type { Plugin } from 'cordis';
-import '../context';
+import '../execution-context';
 
 export const capabilitiesPlugin: Plugin.Object<void> = {
   name: 'tongzhou-capabilities',
-  inject: ['tzIpc', 'tzStore', 'tzEvents'],
+  inject: ['tzClient', 'tzStore', 'tzEvents'],
   apply(ctx) {
-    const register = ctx.tzIpc.scoped(ctx);
+    const register = ctx.tzClient.scoped(ctx);
     const store = ctx.tzStore;
 
     register(

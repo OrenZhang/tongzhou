@@ -7,13 +7,13 @@ import { WecomOnboarding } from '../../services/bots/wecom-onboarding';
 import { WeixinOnboarding } from '../../services/bots/weixin/onboarding';
 import { idSchema } from '../../services/storage/validation';
 import type { Plugin } from 'cordis';
-import '../context';
+import '../execution-context';
 
 export const botsPlugin: Plugin.Object<void> = {
   name: 'tongzhou-bots',
-  inject: ['tzIpc', 'tzBots', 'tzFeishu', 'tzStore', 'tzEvents'],
+  inject: ['tzClient', 'tzBots', 'tzFeishu', 'tzStore', 'tzEvents'],
   apply(ctx) {
-    const register = ctx.tzIpc.scoped(ctx);
+    const register = ctx.tzClient.scoped(ctx);
     const bots = ctx.tzBots;
     const feishu = ctx.tzFeishu;
     const wecom = new WecomOnboarding((state) => {

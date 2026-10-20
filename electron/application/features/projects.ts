@@ -1,4 +1,3 @@
-import { dialog, shell } from 'electron';
 import { randomUUID } from 'node:crypto';
 import { realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
@@ -16,24 +15,24 @@ import { initializeAgent } from '../../modules/projects/project-init';
 import { absolutePathSchema } from '../../services/storage/file-transfer';
 import { idSchema } from '../../services/storage/validation';
 import type { Plugin } from 'cordis';
-import '../context';
+import '../execution-context';
 
 export const projectsPlugin: Plugin.Object<void> = {
   name: 'tongzhou-projects',
   inject: [
-    'tzIpc',
+    'tzClient',
     'tzStore',
     'tzChannels',
-    'tzDesktop',
+    'tzEnvironment',
     'tzProjectTools',
     'tzSessions',
     'tzEvents',
   ],
   apply(ctx) {
-    const register = ctx.tzIpc.scoped(ctx);
+    const register = ctx.tzClient.scoped(ctx);
     const store = ctx.tzStore;
     const channels = ctx.tzChannels;
-    const { getWindow } = ctx.tzDesktop;
+    const dialog = ctx.tzEnvironment.host.dialogs;
     const { worktrees, repositories, activity: worktreeActivity } = ctx.tzProjectTools;
     register(
       'projectDeletionPreview',
@@ -87,8 +86,7 @@ export const projectsPlugin: Plugin.Object<void> = {
       async (id) => {
         const p = store.get<Project>('project', idSchema.parse(id));
         if (p.removed) throw new Error('工作树已移除');
-        const error = await shell.openPath(p.path);
-        if (error) throw new Error('无法打开此项目目录');
+        await ctx.tzEnvironment.host.documents.openPath(p.path);
       },
     );
     register(
@@ -133,7 +131,7 @@ export const projectsPlugin: Plugin.Object<void> = {
         [],
       ),
       async () => {
-        const result = await dialog.showOpenDialog(getWindow()!, {
+        const result = await dialog.showOpenDialog({
           title: '选择克隆到的父目录',
           properties: ['openDirectory', 'createDirectory'],
         });
@@ -159,7 +157,7 @@ export const projectsPlugin: Plugin.Object<void> = {
       async (directory) => {
         const result = directory
           ? { canceled: false, filePaths: [absolutePathSchema.parse(directory)] }
-          : await dialog.showOpenDialog(getWindow()!, {
+          : await dialog.showOpenDialog({
               title: '选择项目目录',
               properties: ['openDirectory'],
             });
