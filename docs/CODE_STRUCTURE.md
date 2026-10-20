@@ -13,6 +13,8 @@ electron/
     application.ts         Electron 宿主装配，继承同一个执行入口
     desktop-host.ts、host.ts 平台适配与不依赖 Electron 的宿主契约
     services.ts、context.ts Electron 服务与依赖（电源、更新、账号窗口）
+    account-services.ts    共用账号装配，通过宿主接口打开授权窗口
+    system-services.ts     共用电源、合盖恢复、更新策略与持久化装配
     task-system.ts         任务服务装配、启动回滚与退出清理
     commands.ts            通用命令注册、调用跟踪与退出等待
     client-ipc.ts          Electron IPC 来源校验与传输适配
@@ -41,14 +43,17 @@ electron/
     desktop/               终端、剪贴板、电脑操作、更新
     browser/               浏览器页面与独立登录分区
     channels/              消息渠道、机器人与飞书接入
+  hosts/                   Tauri 的独立 Node 入口、网络及桌面驱动适配
+src-tauri/                 可选 Tauri 原生壳、私有进程通信、托盘、截图、电源与签名更新
 src/
   main.tsx                 渲染入口
+  platform/                Tauri 传输适配；Electron 继续使用 preload
   app/                     应用装配、全局布局与基础样式
   features/                chat、agents、knowledge、artifacts、automation、plugins、
                            settings、connections、workspace
   components/              通用组件、controls、markdown、files
   hooks/、lib/             通用交互钩子与辅助函数
-  shared/                  主进程和渲染层共用的数据类型与纯函数
+  shared/                  共用数据类型、纯函数及唯一的客户端 API 映射
 tests/                     application、core、modules、services、ui、integration、release、support
 scripts/testing/           Electron 回归、协议集成测试及夹具
 prompts/                   独立维护的公共提示词
@@ -83,10 +88,11 @@ prompts/                   独立维护的公共提示词
 - `ApplicationHost` 提供文档操作、文件选择、剪贴板、版本和重启。通用命令不直接弹 Electron 窗口；没有相应能力的宿主应明确处理这些入口，不能伪造成功或静默回退。
 - `ApplicationCommands` 将业务注册同时接到原有 `ClientCommands` 能力目录与可选传输适配器。普通 Node 可用 `app.client.invoke(name, ...args)` 从可信宿主调用；Agent 继续使用 `client_catalog/query/change`，原有只读、审批、凭据过滤和 manual 限制不变。
 - `ClientIpc` 只负责可信主窗口／主 frame 来源校验与错误脱敏。通用层负责在途调用追踪、停止接收新操作及随 Cordis 上下文撤销注册。未来 HTTP／WebSocket 适配器必须先认证调用方并执行访问范围校验，不能将可信进程内入口直接公开到网络。
-- Electron 继续提供 Chromium 系统代理、账号隔离窗口、旧密钥格式适配、电源、更新、外观及电脑权限界面。账号管理与连接诊断的桌面装配仍位于宿主，现有授权行为不变；通用核心不会为启动而创建认证窗口或读取系统钥匙串。
+- Electron 继续提供 Chromium 系统代理、账号隔离窗口、旧密钥格式适配、电源、更新及电脑权限界面。账号管理通过共用装配接入宿主的浏览器接口；外观、网络配置及导入命令已使用通用宿主契约。现有 Electron 授权行为不变，普通 Node 入口不依赖 Electron 或系统钥匙串。
 - Node 核心已复用会话、审批／追问、模型执行、MCP、智库、内容、作品、画布工作流、自动化和消息渠道。终端与托管网络子进程的资源路径从装配目录传入，不再假定入口一定是 Electron 主进程。
+- 电脑操作规则位于纯 Node 的 `services/desktop/computer.ts`，Electron 捕获驱动位于 `electron-computer.ts`；两种宿主共用 `computer-helper.ts` 和自检算法。`system-services.ts` 复用电源与更新的状态、持久化、忙碌检查和清理，仅由宿主提供原生请求驱动。不能在 Rust 层再实现会话、审批或业务状态机。
 
-这一步提供可复用执行入口与适配边界，没有增加公开服务器、移动端安装包或远程登录体系。后续 Web／移动端连接同一个执行核心时复用数据契约和命令处理器，桌面宿主是否替换为 Tauri 可单独验证；无需重写业务执行循环。
+这一步提供可复用执行入口与适配边界，没有增加公开服务器、移动端安装包或远程登录体系。后续 Web／移动端连接同一个执行核心时复用数据契约和命令处理器，无需重写业务执行循环。可选原生壳的运行方式、验证证据和未适配边界见 [Tauri 预览](TAURI_PREVIEW.md)。
 
 ### 验证入口
 

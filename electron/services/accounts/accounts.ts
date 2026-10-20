@@ -9,6 +9,14 @@ import type { ProviderNetwork } from '../../../src/shared/provider-network';
 import type { AppEvent, NativeEngine, Provider } from '../../../src/shared/types';
 import { redact } from '../storage/validation';
 
+/** Native browser operations; the account state machine is shared by desktop hosts. */
+export interface AccountBrowserHost {
+  open(url: string, id: string): Promise<void>;
+  close(id: string): void;
+  test(id: string): Promise<string>;
+  dispose(): void;
+}
+
 export interface AccountDependencies extends Pick<TaskService, 'snapshot'>, ChangePublisher {
   invalidateNative(protocol?: string): void;
   resolveNetwork?(network?: ProviderNetwork): Promise<ProviderNetwork | undefined>;

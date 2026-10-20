@@ -1,3 +1,6 @@
+import { importsPlugin } from './features/imports';
+import { networkPlugin } from './features/network';
+import { appearancePlugin } from './features/appearance';
 import { canvasPlugin } from './features/canvas';
 import { botsPlugin } from './features/bots';
 import { attachmentsPlugin } from './features/attachments';
@@ -16,6 +19,9 @@ import { pluginsPlugin } from './features/plugins';
 import { agentsPlugin } from './features/agents';
 
 export const executionFeatures = [
+  importsPlugin,
+  networkPlugin,
+  appearancePlugin,
   attachmentsPlugin,
   projectsPlugin,
   channelsPlugin,

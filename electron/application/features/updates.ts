@@ -1,11 +1,10 @@
-import { shell } from 'electron';
 import { manual, operation, workspaceOperation } from '../../core/tools/client-commands';
 import type { Plugin } from 'cordis';
-import '../context';
+import '../execution-context';
 
 export const updatesPlugin: Plugin.Object<void> = {
   name: 'tongzhou-updates',
-  inject: ['tzClient', 'tzStore', 'tzUpdates'],
+  inject: ['tzClient', 'tzStore', 'tzUpdates', 'tzEnvironment'],
   apply(ctx) {
     const register = ctx.tzClient.scoped(ctx);
     const store = ctx.tzStore;
@@ -23,7 +22,9 @@ export const updatesPlugin: Plugin.Object<void> = {
       manual('客户端更新', '下载更新并重启客户端', 'settings', '由用户点击安装更新'),
       () => {
         if (updates.snapshot().version && !updates.snapshot().automaticInstall)
-          return shell.openExternal('https://github.com/OrenZhang/tongzhou/releases/latest');
+          return ctx.tzEnvironment.host.documents.openExternal(
+            'https://github.com/OrenZhang/tongzhou/releases/latest',
+          );
         return updates.install();
       },
     );

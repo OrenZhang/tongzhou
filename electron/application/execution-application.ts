@@ -34,6 +34,7 @@ export class ExecutionApplication {
         apply: (ctx) => {
           const catalog = new ClientCommands();
           ctx.provide('tzEnvironment', this.environment);
+          ctx.provide('tzProviderImports', this.environment.pendingImports ?? new Map());
           ctx.provide('tzEvents', new ApplicationEvents(this.environment.emit));
           this.kernel.own(ctx, () => {
             ctx.tzEvents.removeAllListeners();

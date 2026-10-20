@@ -3,7 +3,7 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { AppEvent, ProviderInput } from '../src/shared/types';
-import { DesktopComputer } from './services/desktop/computer';
+import { DesktopComputer } from './services/desktop/electron-computer';
 import { linuxPasswordStore } from './services/desktop/secret-store';
 import { ComputerPermissions } from './services/desktop/computer-permissions';
 import { ComputerPermissionPanel } from './services/desktop/computer-permission-panel';

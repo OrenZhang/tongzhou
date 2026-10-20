@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { Plugin } from 'cordis';
 import { manual, operation } from '../../core/tools/client-commands';
-import '../context';
+import '../execution-context';
 
 const preferences = z
   .object({

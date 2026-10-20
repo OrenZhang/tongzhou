@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "CoSail",
+  "version": "1.0.4",
+  "identifier": "org.tongzhou.tauri.preview",
+  "build": {
+    "frontendDist": "../dist-tauri"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "CoSail",
+        "width": 1440,
+        "height": 940,
+        "minWidth": 1000,
+        "minHeight": 700,
+        "create": false
+      }
+    ],
+    "security": {
+      "capabilities": ["main", "permission-panel"]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app"],
+    "icon": ["../build/icon.png", "../build/icon.icns", "../build/icon.ico"],
+    "resources": {
+      "../work/tauri-runtime/": "runtime/"
+    },
+    "macOS": {
+      "minimumSystemVersion": "14.0",
+      "infoPlist": "Info.plist"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "",
+      "requireSignedVersion": true
+    }
+  }
+}

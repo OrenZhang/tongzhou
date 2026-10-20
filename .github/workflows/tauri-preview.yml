@@ -1,0 +1,64 @@
+name: Build signed Tauri preview
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, macos-15-intel, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    env:
+      TONGZHOU_DISABLE_UPDATES: '1'
+      TONGZHOU_GITHUB_CLIENT_ID: ${{ vars.TONGZHOU_GITHUB_CLIENT_ID }}
+      TONGZHOU_TAURI_UPDATER_PUBLIC_KEY: ${{ vars.TONGZHOU_TAURI_UPDATER_PUBLIC_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Linux native build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libx11-dev libxtst-dev libxcb-randr0-dev libpipewire-0.3-dev libwayland-dev libclang-dev
+      - name: Require publisher keys
+        shell: bash
+        run: node -e 'for (const name of ["TONGZHOU_TAURI_UPDATER_PUBLIC_KEY", "TAURI_SIGNING_PRIVATE_KEY"]) if (!process.env[name]) throw new Error(`Configure ${name} before building signed updates`);'
+      - run: npm ci
+      - run: npm test
+      - run: npm run tauri:build -- --updater
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - run: npm run test:tauri
+      - run: npm run test:tauri-desktop
+      - run: node scripts/tauri-release.mjs collect
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tauri-${{ matrix.os }}
+          path: work/tauri-release/*
+          if-no-files-found: error
+  manifest:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: tauri-*
+          path: work/tauri-release
+          merge-multiple: true
+      - run: node scripts/tauri-release.mjs merge
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tauri-signed-release
+          path: work/tauri-release/*
+          if-no-files-found: error

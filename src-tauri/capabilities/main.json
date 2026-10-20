@@ -1,0 +1,6 @@
+{
+  "identifier": "main",
+  "description": "Local main UI only. Remote authorization pages have no core access.",
+  "windows": ["main"],
+  "permissions": ["core:event:default", "allow-core-call", "allow-core-ready"]
+}

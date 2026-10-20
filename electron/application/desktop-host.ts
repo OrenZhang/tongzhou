@@ -1,4 +1,5 @@
-import { app, clipboard, dialog, session } from 'electron';
+import { electronComputerDiagnostic } from '../services/desktop/electron-computer';
+import { app, clipboard, dialog, session, nativeTheme } from 'electron';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import type { DesktopEnvironment } from './context';
@@ -19,10 +20,24 @@ export function desktopHost(desktop: DesktopEnvironment) {
     bundleDir: desktop.bundleDir,
     emit: desktop.emit,
     computer: desktop.computer,
+    pendingImports: desktop.pendingImports,
     createSecretCodec: () =>
       createSecretCodec(desktop.dataDir, process.platform, () => require('electron').safeStorage),
     host: {
       version: app.getVersion(),
+      computer: {
+        controller: desktop.computer,
+        guide: () => desktop.computerPermissions.guide(),
+        openSettings: (permission) => desktop.computerPermissionPanel.open(permission),
+        reveal: () => desktop.computerPermissions.revealApplication(),
+        diagnostic: () => electronComputerDiagnostic(desktop.computer),
+      },
+      setTheme(theme) {
+        nativeTheme.themeSource = theme;
+        desktop
+          .getWindow()
+          ?.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#17191e' : '#fafbfc');
+      },
       documents: desktopDocumentHost,
       dialogs: {
         showOpenDialog(options) {
@@ -39,6 +54,12 @@ export function desktopHost(desktop: DesktopEnvironment) {
         app.relaunch();
         app.quit();
       },
+    },
+    async networkProbe(id, network) {
+      const isolated = session.fromPartition('tongzhou-network-test-' + id);
+      await isolated.setProxy(accountProxyConfig(network));
+      await isolated.closeAllConnections();
+      return ((input, init) => isolated.fetch(input as string, init)) as typeof fetch;
     },
     modelTransport(network) {
       const key = JSON.stringify(network ?? { mode: 'inherit' });
@@ -65,9 +86,14 @@ export function desktopHost(desktop: DesktopEnvironment) {
       return pending;
     },
   };
+  const updateWindowTheme = () =>
+    desktop
+      .getWindow()
+      ?.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#17191e' : '#fafbfc');
   return {
     environment,
     connect() {
+      nativeTheme.on('updated', updateWindowTheme);
       const serviceSession = session.fromPartition('tongzhou-service-network');
       setServiceTransport((input, init) =>
         serviceSession.fetch(input instanceof URL ? input.href : input, {
@@ -77,6 +103,7 @@ export function desktopHost(desktop: DesktopEnvironment) {
       );
     },
     dispose() {
+      nativeTheme.removeListener('updated', updateWindowTheme);
       modelTransports.clear();
       setServiceTransport();
     },

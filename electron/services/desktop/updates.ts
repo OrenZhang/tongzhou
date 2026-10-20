@@ -8,7 +8,7 @@ export interface UpdateDriver {
   on(name: string, handler: (...args: any[]) => void): unknown;
   checkForUpdates(): Promise<unknown>;
   downloadUpdate(): Promise<unknown>;
-  quitAndInstall(silent?: boolean, restart?: boolean): void;
+  quitAndInstall(silent?: boolean, restart?: boolean): void | Promise<void>;
 }
 
 /** Only the main process chooses the trusted publisher and performs installation. */
@@ -24,12 +24,15 @@ export class Updates {
     automaticInstall: boolean,
     private busy: () => boolean,
     private changed: (state: UpdateState) => void,
+    unavailableReason?: string,
   ) {
     this.state = {
       phase: packaged ? 'idle' : 'unsupported',
       currentVersion: version,
       automaticInstall,
-      message: packaged ? undefined : '开发预览不执行自动更新，请使用正式安装版。',
+      message: packaged
+        ? undefined
+        : (unavailableReason ?? '开发预览不执行自动更新，请使用正式安装版。'),
     };
     driver.autoDownload = false;
     driver.autoInstallOnAppQuit = false;
@@ -118,7 +121,7 @@ export class Updates {
           });
         } else {
           this.set({ phase: 'installing', message: '正在安装并重新启动…' });
-          this.driver.quitAndInstall(true, true);
+          await this.driver.quitAndInstall(true, true);
         }
       } catch {
         this.set({ phase: 'error', message: '下载或安装失败，请重试。当前版本与数据已保留。' });

@@ -1,17 +1,16 @@
-import { dialog, session } from 'electron';
 import { z } from 'zod';
 import { manual, operation, workspaceOperation } from '../../core/tools/client-commands';
 import { networkProfileSchema } from '../../services/network/network-config';
-import { accountProxyConfig } from '../../services/network/provider-network';
 import { userAgent } from '../../services/network/request-identity';
 import { idSchema } from '../../services/storage/validation';
 import type { Plugin } from 'cordis';
-import '../context';
+import '../execution-context';
 
 export const networkPlugin: Plugin.Object<void> = {
   name: 'tongzhou-network',
-  inject: ['tzClient', 'tzStore', 'tzNetworks', 'tzEvents'],
+  inject: ['tzEnvironment', 'tzClient', 'tzStore', 'tzNetworks', 'tzEvents'],
   apply(ctx) {
+    const dialog = ctx.tzEnvironment.host.dialogs;
     const register = ctx.tzClient.scoped(ctx);
     const store = ctx.tzStore;
     const networks = ctx.tzNetworks;
@@ -119,12 +118,12 @@ export const networkPlugin: Plugin.Object<void> = {
       async (raw) => {
         const id = idSchema.parse(raw);
         const network = await networks.resolve({ mode: 'managed', profileId: id });
-        const s = session.fromPartition('tongzhou-network-test-' + id);
-        await s.setProxy(accountProxyConfig(network));
-        await s.closeAllConnections();
+        const transport = ctx.tzEnvironment.networkProbe
+          ? await ctx.tzEnvironment.networkProbe(id, network)
+          : await ctx.tzEnvironment.modelTransport(network);
         const start = Date.now();
         try {
-          const response = await s.fetch(
+          const response = await transport(
             'https://auth.openai.com/.well-known/openid-configuration',
             {
               headers: { 'User-Agent': userAgent },

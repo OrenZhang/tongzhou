@@ -1,4 +1,7 @@
-import type { AppEvent } from '../../src/shared/types';
+import type { PowerSettings } from '../services/desktop/power';
+import type { Updates } from '../services/desktop/updates';
+import type { AppEvent, ProviderInput } from '../../src/shared/types';
+import type { Accounts, AccountBrowserHost } from '../services/accounts/accounts';
 import type { TaskService } from '../core/task-contracts';
 import type { DomainServices } from '../modules/domain-services';
 import type { Automations } from '../modules/automation/automations';
@@ -30,12 +33,22 @@ export interface ExecutionEnvironment {
   host: ApplicationHost;
   createSecretCodec(): SecretCodec;
   modelTransport: NonNullable<ExecutionNetwork['transport']>;
+  networkProbe?: (
+    id: string,
+    network?: import('../../src/shared/provider-network').ProviderNetwork,
+  ) => Promise<typeof fetch>;
   computer?: ComputerAdapter;
+  pendingImports?: Map<string, ProviderInput>;
 }
 
 declare module 'cordis' {
   interface Context {
     tzEnvironment: ExecutionEnvironment;
+    tzPower: PowerSettings;
+    tzUpdates: Updates;
+    tzAccounts: Accounts;
+    tzAccountBrowser: AccountBrowserHost;
+    tzProviderImports: Map<string, ProviderInput>;
     tzClient: ApplicationCommands;
     tzCommands: ClientCommands;
     tzStore: Store;

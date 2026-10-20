@@ -242,7 +242,6 @@
   "统一权限与文件范围检查": "Unified permission and file-scope checks",
   "统一执行核心": "Unified execution engine",
   "Codex 原生沙箱与审批": "Native Codex sandbox & approvals",
-  "CoSail终端工具遵循会话权限，以当前系统用户权限运行；它不提供操作系统级沙箱。项目内容会发送给所选模型服务。CoSail不提供云同步或自动更新；账号登录客户端的遥测以各自实现为准。": "CoSail terminal tools follow conversation permissions and run as your system user; they do not provide an OS-level sandbox. Project content is sent to your selected model service. CoSail provides no cloud sync or automatic updates; account sign-in clients manage their own telemetry.",
   "多模型协作，一个工作台。": "Multiple models. One workspace.",
   "同舟：Co 代表协作，Sail 代表航行 · 一个工作台，多模型协作": "CoSail means “in the same boat”: Co for collaboration, Sail for the journey.",
   "普通聊天 · 无需项目": "General chat · No project required",
@@ -3000,5 +2999,8 @@
   "删除绑定": "Remove binding",
   "添加参数绑定": "Add input binding",
   "节点 ID 和参数名来自 API 流程；未连接上游时使用流程原有参数。": "Use node IDs and input names from the API workflow. Unconnected inputs keep the workflow values.",
-  "执行与恢复": "Execution and recovery"
+  "执行与恢复": "Execution and recovery",
+  "CoSail终端工具遵循会话权限，以当前系统用户权限运行；它不提供操作系统级沙箱。项目内容会发送给所选模型服务。CoSail不提供云同步；客户端更新由你确认后安装。账号登录客户端的遥测以各自实现为准。": "CoSail terminal tools follow conversation permissions and run as your system user; they do not provide an OS-level sandbox. Project content is sent to your selected model service. CoSail provides no cloud sync. Client updates are installed after your confirmation; account sign-in clients manage their own telemetry.",
+  "已打开{0}设置。可点击“在 Finder 中显示”，将当前应用拖入列表后打开开关。": "Opened {0} settings. Click “Show in Finder”, drag the current app into the list, then enable its permission.",
+  "点击“在 Finder 中显示”，将当前预览应用拖入系统设置的应用列表，再打开所需权限。": "Click “Show in Finder”, drag the current preview app into the list in System Settings, then enable the required permission."
 }

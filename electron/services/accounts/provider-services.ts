@@ -2,8 +2,7 @@ import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import type { Store } from '../storage/store';
 import type { TaskService, ChangePublisher } from '../../core/task-contracts';
-import type { Accounts } from './accounts';
-import type { AccountBrowser } from './account-browser';
+import type { Accounts, AccountBrowserHost } from './accounts';
 import type { NetworkProfiles } from '../network/network-profiles';
 import type { Provider, ProviderInput } from '../../../src/shared/types';
 import type { ConnectionCheck } from '../../../src/shared/connection-diagnostics';
@@ -19,7 +18,7 @@ export function registerProviderServices(
   store: Store,
   services: Pick<TaskService, 'snapshot'> & ChangePublisher,
   accounts: Accounts,
-  accountBrowser: AccountBrowser,
+  accountBrowser: AccountBrowserHost,
   networks: NetworkProfiles,
   pendingImports: Map<string, ProviderInput>,
 ) {

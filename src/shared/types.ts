@@ -150,6 +150,7 @@ export interface ComputerStatus {
   screen: string;
   accessibility: boolean;
   emergencyShortcut: boolean;
+  permissionAssistant?: boolean;
 }
 export interface ComputerPermissionGuide {
   name: string;

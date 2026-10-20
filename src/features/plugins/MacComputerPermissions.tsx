@@ -30,6 +30,7 @@ export function MacComputerPermissions({
       setPending(false);
     }
   };
+  const assistant = status.permissionAssistant !== false;
   const missing = !status.accessibility || status.screen !== 'granted';
   return (
     <section className="computer-permission-guide" aria-label={tr('macOS 授权引导')}>
@@ -71,7 +72,14 @@ export function MacComputerPermissions({
               onClick={() =>
                 void act(
                   () => api.computerOpenPermissionSettings(permission),
-                  tr('已打开{0}设置。请将授权浮窗中的应用图标拖入列表，完成后返回CoSail。', [name]),
+                  assistant
+                    ? tr('已打开{0}设置。请将授权浮窗中的应用图标拖入列表，完成后返回CoSail。', [
+                        name,
+                      ])
+                    : tr(
+                        '已打开{0}设置。可点击“在 Finder 中显示”，将当前应用拖入列表后打开开关。',
+                        [name],
+                      ),
                 )
               }
             >
@@ -84,9 +92,11 @@ export function MacComputerPermissions({
         ))}
       </div>
       <p className="computer-permission-instruction">
-        {tr(
-          '打开系统设置后，授权浮窗会显示在设置窗口下方或旁边。将浮窗中的CoSail图标拖入应用列表，再打开开关。',
-        )}
+        {assistant
+          ? tr(
+              '打开系统设置后，授权浮窗会显示在设置窗口下方或旁边。将浮窗中的CoSail图标拖入应用列表，再打开开关。',
+            )
+          : tr('点击“在 Finder 中显示”，将当前预览应用拖入系统设置的应用列表，再打开所需权限。')}
       </p>
       <div className="capability-actions">
         <button

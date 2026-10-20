@@ -1,17 +1,16 @@
-import { nativeTheme } from 'electron';
 import { z } from 'zod';
 import { normalizeAppearance } from '../../../src/shared/appearance';
 import { operation } from '../../core/tools/client-commands';
 import type { Plugin } from 'cordis';
-import '../context';
+import '../execution-context';
 
 export const appearancePlugin: Plugin.Object<void> = {
   name: 'tongzhou-appearance',
-  inject: ['tzClient', 'tzStore', 'tzDesktop'],
-  apply(ctx) {
+  inject: ['tzClient', 'tzStore', 'tzEnvironment'],
+  async apply(ctx) {
     const register = ctx.tzClient.scoped(ctx);
     const store = ctx.tzStore;
-    const { emit, getWindow } = ctx.tzDesktop;
+    const { emit, host } = ctx.tzEnvironment;
     const appearance = store
       .list<{
         id: string;
@@ -19,22 +18,18 @@ export const appearancePlugin: Plugin.Object<void> = {
         language?: 'zh-CN' | 'en';
       }>('preferences')
       .find((p) => p.id === 'appearance');
-    nativeTheme.themeSource = appearance?.theme ?? 'system';
+    await host.setTheme?.(appearance?.theme ?? 'system');
     emit({ type: 'appearance', value: normalizeAppearance(appearance) });
-    const updateWindowTheme = () =>
-      getWindow()?.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#17191e' : '#fafbfc');
-    nativeTheme.on('updated', updateWindowTheme);
     register(
       'setTheme',
       operation('外观', 'change', '切换浅色、深色或跟随系统主题', [
         z.enum(['system', 'light', 'dark']),
       ]),
-      (raw) => {
+      async (raw) => {
         const theme = z.enum(['system', 'light', 'dark']).parse(raw);
         const current = store.list<any>('preferences').find((p) => p.id === 'appearance');
         store.put('preferences', { ...current, id: 'appearance', theme });
-        nativeTheme.themeSource = theme;
-        updateWindowTheme();
+        await host.setTheme?.(theme);
         emit({ type: 'appearance', value: { theme } });
       },
     );
@@ -53,15 +48,13 @@ export const appearancePlugin: Plugin.Object<void> = {
       operation('外观', 'change', '设置主题、界面风格、字体和字号；立即生效并保存', [
         appearanceSchema,
       ]),
-      (raw) => {
+      async (raw) => {
         const current = store.list<any>('preferences').find((p) => p.id === 'appearance');
         const value = normalizeAppearance({ ...current, ...appearanceSchema.parse(raw) });
         store.put('preferences', { id: 'appearance', ...value });
-        nativeTheme.themeSource = value.theme;
-        updateWindowTheme();
+        await host.setTheme?.(value.theme);
         emit({ type: 'appearance', value });
       },
     );
-    ctx.effect(() => () => nativeTheme.removeListener('updated', updateWindowTheme));
   },
 };

@@ -17,6 +17,7 @@ function run(argv) {
   target[0].actions.byName('AXRaise').perform();
   delay(0.12);
   if(!process.frontmost()) throw Error('Could not focus the selected window');
+  if(p.action==='focus') return '{"ok":true}';
   function post(type,x,y,button){var event=$.CGEventCreateMouseEvent(null,type,$.CGPointMake(x,y),button||0);$.CGEventPost(0,event);}
   if(p.action==='click') {
     var down=p.button==='right'?3:1,up=p.button==='right'?4:2,button=p.button==='right'?1:0;

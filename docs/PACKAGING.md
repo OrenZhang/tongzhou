@@ -66,3 +66,33 @@ ZIP 从 337.15 MiB 降到 **323.40 MiB**，再减少 13.75 MiB；解压条目总
 因此已撤回实验性的打包接入，保留原发布运行时和原生模块。复用实验没有作为新的优化包发布，也没有将失败项目改为禁止执行。未来如采用标准 Node 按需安装，需要明确首次联网、下载校验、版本管理与离线完整包策略；这属于分发方式调整。
 
 复现：`npm run probe:electron-node`。探针复制合成项目的依赖，不重编译或更改仓库安装的原生模块；报告中明确区分“诊断完成”和“项目兼容”，不能把命令正常退出理解为兼容通过。本次报告：`test-results/electron-node-3gjcet/report.json`。后台正向验证日志：`work/electron-node-probe-{package,native,terminal}.log`；项目对照：`work/electron-project-probe/report.json`。
+
+## Tauri 宿主验证（2026-10-20）
+
+新增独立的 CoSail，复用现有 Node 执行核心、React 界面和业务接口；正式 Electron 入口继续保留。构建从同一个依赖收集器取得运行资源，不删除 Codex／Kimi／MiniMax、独立 Node、ripgrep 或 PTY。具体构建方式及未适配能力见 [Tauri 预览](TAURI_PREVIEW.md)。
+
+在 `main / 34fcf85` 基础上的同一份工作区改动、同一 macOS ARM64 环境中，完整重建两个宿主，使用 electron-builder 相同的 `normal` ZIP 配置比较未公证的本地应用包：
+
+| 指标                 |   Electron | Tauri Preview |                 减少 |
+| -------------------- | ---------: | ------------: | -------------------: |
+| ZIP 实际文件长度     | 323.41 MiB |    203.94 MiB | 119.47 MiB（36.94%） |
+| ZIP 条目解压后总长度 | 835.05 MiB |    545.75 MiB |           289.30 MiB |
+
+下载字节数分别为 339,115,358 和 213,843,309，不采用 APFS 分配空间。835 个保留的引擎、Node、ripgrep、PTY 文件逐一 SHA-256 相同。体积减少主要来自 Tauri 使用系统 WebKit，避免携带 Electron／Chromium；执行资源仍是大头，不能据此承诺几 MB 的完整客户端。
+
+验证包括实际 WebKit 窗口中的中文会话、MCP 审批和调用、文件写入、交互 PTY、官方 ChatGPT 授权、重启保留及一轮 GPT-6 Sol 真实回复；Electron 的会话、账号代理隔离与管理回归通过。自动化协议测试使用本地合成模型，不作为质量对照。
+
+对比报告 `work/tauri-size-report.json`，比较包 `work/CoSail-{Electron-comparison,Tauri-Preview}-mac-arm64.zip`。此结果仅适用于 macOS ARM64；Windows 的 WebView2 安装方式、Linux 的系统库和移动端执行方式需要分别评估，尚未生成或验证对应发布安装包。本次不切换正式发布入口。
+
+### 补齐桌面能力后的当前体积（2026-10-20）
+
+托盘、电源管理、电脑控制、权限辅助窗口和更新验证接入后，重新生成 macOS ARM64 对照 ZIP，仍使用相同的 `normal` 压缩配置。Tauri 包已完成本地临时签名，正式分发仍需平台签名和公证。
+
+| 指标                 |   Electron |      Tauri |                 减少 |
+| -------------------- | ---------: | ---------: | -------------------: |
+| ZIP 实际文件长度     | 323.43 MiB | 205.36 MiB | 118.06 MiB（36.50%） |
+| ZIP 条目解压后总长度 | 835.10 MiB | 549.14 MiB |           285.95 MiB |
+
+下载字节数分别为 339,139,230 和 215,339,968。报告为 `work/tauri-current-size-report.json`，比较包为 `work/CoSail-{Electron,Tauri}-1.0.4-mac-arm64-current.zip`。上表为当前本地比较包，前节保留首次宿主验证的数据；正式 Electron 发布入口未切换。
+
+当前全量测试为 118 个文件、872 项通过、1 项原有跳过，类型检查通过。macOS 实际窗口发现、截图和中文输入自检通过；正式更新安装、Windows 和 Linux 实机验证仍待完成。

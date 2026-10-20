@@ -1,6 +1,10 @@
 // CoSail double-sail mark rasterized from the project's vector geometry. No external assets.
 import { deflateSync } from 'node:zlib';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 const samples = 4;
 const { background, polygons } = JSON.parse(
   await readFile(new URL('../src/shared/brand-mark.json', import.meta.url), 'utf8'),
@@ -81,7 +85,7 @@ await writeFile('build/icon.png', render(512));
 const macScale = 0.8;
 await writeFile('build/icon-mac.png', render(512, macScale));
 await writeFile('build/icon.ico', Buffer.concat([ico, png]));
-// PNG-backed ICNS entries are understood by modern macOS at every Dock scale.
+// Portable fallback; macOS below uses Icon Services for native small icons and Retina variants.
 const iconEntries = [
   ['icp4', 16],
   ['icp5', 32],
@@ -101,6 +105,29 @@ const iconHeader = Buffer.alloc(8);
 iconHeader.write('icns', 0, 'ascii');
 iconHeader.writeUInt32BE(8 + iconEntries.reduce((size, entry) => size + entry.length, 0), 4);
 await writeFile('build/icon.icns', Buffer.concat([iconHeader, ...iconEntries]));
+if (process.platform === 'darwin') {
+  // Let Icon Services encode its small ARGB representations and Retina variants.
+  const directory = await mkdtemp(path.join(tmpdir(), 'cosail-icon-'));
+  const iconset = path.join(directory, 'CoSail.iconset');
+  try {
+    await mkdir(iconset);
+    for (const size of [16, 32, 128, 256, 512])
+      for (const scale of [1, 2])
+        await writeFile(
+          path.join(iconset, `icon_${size}x${size}${scale === 2 ? '@2x' : ''}.png`),
+          render(size * scale, macScale),
+        );
+    await promisify(execFile)('/usr/bin/iconutil', [
+      '-c',
+      'icns',
+      '-o',
+      path.resolve('build/icon.icns'),
+      iconset,
+    ]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
 
 const rgb = (color) => 'rgb(' + color.join(',') + ')';
 const svg =

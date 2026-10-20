@@ -1,6 +1,6 @@
 import { registerProviderServices } from '../../services/accounts/provider-services';
 import type { Plugin } from 'cordis';
-import '../context';
+import '../execution-context';
 
 export const providersPlugin: Plugin.Object<void> = {
   name: 'tongzhou-providers',
@@ -11,7 +11,7 @@ export const providersPlugin: Plugin.Object<void> = {
     'tzNetworks',
     'tzAccounts',
     'tzAccountBrowser',
-    'tzDesktop',
+    'tzProviderImports',
     'tzEvents',
   ],
   apply(ctx) {
@@ -21,7 +21,7 @@ export const providersPlugin: Plugin.Object<void> = {
     const networks = ctx.tzNetworks;
     const accounts = ctx.tzAccounts;
     const accountBrowser = ctx.tzAccountBrowser;
-    const { pendingImports } = ctx.tzDesktop;
+    const pendingImports = ctx.tzProviderImports;
     registerProviderServices(
       register,
       store,

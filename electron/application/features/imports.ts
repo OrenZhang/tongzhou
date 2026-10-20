@@ -1,15 +1,15 @@
-import { dialog } from 'electron';
 import { manual } from '../../core/tools/client-commands';
 import { importCCSwitch } from '../../services/accounts/cc-switch';
 import type { Plugin } from 'cordis';
-import '../context';
+import '../execution-context';
 
 export const importsPlugin: Plugin.Object<void> = {
   name: 'tongzhou-imports',
-  inject: ['tzClient', 'tzDesktop'],
+  inject: ['tzClient', 'tzEnvironment', 'tzProviderImports'],
   apply(ctx) {
     const register = ctx.tzClient.scoped(ctx);
-    const { getWindow, pendingImports } = ctx.tzDesktop;
+    const pendingImports = ctx.tzProviderImports;
+    const dialog = ctx.tzEnvironment.host.dialogs;
     register(
       'importCCSwitch',
       manual(
@@ -20,7 +20,7 @@ export const importsPlugin: Plugin.Object<void> = {
         [],
       ),
       async () => {
-        const result = await dialog.showOpenDialog(getWindow()!, {
+        const result = await dialog.showOpenDialog({
           title: '导入 CC Switch 配置',
           filters: [{ name: 'CC Switch', extensions: ['db', 'sqlite', 'sqlite3', 'json'] }],
           properties: ['openFile'],

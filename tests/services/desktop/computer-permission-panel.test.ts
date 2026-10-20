@@ -1,6 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
-vi.mock('electron', () => ({ BrowserWindow: vi.fn(), ipcMain: {}, screen: {} }));
-import { permissionPanelBounds } from '../../../electron/services/desktop/computer-permission-panel';
+import { describe, expect, it } from 'vitest';
+import {
+  permissionPanelBounds,
+  permissionPanelHTML,
+} from '../../../electron/services/desktop/permission-panel-view';
 
 describe('macOS authorization panel placement', () => {
   it('appears beneath the settings window without covering its contents', () => {
@@ -25,4 +27,19 @@ describe('macOS authorization panel placement', () => {
       expect(panel.y + panel.height).toBeLessThanOrEqual(area.y + area.height);
     }
   });
+});
+
+it('escapes bundle names and paths in the shared permission assistant', () => {
+  const html = permissionPanelHTML(
+    {
+      name: '<script>alert(1)</script>.app',
+      path: '/tmp/test.app',
+      icon: 'data:image/png;base64,test',
+      development: true,
+    },
+    'accessibility',
+  );
+  expect(html).not.toContain('<script>');
+  expect(html).toContain('&lt;script&gt;');
+  expect(html).toContain('draggable="true"');
 });

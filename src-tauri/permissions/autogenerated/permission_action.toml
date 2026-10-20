@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-permission-action"
+description = "Enables the permission_action command without any pre-configured scope."
+commands.allow = ["permission_action"]
+
+[[permission]]
+identifier = "deny-permission-action"
+description = "Denies the permission_action command without any pre-configured scope."
+commands.deny = ["permission_action"]

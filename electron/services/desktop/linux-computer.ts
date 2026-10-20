@@ -1,6 +1,5 @@
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { clipboard } from 'electron';
 import { deflateSync } from 'node:zlib';
 
 /**
@@ -62,6 +61,7 @@ async function typeViaClipboard(
   pid: number,
   text: string,
   signal?: AbortSignal,
+  restoreClipboard?: (text: string) => void | Promise<void>,
 ): Promise<{ ok: true }> {
   const m = load();
   let previous: string | undefined;
@@ -99,12 +99,16 @@ async function typeViaClipboard(
     m.clipRelease();
     // Restore through the native clipboard, which can own and serve the
     // selection beyond this call.
-    if (previous) clipboard.writeText(previous);
+    if (previous) await restoreClipboard?.(previous);
   }
   return { ok: true };
 }
 
-export async function x11Run(payload: any, signal?: AbortSignal): Promise<unknown> {
+export async function x11Run(
+  payload: any,
+  signal?: AbortSignal,
+  restoreClipboard?: (text: string) => void | Promise<void>,
+): Promise<unknown> {
   const m = load();
   const w = payload.window ?? {};
   switch (payload.action) {
@@ -117,7 +121,7 @@ export async function x11Run(payload: any, signal?: AbortSignal): Promise<unknow
       m.click(w.id, w.pid, payload.x, payload.y, payload.button ?? 'left', payload.clickCount ?? 1);
       return { ok: true };
     case 'type':
-      return typeViaClipboard(w.id, w.pid, payload.text, signal);
+      return typeViaClipboard(w.id, w.pid, payload.text, signal, restoreClipboard);
     case 'key':
       m.pressKey(w.id, w.pid, payload.key);
       return { ok: true };

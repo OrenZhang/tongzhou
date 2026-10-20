@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 vi.mock('electron', () => ({ desktopCapturer: { getSources: vi.fn() }, systemPreferences: {} }));
 import { desktopCapturer } from 'electron';
+import { DesktopComputer } from '../../../electron/services/desktop/electron-computer';
 import {
   actionSchema,
   mapPoint,
-  DesktopComputer,
   observedWindow,
 } from '../../../electron/services/desktop/computer';
 describe('computer tool boundaries', () => {

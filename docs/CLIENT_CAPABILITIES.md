@@ -18,7 +18,7 @@ register(
 );
 ```
 
-不需要修改 ClientCommands、client_catalog、client_query、client_change 或原生引擎桥接。已经创建的会话工具通过实时注册表发现新操作；发布新版应用仍须加载新版模块。若新增页面按钮，仍按正常 UI 开发流程在受控 preload API 暴露所需业务方法。
+不需要修改 ClientCommands、client_catalog、client_query、client_change 或原生引擎桥接。已经创建的会话工具通过实时注册表发现新操作；发布新版应用仍须加载新版模块。若新增页面按钮，在 `src/shared/client-api.ts` 的受控 API 映射暴露所需业务方法；Electron preload 与 Tauri 适配器共用该映射，不再分别复制方法清单。
 
 - query：只查询，无修改审批；只读会话可用。
 - change：修改配置或产生外部作用，使用当前会话权限和审批。参数在调用前经注册的 Zod Schema 校验；优先复用业务模块导出的 Schema。

@@ -1,11 +1,18 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { cp } from 'node:fs/promises';
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   base: './',
   build: { license: { fileName: 'THIRD_PARTY_LICENSES.md' } },
   optimizeDeps: { exclude: ['@excalidraw/excalidraw'] },
   plugins: [
+    {
+      name: 'tauri-ipc-csp',
+      transformIndexHtml(html) {
+        if (mode !== 'tauri') return html;
+        return html.replace("connect-src 'self'", "connect-src 'self' ipc: http://ipc.localhost");
+      },
+    },
     react(),
     {
       name: 'local-excalidraw-fonts',
@@ -68,4 +75,4 @@ export default defineConfig({
     },
   ],
   server: { host: '127.0.0.1', port: 5173, strictPort: true },
-});
+}));

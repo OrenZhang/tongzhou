@@ -1,0 +1,6 @@
+{
+  "identifier": "permission-panel",
+  "description": "Local permission assistant only: drag the running app, move, reveal or close. No execution core access.",
+  "windows": ["permission-panel"],
+  "permissions": ["allow-permission-action"]
+}

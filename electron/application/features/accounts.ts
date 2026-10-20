@@ -1,14 +1,12 @@
-import { clipboard, shell } from 'electron';
 import { z } from 'zod';
 import { manual, operation, workspaceOperation } from '../../core/tools/client-commands';
-import { writeClipboardText } from '../../services/desktop/clipboard';
 import { idSchema } from '../../services/storage/validation';
 import type { Plugin } from 'cordis';
-import '../context';
+import '../execution-context';
 
 export const accountsPlugin: Plugin.Object<void> = {
   name: 'tongzhou-accounts',
-  inject: ['tzClient', 'tzStore', 'tzAccounts', 'tzAccountBrowser', 'tzEvents'],
+  inject: ['tzEnvironment', 'tzClient', 'tzStore', 'tzAccounts', 'tzAccountBrowser', 'tzEvents'],
   apply(ctx) {
     const register = ctx.tzClient.scoped(ctx);
     const store = ctx.tzStore;
@@ -56,7 +54,7 @@ export const accountsPlugin: Plugin.Object<void> = {
       (raw, id) => {
         const state = accountFor(raw, id).state;
         if (state.phase !== 'waiting' || !state.url) throw new Error('授权链接已失效，请重新登录');
-        return shell.openExternal(state.url);
+        return ctx.tzEnvironment.host.documents.openExternal(state.url);
       },
     );
     register(
@@ -71,7 +69,7 @@ export const accountsPlugin: Plugin.Object<void> = {
       (raw, id) => {
         const state = accountFor(raw, id).state;
         if (state.phase !== 'waiting' || !state.userCode) throw new Error('设备码已失效');
-        return writeClipboardText(clipboard, state.userCode);
+        return ctx.tzEnvironment.host.writeClipboard(state.userCode);
       },
     );
     register(
@@ -141,7 +139,7 @@ export const accountsPlugin: Plugin.Object<void> = {
         '设备授权码仅显示给用户，不传入模型',
         [idSchema.optional()],
       ),
-      (id) => writeClipboardText(clipboard, codexFor(id).code()),
+      (id) => ctx.tzEnvironment.host.writeClipboard(codexFor(id).code()),
     );
     register(
       'codexLogout',

@@ -1,12 +1,6 @@
-import { desktopCapturer, systemPreferences, nativeImage } from 'electron';
 import { randomUUID } from 'node:crypto';
-import path from 'node:path';
-import { readFile } from 'node:fs/promises';
-import { setTimeout as delay } from 'node:timers/promises';
 import { z } from 'zod';
-import { command } from '../../core/tools/workspace';
 import type { ComputerAdapter } from '../../core/tools/extensions';
-import { x11Available, x11Run, rgbaToPng, type X11Capture } from './linux-computer';
 import type { ComputerStatus, ToolOutput } from '../../../src/shared/types';
 import type { ToolSpec } from '../../core/models/providers';
 
@@ -123,7 +117,7 @@ export function mapPoint(
     y: Math.round(frame.bounds.y + (y * frame.bounds.height) / frame.height),
   };
 }
-type WindowInfo = {
+export type WindowInfo = {
   id: string;
   title: string;
   pid: number;
@@ -154,103 +148,57 @@ type Frame = {
   bounds: WindowInfo['bounds'];
   expires: number;
 };
-export class DesktopComputer implements ComputerAdapter {
+export interface ComputerDriver {
+  status(): ComputerStatus;
+  refresh?(): Promise<void>;
+  requestPermission(): void | Promise<void>;
+  helper(payload: any, signal: AbortSignal): Promise<any>;
+  capture(
+    window: WindowInfo,
+    signal: AbortSignal,
+  ): Promise<{
+    width: number;
+    height: number;
+    bounds?: WindowInfo['bounds'];
+    mimeType: 'image/png' | 'image/jpeg' | 'image/webp';
+    data: string;
+  }>;
+}
+export class ComputerControl implements ComputerAdapter {
   private frames = new Map<string, Frame>();
-  constructor(private lock = { busy: false }) {}
+  constructor(
+    private driver: ComputerDriver,
+    private lock = { busy: false, emergencyShortcut: false },
+  ) {}
+  get emergencyShortcut() {
+    return this.lock.emergencyShortcut;
+  }
+  set emergencyShortcut(value: boolean) {
+    this.lock.emergencyShortcut = value;
+  }
   fork() {
-    return new DesktopComputer(this.lock);
+    return new ComputerControl(this.driver, this.lock);
   }
-  emergencyShortcut = false;
   status(): ComputerStatus {
-    return {
-      supported:
-        process.platform === 'linux'
-          ? x11Available()
-          : ['win32', 'darwin'].includes(process.platform),
-      platform: process.platform,
-      screen:
-        process.platform === 'darwin'
-          ? systemPreferences.getMediaAccessStatus('screen')
-          : 'available',
-      accessibility:
-        process.platform !== 'darwin' || systemPreferences.isTrustedAccessibilityClient(false),
-      emergencyShortcut: this.emergencyShortcut,
-    };
+    return { ...this.driver.status(), emergencyShortcut: this.emergencyShortcut };
   }
-  requestPermission() {
-    if (process.platform === 'darwin') systemPreferences.isTrustedAccessibilityClient(true);
-    return this.status();
+  async refresh() {
+    await this.driver.refresh?.();
+  }
+  async requestPermission() {
+    await this.driver.requestPermission();
+    await this.refresh();
   }
   specs(readOnly: boolean) {
     return computerTools.filter((_, i) => !readOnly || i < 2);
   }
-  private async helper(payload: unknown, signal: AbortSignal) {
-    if (process.platform === 'linux') {
-      signal.throwIfAborted();
-      try {
-        return await x11Run(payload, signal);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        if (message.includes('Could not focus'))
-          throw new Error(
-            '无法聚焦目标窗口。请将CoSail置于前台批准操作，或先点击目标窗口使其获得键盘焦点后重试。未发送输入。',
-          );
-        if (message.includes('focus was lost'))
-          throw new Error(
-            '输入过程中目标窗口失去了键盘焦点，字符可能未完整送入。请重新截图确认，必要时先点击目标窗口再输入。',
-          );
-        throw new Error('电脑操作失败，请检查系统权限与目标窗口状态。');
-      }
-    }
-    const root = path
-      .join(__dirname, '../build/computer')
-      .replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep);
-    const json = JSON.stringify(payload);
-    const windowsCode =
-      process.platform === 'win32'
-        ? (await readFile(path.join(root, 'windows.ps1'), 'utf8')).replace(
-            'param([string]$PayloadBase64)',
-            "$PayloadBase64 = '" + Buffer.from(json).toString('base64') + "'",
-          )
-        : '';
-    const output =
-      process.platform === 'win32'
-        ? await command(
-            'powershell.exe',
-            [
-              '-NoProfile',
-              '-NonInteractive',
-              '-OutputFormat',
-              'Text',
-              '-EncodedCommand',
-              Buffer.from(windowsCode, 'utf16le').toString('base64'),
-            ],
-            root,
-            signal,
-            30000,
-          )
-        : await command(
-            '/usr/bin/osascript',
-            ['-l', 'JavaScript', path.join(root, 'macos.js'), json],
-            root,
-            signal,
-            30000,
-          );
-    if (!output.startsWith('exit code: 0\n')) {
-      if (output.includes('Could not focus'))
-        throw new Error(
-          '无法聚焦目标窗口。请将CoSail置于前台批准操作，或手动激活目标窗口后重试。未发送输入。',
-        );
-      if (output.includes('Windows blocked input'))
-        throw new Error('系统拒绝向此窗口输入。不支持管理员或受保护窗口。');
-      throw new Error('电脑操作失败，请检查系统权限与目标窗口状态。');
-    }
-    return JSON.parse(output.slice('exit code: 0\n'.length).trim());
+  private helper(payload: unknown, signal: AbortSignal) {
+    return this.driver.helper(payload, signal);
   }
   async execute(name: string, args: any, signal: AbortSignal): Promise<ToolOutput> {
+    await this.refresh();
     if (!this.status().supported)
       throw new Error('电脑控制需要 Windows、macOS，或带 X11/XWayland 显示的 Linux');
-    const platform = this.status().platform;
     if (this.lock.busy) throw new Error('另一项电脑操作正在执行，请稍后重试');
     this.lock.busy = true;
     try {
@@ -265,76 +213,11 @@ export class DesktopComputer implements ComputerAdapter {
           throw new Error('请在 macOS 系统设置授予CoSail屏幕录制权限后重启');
         const windows: WindowInfo[] = await this.helper({ action: 'windows' }, signal);
         const window = observedWindow(windows, windowId);
-        let source: Awaited<ReturnType<typeof desktopCapturer.getSources>>[number] | undefined;
-        // A newly shown window may be enumerated before its first capture frame exists.
-        // Retry only the requested window; never substitute another window or a full screen.
-        // Linux skips desktopCapturer entirely: on Wayland sessions it hangs waiting for
-        // the capture portal and exposes no window sources (the X11 capture below covers it).
-        if (platform !== 'linux') {
-          for (let attempt = 0; attempt < 3; attempt++) {
-            signal.throwIfAborted();
-            const sources = await desktopCapturer.getSources({
-              types: ['window'],
-              thumbnailSize: { width: 1280, height: 960 },
-              fetchWindowIcons: false,
-            });
-            signal.throwIfAborted();
-            source = sources.find((s) => s.id.split(':')[1] === window.id);
-            if (source && !source.thumbnail.isEmpty()) break;
-            if (attempt < 2) await delay(150 * (attempt + 1), undefined, { signal });
-          }
-        }
-        let image = source?.thumbnail;
-        let dialogBounds: WindowInfo['bounds'] | undefined;
-        // Chromium omits owned Win32 dialogs from window sources. Capture only that
-        // exact dialog HWND; never substitute a desktop screenshot or another app.
-        if (
-          (!image || image.isEmpty()) &&
-          process.platform === 'win32' &&
-          window.className === '#32770' &&
-          window.ownerId &&
-          window.ownerId !== '0'
-        ) {
-          const captured = await this.helper({ action: 'capture-dialog', window }, signal);
-          image = nativeImage.createFromBuffer(Buffer.from(captured.data, 'base64'));
-          dialogBounds = captured.bounds;
-        }
-        // The X11 addon reads window pixels directly, on the same connection as input.
-        if ((!image || image.isEmpty()) && platform === 'linux') {
-          try {
-            const captured = (await x11Run({
-              action: 'capture',
-              windowId: window.id,
-              pid: window.pid,
-            })) as X11Capture;
-            image = nativeImage.createFromBuffer(
-              rgbaToPng(captured.width, captured.height, captured.data),
-            );
-          } catch {
-            // Fall through to the unified error below.
-          }
-        }
-        if (!image || image.isEmpty())
-          throw new Error(
-            process.platform === 'darwin'
-              ? '未获取目标窗口图像。请检查屏幕录制权限，并保持窗口可见后重试。'
-              : '未获取目标窗口图像。请保持窗口可见、退出最小化后重试；受保护窗口可能不允许截图。',
-          );
-        const { width, height } = image.getSize();
+        const captured = await this.driver.capture(window, signal);
+        const { width, height } = captured;
+        if (!(width > 0 && height > 0) || !captured.data) throw new Error('未获取目标窗口图像');
         const frameId = randomUUID();
-        // Chromium's Windows window capturer excludes the title bar and invisible resize borders.
-        // Align the image with the client bottom; image aspect also accounts for a native menu bar.
-        const client = window.clientBounds;
-        const captureBounds =
-          dialogBounds ??
-          (client && client.width > 0
-            ? {
-                x: client.x,
-                y: client.y + client.height - (client.width * height) / width,
-                width: client.width,
-                height: (client.width * height) / width,
-              }
-            : window.bounds);
+        const captureBounds = captured.bounds ?? window.bounds;
         for (const [id, frame] of this.frames)
           if (frame.expires < Date.now()) this.frames.delete(id);
         if (this.frames.size >= 20) this.frames.delete(this.frames.keys().next().value!);
@@ -362,7 +245,7 @@ export class DesktopComputer implements ComputerAdapter {
             coordinateSystem: '截图图片坐标，非屏幕坐标',
             expiresInSeconds: 120,
           }),
-          images: [{ mimeType: 'image/jpeg', data: image.toJPEG(75).toString('base64') }],
+          images: [{ mimeType: captured.mimeType, data: captured.data }],
         };
       }
       if (!computerTools.some((t) => t.name === name)) throw new Error('未知电脑工具');
