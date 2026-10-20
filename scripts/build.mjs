@@ -1,7 +1,17 @@
-import { build } from 'esbuild';
-import { cp, mkdir, rm } from 'node:fs/promises';
+import { build as esbuild } from 'esbuild';
+import path from 'node:path';
+import { cp, mkdir, rm, readFile, readdir, writeFile } from 'node:fs/promises';
 import './prepare-pty.mjs';
 import './prepare-x11.mjs';
+// Bundled libraries are build dependencies; only external modules ship in node_modules.
+const libraries = new Set();
+async function build(options) {
+  const result = await esbuild({ ...options, metafile: true });
+  for (const input of Object.keys(result.metafile.inputs)) {
+    const root = input.match(/^(.*node_modules\/(?:@[^/]+\/)?[^/]+)(?:\/|$)/)?.[1];
+    if (root) libraries.add(root);
+  }
+}
 await rm('dist-electron', { recursive: true, force: true });
 await mkdir('dist-electron/skills', { recursive: true });
 await cp('skills', 'dist-electron/skills', { recursive: true });
@@ -75,3 +85,17 @@ await build({
   format: 'cjs',
   target: 'node22',
 });
+
+// Preserve bundled dependencies' notices after removing their duplicate source trees.
+const notices = [];
+for (const root of [...libraries].sort()) {
+  const pkg = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
+  const files = (await readdir(root)).filter((name) =>
+    /^(licen[cs]e|notice|copying)(\.|$)/i.test(name),
+  );
+  const texts = await Promise.all(files.map((name) => readFile(path.join(root, name), 'utf8')));
+  notices.push(
+    `${pkg.name}@${pkg.version} (${typeof pkg.license === 'string' ? pkg.license : 'see upstream license'})\n${texts.join('\n')}`,
+  );
+}
+await writeFile('dist-electron/THIRD_PARTY_LICENSES.txt', notices.join('\n\n---\n\n'));

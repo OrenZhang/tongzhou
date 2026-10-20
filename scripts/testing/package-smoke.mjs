@@ -110,6 +110,55 @@ try {
     ['web_search', 'fetch_page'],
   );
   checks.push('bundled MCP starts outside repository cwd');
+  if (process.env.TONGZHOU_SMOKE_EXECUTABLE) {
+    const runtime = await app.evaluate(async ({ app }) => {
+      const { createRequire } = process.getBuiltinModule('module');
+      const { execFileSync } = process.getBuiltinModule('child_process');
+      const path = process.getBuiltinModule('path');
+      const require = createRequire(path.join(app.getAppPath(), 'package.json'));
+      const root = path
+        .dirname(require.resolve('node/package.json'))
+        .replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep);
+      const node = path.join(root, 'bin', process.platform === 'win32' ? 'node.exe' : 'node');
+      // Test native modules under the same independent Node used by engine/terminal hosts.
+      const modules = path.join(
+        app.getAppPath().replace('app.asar', 'app.asar.unpacked'),
+        'node_modules',
+      );
+      const script = `const {createRequire}=require('node:module');
+        const r=createRequire(${JSON.stringify(path.join(modules, '../package.json'))});
+        r('node-pty');
+        const Database=r('better-sqlite3'); const db=new Database(':memory:');
+        if(db.prepare('select 42 as value').get().value!==42)throw Error('SQLite failed');
+        db.close();console.log('native runtime OK');`;
+      const native = execFileSync(node, ['-e', script], { encoding: 'utf8', timeout: 15000 });
+      const codexRoot = path
+        .dirname(require.resolve(`@openai/codex-${process.platform}-${process.arch}/package.json`))
+        .replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep);
+      const triple =
+        process.platform === 'darwin'
+          ? `${process.arch === 'arm64' ? 'aarch64' : 'x86_64'}-apple-darwin`
+          : process.platform === 'win32'
+            ? `${process.arch === 'arm64' ? 'aarch64' : 'x86_64'}-pc-windows-msvc`
+            : `${process.arch === 'arm64' ? 'aarch64' : 'x86_64'}-unknown-linux-musl`;
+      const codex = execFileSync(
+        path.join(
+          codexRoot,
+          'vendor',
+          triple,
+          'bin',
+          process.platform === 'win32' ? 'codex.exe' : 'codex',
+        ),
+        ['--version'],
+        { encoding: 'utf8', timeout: 15000 },
+      );
+      return { native, codex };
+    });
+    assert.match(runtime.native, /native runtime OK/);
+    assert.match(runtime.codex, /codex/);
+    checks.push('packaged Codex binary and independent Node/PTY/SQLite runtime');
+  }
+
   await app.evaluate(({ dialog }, p) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
   }, project);

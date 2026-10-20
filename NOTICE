@@ -12,7 +12,7 @@ CC Switch: https://github.com/farion1231/cc-switch
 MIT, Copyright (c) 2025 Jason Young.
 The project is acknowledged as a design reference and compatible configuration source. CoSail's read-only importer is independently implemented; no CC Switch source code is copied into this release.
 
-Electron, React, Lucide, remark, react-markdown, Zod, @iarna/toml and other dependencies retain their respective licenses. See package-lock.json and the dependency distributions for the complete inventory and notices.
+Electron, React, Lucide, remark, react-markdown, Zod, @iarna/toml and other dependencies retain their respective licenses. Bundled library notices are included in dist/THIRD_PARTY_LICENSES.md and dist-electron/THIRD_PARTY_LICENSES.txt. External runtime packages retain their original notices under node_modules. See package-lock.json in the source distribution for the complete dependency inventory.
 
 Excalidraw: https://github.com/excalidraw/excalidraw
 @excalidraw/excalidraw 0.18.1, MIT. The official React editor is integrated as a local whiteboard with CoSail persistence and AI tools. Excalidraw and its bundled fonts retain their respective license notices.

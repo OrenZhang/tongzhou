@@ -1,4 +1,5 @@
-import { rename, writeFile } from 'node:fs/promises';
+import { rename, writeFile, readdir, rm } from 'node:fs/promises';
+import { Arch } from 'builder-util';
 import path from 'node:path';
 
 // Chromium picks the ozone platform before the JS main script runs, so the X11
@@ -27,6 +28,22 @@ exec "\$DIR/cosail.bin" --ozone-platform=x11 "\$@"
 `;
 
 export default async function afterPack(context) {
+  // Runtime selection uses process.platform/process.arch. Keep the complete
+  // target prebuild (including spawn-helper/ConPTY), prune only other targets.
+  const prebuilds = path.join(
+    context.packager.getResourcesDir(context.appOutDir),
+    'app.asar.unpacked/node_modules/node-pty/prebuilds',
+  );
+  const architectures =
+    Arch[context.arch] === 'universal' ? ['arm64', 'x64'] : [Arch[context.arch]];
+  const keep = new Set(architectures.map((arch) => `${context.electronPlatformName}-${arch}`));
+  const entries = await readdir(prebuilds, { withFileTypes: true }).catch((error) => {
+    if (error.code === 'ENOENT') return [];
+    throw error;
+  });
+  for (const entry of entries)
+    if (entry.isDirectory() && /^(darwin|win32|linux)-/.test(entry.name) && !keep.has(entry.name))
+      await rm(path.join(prebuilds, entry.name), { recursive: true });
   if (context.electronPlatformName !== 'linux') return;
   const executable = path.join(context.appOutDir, 'cosail');
   await rename(executable, `${executable}.bin`);

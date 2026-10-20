@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import { cp } from 'node:fs/promises';
 export default defineConfig({
   base: './',
+  build: { license: { fileName: 'THIRD_PARTY_LICENSES.md' } },
   optimizeDeps: { exclude: ['@excalidraw/excalidraw'] },
   plugins: [
     react(),
