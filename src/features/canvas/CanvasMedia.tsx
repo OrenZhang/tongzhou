@@ -1,4 +1,5 @@
 import { mediaFieldNames } from '../../shared/canvas-media-settings';
+import { CanvasModelPicker } from './CanvasModelPicker';
 import { pluginLabel } from '../../shared/plugin-label';
 import { t as tr } from '../../shared/i18n';
 import { useEffect, useId, useState } from 'react';
@@ -274,6 +275,14 @@ export function CanvasMediaFields({
   return (
     <div className="canvas-media-fields">
       {toolNotice && <small role="status">{toolNotice}</small>}
+      {m.mode !== 'existing' && (
+        <CanvasModelPicker
+          data={data}
+          media={m}
+          kind={kind}
+          onChange={(media) => patch({ media })}
+        />
+      )}
       <label>
         {tr('生成模式')}
         <select
@@ -324,6 +333,7 @@ export function CanvasMediaFields({
             {tr('生成插件')}
             <select
               aria-label={tr('生成插件')}
+              disabled={!!m.modelProviderId}
               value={m.pluginId ?? ''}
               onChange={(e) => {
                 const p = data.plugins?.find((p) => p.id === e.target.value),
@@ -350,6 +360,7 @@ export function CanvasMediaFields({
               {tr('生成工具')}
               <select
                 aria-label={tr('生成工具')}
+                disabled={!!m.modelProviderId}
                 value={m.tool ?? ''}
                 onChange={(e) => chooseTool(e.target.value)}
               >
@@ -452,11 +463,17 @@ export function CanvasMediaFields({
             {tr('生成模型')}
             <input
               aria-label={tr('生成模型')}
-              disabled={!!tool && !props.model && !props.model_name}
+              disabled={!!m.modelProviderId || (!!tool && !props.model && !props.model_name)}
               list={modelId}
               value={m.model ?? ''}
               placeholder={tr('使用工具默认模型')}
-              onChange={(e) => update({ model: e.target.value || undefined })}
+              onChange={(e) =>
+                update({
+                  model: e.target.value || undefined,
+                  modelProviderId: undefined,
+                  registeredModel: undefined,
+                })
+              }
             />
             <datalist id={modelId}>
               {models.map((v) => (

@@ -1,0 +1,46 @@
+.content-filters {
+  display: flex;
+  gap: 6px;
+  margin: 8px 0;
+}
+.content-filters select {
+  min-width: 0;
+  flex: 1;
+}
+.content-properties fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0 0 16px;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.content-properties label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.content-properties small {
+  color: var(--muted);
+  line-height: 1.6;
+}
+.content-source-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.content-source-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.content-source-list li span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.content-source-list button {
+  flex-shrink: 0;
+}

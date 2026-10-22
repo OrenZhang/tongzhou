@@ -15,6 +15,7 @@ import type { View } from '../../app/views';
 import { protocolLabels, presets } from './provider-presets';
 import { ProviderSecretField } from './ProviderSecretField';
 import { ModelProtocolFields } from './ModelProtocolFields';
+import { ModelCapabilityFields } from './ModelCapabilityFields';
 import { reasoningEfforts, reasoningLabels } from '../../shared/model-reasoning';
 import {
   automaticModel,
@@ -81,6 +82,7 @@ export function ProviderConnectionDialog({
                     models: [...p.models],
                     modelLabels: undefined,
                     modelProtocols: undefined,
+                    modelCapabilities: undefined,
                     secret: '',
                     clearSecret:
                       providerEdit.baseUrl !== p.baseUrl || providerEdit.protocol !== p.protocol,
@@ -239,6 +241,11 @@ export function ProviderConnectionDialog({
             />
           </Field>
         </details>
+        <ModelCapabilityFields
+          provider={providerEdit}
+          plugins={data.plugins ?? []}
+          onChange={(modelCapabilities) => setProviderEdit({ ...providerEdit, modelCapabilities })}
+        />
         <ModelProtocolFields
           provider={providerEdit}
           onChange={(modelProtocols) => setProviderEdit({ ...providerEdit, modelProtocols })}

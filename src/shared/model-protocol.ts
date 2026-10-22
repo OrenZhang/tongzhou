@@ -1,4 +1,5 @@
 import type { Provider } from './types';
+import { supportsConversation, modelCapabilityProfile } from './model-capabilities';
 import type { ReasoningEffort } from './model-reasoning';
 
 export const automaticModel = 'tongzhou-auto';
@@ -99,6 +100,10 @@ export function routeModel(
       !provider ||
       provider.enabled === false ||
       !provider.models.includes(entry.model) ||
+      !supportsConversation(provider, entry.model) ||
+      (context.images &&
+        !!modelCapabilityProfile(provider, entry.model) &&
+        !modelCapabilityProfile(provider, entry.model)!.capabilities.includes('vision')) ||
       !usable(provider)
     )
       continue;

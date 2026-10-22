@@ -80,9 +80,11 @@ export const nodeSchema = z
       .optional(),
     media: z
       .object({
+        modelProviderId: id.optional(),
+        registeredModel: z.string().min(1).max(200).optional(),
         pluginId: id.optional(),
         tool: id.optional(),
-        model: id.optional(),
+        model: z.string().min(1).max(200).optional(),
         count: z.number().int().min(1).max(8).optional(),
         mode: z.enum(['text', 'reference', 'first-frame', 'frames', 'existing']).optional(),
         referenceImages: z.array(resourceSchema).max(8).optional(),

@@ -232,6 +232,7 @@ export default function App() {
       return (
         target &&
         target.models.includes(entry.model) &&
+        supportsConversation(target, entry.model) &&
         !providerUnavailableReason(target, accountStates[target.id])
       );
     });
@@ -239,15 +240,17 @@ export default function App() {
     (p) => !providerUnavailableReason(p, accountStates[p.id]) || poolReady(p),
   );
   const firstModel = (p: Provider) =>
-    providerUnavailableReason(p, accountStates[p.id]) || !p.models[0]
+    providerUnavailableReason(p, accountStates[p.id]) || !conversationModels(p)[0]
       ? p.modelPool?.length
         ? automaticModel
         : ''
-      : p.models[0];
+      : conversationModels(p)[0];
   const unavailableReason = provider
     ? model === automaticModel && poolReady(provider)
       ? ''
-      : providerUnavailableReason(provider, accountStates[provider.id])
+      : model !== automaticModel && model && !supportsConversation(provider, model)
+        ? tr('此模型未标记文本生成能力，请选择对话模型，或在画布中使用生成节点')
+        : providerUnavailableReason(provider, accountStates[provider.id])
     : tr('请选择连接');
   const providerReady = !!provider && !unavailableReason;
   const selectedAgent = data.agents.find((a) => a.id === agentId);
@@ -328,7 +331,7 @@ export default function App() {
     }
   }, [sessionId, providerId, availableProviders]);
   useEffect(() => {
-    if (!model && provider?.models[0]) setModel(provider.models[0]);
+    if (!model && conversationModels(provider)[0]) setModel(conversationModels(provider)[0]);
   }, [model, provider?.models]);
   const newSession = async (projectId?: string) => {
     await perform(async () => {
@@ -1314,7 +1317,7 @@ export default function App() {
                                 providerReady
                                   ? [
                                       ...(provider?.modelPool?.length ? [automaticModel] : []),
-                                      ...(provider?.models ?? []),
+                                      ...conversationModels(provider),
                                     ]
                                   : []
                               }
@@ -1324,7 +1327,10 @@ export default function App() {
                               }}
                               load={
                                 providerReady && provider
-                                  ? () => api.models(provider.id)
+                                  ? async () =>
+                                      (await api.models(provider.id)).filter((m) =>
+                                        supportsConversation(provider, m),
+                                      )
                                   : undefined
                               }
                               onChange={(m) => selectModel(providerId, m)}
@@ -2534,3 +2540,4 @@ export default function App() {
 }
 
 const modelStages = localized(raw_modelStages);
+import { conversationModels, supportsConversation } from '../shared/model-capabilities';

@@ -77,7 +77,7 @@ export function BotSettingsPanel({
             <option value="" disabled>
               {tr('选择模型')}
             </option>
-            {provider?.models.map((m) => (
+            {conversationModels(provider).map((m) => (
               <option key={m} value={m}>
                 {m}
               </option>
@@ -160,3 +160,4 @@ export function BotSettingsPanel({
     </div>
   );
 }
+import { conversationModels } from '../../shared/model-capabilities';

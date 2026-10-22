@@ -43,6 +43,7 @@ export interface Provider {
   auth: AuthMode;
   models: string[];
   modelLabels?: Record<string, string>;
+  modelCapabilities?: Record<string, import('./model-capabilities').ModelCapabilities>;
   /** Explicit wire protocol overrides for mixed-model API gateways. */
   modelProtocols?: Record<string, 'openai-chat' | 'openai-responses' | 'anthropic' | 'gemini'>;
   hasSecret?: boolean;

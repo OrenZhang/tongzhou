@@ -302,13 +302,18 @@ export function AgentsPage({
                       ?.modelLabels
                   }
                   value={agentEdit.model}
-                  models={
-                    data.providers.find((p) => p.id === (agentEdit.providerId || providerId))
-                      ?.models ?? []
-                  }
+                  models={conversationModels(
+                    data.providers.find((p) => p.id === (agentEdit.providerId || providerId)),
+                  )}
                   load={
                     agentEdit.providerId || providerId
-                      ? () => api.models(agentEdit.providerId || providerId)
+                      ? async () => {
+                          const id = agentEdit.providerId || providerId;
+                          const provider = data.providers.find((p) => p.id === id);
+                          return (await api.models(id)).filter(
+                            (m) => !provider || supportsConversation(provider, m),
+                          );
+                        }
                       : undefined
                   }
                   onChange={(model) => setAgentEdit({ ...agentEdit, model })}
@@ -352,3 +357,4 @@ export function AgentsPage({
     </>
   );
 }
+import { conversationModels, supportsConversation } from '../../shared/model-capabilities';

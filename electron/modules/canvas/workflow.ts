@@ -1,4 +1,5 @@
 import { ComfyWorkflows } from './comfyui';
+import { validateMediaModel } from '../../../src/shared/model-capabilities';
 import { ComfyNodePlugins } from './comfyui-plugin';
 import { sessionWorkspace } from '../sessions/session-workspace';
 import path from 'node:path';
@@ -396,6 +397,12 @@ export class CanvasWorkflows {
           : undefined;
         if (!plugin?.enabled || !node.media?.tool)
           throw new Error('请先选择已启用的生成插件和工具：' + node.title);
+        validateMediaModel(
+          node.media,
+          node.kind,
+          this.store.providers(),
+          this.store.list('plugin'),
+        );
         for (const ref of [
           ...(node.media.referenceImages ?? []),
           node.media.firstFrame,
@@ -871,6 +878,21 @@ export class CanvasWorkflows {
     options: CanvasExecute,
     signal: AbortSignal,
   ) {
+    const mode = inputs.some((o) => o.inputPort === 'lastFrame' && o.resources.length)
+      ? 'frames'
+      : inputs.some((o) => o.inputPort === 'firstFrame' && o.resources.length)
+        ? node.media?.lastFrame
+          ? 'frames'
+          : 'first-frame'
+        : inputs.some((o) => o.inputPort === 'reference' && o.resources.length)
+          ? 'reference'
+          : node.media?.mode;
+    validateMediaModel(
+      { ...node.media, mode },
+      node.kind as 'image' | 'video' | 'audio',
+      this.store.providers(),
+      this.store.list('plugin'),
+    );
     const step = run.nodes[node.id],
       m = node.media!,
       regen = options.regenerate?.nodeId === node.id ? options.regenerate : undefined;

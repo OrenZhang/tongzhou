@@ -56,6 +56,8 @@ export interface CanvasNodePluginDefinition {
 }
 /** Per-node extension configuration. Service credentials belong to the existing plugin connection. */
 export interface CanvasMedia {
+  modelProviderId?: string;
+  registeredModel?: string;
   pluginId?: string;
   tool?: string;
   model?: string;

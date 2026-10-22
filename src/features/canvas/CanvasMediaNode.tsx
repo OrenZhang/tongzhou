@@ -1,4 +1,6 @@
 import { mediaFieldNames } from '../../shared/canvas-media-settings';
+import { CanvasModelPicker } from './CanvasModelPicker';
+import { validateMediaModel } from '../../shared/model-capabilities';
 import { useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -141,8 +143,21 @@ export function CanvasMediaNode({
       : connectedReferences
         ? 'reference'
         : (media.mode ?? 'text');
+  let modelIssue = '';
+  if (!existing)
+    try {
+      validateMediaModel(
+        { ...media, mode: effectiveMode },
+        kind,
+        data.providers,
+        data.plugins ?? [],
+      );
+    } catch (error) {
+      modelIssue = tr((error as Error).message);
+    }
   const issue =
     executionIssue ||
+    modelIssue ||
     (existing
       ? !node.resource
         ? tr('请选择已有素材')
@@ -375,11 +390,21 @@ export function CanvasMediaNode({
                 )}
                 <fieldset disabled={disabled}>
                   {!existing && prompt}
+                  {!existing && (
+                    <CanvasModelPicker
+                      data={data}
+                      media={media}
+                      kind={kind}
+                      mode={effectiveMode}
+                      onChange={(media) => patch({ media })}
+                    />
+                  )}
                   <div className="canvas-composer-settings">
                     <label>
                       {tr('生成插件')}
                       <select
                         aria-label={tr('生成插件')}
+                        disabled={!!media.modelProviderId}
                         value={media.pluginId ?? ''}
                         onChange={(e) => chooseTool(e.target.value)}
                       >
@@ -397,6 +422,7 @@ export function CanvasMediaNode({
                       {tr('生成工具')}
                       <select
                         aria-label={tr('生成工具')}
+                        disabled={!!media.modelProviderId}
                         value={media.tool ?? ''}
                         onChange={(e) => chooseTool(media.pluginId ?? '', e.target.value)}
                       >
@@ -446,9 +472,14 @@ export function CanvasMediaNode({
                     </label>
                     {!existing && (
                       <>
-                        {parameter(tr('生成模型'), mediaFieldNames.model, media.model, (model) =>
-                          update({ model }),
-                        )}
+                        {!media.modelProviderId &&
+                          parameter(tr('生成模型'), mediaFieldNames.model, media.model, (model) =>
+                            update({
+                              model,
+                              modelProviderId: undefined,
+                              registeredModel: undefined,
+                            }),
+                          )}
                         {parameter(
                           tr('画面比例'),
                           mediaFieldNames.aspectRatio,

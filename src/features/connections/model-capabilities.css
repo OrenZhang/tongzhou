@@ -1,0 +1,28 @@
+.model-capability-fields > label,
+.model-media-binding > label,
+.canvas-model-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.model-capability-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+  gap: 8px 12px;
+  margin: 12px 0;
+}
+.model-media-binding {
+  display: grid;
+  gap: 8px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+.canvas-model-picker select {
+  width: 100%;
+  min-width: 0;
+}
+.canvas-model-picker small {
+  font-weight: normal;
+  opacity: 0.75;
+}

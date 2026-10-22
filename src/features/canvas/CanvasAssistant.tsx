@@ -197,7 +197,7 @@ export function CanvasAssistant({
   const models = data.providers
     .filter((p) => p.enabled !== false)
     .flatMap((p) =>
-      p.models.map((model) => ({
+      conversationModels(p).map((model) => ({
         key: JSON.stringify([p.id, model]),
         label: `${providerLabel(p)} · ${p.modelLabels?.[model] ?? model}`,
       })),
@@ -582,3 +582,4 @@ export function CanvasAssistant({
     </section>
   );
 }
+import { conversationModels } from '../../shared/model-capabilities';

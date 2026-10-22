@@ -46,6 +46,7 @@ import { projectInstructions, commandResult } from '../tools/workspace';
 import { nativeEngine } from '../../services/accounts/native-engine';
 import { redact } from '../../services/storage/validation';
 import { automaticModel, routeModel } from '../../../src/shared/model-protocol';
+import { supportsConversation } from '../../../src/shared/model-capabilities';
 
 export interface TaskResources extends DomainServices {
   events: ApplicationEvents;
@@ -382,6 +383,8 @@ export class TaskScheduler implements TaskService {
       routing = selected.routing;
       input = { ...input, providerId: provider.id, model: selected.model };
     }
+    if (!operation && !supportsConversation(provider, input.model))
+      throw new Error('此模型未标记文本生成能力，请选择对话模型，或在画布中使用生成节点');
     const project =
       session.projectId && !session.knowledgeJob
         ? this.store.get<Project>('project', session.projectId)

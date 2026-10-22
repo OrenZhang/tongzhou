@@ -837,11 +837,13 @@ export function CanvasWorkspace({
                     onChange={(e) => patch({ model: e.target.value || undefined })}
                   >
                     <option value="">{tr('跟随执行会话')}</option>
-                    {data.providers
-                      .find((p) => p.id === (node.providerId || ownerSession?.providerId))
-                      ?.models.map((m) => (
-                        <option key={m}>{m}</option>
-                      ))}
+                    {conversationModels(
+                      data.providers.find(
+                        (p) => p.id === (node.providerId || ownerSession?.providerId),
+                      ),
+                    ).map((m) => (
+                      <option key={m}>{m}</option>
+                    ))}
                   </select>
                 </label>
                 <label>
@@ -1753,3 +1755,4 @@ export function CanvasWorkspace({
 }
 
 const canvasNodeKinds = localized(raw_canvasNodeKinds);
+import { conversationModels } from '../../shared/model-capabilities';

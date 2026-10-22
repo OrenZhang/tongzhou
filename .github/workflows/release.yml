@@ -52,7 +52,7 @@ jobs:
       - shell: bash
         run: $SMOKE_PREFIX npm run test:desktop
       - shell: bash
-        run: $SMOKE_PREFIX node scripts/testing/regression.mjs --only=canvas-routing,whiteboard,studio-library
+        run: $SMOKE_PREFIX node scripts/testing/regression.mjs --only=model-capabilities,canvas-routing,whiteboard,studio-library
       - shell: bash
         run: $SMOKE_PREFIX npm run test:workspace-layout
       - shell: bash

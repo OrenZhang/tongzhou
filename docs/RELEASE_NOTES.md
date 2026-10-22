@@ -1,32 +1,28 @@
-# CoSail v1.0.4
+# CoSail v1.0.5
 
 **同舟 CoSail · 与 AI 同行，让想法抵达。**
 
-本版完善创作工作台，将节点工作流、自由白板和 AI 协作接入同一入口。
+本版打通模型能力与画布选择，补齐内容库的手动分类和引用维护。
 
-- **创作入口**：打开后选择工作流画布或白板，支持继续最近的创作。节点库默认显示紧凑图标，可展开、收起和拖入节点。
-- **可编辑白板**：集成 Excalidraw，支持绘图、图片、画框、素材库、原生文件导入导出及 PNG/SVG 导出。AI 可创建和修改图形、布局及绑定箭头，移动图形时连线跟随；支持撤销、保存与冲突提示。编辑器和字体随应用打包。
-- **专属 Agent 与技能**：新建画布和白板自动关联对应 Agent、工具及内置技能；涵盖流程图、工作流、人物三视图、参考图及媒体生成。生成能力仍需配置可用插件，按真实工具结果判断完成。
-- **节点编辑**：点击节点直接编辑配置，配置与聊天使用独立浮窗；缩小连接点，悬停再显示端口名称；调整媒体布局，移除重复标题和多余按钮。
-- **素材与来源**：支持关联内容库、作品、会话消息、项目文件和导入本地文件；文本类节点支持外部地址。完善媒体结果保存、资源引用及失败重试。
-- **智库整理**：内容库置于首位；新增紧凑的创作列表，支持搜索、筛选、重命名、删除和直接打开。作品日期分组可折叠，并记住状态。
-- **界面与可靠性**：补充中英文文案、优化弹窗边距和模块导航，统一通知目标选择；扩展画布、白板、会话关联和智库的自动回归检查。
+- **模型与画布**：分别标记文本、图片理解、图像/视频/音频生成等能力，绑定实际媒体工具；画布按节点与模式筛选。工具目录明确列出模型时可辅助匹配，多个工具同名时由用户选择。
+- **执行一致性**：界面与 AI 使用同一生成模型目录；检查模型枚举、工具可用性和参考图/首尾帧模式。绑定变更时明确提示，不静默切换服务。媒体专用模型不会被自动路由到聊天接口。
+- **通用内容库**：增加类型与标签筛选，支持手动维护目录、自定义类型、标签及来源引用。保留稳定文档 ID 和版本；单独调整分类不会刷新已有来源版本，并发修改时拒绝覆盖。
+- **漫剧技能**：完善项目公共资产、章节引用、提示词及生成记录的维护规范，复用现有内容库，不把个人知识库固定成漫剧结构。
+- **本次 main 累积更新**：包含 ComfyUI 工作流接入、漫剧制作资料及 Tauri 桌面宿主预览。ComfyUI 的真实模型出图仍需用户服务验收；正式下载继续提供 Electron 安装包。
 
-白板提供本地编辑与 AI 协作，不包含 excalidraw.com 在线房间或多人实时协作服务。
+能力标记不会凭空增加接口支持。生成使用所绑定插件的连接与认证；不包含任意 OpenAI 兼容地址的通用媒体直连、infinite-canvas 远程节点插件兼容或 WebDAV 同步。语音识别目前仅记录能力，没有新增转写节点。
 
 ## English
 
 **CoSail · Sail with AI. Bring ideas to life.**
 
-- **Studio** brings workflow canvases and Excalidraw whiteboards together, with compact creation choices, recent files and a collapsible node palette.
-- **Editable whiteboards** support drawing, images, frames, libraries, native files and PNG/SVG export. AI can edit shapes, layouts and bound arrows, with undo, local saving and conflict handling. The editor and fonts are bundled locally.
-- **Dedicated agents and skills** connect each creation mode to its tools, covering diagrams, workflows, character turnarounds, reference images and media generation through configured plugins.
-- **Node editing** opens on click. Configuration and chat use separate floating panels; smaller ports reveal labels on hover, and media previews use space more effectively.
-- **Resources** can come from the content library, artifacts, messages, project files or local uploads. Text-based nodes can also load external URLs. Media saving, references and retry behavior are improved.
-- **Knowledge Center** puts the content library first and adds a compact Studio list with search, filters, rename, delete and direct reopening. Artifact date groups remember their collapsed state.
-- **Polish and validation** include Chinese/English copy, dialog spacing, module navigation, notification targets and expanded desktop regression coverage.
+- **Models and canvas**: classify model capabilities separately and bind image, video or audio generation to actual tools. Canvas choices are filtered by node and mode; exact tool-catalog IDs assist configuration without guessing from names.
+- **Consistent execution**: the UI and AI share the same generation catalog. Model IDs, available tools and reference/frame modes are validated. Changed bindings require reselection; media-only models are excluded from chat routing.
+- **General-purpose content library**: filter by type and tags, edit folders and custom metadata, and maintain versioned source references. Classification changes preserve source versions, and concurrent edits cannot silently overwrite content.
+- **Comic-production skill**: project assets, chapter references, prompt variants and generation records use the shared content library without imposing a comic-specific structure on personal knowledge.
+- **Accumulated main updates** include ComfyUI workflow integration, production references and a Tauri host preview. Official installers remain Electron-based; live ComfyUI generation requires validation against your service.
 
-Whiteboards support local editing and AI assistance; hosted multiplayer rooms and Excalidraw cloud accounts are not included.
+Generation uses the bound plugin's connection and credentials. Capability labels do not add unsupported APIs. Generic media endpoints, remote infinite-canvas plugins and WebDAV sync are not included; transcription is a capability label only.
 
 ## 安装包 / Downloads
 

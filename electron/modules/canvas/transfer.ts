@@ -74,7 +74,13 @@ function portable(node: CanvasNode): CanvasNode {
     if (n.pluginId === 'workflow.notify') delete n.config!.targetId;
   }
   if (n.media) {
-    const { pluginId: _mp, destination: _d, ...media } = n.media;
+    const {
+      pluginId: _mp,
+      destination: _d,
+      modelProviderId: _modelProvider,
+      registeredModel: _registered,
+      ...media
+    } = n.media;
     n.media = {
       ...media,
       parameters: media.parameters ? publicConfig(media.parameters) : undefined,

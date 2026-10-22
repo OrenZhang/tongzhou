@@ -93,6 +93,8 @@ export function switchCanvasMediaTool(
   if (!sameTool && Object.keys(current.parameters ?? {}).length) reset.push('parameters');
   const media: CanvasMedia = {
     ...current,
+    modelProviderId: undefined,
+    registeredModel: undefined,
     pluginId,
     tool: tool?.name,
     mode,

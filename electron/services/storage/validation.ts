@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { normalizeProxyUrl } from '../../../src/shared/provider-network';
 import { apiProtocols, automaticModel } from '../../../src/shared/model-protocol';
 import { reasoningEfforts } from '../../../src/shared/model-reasoning';
+import { modelCapabilities } from '../../../src/shared/model-capabilities';
 const id = z
   .string()
   .min(1)
@@ -68,6 +69,44 @@ export const providerSchema = z
       )
       .optional(),
     modelLabels: z.record(z.string().max(200), z.string().max(200)).optional(),
+    modelCapabilities: z
+      .record(
+        z.string().trim().min(1).max(200),
+        z
+          .object({
+            capabilities: z
+              .array(
+                z.enum(
+                  Object.keys(modelCapabilities) as [
+                    keyof typeof modelCapabilities,
+                    ...(keyof typeof modelCapabilities)[],
+                  ],
+                ),
+              )
+              .max(9),
+            bindings: z
+              .object(
+                Object.fromEntries(
+                  ['image', 'video', 'audio'].map((kind) => [
+                    kind,
+                    z
+                      .object({
+                        pluginId: id,
+                        tool: z.string().min(1).max(200),
+                        model: z.string().trim().min(1).max(200).optional(),
+                      })
+                      .strict()
+                      .optional(),
+                  ]),
+                ),
+              )
+              .strict()
+              .optional(),
+          })
+          .strict(),
+      )
+      .refine((v) => Object.keys(v).length <= 200, '单个连接最多配置 200 个模型能力')
+      .optional(),
     modelProtocols: z
       .record(z.string().trim().min(1).max(200), z.enum(apiProtocols))
       .refine((value) => Object.keys(value).length <= 200, '单个连接最多配置 200 个模型协议')

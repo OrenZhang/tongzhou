@@ -4,6 +4,7 @@ import { createWriteStream } from 'node:fs';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 const suites = [
+  'model-capabilities',
   'canvas',
   'canvas-chat',
   'comfyui',

@@ -41,6 +41,47 @@ function fixture() {
   return { root, store, knowledge, content, library, document, session, tools };
 }
 describe('generic content workspace', () => {
+  it('moves and classifies a document without refreshing source versions or breaking references', () => {
+    const f = fixture();
+    const source = f.document;
+    const derived = f.content.write({
+      libraryId: f.library.id,
+      title: 'Research note',
+      content: 'Notes',
+      sourceIds: [source.id],
+    });
+    f.content.write({
+      id: source.id,
+      version: source.version,
+      libraryId: f.library.id,
+      title: source.title,
+      content: 'Changed source',
+    });
+    const classified = f.content.write({
+      id: derived.id,
+      version: derived.version,
+      libraryId: f.library.id,
+      title: derived.title,
+      content: derived.content,
+      contentType: 'research/note',
+      tags: ['study'],
+      folderId: null,
+    });
+    expect(classified.id).toBe(derived.id);
+    expect(classified.sources.find((s) => s.id === source.id)?.version).toBe(source.version);
+    expect(classified.contentType).toBe('research/note');
+    expect(classified.tags).toEqual(['study']);
+    expect(() =>
+      f.content.write({
+        id: derived.id,
+        version: derived.version,
+        libraryId: f.library.id,
+        title: 'stale',
+        content: 'stale',
+      }),
+    ).toThrow();
+    expect(f.content.document(derived.id).content).toBe('Notes');
+  });
   it('starts scoped collaboration for supported image originals while retaining the unsupported-file boundary', async () => {
     const f = fixture();
     const image = f.knowledge.importFile(

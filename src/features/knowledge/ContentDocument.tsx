@@ -53,6 +53,7 @@ export function ContentDocument({
   const menu = useRef<HTMLDetailsElement>(null);
   const [history, setHistory] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [properties, setProperties] = useState<KnowledgeDocument>();
   const [sessionId, setSessionId] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [prompt, setPrompt] = useState('');
@@ -62,7 +63,7 @@ export function ContentDocument({
     data.providers.find((p) => p.enabled !== false)?.id ?? '',
   );
   const [model, setModel] = useState(
-    data.providers.find((p) => p.enabled !== false)?.models[0] ?? '',
+    conversationModels(data.providers.find((p) => p.enabled !== false))[0] ?? '',
   );
   const [selection, setSelection] = useState<{ start: number; end: number; text: string }>();
   const dirty = () =>
@@ -299,6 +300,17 @@ export function ContentDocument({
   return (
     <>
       <main className="content-editor">
+        {properties && (
+          <ContentProperties
+            api={api}
+            document={properties}
+            onClose={() => setProperties(undefined)}
+            onSaved={async () => {
+              await load();
+              await onChange();
+            }}
+          />
+        )}
         {error && (
           <p className="danger" role="alert">
             {error}
@@ -349,6 +361,20 @@ export function ContentDocument({
                       <button className="text-button" onClick={() => void perform(copy)}>
                         {tr('另存副本')}
                       </button>
+                      {read.document.origin !== 'import' && (
+                        <button
+                          className="text-button"
+                          onClick={() =>
+                            void perform(async () => {
+                              await save();
+                              const current = await api.knowledgeRead(documentId);
+                              setProperties(current.document);
+                            })
+                          }
+                        >
+                          {tr('内容属性与来源')}
+                        </button>
+                      )}
                       <button
                         className="text-button"
                         onClick={() =>
@@ -627,7 +653,7 @@ export function ContentDocument({
                     options={data.providers
                       .filter((p) => p.enabled !== false)
                       .flatMap((p) =>
-                        p.models.map((m) => ({
+                        conversationModels(p).map((m) => ({
                           value: JSON.stringify([p.id, m]),
                           label: p.modelLabels?.[m] ?? m,
                           detail: p.name,
@@ -696,3 +722,5 @@ export function ContentDocument({
     </>
   );
 }
+import { conversationModels } from '../../shared/model-capabilities';
+import { ContentProperties } from './ContentProperties';

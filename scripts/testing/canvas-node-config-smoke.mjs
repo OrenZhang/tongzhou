@@ -76,7 +76,11 @@ try {
             : definition.kind === 'resource'
               ? '自定义提示词'
               : '处理要求');
-      if (definition.kind !== 'save') {
+      if (definition.id === 'comfyui.workflow') {
+        await config
+          .getByLabel('API 工作流 JSON', { exact: true })
+          .fill('{"1":{"class_type":"Synthetic","inputs":{}}}');
+      } else if (definition.kind !== 'save') {
         await config.getByLabel(label, { exact: true }).fill('手动编辑内容');
       }
       if (definition.id === 'visual.sticky-note') {
@@ -91,7 +95,11 @@ try {
     const savedNode = saved.canvas.nodes[0];
     if (!['image', 'video'].includes(definition.kind)) {
       assert.equal(savedNode.title, `手动 ${definition.name}`);
-      if (definition.kind !== 'save') assert.equal(savedNode.text, '手动编辑内容');
+      if (definition.id === 'comfyui.workflow')
+        assert.deepEqual(JSON.parse(savedNode.config.workflow), {
+          1: { class_type: 'Synthetic', inputs: {} },
+        });
+      else if (definition.kind !== 'save') assert.equal(savedNode.text, '手动编辑内容');
     }
     await node.locator('header').click();
     await config.waitFor();

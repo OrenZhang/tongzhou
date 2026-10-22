@@ -23,6 +23,8 @@ export function ContentWorkspace({
   const libraryRef = useRef(library);
   const [folder, setFolder] = useState('*');
   const [query, setQuery] = useState('');
+  const [contentType, setContentType] = useState('');
+  const [tag, setTag] = useState('');
   const [state, setState] = useState<ContentState>();
   const [documentId, setDocumentId] = useState(initialDocument?.id ?? '');
   const [chat, setChat] = useState(true);
@@ -69,6 +71,8 @@ export function ContentWorkspace({
       content: '',
     });
     setQuery('');
+    setContentType('');
+    setTag('');
     setDocumentId(doc.id);
   };
   return (
@@ -96,6 +100,8 @@ export function ContentWorkspace({
               );
               if (result.imported[0]) {
                 setQuery('');
+                setContentType('');
+                setTag('');
                 setDocumentId(result.imported[0].id);
               }
               if (result.errors.length) setError(result.errors.join('；'));
@@ -123,15 +129,56 @@ export function ContentWorkspace({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
+          <div className="content-filters">
+            <select
+              aria-label={tr('筛选内容类型')}
+              value={contentType}
+              onChange={(e) => setContentType(e.target.value)}
+            >
+              <option value="">{tr('全部类型')}</option>
+              {[
+                ...new Set([
+                  ...(state?.documents.map((d) => d.contentType).filter(Boolean) ?? []),
+                  ...(contentType ? [contentType] : []),
+                ]),
+              ]
+                .sort()
+                .map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+            </select>
+            <select
+              aria-label={tr('筛选标签')}
+              value={tag}
+              onChange={(e) => setTag(e.target.value)}
+            >
+              <option value="">{tr('全部标签')}</option>
+              {[
+                ...new Set([
+                  ...(state?.documents.flatMap((d) => d.tags) ?? []),
+                  ...(tag ? [tag] : []),
+                ]),
+              ]
+                .sort()
+                .map((value) => (
+                  <option key={value}>{value}</option>
+                ))}
+            </select>
+          </div>
           <KnowledgeFolders
             api={api}
             folders={state?.folders ?? []}
             libraryId={library}
             selected={folder}
-            documents={state?.documents ?? []}
+            documents={(state?.documents ?? []).filter(
+              (d) =>
+                (!contentType || d.contentType === contentType) && (!tag || d.tags.includes(tag)),
+            )}
             selectedDocument={documentId}
             onOpenDocument={setDocumentId}
-            searching={!!query.trim()}
+            searching={!!query.trim() || !!contentType || !!tag}
             onSelect={setFolder}
             onChanged={refresh}
           />
@@ -147,6 +194,8 @@ export function ContentWorkspace({
             onChange={refresh}
             onOpen={(id) => {
               setQuery('');
+              setContentType('');
+              setTag('');
               setDocumentId(id);
             }}
             onArtifact={onArtifact}

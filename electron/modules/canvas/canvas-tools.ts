@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { mediaModelCatalog } from '../../../src/shared/model-capabilities';
 import type { Store } from '../../services/storage/store';
 import type { ToolScope } from '../../core/tools/extensions';
 import type { Session, PluginConfig } from '../../../src/shared/types';
@@ -99,6 +100,23 @@ export function attachCanvasTools(
       nodePlugins: canvases.plugins
         .list()
         .map(({ id, name, kind, description, ports }) => ({ id, name, kind, description, ports })),
+      mediaModels: (['image', 'video', 'audio'] as const).flatMap((kind) =>
+        mediaModelCatalog(store.providers(), store.list<PluginConfig>('plugin'), kind).map((c) => ({
+          kind,
+          capabilities: c.capabilities,
+          providerId: c.providerId,
+          model: c.model,
+          label: c.label,
+          issue: c.issue,
+          media: {
+            modelProviderId: c.providerId,
+            registeredModel: c.model,
+            model: c.wireModel,
+            pluginId: c.binding?.pluginId,
+            tool: c.binding?.tool,
+          },
+        })),
+      ),
       mediaTools: store
         .list<PluginConfig>('plugin')
         .filter((p) => p.enabled)
