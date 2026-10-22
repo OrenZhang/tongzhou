@@ -219,10 +219,14 @@ try {
   await branchRow.hover();
   await branchRow.getByRole('button', { name: '删除会话', exact: true }).click();
   await page.getByRole('button', { name: '确认删除', exact: true }).click();
-  await page.waitForFunction(
-    async (id) => !(await window.tongzhou.snapshot()).sessions.some((s) => s.id === id),
-    branch.id,
-  );
+  // waitForFunction treats a Promise as truthy; poll the resolved IPC snapshot instead.
+  const deletionDeadline = Date.now() + 15000;
+  while (
+    (await page.evaluate(() => window.tongzhou.snapshot())).sessions.some((s) => s.id === branch.id)
+  ) {
+    assert(Date.now() < deletionDeadline, 'Archived branch deletion did not finish');
+    await page.waitForTimeout(100);
+  }
   assert.equal((await page.evaluate(() => window.tongzhou.snapshot())).sessions.length, 1);
   checks.push('history quote and independent branch', 'archive deletion');
   await page.getByRole('button', { name: '设置', exact: true }).click();

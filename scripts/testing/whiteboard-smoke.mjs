@@ -268,12 +268,13 @@ try {
     await readFile(imagePath, 'utf8'),
   );
   await page.getByTestId('toolbar-image').locator('..').click();
-  await poll(async () => Object.keys((await read()).whiteboard.files).length > 0);
   // File ingestion precedes image decoding. The native image cursor signals
   // placement readiness; a fixed delay races slower CI renderers.
   await page.waitForFunction(() =>
     document.querySelector('.excalidraw canvas.interactive')?.style.cursor.startsWith('url('),
   );
+  // Leave the image on the cursor past autosave, as a user choosing its position would.
+  await page.waitForTimeout(1500);
   const imageBounds = await board.boundingBox();
   await page.mouse.move(imageBounds.x + 550, imageBounds.y + 550);
   await page.mouse.down();
@@ -282,6 +283,7 @@ try {
   await poll(async () =>
     (await read()).whiteboard.elements.some((e) => e.type === 'image' && !e.isDeleted),
   );
+  assert(Object.keys((await read()).whiteboard.files).length > 0);
   await page.keyboard.press('Escape');
   for (const [format, label] of [
     ['excalidraw', '导出可编辑白板'],

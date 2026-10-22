@@ -185,14 +185,17 @@ export default function WhiteboardBoard({
         handleKeyboardGlobally={false}
         viewModeEnabled={blocked}
         aiEnabled={false}
-        onChange={(elements, state, files) =>
+        onChange={(elements, state, files) => {
+          // The cursor image is a temporary zero-size element. Persisting and restoring
+          // it before placement drops it from Excalidraw's scene, leaving a dangling cursor.
+          if (state.pendingImageElementId) return;
           publish({
             elements: elements as unknown as WhiteboardScene['elements'],
             appState: storedState(state),
             files: files as unknown as WhiteboardScene['files'],
             libraryItems: latest.current.whiteboard?.libraryItems ?? [],
-          })
-        }
+          });
+        }}
         onLibraryChange={(libraryItems) => {
           if (json(libraryItems) === lastLibrary.current) return;
           lastLibrary.current = json(libraryItems);

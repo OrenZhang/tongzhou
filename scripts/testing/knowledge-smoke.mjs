@@ -242,7 +242,7 @@ try {
   await page.locator(`[data-session-id="${organizeId}"]`).click();
   await page
     .getByText('已保存库存处理 Wiki 草稿，保留来源及待验证事项。', { exact: true })
-    .waitFor();
+    .waitFor({ timeout: 60000 });
   await page.waitForFunction(
     async () => !(await window.tongzhou.snapshot()).runs.some((r) => r.status === 'running'),
   );
@@ -449,6 +449,24 @@ try {
   console.log(
     'Knowledge desktop passed: import, notes, revisions, model tool synthesis, source links, scoped context, auto capture, reload, client catalog, light/dark, unified content navigation, folder deletion confirmation and document preservation.',
   );
+} catch (error) {
+  const page = await app.firstWindow();
+  await page.screenshot({ path: path.join(root, 'failure.png') }).catch(() => {});
+  const runs = await page
+    .evaluate(async () =>
+      (await window.tongzhou.snapshot()).runs.map(({ status, error, phase, agentName }) => ({
+        status,
+        error,
+        phase,
+        agentName,
+      })),
+    )
+    .catch(() => []);
+  console.error(
+    'Knowledge diagnostic',
+    JSON.stringify({ runs, errors, requestCount: requests.length }),
+  );
+  throw error;
 } finally {
   await app.close();
   server.closeAllConnections();
