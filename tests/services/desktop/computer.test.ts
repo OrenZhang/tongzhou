@@ -1,6 +1,16 @@
-import { describe, it, expect, vi } from 'vitest';
-vi.mock('electron', () => ({ desktopCapturer: { getSources: vi.fn() }, systemPreferences: {} }));
-import { desktopCapturer } from 'electron';
+import { afterEach, describe, it, expect, vi } from 'vitest';
+vi.mock('electron', () => ({
+  desktopCapturer: { getSources: vi.fn() },
+  systemPreferences: {},
+  nativeImage: { createFromBuffer: vi.fn() },
+}));
+vi.mock('../../../electron/services/desktop/linux-computer', () => ({
+  x11Available: vi.fn(() => true),
+  x11Run: vi.fn(),
+  rgbaToPng: vi.fn(() => Buffer.from('png')),
+}));
+import { desktopCapturer, nativeImage } from 'electron';
+import { x11Run } from '../../../electron/services/desktop/linux-computer';
 import { DesktopComputer } from '../../../electron/services/desktop/electron-computer';
 import {
   actionSchema,
@@ -8,6 +18,12 @@ import {
   observedWindow,
 } from '../../../electron/services/desktop/computer';
 describe('computer tool boundaries', () => {
+  const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')!;
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', platformDescriptor);
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+  });
   it('targets only the owned modal of a disabled window, never unrelated windows', () => {
     const bounds = { x: 0, y: 0, width: 100, height: 100 };
     const parent = { id: '1', pid: 10, title: 'App', enabled: false, bounds };
@@ -45,6 +61,7 @@ describe('computer tool boundaries', () => {
     expect(computer.specs(false)).toHaveLength(7);
   });
   it('retries a newly shown window without using another window image', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' });
     const computer = new DesktopComputer();
     vi.spyOn(computer, 'status').mockReturnValue({
       supported: true,
@@ -84,5 +101,31 @@ describe('computer tool boundaries', () => {
       computer.execute('computer_screenshot', { windowId: '123' }, new AbortController().signal),
     ).rejects.toThrow('未获取目标窗口图像');
     expect(capture).toHaveBeenCalledTimes(3);
+  });
+  it('captures only the requested X11 window without opening the desktop capture portal', async () => {
+    Object.defineProperty(process, 'platform', { value: 'linux' });
+    const computer = new DesktopComputer();
+    vi.spyOn(computer as any, 'helper').mockResolvedValue([
+      { id: '123', title: 'X11 fixture', pid: 10, bounds: { x: 0, y: 0, width: 2, height: 2 } },
+    ]);
+    vi.mocked(x11Run).mockResolvedValue({ width: 2, height: 2, data: Buffer.alloc(16) });
+    vi.mocked(nativeImage.createFromBuffer).mockReturnValue({
+      isEmpty: () => false,
+      getSize: () => ({ width: 2, height: 2 }),
+      toJPEG: () => Buffer.from('x11-window'),
+    } as any);
+    const result = await computer.execute(
+      'computer_screenshot',
+      { windowId: '123' },
+      new AbortController().signal,
+    );
+    expect(x11Run).toHaveBeenCalledWith({ action: 'capture', windowId: '123', pid: 10 });
+    expect(desktopCapturer.getSources).not.toHaveBeenCalled();
+    expect(result.images?.[0].data).toBe(Buffer.from('x11-window').toString('base64'));
+    vi.mocked(x11Run).mockRejectedValueOnce(new Error('window disappeared'));
+    await expect(
+      computer.execute('computer_screenshot', { windowId: '123' }, new AbortController().signal),
+    ).rejects.toThrow('未获取目标窗口图像');
+    expect(desktopCapturer.getSources).not.toHaveBeenCalled();
   });
 });
