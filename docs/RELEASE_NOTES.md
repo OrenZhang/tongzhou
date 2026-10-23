@@ -9,6 +9,7 @@
 - **通用内容库**：增加类型与标签筛选，支持手动维护目录、自定义类型、标签及来源引用。保留稳定文档 ID 和版本；单独调整分类不会刷新已有来源版本，并发修改时拒绝覆盖。
 - **漫剧技能**：完善项目公共资产、章节引用、提示词及生成记录的维护规范，复用现有内容库，不把个人知识库固定成漫剧结构。
 - **白板插图**：修复选好图片后停留等待放置，自动保存导致图片无法落位的问题。
+- **会话稳定性**：技能策略初始化遇到临时文件写入失败时有限重试，持续失败仍停止；不会重复模型请求或生成任务。
 - **本次 main 累积更新**：包含 ComfyUI 工作流接入、漫剧制作资料及 Tauri 桌面宿主预览。ComfyUI 的真实模型出图仍需用户服务验收；正式下载继续提供 Electron 安装包。
 
 能力标记不会凭空增加接口支持。生成使用所绑定插件的连接与认证；不包含任意 OpenAI 兼容地址的通用媒体直连、infinite-canvas 远程节点插件兼容或 WebDAV 同步。语音识别目前仅记录能力，没有新增转写节点。
@@ -22,6 +23,7 @@
 - **General-purpose content library**: filter by type and tags, edit folders and custom metadata, and maintain versioned source references. Classification changes preserve source versions, and concurrent edits cannot silently overwrite content.
 - **Comic-production skill**: project assets, chapter references, prompt variants and generation records use the shared content library without imposing a comic-specific structure on personal knowledge.
 - **Whiteboard images**: preserve a pending cursor image while choosing its position; autosave no longer removes it before placement.
+- **Session reliability**: bounded retries handle transient skill-policy configuration writes during initialization, without replaying model requests or generation tasks.
 - **Accumulated main updates** include ComfyUI workflow integration, production references and a Tauri host preview. Official installers remain Electron-based; live ComfyUI generation requires validation against your service.
 
 Generation uses the bound plugin's connection and credentials. Capability labels do not add unsupported APIs. Generic media endpoints, remote infinite-canvas plugins and WebDAV sync are not included; transcription is a capability label only.

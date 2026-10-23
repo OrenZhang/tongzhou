@@ -20,6 +20,7 @@ import { Store } from '../../services/storage/store';
 import { ToolScope } from '../tools/extensions';
 import { nativeEngine } from '../../services/accounts/native-engine';
 import { CodexClient } from './codex';
+import { disableNativeSkill } from './skill-policy';
 import { modelGateway } from '../models/model-gateway';
 import { nativeModelConnection } from '../models/native-model';
 import { CodexSessions } from './codex-sessions';
@@ -552,7 +553,7 @@ export class CodexExecution implements ExecutionAdapter {
         for (const entry of skills.data ?? [])
           for (const skill of entry.skills ?? [])
             if (skill.enabled !== false)
-              await client.request('skills/config/write', { path: skill.path, enabled: false });
+              await disableNativeSkill(client, skill.path, signal);
       }
       if (signal.aborted) throw new Error('已停止');
       this.ports.progress(run, 'phase', '检查账号状态');
