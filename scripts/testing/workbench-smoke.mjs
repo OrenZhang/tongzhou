@@ -364,7 +364,8 @@ try {
   await page.getByRole('button', { name: /^内置插件/ }).click();
   assert.equal(await page.getByRole('button', { name: /^工作插件|^内置与自定义/ }).count(), 0);
   const detail = page.locator('.plugin-detail-page');
-  assert.equal(await page.locator('.plugin-library .plugin-tile').count(), 14);
+  assert.equal(await page.locator('.plugin-library .plugin-tile').count(), 15);
+  await page.getByRole('heading', { name: 'ComfyUI', exact: true }).waitFor();
   await capture('builtin-plugin-library-all');
   assert.equal(await page.getByRole('button', { name: '添加插件', exact: true }).count(), 0);
   await page.getByLabel('类型', { exact: true }).selectOption('mcp');
@@ -376,7 +377,7 @@ try {
   await page.getByRole('heading', { name: '技能创建', exact: true }).waitFor();
   assert.equal(await page.getByRole('button', { name: '移除', exact: true }).count(), 0);
   await page.getByLabel('类型', { exact: true }).selectOption('app');
-  assert.equal(await page.locator('.plugin-library .plugin-tile').count(), 6);
+  assert.equal(await page.locator('.plugin-library .plugin-tile').count(), 7);
   await capture('builtin-plugin-library');
   await page.getByLabel('搜索插件', { exact: true }).fill('Figma');
   assert.equal(await page.locator('.work-plugins .plugin-tile').count(), 1);
