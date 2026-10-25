@@ -10,6 +10,7 @@ import { knowledgeFolderForTool } from '../../../src/shared/knowledge';
 import type { Session } from '../../../src/shared/types';
 import type { ArtifactPreview } from '../../../src/shared/artifacts';
 import { projectFamilyId } from '../../../src/shared/projects';
+import { imagePreview } from '../artifacts/image-preview';
 
 export const libraryIdSchema = z.union([z.literal('default'), z.string().uuid()]);
 export const librarySchema = z.object({
@@ -172,18 +173,10 @@ export class ContentWorkspace {
           }
         : { type: 'file' };
     }
-    if (!['.png', '.jpg', '.jpeg', '.webp'].includes(ext)) return { type: 'file' };
+    if (!['.png', '.jpg', '.jpeg', '.webp', '.gif'].includes(ext)) return { type: 'file' };
     const bytes = this.knowledge.originalBytes(id);
     if (bytes.length > maxImageBytes) return { type: 'file' };
-    const mimeType = bytes.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex'))
-      ? 'image/png'
-      : bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255
-        ? 'image/jpeg'
-        : bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP'
-          ? 'image/webp'
-          : undefined;
-    if (!mimeType) throw new Error('图片原件格式无效');
-    return { type: 'image', content: `data:${mimeType};base64,${bytes.toString('base64')}` };
+    return imagePreview(bytes, maxImageBytes);
   }
   write(raw: ContentWrite, sessionId?: string, workspace = false) {
     const p = contentWriteSchema.parse(raw);

@@ -10,7 +10,8 @@ import { splitPluginId, splitCategories } from '../../shared/canvas-ports';
 import { registerCanvasDraft } from './draft-sync';
 import { CanvasAssistant } from './CanvasAssistant';
 import { mergeCanvasChanges } from '../../shared/canvas-collaboration';
-import { duplicateSelection, alignSelection } from '../../shared/canvas-editing';
+import { duplicateSelection, alignSelection, appendCanvasLoop } from '../../shared/canvas-editing';
+import { CanvasControlFields, CanvasIterationResults } from './CanvasControlFields';
 import {
   CanvasMediaFields,
   CanvasMediaResults,
@@ -524,6 +525,14 @@ export function CanvasWorkspace({
     const c = current.current;
     const plugin = state.plugins?.find((p) => p.id === pluginId);
     if (!c || !plugin || busy || conflictRef.current) return;
+    if (pluginId === 'workflow.foreach') {
+      try {
+        change(appendCanvasLoop(c, state.plugins ?? [], position));
+      } catch (error) {
+        setError(errorMessage(error));
+      }
+      return;
+    }
     if (pluginId === 'resource') {
       resourceDrop.current = position;
       setPicker('add');
@@ -713,6 +722,12 @@ export function CanvasWorkspace({
               node.kind !== 'save' &&
               node.definition?.adapter !== 'comfyui' &&
               node.pluginId !== 'comfyui.workflow' &&
+              ![
+                'workflow.condition',
+                'workflow.foreach',
+                'workflow.collect',
+                'workflow.join',
+              ].includes(node.pluginId ?? '') &&
               !inlineMedia && (
                 <label>
                   {tr(state.plugins?.find((p) => p.id === node.pluginId)?.view?.textLabel ?? '') ||
@@ -753,14 +768,32 @@ export function CanvasWorkspace({
             {node.kind === 'plugin' &&
               node.definition?.adapter !== 'comfyui' &&
               node.pluginId !== 'comfyui.workflow' &&
-              !['workflow.schedule', 'workflow.notify'].includes(node.pluginId ?? '') && (
+              !['workflow.schedule', 'workflow.notify'].includes(node.pluginId ?? '') &&
+              ([
+                'workflow.condition',
+                'workflow.foreach',
+                'workflow.collect',
+                'workflow.join',
+              ].includes(node.pluginId ?? '') ? (
+                <CanvasControlFields canvas={canvas} node={node} patch={patch} />
+              ) : (
                 <CanvasPluginFields
                   data={data}
                   definition={state.plugins?.find((p) => p.id === (node.pluginId ?? node.kind))}
                   node={node}
                   patch={patch}
                 />
-              )}
+              ))}
+            {shownRun?.nodes[node.id]?.iterations && (
+              <CanvasIterationResults
+                step={shownRun.nodes[node.id]}
+                canvas={shownRun.definition}
+                onTask={(id) => {
+                  const session = data.sessions.find((s) => s.id === id);
+                  if (session) onSession(session);
+                }}
+              />
+            )}
             {(node.definition?.adapter === 'comfyui' || node.pluginId === 'comfyui.workflow') && (
               <CanvasComfyFields
                 data={data}
@@ -1517,6 +1550,49 @@ export function CanvasWorkspace({
               </label>
               {canvas.mode !== 'whiteboard' && (
                 <>
+                  <label>
+                    {tr('最大并行节点数')}
+                    <input
+                      type="number"
+                      min={1}
+                      max={8}
+                      step={1}
+                      value={canvas.execution?.concurrency ?? 4}
+                      onChange={(e) =>
+                        change({
+                          ...canvas,
+                          execution: {
+                            maxSteps: canvas.execution?.maxSteps ?? 500,
+                            concurrency: Math.max(1, Math.min(8, Number(e.target.value) || 1)),
+                          },
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    {tr('总执行步数上限')}
+                    <input
+                      type="number"
+                      min={1}
+                      max={5000}
+                      step={1}
+                      value={canvas.execution?.maxSteps ?? 500}
+                      onChange={(e) =>
+                        change({
+                          ...canvas,
+                          execution: {
+                            concurrency: canvas.execution?.concurrency ?? 4,
+                            maxSteps: Math.max(1, Math.min(5000, Number(e.target.value) || 1)),
+                          },
+                        })
+                      }
+                    />
+                  </label>
+                  <small>
+                    {tr(
+                      '独立分支按依赖并行；循环每项顺序执行，循环内独立节点仍可并行。所有循环共用执行限额。',
+                    )}
+                  </small>
                   <label className="canvas-check">
                     <input
                       type="checkbox"
@@ -1554,6 +1630,12 @@ export function CanvasWorkspace({
                     ))}
                   </select>
                   {shownRun?.error && <p role="alert">{shownRun.error}</p>}
+                  {shownRun && (
+                    <small>
+                      {tr('已执行步数：')}
+                      {shownRun.stepsExecuted ?? '—'}
+                    </small>
+                  )}
                 </>
               )}
             </div>

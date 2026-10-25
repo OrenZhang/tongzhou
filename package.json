@@ -67,7 +67,8 @@
     "test:model-core": "node scripts/testing/model-gateway-smoke.mjs --auto-compact",
     "test:codex-platform": "node scripts/testing/codex-platform-smoke.mjs",
     "test:codex-interactions": "node scripts/testing/codex-interactions-smoke.mjs",
-    "probe:electron-node": "node scripts/testing/electron-node-probe.mjs"
+    "probe:electron-node": "node scripts/testing/electron-node-probe.mjs",
+    "test:canvas-controls": "node scripts/testing/canvas-control-flow-smoke.mjs"
   },
   "dependencies": {
     "@minimax-ai/code": "0.4.12",

@@ -40,6 +40,21 @@ export function splitCategories(node: CanvasNode): SplitCategory[] {
     : defaultSplitCategories;
 }
 const all: CanvasValueType[] = ['text', 'image', 'video', 'audio', 'resource'];
+export const canvasFailurePort = '$error';
+export function withFailurePort(ports: { inputs: CanvasPort[]; outputs: CanvasPort[] }) {
+  return {
+    ...ports,
+    outputs: [
+      ...ports.outputs.filter((p) => p.id !== canvasFailurePort),
+      {
+        id: canvasFailurePort,
+        label: '失败',
+        types: ['text', 'json'] as CanvasValueType[],
+        description: '节点失败时传递错误信息；取消和执行限额不会触发失败分支',
+      },
+    ],
+  };
+}
 const port = (
   id: string,
   label: string,
@@ -98,11 +113,11 @@ export function canvasPorts(
         },
     );
   if (definition?.dynamicOutputs === 'categories' || node.pluginId === splitPluginId)
-    return {
+    return withFailurePort({
       inputs: [port('context', '原文内容', ['text', 'resource'])],
       outputs: splitCategories(node).map((c) => port(c.id, c.label, ['text'], c.instruction)),
-    };
-  return base;
+    });
+  return withFailurePort(base);
 }
 export function validateCanvasPorts(
   edge: CanvasEdge,
@@ -116,6 +131,8 @@ export function validateCanvasPorts(
   const out = edge.fromPort ? outputs.find((p) => p.id === edge.fromPort) : undefined;
   const input = edge.toPort ? inputs.find((p) => p.id === edge.toPort) : undefined;
   if (edge.fromPort && !out) throw new Error('输出端口不存在：' + edge.fromPort);
+  if (edge.fromPort === canvasFailurePort && edge.kind !== 'dependency')
+    throw new Error('失败出口必须使用执行依赖连线');
   if (edge.toPort && !input) throw new Error('输入端口不存在：' + edge.toPort);
   if (
     out &&

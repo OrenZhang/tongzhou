@@ -232,6 +232,15 @@ try {
     1,
     'A failed regeneration keeps the previous image visible',
   );
+  await node.getByRole('button', { name: '预览媒体', exact: true }).click();
+  const preview = page.getByRole('dialog', { name: '画布媒体预览', exact: true });
+  await preview.locator('.canvas-media-lightbox').waitFor();
+  await page.waitForFunction(() => {
+    const image = document.querySelector('.canvas-media-lightbox');
+    return image?.complete && image.naturalWidth > 0;
+  });
+  assert.equal(await preview.getByText('没有可预览的媒体，原件可能已移除。').count(), 0);
+  await preview.getByRole('button', { name: '关闭', exact: true }).click();
   await panel.getByLabel('生成提示词', { exact: true }).fill('Portrait retry');
   assert.equal(await panel.getByRole('button', { name: '重生成', exact: true }).count(), 0);
   await panel.getByRole('button', { name: '重新生成', exact: true }).click();

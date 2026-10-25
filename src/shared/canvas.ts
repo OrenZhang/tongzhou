@@ -47,6 +47,7 @@ export interface CanvasNodePluginDefinition {
   source?: boolean;
   /** External effects and time-dependent nodes must execute on every run. */
   cache?: 'never';
+  control?: 'condition' | 'foreach' | 'collect' | 'join';
   view?: { renderer: string; textLabel?: string; resource?: 'image' };
   defaults?: Pick<CanvasNode, 'text' | 'config' | 'width' | 'height'>;
   inputs: CanvasValueType[];
@@ -123,6 +124,7 @@ export interface CanvasEdge {
   toPort?: string;
 }
 export interface Canvas {
+  execution?: { concurrency: number; maxSteps: number };
   mode?: 'workflow' | 'whiteboard';
   whiteboard?: import('./whiteboard').WhiteboardScene;
   id: string;
@@ -139,6 +141,10 @@ export type CanvasWrite = Omit<Canvas, 'id' | 'version' | 'updatedAt'> & {
   version?: number;
 };
 export interface CanvasOutput {
+  /** Foreach plugins may supply typed per-item input envelopes, including resource references. */
+  iterationInputs?: CanvasOutput[];
+  /** Only these named outputs activate dependency edges when present. */
+  activePorts?: string[];
   text: string;
   value?: unknown;
   prompt?: string;
@@ -158,7 +164,12 @@ export interface CanvasNodeRun {
   progress?: { value: number; max: number };
   externalStatus?: string;
   plugin?: { id: string; version: number };
-  status: 'pending' | 'running' | 'completed' | 'cached' | 'failed' | 'cancelled';
+  status: 'pending' | 'running' | 'completed' | 'cached' | 'failed' | 'cancelled' | 'skipped';
+  skipReason?: string;
+  handled?: boolean;
+  executionKey?: string;
+  iterationFingerprint?: string;
+  iterations?: CanvasIteration[];
   generation?: CanvasGenerationItem[];
   generationFingerprint?: string;
   fingerprint?: string;
@@ -170,7 +181,17 @@ export interface CanvasNodeRun {
   startedAt?: number;
   endedAt?: number;
 }
+export interface CanvasIteration {
+  external?: CanvasRun['external'];
+  index: number;
+  value: unknown;
+  status: 'running' | 'completed' | 'failed' | 'cancelled' | 'cached';
+  nodes: Record<string, CanvasNodeRun>;
+  output?: CanvasOutput;
+  error?: string;
+}
 export interface CanvasRun {
+  stepsExecuted?: number;
   id: string;
   canvasId: string;
   sessionId: string;
@@ -220,7 +241,15 @@ export interface CanvasState {
   runs: CanvasRun[];
 }
 export interface CanvasOperation {
-  type: 'put_node' | 'remove_node' | 'put_edge' | 'remove_edge' | 'select' | 'rename';
+  type:
+    | 'put_node'
+    | 'remove_node'
+    | 'put_edge'
+    | 'remove_edge'
+    | 'select'
+    | 'rename'
+    | 'configure_execution';
+  execution?: Canvas['execution'];
   node?: CanvasNode;
   edge?: CanvasEdge;
   id?: string;

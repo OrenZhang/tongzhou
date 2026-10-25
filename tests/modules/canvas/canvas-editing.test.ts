@@ -76,6 +76,44 @@ describe('canvas interaction contracts', () => {
     );
     expect(() => fillPrompt('{{风格}}', {})).toThrow('风格');
   });
+  it('remaps paired collection IDs when a loop is duplicated and leaves incomplete copies unpaired', () => {
+    const canvas: Canvas = {
+      id: 'canvas',
+      version: 1,
+      updatedAt: 0,
+      title: 'loop',
+      viewport: { x: 0, y: 0, zoom: 1 },
+      selection: ['loop', 'end'],
+      nodes: [
+        {
+          id: 'loop',
+          kind: 'plugin',
+          pluginId: 'workflow.foreach',
+          config: { endNodeId: 'end' },
+          title: 'loop',
+          x: 0,
+          y: 0,
+        },
+        { id: 'end', kind: 'plugin', pluginId: 'workflow.collect', title: 'end', x: 400, y: 0 },
+      ],
+      edges: [
+        {
+          id: 'edge',
+          kind: 'dependency',
+          from: 'loop',
+          to: 'end',
+          fromPort: 'item',
+          toPort: 'context',
+        },
+      ],
+    };
+    let id = 0;
+    const copied = duplicateSelection(canvas, () => String(++id));
+    expect(copied.nodes[2].config?.endNodeId).toBe(copied.nodes[3].id);
+    expect(duplicateSelection({ ...canvas, selection: ['loop'] }).nodes[2].config?.endNodeId).toBe(
+      '',
+    );
+  });
   it('waits for the correct session draft and propagates conflicts before sending', async () => {
     const events: string[] = [];
     let resolve!: () => void;

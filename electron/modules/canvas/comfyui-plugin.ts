@@ -132,7 +132,15 @@ export class ComfyNodePlugins {
       : undefined;
     if (resume && (resume.canvasId !== c.run.canvasId || resume.sessionId !== c.run.sessionId))
       throw new Error('只能继续当前画布与会话的任务');
-    const operation = this.comfyOperation(canvas, parsed.nodes, c.run, inputs, c.signal, resume);
+    const operation = this.comfyOperation(
+      canvas,
+      parsed.nodes,
+      c.run,
+      inputs,
+      c.signal,
+      resume,
+      c.run.nodes[c.node.id].executionKey,
+    );
     const output = await c.task(operation.operation, {
       providerId: 'canvas',
       model: 'ComfyUI',
@@ -153,6 +161,7 @@ export class ComfyNodePlugins {
     inputs: Map<string, CanvasOutput[]>,
     signal: AbortSignal,
     resume?: CanvasRun,
+    executionKey?: string,
   ) {
     let result: Awaited<ReturnType<ComfyWorkflows['execute']>> | undefined;
     let progress: (text: string) => void = () => {};
@@ -199,6 +208,7 @@ export class ComfyNodePlugins {
               progress,
               () => this.persist(run),
               resume,
+              executionKey,
             );
             return { text: result.text, artifacts: result.artifacts };
           },

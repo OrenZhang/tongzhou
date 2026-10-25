@@ -17,6 +17,39 @@ export function pluginCanvasNode(definition: CanvasNodePluginDefinition): Canvas
   };
 }
 
+/** A loop starts as a valid identity loop; insert processing nodes between item and collect. */
+export function appendCanvasLoop(
+  canvas: Canvas,
+  plugins: CanvasNodePluginDefinition[],
+  position?: { x: number; y: number },
+): Canvas {
+  if (canvas.nodes.length > 198) throw new Error('添加循环需要两个节点，请先腾出画布空间');
+  const startDef = plugins.find((p) => p.id === 'workflow.foreach');
+  const endDef = plugins.find((p) => p.id === 'workflow.collect');
+  if (!startDef || !endDef) throw new Error('遍历节点插件不可用');
+  const start = pluginCanvasNode(startDef),
+    end = pluginCanvasNode(endDef);
+  start.x = position?.x ?? nodeBounds(canvas.nodes).x + nodeBounds(canvas.nodes).width + 80;
+  start.y = position?.y ?? 80;
+  end.x = start.x + 640;
+  end.y = start.y;
+  if (end.x > 100000 || end.x < -100000 || Math.abs(start.y) > 100000)
+    throw new Error('循环节点超出画布范围，请调整放置位置');
+  start.config = { ...start.config, endNodeId: end.id };
+  return connectCanvasPorts(
+    { ...canvas, nodes: [...canvas.nodes, start, end], selection: [start.id] },
+    {
+      id: crypto.randomUUID(),
+      from: start.id,
+      fromPort: 'item',
+      to: end.id,
+      toPort: 'context',
+      kind: 'dependency',
+    },
+    plugins,
+  );
+}
+
 /** Create and connect in one history step, using the same validation as dragged edges. */
 export function appendConnectedCanvasNode(
   canvas: Canvas,
@@ -114,6 +147,11 @@ export function duplicateSelection(
         x: Math.min(100000, n.x + 40),
         y: Math.min(100000, n.y + 40),
         group: n.group ? groups.get(n.group) : undefined,
+        ...(n.pluginId === 'workflow.foreach'
+          ? {
+              config: { ...n.config, endNodeId: ids.get(String(n.config?.endNodeId)) ?? '' },
+            }
+          : {}),
       })),
     ],
     edges: [...canvas.edges, ...edges],

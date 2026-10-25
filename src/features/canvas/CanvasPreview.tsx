@@ -6,9 +6,16 @@ import { Modal } from '../../components/components';
 import type { CanvasResource } from '../../shared/canvas';
 import type { ArtifactPreview } from '../../shared/artifacts';
 import type { TongzhouAPI } from '../../shared/types';
+import {
+  canvasPreviewIssue,
+  invalidateCanvasPreview,
+  resourceKey,
+  type CanvasPreviewItem,
+} from '../../shared/canvas-preview';
+import { errorMessage } from '../../lib/feedback';
 
-export type CanvasPreviewItem = { resource: CanvasResource; title: string };
-export const resourceKey = (r: CanvasResource) => JSON.stringify(r);
+export { resourceKey, type CanvasPreviewItem } from '../../shared/canvas-preview';
+type LoadedPreview = CanvasPreviewItem & { preview?: ArtifactPreview; error?: string };
 
 /** One viewer for referenced assets and generated batches. Remember the last viewed resource. */
 export function CanvasPreview({
@@ -24,8 +31,11 @@ export function CanvasPreview({
   storageKey: string;
   onClose(): void;
 }) {
-  const [media, setMedia] = useState<(CanvasPreviewItem & { preview: ArtifactPreview })[]>([]),
+  const [loaded, setLoaded] = useState<LoadedPreview[]>([]),
     [loading, setLoading] = useState(true),
+    [attempt, setAttempt] = useState(0),
+    [downloading, setDownloading] = useState(false),
+    [loadError, setLoadError] = useState<{ key: string; message: string }>(),
     [selected, setSelected] = useState(() => {
       if (initial) return initial;
       try {
@@ -36,6 +46,8 @@ export function CanvasPreview({
     });
   useEffect(() => {
     let live = true;
+    setLoading(true);
+    setLoadError(undefined);
     const seen = new Set<string>();
     const unique = items.filter((item) => {
       const key = resourceKey(item.resource);
@@ -44,34 +56,54 @@ export function CanvasPreview({
       return true;
     });
     void Promise.all(
-      unique.map(async (item) => {
+      unique.map(async (item): Promise<LoadedPreview> => {
         try {
           return { ...item, preview: await api.canvasResourcePreview(item.resource) };
-        } catch {
-          return undefined;
+        } catch (error) {
+          return { ...item, error: errorMessage(error) };
         }
       }),
     ).then((results) => {
       if (!live) return;
-      setMedia(
-        results.filter(
-          (item): item is NonNullable<typeof item> =>
-            !!item &&
-            ['image', 'video', 'audio'].includes(item.preview.type) &&
-            !!item.preview.content,
-        ),
-      );
+      setLoaded(results);
       setLoading(false);
     });
     return () => {
       live = false;
     };
-  }, [api, items]);
+  }, [api, items, attempt]);
+  // Keep failed originals selectable; never silently replace a clicked image with another one.
+  const media = loaded.filter(
+    (item) =>
+      item.error ||
+      item.preview?.type === 'external' ||
+      ['image', 'video', 'audio'].includes(item.preview?.type ?? '') ||
+      resourceKey(item.resource) === selected,
+  );
   const index = Math.max(
       0,
       media.findIndex((item) => resourceKey(item.resource) === selected),
     ),
     current = media[index];
+  const currentKey = current ? resourceKey(current.resource) : '';
+  const issue =
+    current &&
+    ((loadError?.key === currentKey ? loadError.message : '') ||
+      current.error ||
+      (current.preview ? tr(canvasPreviewIssue(current.preview)) : ''));
+  const download = async (resource: CanvasResource) => {
+    if (resource.kind !== 'artifact' || downloading) return;
+    setDownloading(true);
+    try {
+      await api.artifactDownload(resource.id);
+      invalidateCanvasPreview(resource);
+      setAttempt((value) => value + 1);
+    } catch (error) {
+      setLoadError({ key: resourceKey(resource), message: errorMessage(error) });
+    } finally {
+      setDownloading(false);
+    }
+  };
   const choose = (index: number) => {
     if (!media[index]) return;
     setSelected(resourceKey(media[index].resource));
@@ -104,7 +136,7 @@ export function CanvasPreview({
             {tr('正在读取原件…')}
           </p>
         ) : !current ? (
-          <p className="canvas-preview-empty">{tr('没有可预览的媒体，原件可能已移除。')}</p>
+          <p className="canvas-preview-empty">{tr('画布中没有可预览的图片、视频或音频。')}</p>
         ) : (
           <>
             <div className="canvas-preview-controls">
@@ -129,26 +161,54 @@ export function CanvasPreview({
                 <ChevronRight size={16} />
               </button>
             </div>
-            {current.preview.type === 'audio' ? (
+            {issue ? (
+              <div className="canvas-preview-empty">
+                <p role="alert">{issue}</p>
+                {current.preview?.type === 'external' && current.resource.kind === 'artifact' ? (
+                  <button disabled={downloading} onClick={() => void download(current.resource)}>
+                    {downloading ? tr('正在下载原件…') : tr('下载原件并预览')}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      invalidateCanvasPreview(current.resource);
+                      setAttempt((value) => value + 1);
+                    }}
+                  >
+                    {tr('重试加载')}
+                  </button>
+                )}
+              </div>
+            ) : current.preview?.type === 'audio' ? (
               <audio
-                key={resourceKey(current.resource)}
+                key={currentKey + attempt}
                 src={current.preview.content}
                 controls
                 autoPlay
+                onError={() =>
+                  setLoadError({ key: currentKey, message: tr('媒体加载失败，请重试读取原件。') })
+                }
               />
-            ) : current.preview.type === 'video' ? (
+            ) : current.preview?.type === 'video' ? (
               <video
-                key={resourceKey(current.resource)}
+                key={currentKey + attempt}
                 className="canvas-media-lightbox"
                 src={current.preview.content}
                 controls
                 autoPlay
+                onError={() =>
+                  setLoadError({ key: currentKey, message: tr('媒体加载失败，请重试读取原件。') })
+                }
               />
             ) : (
               <img
+                key={currentKey + attempt}
                 className="canvas-media-lightbox"
-                src={current.preview.content}
+                src={current.preview?.content}
                 alt={current.title}
+                onError={() =>
+                  setLoadError({ key: currentKey, message: tr('媒体加载失败，请重试读取原件。') })
+                }
               />
             )}
             {media.length > 1 && (
@@ -160,11 +220,16 @@ export function CanvasPreview({
                     aria-pressed={i === index}
                     onClick={() => choose(i)}
                   >
-                    {item.preview.type === 'image' ? (
+                    {item.preview?.type === 'image' && item.preview.content ? (
                       <img src={item.preview.content} alt="" />
                     ) : (
                       <span>
-                        {item.preview.type === 'audio' ? tr('音频') : tr('视频')} {i + 1}
+                        {item.error || canvasPreviewIssue(item.preview ?? { type: 'file' })
+                          ? tr('预览不可用')
+                          : item.preview?.type === 'audio'
+                            ? tr('音频')
+                            : tr('视频')}{' '}
+                        {i + 1}
                       </span>
                     )}
                   </button>

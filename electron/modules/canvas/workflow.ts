@@ -9,6 +9,9 @@ import type { CanvasNodeContext, CanvasNodePlugin } from './node-plugins';
 import { registerVisualPlugins, textSourceOutput } from './visual-plugins';
 import { checkedNodeText } from './text-source';
 import { splitPlugin } from './split-plugin';
+import { registerControlPlugins } from './control-plugins';
+import { planCanvasExecution, type CanvasExecutionPlan } from './execution-plan';
+import { CanvasExecution, canvasEdgeActive } from './execution';
 import { registerWorkflowPlugins, type CanvasNotify } from './workflow-plugins';
 import { routeCanvasOutput } from '../../../src/shared/canvas-ports';
 import { createMcpNodePlugin, type McpNodeOptions } from './plugin-sdk';
@@ -33,11 +36,12 @@ import type {
 } from '../../../src/shared/canvas';
 import type { Provider, Run, Session, Project } from '../../../src/shared/types';
 import type { ArtifactPreview } from '../../../src/shared/artifacts';
+import { imagePreview } from '../artifacts/image-preview';
 import { effectivePermission } from '../../../src/shared/permissions';
 import { agentProfile } from '../agents/agents';
 import { builtinAgent, isCanvasAgent } from '../../../src/shared/builtin-agents';
 import { read, within } from '../../core/tools/workspace';
-import { Canvases, executeSchema, executionOrder, nodeSchema } from './canvas';
+import { Canvases, executeSchema, nodeSchema } from './canvas';
 
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 type Resources = {
@@ -167,6 +171,13 @@ export class CanvasResources {
     if (ref.kind === 'artifact') return this.domains.artifacts.preview(ref.id);
     return { type: 'file' };
   }
+  async previewOriginal(ref: CanvasResource): Promise<ArtifactPreview> {
+    if (ref.kind !== 'file') return this.preview(ref);
+    this.validate(ref);
+    const ext = path.extname(ref.path).toLowerCase();
+    if (!['.png', '.jpg', '.jpeg', '.webp', '.gif'].includes(ext)) return { type: 'file' };
+    return imagePreview(await this.fileBytes(ref), 25 * 1024 * 1024);
+  }
   attachments(outputs: CanvasOutput[]) {
     const refs = [
       ...new Map(outputs.flatMap((o) => o.resources).map((r) => [JSON.stringify(r), r])).values(),
@@ -221,6 +232,7 @@ export class CanvasWorkflows {
           outputs,
           apiVersion: 1,
           adapter: kind === 'plugin' ? 'mcp' : 'native',
+          source: kind === 'text' || kind === 'resource' ? true : undefined,
         },
         execute,
         schema,
@@ -247,6 +259,7 @@ export class CanvasWorkflows {
     register('resource', [], ['text', 'resource'], referenced);
     register('agent', ['text', 'image', 'resource'], ['text', 'resource'], (c) => c.task());
     canvases.plugins.register(splitPlugin);
+    registerControlPlugins(canvases.plugins);
     registerWorkflowPlugins(
       canvases.plugins,
       (...args) => {
@@ -354,9 +367,16 @@ export class CanvasWorkflows {
       throw new Error('当前会话为只读模式');
     if (this.canvases.runs.list().some((r) => r.canvasId === canvas.id && r.status === 'running'))
       throw new Error('此画布正在执行');
-    const order = p.saveResource
-      ? (p.nodeIds ?? [])
-      : this.canvases.plugins.plan(canvas, executionOrder(canvas, p.nodeIds));
+    const plan: CanvasExecutionPlan = p.saveResource
+      ? { order: p.nodeIds ?? [], loops: [] }
+      : planCanvasExecution(canvas, this.canvases.plugins, p.nodeIds);
+    const { order, loops } = plan;
+    if (p.resumeRunId && loops.length)
+      throw new Error(
+        '循环中的远端任务不能作为整张图继续查询；请查看对应轮次的原任务，避免重复提交',
+      );
+    if (p.regenerate && loops.some((loop) => loop.body.has(p.regenerate!.nodeId)))
+      throw new Error('循环内媒体节点请重跑循环并复用成功项，不能按单个节点重新生成');
     if (
       p.saveResource &&
       (order.length !== 1 ||
@@ -450,7 +470,7 @@ export class CanvasWorkflows {
     const abort = new AbortController();
     this.active.set(run.id, abort);
     this.persist(run);
-    const pending = this.execute(run, order, p, abort.signal).finally(() => {
+    const pending = this.execute(run, plan, p, abort.signal).finally(() => {
       this.active.delete(run.id);
       this.pending.delete(run.id);
     });
@@ -472,169 +492,220 @@ export class CanvasWorkflows {
   }
   private async execute(
     run: CanvasRun,
-    order: string[],
+    plan: CanvasExecutionPlan,
     options: CanvasExecute,
     signal: AbortSignal,
   ) {
-    let current: string | undefined;
-    try {
-      for (const id of order) {
-        signal.throwIfAborted();
-        if (run.nodes[id].status === 'completed') continue;
-        current = id;
-        const node = run.definition.nodes.find((n) => n.id === id)!,
-          step = run.nodes[id];
-        const registered = this.canvases.plugins.get(node).definition;
+    const runtime = new CanvasExecution(run, plan, options, signal, {
+      plugins: this.canvases.plugins,
+      persist: () => this.persist(run),
+      assertState: () => {
+        for (const [id, step] of Object.entries(run.nodes)) {
+          const current = this.canvases.plugins.get(
+            run.definition.nodes.find((n) => n.id === id)!,
+          ).definition;
+          if (
+            step.plugin &&
+            (step.plugin.id !== current.id || step.plugin.version !== current.version)
+          )
+            throw new Error('节点插件版本已变化，请重新启动工作流');
+        }
+        const owner = this.store.get<Session>('session', run.sessionId);
         if (
-          step.plugin &&
-          (registered.id !== step.plugin.id || registered.version !== step.plugin.version)
+          effectivePermission(
+            owner,
+            this.store.defaultPermission(),
+            owner.agentId ? agentProfile(this.store, owner.agentId) : undefined,
+          ) === 'read-only'
         )
-          throw new Error('节点插件版本已变化，请重新启动工作流');
-        step.status = 'running';
-        step.startedAt = Date.now();
-        this.persist(run);
-        if (this.canvases.plugins.groupKey(node)) {
-          await this.executeGroup(run, node, order, options, signal);
-          continue;
+          throw new Error('会话已切换为只读，工作流停止');
+      },
+      executeNode: (id, opts, scopedSignal, inputs) =>
+        this.executeNode(run, id, opts, scopedSignal, inputs),
+      executeGroup: (ids, opts, scopedSignal) =>
+        this.executeGroup(
+          run,
+          run.definition.nodes.find((n) => n.id === ids[0])!,
+          ids,
+          opts,
+          scopedSignal,
+        ),
+      inputs: (id, scopedSignal) => this.inputsFor(run, id, options, scopedSignal),
+      history: () =>
+        this.canvases.runs
+          .list()
+          .filter(
+            (r) => r.id !== run.id && r.canvasId === run.canvasId && r.sessionId === run.sessionId,
+          )
+          .sort((a, b) => b.startedAt - a.startedAt),
+      validateOutput: async (output) => {
+        try {
+          for (const ref of output.resources) {
+            this.resources.validate(ref);
+            if (ref.kind === 'artifact') this.domains.artifacts.bytes(ref.id);
+            if (ref.kind === 'content' && this.domains.content.document(ref.id).blob)
+              this.domains.knowledge.originalBytes(ref.id);
+            if (ref.kind === 'file') await this.resources.fileBytes(ref);
+          }
+          return true;
+        } catch {
+          return false;
         }
-        const inputs = await this.inputsFor(run, id, options, signal);
-        if (inputs.reduce((size, value) => size + value.text.length, 0) > 120000)
-          throw new Error('节点输入超过 120000 字符，请缩小处理范围');
-        signal.throwIfAborted();
-        const own =
-          (node.kind === 'resource' || node.media?.mode === 'existing') && node.resource
-            ? await this.resources.resolveNode(node)
-            : undefined;
-        const session = this.store.get<Session>('session', run.sessionId);
-        const providerId = node.providerId || options.providerId || session.providerId;
-        const selectedProvider =
-          node.kind === 'agent' || (node.kind === 'image' && !node.media)
-            ? this.store.get<Provider>('provider', providerId)
-            : undefined;
-        const model =
-          node.model ||
-          (node.providerId && node.providerId !== session.providerId
-            ? selectedProvider?.models[0]
-            : options.model || session.model) ||
-          '';
-        // The canvas specialist orchestrates the graph; transform nodes need their own task role.
-        const agentId =
-          node.agentId ||
-          (isCanvasAgent(builtinAgent(session.agentId) ?? {}) ? '' : session.agentId);
-        const ownerPermission = effectivePermission(
-          session,
-          this.store.defaultPermission(),
-          session.agentId ? agentProfile(this.store, session.agentId) : undefined,
-        );
-        if (ownerPermission === 'read-only') throw new Error('会话已切换为只读，工作流停止');
-        const permission = effectivePermission(
-          { ...session, permission: ownerPermission },
-          this.store.defaultPermission(),
-          agentId ? agentProfile(this.store, agentId) : undefined,
-        );
-        const { x: _x, y: _y, width: _width, height: _height, group: _group, ...config } = node;
-        step.inputs = inputs;
-        const provider =
-          node.kind === 'agent' || (node.kind === 'image' && !node.media)
-            ? this.store.get<Provider>('provider', providerId)
-            : undefined;
-        step.fingerprint = digest({
-          config,
-          ...(node.pluginId || step.plugin?.version !== 1 ? { nodePlugin: step.plugin } : {}),
-          ...(options.saveResource ? { saveResource: true } : {}),
-          inputs,
-          own,
-          provider,
-          model,
-          agent: agentId ? agentProfile(this.store, agentId) : undefined,
-          permission,
-          plugins: this.store.list('plugin'),
-          skills: this.store
-            .list('skill')
-            .map((s: any) => ({ id: s.id, enabled: s.enabled, files: s.files })),
-        });
-        const cached =
-          options.reuse &&
-          this.canvases.plugins.get(node).definition.cache !== 'never' &&
-          !options.saveResource &&
-          options.regenerate?.nodeId !== id
-            ? this.canvases.runs
-                .list()
-                .filter(
-                  (r) =>
-                    r.id !== run.id && r.canvasId === run.canvasId && r.sessionId === run.sessionId,
-                )
-                .sort((a, b) => b.startedAt - a.startedAt)
-                .flatMap((r) => Object.values(r.nodes))
-                .find(
-                  (s) =>
-                    ['completed', 'cached'].includes(s.status) &&
-                    s.fingerprint === step.fingerprint &&
-                    s.output,
-                )
-            : undefined;
-        let reusable = !!cached;
-        if (cached?.output)
-          for (const ref of cached.output.resources)
-            try {
-              this.resources.validate(ref);
-            } catch {
-              reusable = false;
-            }
-        if (cached?.output && reusable) {
-          step.output = cached.output;
-          step.generation = cached.generation;
-          step.generationFingerprint = cached.generationFingerprint;
-          step.taskSessionId = cached.taskSessionId;
-          step.taskRunId = cached.taskRunId;
-          step.status = 'cached';
-        } else {
-          step.output = await this.canvases.plugins.execute({
-            node,
-            run,
-            inputs,
-            own,
-            options,
-            permission,
-            signal,
-            task: (operation, connection, prompt) =>
-              this.task(
-                prompt === undefined ? node : { ...node, text: prompt },
-                run,
-                inputs,
-                connection ??
-                  (operation
-                    ? { providerId: 'canvas', model: '节点插件', agentId: '' }
-                    : { providerId, model, agentId }),
-                permission,
-                signal,
-                operation,
-              ),
-          });
-          step.status = 'completed';
-        }
-        signal.throwIfAborted();
-        step.endedAt = Date.now();
-        this.persist(run);
-      }
+      },
+    });
+    try {
+      await runtime.execute();
       run.status = 'completed';
-    } catch (e) {
+    } catch (error) {
       run.status = signal.aborted ? 'cancelled' : 'failed';
-      run.error = e instanceof Error ? e.message : String(e);
-      if (current) {
-        run.nodes[current].status = signal.aborted ? 'cancelled' : 'failed';
-        run.nodes[current].error = run.error;
-        run.nodes[current].endedAt = Date.now();
-      }
+      run.error = error instanceof Error ? error.message : String(error);
+    } finally {
       for (const step of Object.values(run.nodes)) {
-        if (step.status === 'pending') step.status = 'cancelled';
+        if (step.status === 'pending' || step.status === 'running') step.status = 'cancelled';
         for (const item of step.generation ?? [])
           if (item.status === 'pending' || item.status === 'running') item.status = 'cancelled';
       }
-    } finally {
       run.endedAt = Date.now();
       this.persist(run);
     }
+  }
+  private async executeNode(
+    run: CanvasRun,
+    id: string,
+    options: CanvasExecute,
+    signal: AbortSignal,
+    suppliedInputs?: CanvasOutput[],
+  ) {
+    const node = run.definition.nodes.find((n) => n.id === id)!,
+      step = run.nodes[id];
+    const registered = this.canvases.plugins.get(node).definition;
+    if (
+      step.plugin &&
+      (registered.id !== step.plugin.id || registered.version !== step.plugin.version)
+    )
+      throw new Error('节点插件版本已变化，请重新启动工作流');
+    step.status = 'running';
+    step.startedAt = Date.now();
+    this.persist(run);
+    const inputs = suppliedInputs ?? (await this.inputsFor(run, id, options, signal));
+    if (inputs.reduce((size, value) => size + value.text.length, 0) > 120000)
+      throw new Error('节点输入超过 120000 字符，请缩小处理范围');
+    signal.throwIfAborted();
+    const own =
+      (node.kind === 'resource' || node.media?.mode === 'existing') && node.resource
+        ? await this.resources.resolveNode(node)
+        : undefined;
+    const session = this.store.get<Session>('session', run.sessionId);
+    const providerId = node.providerId || options.providerId || session.providerId;
+    const selectedProvider =
+      node.kind === 'agent' || (node.kind === 'image' && !node.media)
+        ? this.store.get<Provider>('provider', providerId)
+        : undefined;
+    const model =
+      node.model ||
+      (node.providerId && node.providerId !== session.providerId
+        ? selectedProvider?.models[0]
+        : options.model || session.model) ||
+      '';
+    // The canvas specialist orchestrates the graph; transform nodes need their own task role.
+    const agentId =
+      node.agentId || (isCanvasAgent(builtinAgent(session.agentId) ?? {}) ? '' : session.agentId);
+    const ownerPermission = effectivePermission(
+      session,
+      this.store.defaultPermission(),
+      session.agentId ? agentProfile(this.store, session.agentId) : undefined,
+    );
+    if (ownerPermission === 'read-only') throw new Error('会话已切换为只读，工作流停止');
+    const permission = effectivePermission(
+      { ...session, permission: ownerPermission },
+      this.store.defaultPermission(),
+      agentId ? agentProfile(this.store, agentId) : undefined,
+    );
+    const { x: _x, y: _y, width: _width, height: _height, group: _group, ...config } = node;
+    step.inputs = inputs;
+    const provider =
+      node.kind === 'agent' || (node.kind === 'image' && !node.media)
+        ? this.store.get<Provider>('provider', providerId)
+        : undefined;
+    step.fingerprint = digest({
+      config,
+      executionKey: step.executionKey,
+      ...(node.pluginId || step.plugin?.version !== 1 ? { nodePlugin: step.plugin } : {}),
+      ...(options.saveResource ? { saveResource: true } : {}),
+      inputs,
+      own,
+      provider,
+      model,
+      agent: agentId ? agentProfile(this.store, agentId) : undefined,
+      permission,
+      plugins: this.store.list('plugin'),
+      skills: this.store
+        .list('skill')
+        .map((s: any) => ({ id: s.id, enabled: s.enabled, files: s.files })),
+    });
+    const cached =
+      options.reuse &&
+      this.canvases.plugins.get(node).definition.cache !== 'never' &&
+      !options.saveResource &&
+      options.regenerate?.nodeId !== id
+        ? this.canvases.runs
+            .list()
+            .filter(
+              (r) =>
+                r.id !== run.id && r.canvasId === run.canvasId && r.sessionId === run.sessionId,
+            )
+            .sort((a, b) => b.startedAt - a.startedAt)
+            .flatMap((r) => Object.values(r.nodes))
+            .find(
+              (s) =>
+                ['completed', 'cached'].includes(s.status) &&
+                s.fingerprint === step.fingerprint &&
+                s.output,
+            )
+        : undefined;
+    let reusable = !!cached;
+    if (cached?.output)
+      for (const ref of cached.output.resources)
+        try {
+          this.resources.validate(ref);
+        } catch {
+          reusable = false;
+        }
+    if (cached?.output && reusable) {
+      step.output = cached.output;
+      step.generation = cached.generation;
+      step.generationFingerprint = cached.generationFingerprint;
+      step.taskSessionId = cached.taskSessionId;
+      step.taskRunId = cached.taskRunId;
+      step.status = 'cached';
+    } else {
+      step.output = await this.canvases.plugins.execute({
+        node,
+        run,
+        inputs,
+        own,
+        options,
+        permission,
+        signal,
+        task: (operation, connection, prompt) =>
+          this.task(
+            prompt === undefined ? node : { ...node, text: prompt },
+            run,
+            inputs,
+            connection ??
+              (operation
+                ? { providerId: 'canvas', model: '节点插件', agentId: '' }
+                : { providerId, model, agentId }),
+            permission,
+            signal,
+            operation,
+          ),
+      });
+      step.status = 'completed';
+    }
+    signal.throwIfAborted();
+    step.endedAt = Date.now();
+    this.persist(run);
   }
   private async executeGroup(
     run: CanvasRun,
@@ -715,6 +786,7 @@ export class CanvasWorkflows {
       ? []
       : run.definition.edges.filter((e) => e.to === id && !excluded.has(e.from))) {
       const push = (value: CanvasOutput) => inputs.push(routeCanvasOutput(value, edge));
+      if (edge.kind === 'dependency' && !canvasEdgeActive(run, edge)) continue;
       const output = run.nodes[edge.from]?.output;
       if (output) push(output);
       else if (edge.kind === 'reference') {
@@ -960,7 +1032,7 @@ export class CanvasWorkflows {
                 sessionWorkspace(this.store, this.dataDir, item.taskSessionId!),
                 '.canvas',
                 run.id,
-                digest(node.id).slice(0, 16) + '-' + item.index,
+                digest(node.id + (step.executionKey ?? '')).slice(0, 16) + '-' + item.index,
               );
               if (regen?.action !== 'resume')
                 args = await mediaArguments(node, tool, inputs, this.domains, outputRoot);

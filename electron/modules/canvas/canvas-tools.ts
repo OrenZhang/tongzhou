@@ -99,7 +99,14 @@ export function attachCanvasTools(
         .map(({ id, name, enabled }) => ({ id, name, enabled })),
       nodePlugins: canvases.plugins
         .list()
-        .map(({ id, name, kind, description, ports }) => ({ id, name, kind, description, ports })),
+        .map(({ id, name, kind, description, ports, control }) => ({
+          id,
+          name,
+          kind,
+          description,
+          ports,
+          control,
+        })),
       mediaModels: (['image', 'video', 'audio'] as const).flatMap((kind) =>
         mediaModelCatalog(store.providers(), store.list<PluginConfig>('plugin'), kind).map((c) => ({
           kind,
@@ -210,10 +217,36 @@ export function attachCanvasTools(
                 externalStatus: n.externalStatus,
                 generation: n.generation,
                 error: n.error,
+                skipReason: n.skipReason,
+                handled: n.handled,
+                iterations: n.iterations?.map((iteration) => ({
+                  index: iteration.index,
+                  status: iteration.status,
+                  error: iteration.error,
+                  output: iteration.output && {
+                    text: iteration.output.text.slice(0, 300),
+                    value: iteration.output.value,
+                    resources: iteration.output.resources,
+                  },
+                  nodes: Object.fromEntries(
+                    Object.entries(iteration.nodes).map(([id, step]) => [
+                      id,
+                      {
+                        status: step.status,
+                        error: step.error,
+                        taskSessionId: step.taskSessionId,
+                        taskRunId: step.taskRunId,
+                      },
+                    ]),
+                  ),
+                  external: iteration.external,
+                })),
                 taskSessionId: n.taskSessionId,
                 output: n.output && {
                   text: n.output.text.slice(0, 300),
                   resources: n.output.resources,
+                  value: n.output.value,
+                  activePorts: n.output.activePorts,
                   ports:
                     n.output.ports &&
                     Object.fromEntries(

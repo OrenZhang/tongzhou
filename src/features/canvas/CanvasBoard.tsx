@@ -15,6 +15,12 @@ import { CanvasPreview, resourceKey, type CanvasPreviewItem } from './CanvasPrev
 import type { Canvas, CanvasNode, CanvasNodeRun, CanvasResource } from '../../shared/canvas';
 import { canvasNodeKinds as raw_canvasNodeKinds } from '../../shared/canvas';
 import type { Snapshot, TongzhouAPI } from '../../shared/types';
+import {
+  canvasPreviewItems,
+  canvasPreviewIssue,
+  subscribeCanvasPreview,
+} from '../../shared/canvas-preview';
+import { errorMessage } from '../../lib/feedback';
 
 export function ResourceThumbnail({
   api,
@@ -32,29 +38,57 @@ export function ResourceThumbnail({
   const [image, setImage] = useState(''),
     [caption, setCaption] = useState(''),
     [video, setVideo] = useState(false),
-    [audio, setAudio] = useState(false);
+    [audio, setAudio] = useState(false),
+    [error, setError] = useState(''),
+    [attempt, setAttempt] = useState(0);
+  useEffect(
+    () =>
+      subscribeCanvasPreview((key) => {
+        if (resource && key === resourceKey(resource)) setAttempt((value) => value + 1);
+      }),
+    [JSON.stringify(resource)],
+  );
   useEffect(() => {
     let current = true;
     setImage('');
     setCaption('');
     setVideo(false);
     setAudio(false);
-    if (resource && (resource.kind === 'content' || resource.kind === 'artifact'))
+    setError('');
+    if (resource && resource.kind !== 'message')
       void api
         .canvasResourcePreview(resource)
         .then((p) => {
           if (current && showText && p.type === 'text') setCaption(p.content ?? '');
+          if (current && !(showText && p.type === 'text')) setError(tr(canvasPreviewIssue(p)));
           if (current && (p.type === 'image' || p.type === 'video' || p.type === 'audio')) {
             setImage(p.content ?? '');
             setVideo(p.type === 'video');
             setAudio(p.type === 'audio');
           }
         })
-        .catch(() => {});
+        .catch((error) => {
+          if (current) setError(errorMessage(error));
+        });
     return () => {
       current = false;
     };
-  }, [api, JSON.stringify(resource), revision, showText]);
+  }, [api, JSON.stringify(resource), revision, showText, attempt]);
+  if (error)
+    return onPreview ? (
+      <button
+        className="canvas-thumbnail-error"
+        title={error}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={onPreview}
+      >
+        {error}
+      </button>
+    ) : (
+      <small className="canvas-thumbnail-error" role="status">
+        {error}
+      </small>
+    );
   if (audio && image)
     return (
       <audio
@@ -62,13 +96,26 @@ export function ResourceThumbnail({
         controls
         preload="metadata"
         aria-label={tr('音频预览')}
+        onError={() => setError(tr('媒体加载失败，请重试读取原件。'))}
         onPointerDown={(e) => e.stopPropagation()}
       />
     );
   const media = video ? (
-    <video src={image} muted preload="metadata" playsInline aria-label={tr('视频预览')} />
+    <video
+      src={image}
+      muted
+      preload="metadata"
+      playsInline
+      aria-label={tr('视频预览')}
+      onError={() => setError(tr('媒体加载失败，请重试读取原件。'))}
+    />
   ) : (
-    <img src={image} alt={tr('资源预览')} draggable={false} />
+    <img
+      src={image}
+      alt={tr('资源预览')}
+      draggable={false}
+      onError={() => setError(tr('媒体加载失败，请重试读取原件。'))}
+    />
   );
   return !image ? (
     caption ? (
@@ -245,23 +292,13 @@ export function CanvasBoard({
     return () => observer.disconnect();
   }, []);
   const [preview, setPreview] = useState<{ items: CanvasPreviewItem[]; initial?: string }>();
-  const gallery = () =>
-    canvas.nodes.flatMap((n) => {
-      const step = steps[n.id];
-      const refs =
-        (n.resource ? [n.resource] : undefined) ??
-        step?.generation?.flatMap((item) => item.resources.filter((r) => r.kind === 'artifact')) ??
-        step?.output?.resources.filter((r) => r.kind === 'artifact') ??
-        [];
-      return refs
-        .filter((r) => r.kind === 'content' || r.kind === 'artifact')
-        .map((resource, i) => ({
-          resource,
-          title: n.title + (refs.length > 1 ? ` · ${i + 1}` : ''),
-        }));
-    });
-  const openPreview = (resource?: CanvasResource) =>
-    setPreview({ items: gallery(), initial: resource ? resourceKey(resource) : undefined });
+  const openPreview = (resource?: CanvasResource) => {
+    const items = canvasPreviewItems(canvas, steps, mediaControls?.previousSteps);
+    // Always include the clicked original, even when it came from a historical view.
+    if (resource && !items.some((item) => resourceKey(item.resource) === resourceKey(resource)))
+      items.unshift({ resource, title: tr('资源预览') });
+    setPreview({ items, initial: resource ? resourceKey(resource) : undefined });
+  };
   const gesture = useRef<
     | {
         x: number;
@@ -332,6 +369,7 @@ export function CanvasBoard({
     cached: tr('已复用'),
     failed: tr('失败'),
     cancelled: tr('未执行'),
+    skipped: tr('已跳过'),
   };
   return (
     <div
@@ -617,6 +655,17 @@ export function CanvasBoard({
                     : ''}
                 </span>
               </header>
+              {step?.iterations && (
+                <small className="canvas-loop-progress">
+                  {tr('遍历进度：')}
+                  {step.progress?.value ?? 0}/{step.progress?.max ?? 0}
+                  {step.iterations.some((i) => i.status === 'failed')
+                    ? ' · ' + tr('包含失败项')
+                    : ''}
+                </small>
+              )}
+              {step?.handled && <small>{tr('失败已由分支处理')}</small>}
+              {step?.skipReason && <small title={step.skipReason}>{tr(step.skipReason)}</small>}
               {inlineMedia && mediaControls && (
                 <CanvasMediaNode
                   api={api}

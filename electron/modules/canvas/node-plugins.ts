@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { defaultCanvasPorts } from '../../../src/shared/canvas-ports';
+import { canvasPorts, defaultCanvasPorts, withFailurePort } from '../../../src/shared/canvas-ports';
 import type { TaskOperation } from '../../core/task-contracts';
 import type { Session } from '../../../src/shared/types';
 import type {
@@ -86,7 +86,7 @@ export class CanvasNodePlugins {
         ...definition,
         apiVersion: definition.apiVersion ?? 1,
         adapter: definition.adapter ?? 'native',
-        ports: definition.ports ?? defaultCanvasPorts(definition),
+        ports: withFailurePort(definition.ports ?? defaultCanvasPorts(definition)),
         configKey: configKey ?? 'config',
         configSchema: schema ? z.toJSONSchema(schema) : { type: 'object', properties: {} },
       }));
@@ -95,7 +95,13 @@ export class CanvasNodePlugins {
       ...new Map(
         nodes
           .filter((n) => n.definition?.adapter === 'comfyui')
-          .map((n) => [n.definition!.id, n.definition!]),
+          .map((n) => [
+            n.definition!.id,
+            {
+              ...n.definition!,
+              ports: withFailurePort(n.definition!.ports ?? defaultCanvasPorts(n.definition!)),
+            },
+          ]),
       ).values(),
     ];
   }
@@ -175,6 +181,21 @@ export class CanvasNodePlugins {
     context.signal.throwIfAborted();
     if (typeof result?.text !== 'string' || !Array.isArray(result.resources))
       throw new Error('节点插件未返回有效的输出');
+    const outputs = new Set(canvasPorts(node, plugin.definition).outputs.map((port) => port.id));
+    if (
+      result.activePorts !== undefined &&
+      (!Array.isArray(result.activePorts) || result.activePorts.some((id) => !outputs.has(id)))
+    )
+      throw new Error('节点插件返回了无效的激活出口');
+    if (
+      result.iterationInputs !== undefined &&
+      (!Array.isArray(result.iterationInputs) ||
+        result.iterationInputs.length > 100 ||
+        result.iterationInputs.some(
+          (item) => typeof item.text !== 'string' || !Array.isArray(item.resources),
+        ))
+    )
+      throw new Error('节点插件返回了无效的遍历输入');
     return result;
   }
 }

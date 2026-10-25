@@ -10,7 +10,7 @@
 | 模型整理或加工            | agent                          | 模型、权限与执行会话；输入上下文和输出是否符合下游                        |
 | 人物图片、视频、音频      | image/video/audio              | canvas_list.mediaTools 中实际工具及 inputSchema                           |
 | 合并提示词                | workflow.template              | {{input}}、{{input.1}}、{{date}}、{{time}}；日期时间为 UTC                |
-| 等待                      | workflow.wait                  | 查看 configSchema 的时间参数；不是无限轮询替代品                          |
+| 等待                      | workflow.delay                 | 查看 configSchema 的时间参数；不是无限轮询替代品                          |
 | 定时触发                  | workflow.schedule              | 保存节点不等于已发布自动化；需实际发布入口，应用须运行                    |
 | 渠道通知                  | workflow.notify                | 已配置的真实 targetId、内容和用户发送意图；不编造接收人                   |
 | 保存结果                  | save                           | 选择真实内容库/文件夹；保留媒体原件与来源                                 |
@@ -46,4 +46,8 @@
 
 `put_node` 是完整替换：先读原节点，再复制保留 kind/pluginId/config/resource/media/位置/尺寸等字段。只改 text 却省略 media 会丢失生成工具配置。`put_edge` 更新同 ID 连线；remove_edge 只删指定线。旧版文档、网络示例和上游工具字段不能直接覆盖本产品节点 schema。
 
-纯工作流不支持执行依赖环。重复尝试属于运行策略或下一次定时触发；画重试业务说明用白板，不能把它作为工作流循环执行。
+执行依赖回边仍不支持；数组和资源遍历用配对的作用域循环。重复尝试属于运行策略或下一次定时触发，不能用无限回路模拟重试。
+
+## 控制流
+
+条件分支、逐项遍历、遍历汇总与分支汇合分别为 workflow.condition、workflow.foreach、workflow.collect、workflow.join。先读取各自 schema 和端口。普通节点额外提供 `$error` 失败出口，必须使用 dependency。循环从 item 到配对 collect 构成无回边的子图，foreach.config.endNodeId 必须指向该 collect；结果从 collect.result 接到循环外。使用 configure_execution 操作配置全图 concurrency 与 maxSteps。

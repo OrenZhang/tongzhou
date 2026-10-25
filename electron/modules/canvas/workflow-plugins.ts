@@ -129,7 +129,7 @@ export function registerWorkflowPlugins(
                 targetId,
                 text,
                 c.run.sessionId,
-                `canvas:${notificationKey(c.run.sessionId, c.run.id)}:${c.node.id}`,
+                `canvas:${notificationKey(c.run.sessionId, c.run.id)}:${c.node.id}${c.run.nodes[c.node.id]?.executionKey ? ':' + c.run.nodes[c.node.id].executionKey : ''}`,
                 c.signal,
               );
               if (receipt.status !== 'sent')

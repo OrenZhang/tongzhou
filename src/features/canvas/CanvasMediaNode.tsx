@@ -31,6 +31,7 @@ import type { Snapshot, TongzhouAPI } from '../../shared/types';
 import { ResourceThumbnail } from './CanvasBoard';
 import { resourceKey } from './CanvasPreview';
 import { CanvasSourcePicker } from './CanvasSourcePicker';
+import { canvasNodePreviews } from '../../shared/canvas-preview';
 
 type RetryAction = NonNullable<CanvasExecute['regenerate']>['action'];
 
@@ -102,20 +103,11 @@ export function CanvasMediaNode({
   const existing = media.mode === 'existing';
   const running = step?.status === 'running' || step?.status === 'pending';
   const items = step?.generation ?? [];
-  const resources = items.length
-    ? items.flatMap((item) => item.resources)
-    : (step?.output?.resources ?? []);
-  const previousResources =
-    previousStep?.generation?.flatMap((item) => item.resources) ??
-    previousStep?.output?.resources ??
-    [];
-  const showingPrevious =
-    !existing && !resources.length && !node.resource && previousResources.length > 0;
-  const previews = node.resource
-    ? [node.resource]
-    : showingPrevious
-      ? previousResources
-      : resources;
+  const {
+    resources: previews,
+    showingPrevious,
+    revision,
+  } = canvasNodePreviews(node, step, previousStep);
   const hasPreview = previews.length > 0;
   const incoming = canvas.edges
     .filter((e) => e.to === node.id)
@@ -261,6 +253,7 @@ export function CanvasMediaNode({
                 key={resourceKey(resource) + index}
                 api={api}
                 resource={resource}
+                revision={revision}
                 onPreview={() => onPreview(resource)}
               />
             ))}

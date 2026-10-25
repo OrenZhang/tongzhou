@@ -11,7 +11,13 @@ import { FileRecords, managedDirectory } from '../../services/storage/local-file
 import { z } from 'zod';
 import { whiteboardSceneSchema, applyWhiteboardOperations } from './whiteboard';
 import type { Store } from '../../services/storage/store';
-import type { Canvas, CanvasRun, CanvasState, CanvasOperation } from '../../../src/shared/canvas';
+import type {
+  Canvas,
+  CanvasRun,
+  CanvasState,
+  CanvasOperation,
+  CanvasNodeRun,
+} from '../../../src/shared/canvas';
 
 const id = z.string().min(1).max(120);
 export const resourceSchema = z.discriminatedUnion('kind', [
@@ -127,9 +133,14 @@ export const edgeSchema = z
     toPort: id.optional(),
   })
   .strict();
+export const canvasExecutionSchema = z.object({
+  concurrency: z.number().int().min(1).max(8),
+  maxSteps: z.number().int().min(1).max(5000),
+});
 export const canvasWriteSchema = z
   .object({
     mode: z.enum(['workflow', 'whiteboard']).optional(),
+    execution: canvasExecutionSchema.optional(),
     whiteboard: whiteboardSceneSchema.optional(),
     id: z.uuid().optional(),
     version: z.number().int().positive().optional(),
@@ -153,6 +164,7 @@ export const operationsSchema = z
       z.object({ type: z.literal('remove_edge'), id }),
       z.object({ type: z.literal('select'), nodeIds: z.array(id).max(200) }),
       z.object({ type: z.literal('rename'), title: z.string().trim().min(1).max(180) }),
+      z.object({ type: z.literal('configure_execution'), execution: canvasExecutionSchema }),
     ]),
   )
   .min(1)
@@ -229,11 +241,16 @@ export class Canvases {
         run.status = 'interrupted';
         run.error = '应用退出，工作流已中断；已完成的结果可在重试时复用。';
         run.endedAt = Date.now();
-        for (const step of Object.values(run.nodes)) {
+        const interrupt = (step: CanvasNodeRun) => {
           if (step.status === 'running' || step.status === 'pending') step.status = 'cancelled';
           for (const item of step.generation ?? [])
             if (item.status === 'running' || item.status === 'pending') item.status = 'cancelled';
-        }
+          for (const iteration of step.iterations ?? []) {
+            if (iteration.status === 'running') iteration.status = 'cancelled';
+            for (const child of Object.values(iteration.nodes)) interrupt(child);
+          }
+        };
+        for (const step of Object.values(run.nodes)) interrupt(step);
         this.runs.put(run);
       }
   }
@@ -350,6 +367,7 @@ export class Canvases {
       if (op.type === 'remove_edge') current.edges = current.edges.filter((e) => e.id !== op.id);
       if (op.type === 'select') current.selection = op.nodeIds!;
       if (op.type === 'rename') current.title = op.title!;
+      if (op.type === 'configure_execution') current.execution = op.execution;
     }
     const { updatedAt: _, ...input } = current;
     return this.save(create ? { ...input, id: undefined, version: undefined } : input);

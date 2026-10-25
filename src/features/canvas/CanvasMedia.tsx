@@ -152,7 +152,7 @@ export function CanvasResourceOutput({
   useEffect(() => {
     let live = true;
     setMedia(false);
-    if (node.resource)
+    if (node.resource && node.resource.kind !== 'file')
       void api
         .canvasResourcePreview(node.resource)
         .then((p) => {
@@ -729,7 +729,7 @@ export function CanvasMediaResults({
           initial={preview}
           items={items.flatMap((item) =>
             item.resources
-              .filter((r) => r.kind === 'artifact')
+              .filter((r) => r.kind !== 'message')
               .map((resource) => ({ resource, title: tr('第 {0} 项', [item.index + 1]) })),
           )}
           onClose={() => setPreview(undefined)}

@@ -404,10 +404,12 @@ export class ComfyWorkflows {
     progress: (text: string) => void,
     persist: () => void,
     resume?: CanvasRun,
+    executionKey?: string,
   ) {
     const prepared = await this.prepare(canvas, nodes, signal, inputs);
     const { client, prompt, connectionId, catalog } = prepared;
-    const key = comfyConfig(nodes[0])!.sourceId;
+    const iteration = executionKey ?? run.nodes[nodes[0].id]?.executionKey;
+    const key = comfyConfig(nodes[0])!.sourceId + (iteration ? ':' + iteration : '');
     const logical = (id: string) => comfyConfig(nodes.find((n) => n.id === id)!)?.nodeId ?? id;
     const fingerprint = comfyHash({
       nodes: nodes.map((n) => ({ config: n.config, definition: n.definition })),

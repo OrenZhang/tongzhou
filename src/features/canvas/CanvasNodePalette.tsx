@@ -17,6 +17,10 @@ import {
   Bell,
   Timer,
   Braces,
+  GitBranch,
+  Repeat,
+  ListChecks,
+  Combine,
   PanelLeftClose,
   PanelLeftOpen,
 } from 'lucide-react';
@@ -43,6 +47,10 @@ const icons: Record<string, typeof AlignLeft> = {
   'workflow.notify': Bell,
   'workflow.delay': Timer,
   'workflow.template': Braces,
+  'workflow.condition': GitBranch,
+  'workflow.foreach': Repeat,
+  'workflow.collect': ListChecks,
+  'workflow.join': Combine,
 };
 
 export function CanvasNodePalette({

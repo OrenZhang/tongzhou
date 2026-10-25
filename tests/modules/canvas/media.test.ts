@@ -548,6 +548,84 @@ describe('media plugin nodes', () => {
       first.nodes.image.generation![0].resources,
     );
   });
+  it('runs real media tool operations per loop item and reuses successful originals without paying again', async () => {
+    const f = await fixture();
+    const control = (
+      id: string,
+      pluginId: string,
+      config?: Record<string, unknown>,
+    ): CanvasNode => ({ id, kind: 'plugin', pluginId, config, title: id, x: 0, y: 0 });
+    const c = f.system.domains.canvases.save({
+      title: '批量人物',
+      viewport: { x: 0, y: 0, zoom: 1 },
+      selection: [],
+      nodes: [
+        {
+          id: 'source',
+          kind: 'text',
+          title: '人物列表',
+          x: 0,
+          y: 0,
+          text: '["红衣人物","蓝衣人物"]',
+        },
+        control('loop', 'workflow.foreach', { endNodeId: 'end' }),
+        image(1),
+        control('end', 'workflow.collect'),
+      ],
+      edges: [
+        {
+          id: 'a',
+          from: 'source',
+          to: 'loop',
+          kind: 'dependency',
+          fromPort: 'result',
+          toPort: 'context',
+        },
+        {
+          id: 'b',
+          from: 'loop',
+          to: 'image',
+          kind: 'dependency',
+          fromPort: 'item',
+          toPort: 'prompt',
+        },
+        {
+          id: 'c',
+          from: 'image',
+          to: 'end',
+          kind: 'dependency',
+          fromPort: 'result',
+          toPort: 'context',
+        },
+      ],
+    });
+    const first = await f.run(c);
+    expect(first.status).toBe('completed');
+    const calls = (await f.calls()).filter((call) => call.name === 'text_to_image');
+    expect(calls).toHaveLength(2);
+    expect(calls[0].arguments.prompt).toContain('红衣人物');
+    expect(calls[1].arguments.prompt).toContain('蓝衣人物');
+    const iterations = first.nodes.loop.iterations!;
+    expect(iterations[0].nodes.image.taskSessionId).not.toBe(
+      iterations[1].nodes.image.taskSessionId,
+    );
+    expect(first.nodes.end.output!.resources).toHaveLength(2);
+    const again = await f.run(c);
+    expect(again.status).toBe('completed');
+    expect(again.nodes.loop.iterations?.map((item) => item.status)).toEqual(['cached', 'cached']);
+    expect((await f.calls()).filter((call) => call.name === 'text_to_image')).toHaveLength(2);
+    expect(again.nodes.end.output!.resources).toEqual(first.nodes.end.output!.resources);
+    const original = first.nodes.end.output!.resources[0];
+    if (original.kind !== 'artifact') throw new Error('Expected an artifact original');
+    f.system.domains.artifacts.delete(original.id);
+    const repaired = await f.run(c);
+    expect(repaired.status).toBe('completed');
+    expect(repaired.nodes.loop.iterations?.map((item) => item.status)).toEqual([
+      'completed',
+      'cached',
+    ]);
+    expect((await f.calls()).filter((call) => call.name === 'text_to_image')).toHaveLength(3);
+  });
   it('saves generated originals into a selected directory and defaults to managed artifacts', async () => {
     const f = await fixture(),
       folder = path.join(f.root, '输出目录'),

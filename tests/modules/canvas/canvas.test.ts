@@ -835,6 +835,34 @@ describe('generic canvas and workflow', () => {
       f.domains.canvasWorkflows.resources.resolve({ kind: 'file', projectId, path: '../outside' }),
     ).rejects.toThrow('范围');
   });
+  it('previews workspace image bytes with scope and hash checks and supports library GIF originals', async () => {
+    const f = fixture(),
+      projectId = randomUUID();
+    f.store.put('project', { id: projectId, path: f.root, name: '本地' });
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lX0AAAAASUVORK5CYII=',
+      'base64',
+    );
+    writeFileSync(path.join(f.root, 'preview.png'), png);
+    const ref = { kind: 'file' as const, projectId, path: 'preview.png' };
+    const resources = f.domains.canvasWorkflows.resources;
+    await expect(resources.previewOriginal(ref)).resolves.toEqual({
+      type: 'image',
+      content: 'data:image/png;base64,' + png.toString('base64'),
+    });
+    await expect(resources.previewOriginal({ ...ref, sha256: 'stale' })).rejects.toThrow('变化');
+    await expect(resources.previewOriginal({ ...ref, path: '../outside.png' })).rejects.toThrow(
+      '范围',
+    );
+    writeFileSync(path.join(f.root, 'preview.png'), 'not an image');
+    await expect(resources.previewOriginal(ref)).rejects.toThrow('格式无效');
+    const gif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
+    const doc = f.domains.knowledge.importFile('preview.gif', gif);
+    expect(resources.preview({ kind: 'content', id: doc.id, version: doc.version })).toEqual({
+      type: 'image',
+      content: 'data:image/gif;base64,' + gif.toString('base64'),
+    });
+  });
   it('enforces session permissions, isolates node workers and exposes read-only tools without write handlers', async () => {
     const f = fixture(),
       c = f.domains.canvases.save(graph([node('a')]));

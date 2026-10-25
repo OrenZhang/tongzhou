@@ -78,6 +78,7 @@ export function mergeCanvasChanges(base: Canvas, local: Canvas, remote: Canvas) 
     nodes,
     edges,
     title: merge(base.title, local.title, remote.title, 'title'),
+    execution: merge(base.execution, local.execution, remote.execution, 'execution'),
     viewport: equal(local.viewport, base.viewport) ? remote.viewport : local.viewport,
     selection: (equal(local.selection, base.selection) ? remote.selection : local.selection).filter(
       (id) => ids.has(id),

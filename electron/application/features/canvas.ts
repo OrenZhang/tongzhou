@@ -363,7 +363,7 @@ export const canvasPlugin: Plugin.Object<void> = {
       workflows.cancel(id),
     );
     define('canvasResourcePreview', '预览画布引用的原件', [resourceSchema], false, (r) =>
-      workflows.resources.preview(r),
+      workflows.resources.previewOriginal(r),
     );
     define('canvasReadTextSource', '读取画布节点的文本来源', [resourceSchema], false, (r) =>
       workflows.resources.readTextSource(r),
