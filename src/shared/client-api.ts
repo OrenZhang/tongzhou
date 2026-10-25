@@ -1,6 +1,6 @@
 import type { AppEvent, TongzhouAPI } from './types';
 
-/** Transport-independent renderer API. Electron and Tauri share every method mapping. */
+/** Renderer API exposed by the Electron preload through the controlled command mapping. */
 export function createClientAPI(
   call: (method: string, ...args: unknown[]) => Promise<any>,
   onEvent: (callback: (event: AppEvent) => void) => () => void,

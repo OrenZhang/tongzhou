@@ -8,9 +8,8 @@ export interface PowerDriver {
   supported: boolean;
   platform: string;
   onBatteryPower(): boolean;
-  blockerActive?(id: number): boolean;
-  startBlocker(): number | Promise<number>;
-  stopBlocker(id: number): void | Promise<void>;
+  startBlocker(): number;
+  stopBlocker(id: number): void;
   setLidEnabled(enabled: boolean, interactive?: boolean): Promise<void>;
 }
 
@@ -23,8 +22,6 @@ export class PowerSettings {
   private error?: string;
   private closing = false;
   private pending = Promise.resolve();
-  private starting?: Promise<void>;
-  private releasing = Promise.resolve();
 
   constructor(
     private driver: PowerDriver,
@@ -67,12 +64,10 @@ export class PowerSettings {
   refresh(onBatteryPower = this.driver.onBatteryPower(), interactive = false) {
     this.onBatteryPower = onBatteryPower;
     // Release synchronously on unplug, even if a Windows policy operation is still pending.
-    const syncing = this.syncBlocker();
-    void syncing.catch(() => {});
+    this.syncBlocker();
     const work = this.pending.then(async () => {
+      this.syncBlocker();
       try {
-        await syncing;
-        await this.syncBlocker();
         const enabled = this.blocker !== undefined && this.preferences.keepAwakeWhenLidClosed;
         await this.driver.setLidEnabled(enabled, interactive);
         this.lidActive = enabled;
@@ -92,39 +87,18 @@ export class PowerSettings {
     this.changed(this.snapshot());
   }
 
-  private shouldBlock() {
-    return (
+  private syncBlocker() {
+    const active =
       this.driver.supported &&
       !this.closing &&
       this.preferences.keepAwakeOnAC &&
-      !this.onBatteryPower
-    );
-  }
-  private syncBlocker(): Promise<void> {
-    if (this.blocker !== undefined && this.driver.blockerActive?.(this.blocker) === false)
+      !this.onBatteryPower;
+    if (!active && this.blocker !== undefined) {
+      this.driver.stopBlocker(this.blocker);
       this.blocker = undefined;
-    if (!this.shouldBlock() && this.blocker !== undefined) {
-      const id = this.blocker;
-      this.blocker = undefined;
-      this.releasing = Promise.resolve(this.driver.stopBlocker(id));
-    } else if (this.shouldBlock() && this.blocker === undefined && !this.starting) {
-      try {
-        const result = this.driver.startBlocker();
-        if (typeof result === 'number') this.blocker = result;
-        else
-          this.starting = result
-            .then(async (id) => {
-              if (this.shouldBlock()) this.blocker = id;
-              else await this.driver.stopBlocker(id);
-            })
-            .finally(() => {
-              this.starting = undefined;
-            });
-      } catch (error) {
-        return Promise.reject(error);
-      }
+    } else if (active && this.blocker === undefined) {
+      this.blocker = this.driver.startBlocker();
     }
-    return Promise.all([this.starting, this.releasing]).then(() => {});
   }
 
   async dispose() {

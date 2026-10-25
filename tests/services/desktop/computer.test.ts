@@ -13,10 +13,12 @@ import { desktopCapturer, nativeImage } from 'electron';
 import { x11Run } from '../../../electron/services/desktop/linux-computer';
 import { DesktopComputer } from '../../../electron/services/desktop/electron-computer';
 import {
+  ComputerControl,
   actionSchema,
   mapPoint,
   observedWindow,
 } from '../../../electron/services/desktop/computer';
+import { computerDiagnostic } from '../../../electron/services/desktop/computer-diagnostic';
 describe('computer tool boundaries', () => {
   const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')!;
   afterEach(() => {
@@ -128,4 +130,71 @@ describe('computer tool boundaries', () => {
     ).rejects.toThrow('未获取目标窗口图像');
     expect(desktopCapturer.getSources).not.toHaveBeenCalled();
   });
+});
+
+it('reuses frame checks across native drivers and never inputs after movement or reuse', async () => {
+  const window = {
+    id: '7',
+    pid: 100,
+    title: 'fixture',
+    bounds: { x: 0, y: 0, width: 600, height: 300 },
+  };
+  const helper = vi.fn(async (payload: any) => (payload.action === 'windows' ? [window] : {}));
+  const control = new ComputerControl({
+    status: () => ({
+      supported: true,
+      platform: 'darwin',
+      screen: 'granted',
+      accessibility: true,
+      emergencyShortcut: true,
+    }),
+    requestPermission() {},
+    helper,
+    capture: async () => ({ width: 600, height: 300, data: 'fixture', mimeType: 'image/png' }),
+  });
+  const signal = new AbortController().signal;
+  let frame = JSON.parse(
+    (await control.execute('computer_screenshot', { windowId: '7' }, signal)).text,
+  );
+  await control.execute('computer_click', { frameId: frame.frameId, x: 10, y: 10 }, signal);
+  await expect(
+    control.execute('computer_click', { frameId: frame.frameId, x: 10, y: 10 }, signal),
+  ).rejects.toThrow('截图');
+  frame = JSON.parse(
+    (await control.execute('computer_screenshot', { windowId: '7' }, signal)).text,
+  );
+  helper.mockResolvedValueOnce([{ ...window, bounds: { ...window.bounds, x: 20 } }]);
+  await expect(
+    control.execute('computer_type', { frameId: frame.frameId, text: '中文' }, signal),
+  ).rejects.toThrow('移动');
+  expect(helper.mock.calls.filter(([p]) => p.action === 'type')).toHaveLength(0);
+});
+it('diagnoses the owned window PID, verifies Unicode delivery and closes its own test window', async () => {
+  let title = '',
+    value = '';
+  const close = vi.fn();
+  const control = new ComputerControl({
+    status: () => ({
+      supported: true,
+      platform: 'darwin',
+      screen: 'granted',
+      accessibility: true,
+      emergencyShortcut: false,
+    }),
+    requestPermission() {},
+    helper: async (payload) => {
+      if (payload.action === 'windows')
+        return [{ id: '7', title, pid: 9999, bounds: { x: 0, y: 0, width: 600, height: 300 } }];
+      if (payload.action === 'type') value = payload.text;
+      return {};
+    },
+    capture: async () => ({ width: 600, height: 300, mimeType: 'image/png', data: 'fixture' }),
+  });
+  const report = await computerDiagnostic(control, async (name) => {
+    title = name;
+    return { pid: 9999, read: async () => value, close };
+  });
+  expect(report.ok).toBe(true);
+  expect(value).toBe('CoSail自检成功');
+  expect(close).toHaveBeenCalledTimes(1);
 });

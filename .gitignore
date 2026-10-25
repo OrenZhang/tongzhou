@@ -69,8 +69,3 @@ node_modules/
 Thumbs.db
 Desktop.ini
 public/excalidraw-assets/
-
-/src-tauri/target/
-
-/dist-tauri/
-/src-tauri/gen/
