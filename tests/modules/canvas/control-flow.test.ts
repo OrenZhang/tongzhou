@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Store } from '../../../electron/services/storage/store';
@@ -38,7 +39,7 @@ const edge = (from: string, to: string, fromPort = 'result'): CanvasEdge => ({
   toPort: 'context',
   kind: 'dependency',
 });
-function fixture() {
+function fixture({ cacheEffects = false } = {}) {
   const root = mkdtempSync(path.join(tmpdir(), 'canvas-controls-'));
   cleanup.push(() => rmSync(root, { recursive: true, force: true }));
   const store = new Store(':memory:', { encrypt: (v) => v, decrypt: (v) => v });
@@ -46,16 +47,14 @@ function fixture() {
   const domains = createDomainServices(store, root),
     owner = store.createSession();
   store.setSessionPermission(owner.id, 'full-access');
-  domains.canvasWorkflows.configure(
-    {
-      start: vi.fn(() => {
-        throw new Error('Unexpected model');
-      }),
-      cancel: vi.fn(async () => {}),
-      setSessionPermission: vi.fn(),
-    } as any,
-    new ApplicationEvents(() => {}),
-  );
+  const tasks = {
+    start: vi.fn((_input: any): string => {
+      throw new Error('Unexpected model');
+    }),
+    cancel: vi.fn(async () => {}),
+    setSessionPermission: vi.fn(),
+  };
+  domains.canvasWorkflows.configure(tasks as any, new ApplicationEvents(() => {}));
   cleanup.push(() => domains.canvasWorkflows.stop());
   const effects: { id: string; inputs: CanvasOutput[]; key?: string }[] = [];
   let failOn: unknown;
@@ -65,7 +64,7 @@ function fixture() {
       name: 'effect',
       kind: 'plugin',
       version: 1,
-      cache: 'never',
+      cache: cacheEffects ? undefined : 'never',
       inputs: ['text', 'json'],
       outputs: ['text', 'json'],
     },
@@ -106,6 +105,7 @@ function fixture() {
     store,
     domains,
     owner,
+    tasks,
     effects,
     save,
     start,
@@ -229,7 +229,7 @@ describe('canvas control flow integration', () => {
   });
 
   it('iterates actual nodes in order, records per-item results and reuses successful iterations', async () => {
-    const f = fixture();
+    const f = fixture({ cacheEffects: true });
     f.fail(2);
     const c = f.save(
       [
@@ -299,6 +299,239 @@ describe('canvas control flow integration', () => {
     expect(r.nodes.outer.iterations?.[0].nodes.body.status).toBe('completed');
     expect(r.nodes.outer.iterations?.[0].nodes.innerEnd.output?.value).toEqual([1, 2]);
   });
+
+  it('revisits non-cacheable nodes in nested loops while reusing each unchanged expensive node', async () => {
+    const f = fixture(),
+      generated: string[] = [];
+    f.domains.canvases.plugins.register({
+      definition: {
+        id: 'test.expensive',
+        name: 'expensive',
+        kind: 'plugin',
+        version: 1,
+        inputs: ['text', 'json'],
+        outputs: ['text', 'json'],
+      },
+      execute: ({ inputs, run, node }) => {
+        generated.push(run.nodes[node.id].executionKey!);
+        return { text: inputs[0].text, value: inputs[0].value, resources: [] };
+      },
+    });
+    const c = f.save(
+      [
+        text('source', '[[1,2],[3]]'),
+        node('outer', 'workflow.foreach', { endNodeId: 'outerEnd' }),
+        node('inner', 'workflow.foreach', { endNodeId: 'innerEnd' }),
+        node('expensive', 'test.expensive'),
+        { ...node('clock', 'workflow.template'), text: '{{time}}' },
+        node('effect', 'test.effect'),
+        node('innerEnd', 'workflow.collect'),
+        node('outerEnd', 'workflow.collect'),
+      ],
+      [
+        edge('source', 'outer'),
+        edge('outer', 'inner', 'item'),
+        edge('inner', 'expensive', 'item'),
+        edge('expensive', 'clock'),
+        edge('clock', 'effect'),
+        edge('effect', 'innerEnd'),
+        edge('innerEnd', 'outerEnd'),
+      ],
+    );
+    const first = await f.done(f.start(c).id);
+    const second = await f.done(f.start(c, true).id);
+    expect(second.startedAt).not.toBe(first.startedAt);
+    expect(second.status).toBe('completed');
+    expect(generated).toEqual(['outer/0/inner/0', 'outer/0/inner/1', 'outer/1/inner/0']);
+    expect(f.effects).toHaveLength(6);
+    const at = new Date(second.startedAt).toISOString();
+    expect(second.nodes.outerEnd.output?.value).toEqual([[at, at], [at]]);
+    for (const outer of second.nodes.outer.iterations!) {
+      expect(outer.status).toBe('completed');
+      for (const inner of outer.nodes.inner.iterations!) {
+        expect(inner.status).toBe('completed');
+        expect(inner.nodes.expensive.status).toBe('cached');
+        expect(inner.nodes.clock.status).toBe('completed');
+        expect(inner.nodes.effect.status).toBe('completed');
+      }
+    }
+  });
+
+  it.each([
+    'provider choice',
+    'provider configuration',
+    'node agent',
+    'permission',
+    'plugin',
+    'skill',
+  ])('invalidates nested Agent results after changing the effective %s', async (change) => {
+    const f = fixture();
+    for (const id of ['provider-a', 'provider-b'])
+      f.store.put('provider', {
+        id,
+        name: id,
+        enabled: true,
+        protocol: 'openai-chat',
+        auth: 'none',
+        baseUrl: 'http://localhost',
+        models: ['same-model'],
+      });
+    f.store.put('agent', { id: 'worker', name: 'worker', instructions: 'first instructions' });
+    f.tasks.start.mockImplementation((input) => {
+      const id = randomUUID();
+      f.store.put('run', {
+        id,
+        sessionId: input.sessionId,
+        status: 'completed',
+        startedAt: Date.now(),
+        providerId: input.providerId,
+        model: input.model,
+        inputTokens: 0,
+        outputTokens: 0,
+        agentName: '',
+      });
+      f.store.message({
+        id: randomUUID(),
+        sessionId: input.sessionId,
+        runId: id,
+        role: 'assistant',
+        content: input.providerId,
+        status: 'complete',
+        createdAt: Date.now(),
+      });
+      return id;
+    });
+    const c = f.save(
+      [
+        text('source', '[[1],[2]]'),
+        node('outer', 'workflow.foreach', { endNodeId: 'outerEnd' }),
+        node('inner', 'workflow.foreach', { endNodeId: 'innerEnd' }),
+        { id: 'agent', kind: 'agent', title: 'agent', x: 0, y: 0, agentId: 'worker' },
+        node('innerEnd', 'workflow.collect'),
+        node('outerEnd', 'workflow.collect'),
+      ],
+      [
+        edge('source', 'outer'),
+        edge('outer', 'inner', 'item'),
+        edge('inner', 'agent', 'item'),
+        edge('agent', 'innerEnd'),
+        edge('innerEnd', 'outerEnd'),
+      ],
+    );
+    let providerId = 'provider-a';
+    const run = () =>
+      f.done(
+        f.domains.canvasWorkflows.start({
+          canvasId: c.id,
+          version: c.version,
+          sessionId: f.owner.id,
+          reuse: true,
+          providerId,
+          model: 'same-model',
+        }).id,
+      );
+    expect((await run()).status).toBe('completed');
+    expect((await run()).status).toBe('completed');
+    expect(f.tasks.start).toHaveBeenCalledTimes(2);
+    if (change === 'provider choice') providerId = 'provider-b';
+    if (change === 'provider configuration')
+      f.store.put('provider', {
+        ...f.store.get<any>('provider', providerId),
+        baseUrl: 'http://localhost/changed',
+      });
+    if (change === 'node agent')
+      f.store.put('agent', {
+        ...f.store.get<any>('agent', 'worker'),
+        instructions: 'new instructions',
+      });
+    if (change === 'permission') f.store.setSessionPermission(f.owner.id, 'ask');
+    if (change === 'plugin') f.store.put('plugin', { id: 'changed', enabled: false });
+    if (change === 'skill')
+      f.store.put('skill', { id: 'changed', enabled: true, files: { 'SKILL.md': 'new' } });
+    const changed = await run();
+    expect(changed.status).toBe('completed');
+    expect(f.tasks.start).toHaveBeenCalledTimes(4);
+    expect(changed.nodes.outerEnd.output?.value).toEqual([[providerId], [providerId]]);
+    expect((await run()).status).toBe('completed');
+    expect(f.tasks.start).toHaveBeenCalledTimes(4);
+  });
+
+  it.each(['missing role', 'removed provider'])(
+    'only validates unavailable %s when its loop branch actually executes',
+    async (unavailable) => {
+      const f = fixture();
+      const provider = {
+        id: 'branch-provider',
+        name: 'branch provider',
+        enabled: true,
+        protocol: 'openai-chat',
+        auth: 'none',
+        baseUrl: 'http://localhost',
+        models: ['model'],
+      };
+      f.store.put('provider', provider);
+      f.domains.canvases.plugins.register({
+        definition: {
+          id: 'test.prepare',
+          name: 'prepare',
+          kind: 'plugin',
+          version: 1,
+          cache: 'never',
+          inputs: ['text'],
+          outputs: ['text'],
+        },
+        execute: ({ inputs }) => {
+          if (unavailable === 'removed provider') f.store.remove('provider', provider.id);
+          return inputs[0];
+        },
+      });
+      const c = f.save(
+        [
+          text('source', '[1]'),
+          node('prepare', 'test.prepare'),
+          node('loop', 'workflow.foreach', { endNodeId: 'end' }),
+          node('condition', 'workflow.condition', {
+            field: 'value',
+            operator: 'equals',
+            value: '1',
+          }),
+          node('yes', 'test.effect'),
+          {
+            id: 'unavailable',
+            kind: 'agent',
+            title: 'unavailable',
+            x: 0,
+            y: 0,
+            providerId: provider.id,
+            model: 'model',
+            agentId: unavailable === 'missing role' ? 'missing-worker' : undefined,
+          },
+          node('end', 'workflow.collect'),
+        ],
+        [
+          edge('source', 'prepare'),
+          edge('prepare', 'loop'),
+          edge('loop', 'condition', 'item'),
+          edge('condition', 'yes', 'true'),
+          edge('condition', 'unavailable', 'false'),
+          edge('yes', 'end'),
+          edge('unavailable', 'end'),
+        ],
+      );
+      const skipped = await f.done(f.start(c, true).id);
+      expect(skipped.status).toBe('completed');
+      expect(skipped.nodes.unavailable.status).toBe('skipped');
+      expect(skipped.nodes.end.output?.value).toEqual([1]);
+      f.store.put('provider', provider);
+      const selected = f.domains.canvases.apply(c.id, c.version, [
+        { type: 'put_node', node: text('source', '[0]') },
+      ]);
+      const failed = await f.done(f.start(selected, true).id);
+      expect(failed.status).toBe('failed');
+      expect(failed.nodes.unavailable.status).toBe('failed');
+      expect(f.tasks.start).not.toHaveBeenCalled();
+    },
+  );
 
   it('executes empty loops without body effects, expands selection and rejects invalid input before body effects', async () => {
     const f = fixture();
@@ -612,6 +845,8 @@ describe('canvas control flow integration', () => {
       );
       const first = await f.done(f.start(c).id);
       first.nodes.loop.iterations![0].status = status;
+      // Historical fingerprints can change after an upgrade or an effective-context change.
+      first.nodes.loop.iterationFingerprint = 'previous-cache-format';
       f.domains.canvases.runs.put(first);
       for (let i = 0; i < 2; i++) {
         const retried = await f.done(f.start(c, true).id);
@@ -619,8 +854,70 @@ describe('canvas control flow integration', () => {
         expect(retried.error).toContain('远端媒体任务 ID');
       }
       expect(submissions).toBe(1);
+      expect((await f.done(f.start(c, false).id)).status).toBe('failed');
+      expect(submissions).toBe(2);
     },
   );
+
+  it('keeps unresolved remote records scoped to their loop and item', async () => {
+    const f = fixture(),
+      submissions: string[] = [];
+    f.domains.canvases.plugins.register({
+      definition: {
+        id: 'test.scoped-remote',
+        name: 'remote',
+        kind: 'plugin',
+        version: 1,
+        inputs: ['text', 'json'],
+        outputs: ['text', 'json'],
+      },
+      execute: ({ node, run, inputs }) => {
+        submissions.push(run.nodes[node.id].executionKey!);
+        if (node.id === 'remoteA' && inputs[0].value === 1) {
+          run.nodes[node.id].generation = [
+            {
+              index: 0,
+              status: 'failed',
+              resources: [],
+              remoteTaskId: 'old-remote-job',
+            },
+          ];
+          throw new Error('query disconnected');
+        }
+        return inputs[0];
+      },
+    });
+    const c = f.save(
+      [
+        text('sourceA', '[0,1]'),
+        text('sourceB', '[0,1]'),
+        node('loopA', 'workflow.foreach', { endNodeId: 'endA', onError: 'continue' }),
+        node('loopB', 'workflow.foreach', { endNodeId: 'endB' }),
+        node('remoteA', 'test.scoped-remote'),
+        node('remoteB', 'test.scoped-remote'),
+        node('endA', 'workflow.collect'),
+        node('endB', 'workflow.collect'),
+      ],
+      [
+        edge('sourceA', 'loopA'),
+        edge('loopA', 'remoteA', 'item'),
+        edge('remoteA', 'endA'),
+        edge('sourceB', 'loopB'),
+        edge('loopB', 'remoteB', 'item'),
+        edge('remoteB', 'endB'),
+      ],
+    );
+    expect((await f.done(f.start(c).id)).status).toBe('completed');
+    expect((await f.done(f.start(c, true, ['endB']).id)).status).toBe('completed');
+    expect(submissions.filter((key) => key.startsWith('loopB/'))).toHaveLength(2);
+    const shorter = f.domains.canvases.apply(c.id, c.version, [
+      { type: 'put_node', node: text('sourceA', '[0]') },
+    ]);
+    const resumed = await f.done(f.start(shorter, true, ['endA']).id);
+    expect(resumed.status).toBe('completed');
+    expect(resumed.nodes.endA.output?.value).toEqual([0]);
+    expect(submissions.filter((key) => key === 'loopA/1')).toHaveLength(1);
+  });
 
   it('recovers running iteration records as interrupted without replaying effects', async () => {
     const f = fixture(),

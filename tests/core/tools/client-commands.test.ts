@@ -18,6 +18,52 @@ function attach(
   return { scope, ask };
 }
 describe('self-registering client capabilities', () => {
+  it('searches and paginates the complete registry so later modules remain discoverable', async () => {
+    const commands = new ClientCommands();
+    for (let i = 0; i < 125; i++)
+      commands.register(`read${i}`, operation('资料', 'query', `读取资料 ${i}`), () => i);
+    commands.register(
+      'commitStaged',
+      operation('改动与交付', 'change', '提交已审阅的代码', [z.string().describe('projectId')]),
+      () => {},
+    );
+    const { scope } = attach(commands);
+    const names: string[] = [];
+    let offset: number | null = 0;
+    do {
+      const page = JSON.parse((await scope.call('client_catalog', { offset })).text);
+      expect(page.sessionId).toBe('current');
+      expect(page.total).toBe(126);
+      expect(page.methods.length).toBeLessThanOrEqual(50);
+      names.push(...page.methods.map((m: any) => m.name));
+      offset = page.nextOffset;
+    } while (offset !== null);
+    expect(new Set(names).size).toBe(126);
+    const found = JSON.parse((await scope.call('client_catalog', { query: '提交 代码' })).text);
+    expect(found.methods).toEqual([
+      expect.objectContaining({ name: 'commitStaged', available: true }),
+    ]);
+    const detail = JSON.parse(
+      (await scope.call('client_catalog', { method: found.methods[0].name })).text,
+    );
+    expect(detail.methods[0].arguments.prefixItems[0].description).toBe('projectId');
+    const missing = JSON.parse(
+      (await scope.call('client_catalog', { query: '不存在的能力' })).text,
+    );
+    expect(missing).toMatchObject({ total: 0, methods: [], nextOffset: null });
+    expect(missing.modules).toContain('改动与交付');
+    for (const filter of [{ module: 'missing' }, { method: 'missing' }]) {
+      const first = JSON.parse((await scope.call('client_catalog', filter)).text);
+      const next = JSON.parse(
+        (await scope.call('client_catalog', { ...filter, offset: first.nextOffset })).text,
+      );
+      expect(next.offset).toBe(50);
+      expect(next.methods).toHaveLength(50);
+      expect(next.methods.some((m: any) => first.methods.some((n: any) => n.name === m.name))).toBe(
+        false,
+      );
+    }
+  });
   it('returns the actual registry with an explicit lookup error for invented names instead of an empty capability list', async () => {
     const commands = new ClientCommands();
     commands.register(

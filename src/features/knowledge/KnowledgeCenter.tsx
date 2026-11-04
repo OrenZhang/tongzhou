@@ -70,6 +70,8 @@ export function KnowledgeCenter({
   const [query, setQuery] = useState('');
   const [project, setProject] = useState('*');
   const [kind, setKind] = useState<KnowledgeKind | 'all' | 'issues'>('all');
+  const [offset, setOffset] = useState(0);
+  const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<KnowledgeRead>();
   const [deleting, setDeleting] = useState<KnowledgeDocument>();
   const [reviewing, setReviewing] = useState<KnowledgeDocument>();
@@ -86,20 +88,35 @@ export function KnowledgeCenter({
   const session = data.sessions.find((s) => s.id === sessionId && !s.archived);
   const refresh = async () => {
     const token = ++request.current;
-    const value = await api.knowledgeState(
-      query,
-      project === '*' ? undefined : project,
-      sessionId || undefined,
-    );
-    if (token === request.current) setState(value);
+    setLoading(true);
+    try {
+      const value = await api.knowledgeState(
+        query,
+        project === '*' ? undefined : project,
+        sessionId || undefined,
+        undefined,
+        { kind: 'memory', issuesOnly: kind === 'issues', offset, limit: 100 },
+      );
+      if (token !== request.current) return;
+      if (value.page && offset > 0 && offset >= value.page.total) {
+        setOffset(
+          Math.floor(Math.max(0, value.page.total - 1) / value.page.limit) * value.page.limit,
+        );
+        return;
+      }
+      setState(value);
+    } finally {
+      if (token === request.current) setLoading(false);
+    }
   };
+  useEffect(() => setOffset(0), [query, project, sessionId, kind, section]);
   useEffect(() => {
     const timer = setTimeout(() => void refresh().catch((e) => setError(String(e))), 150);
     return () => {
       clearTimeout(timer);
       request.current++;
     };
-  }, [query, project, sessionId, data.runs, kind, section]);
+  }, [query, project, sessionId, data.runs, kind, section, offset]);
   const action = async (fn: () => Promise<void>) => {
     setBusy(true);
     setError('');
@@ -141,7 +158,8 @@ export function KnowledgeCenter({
   }, [initialDocument, initialSection]);
   const scopedDocuments = (state?.documents ?? []).filter((d) => d.kind === 'memory');
   const issueIds = new Set(state?.issues.map((issue) => issue.id) ?? []);
-  const pendingCount = scopedDocuments.filter((d) => issueIds.has(d.id)).length;
+  const pendingCount =
+    state?.page?.issuesTotal ?? scopedDocuments.filter((d) => issueIds.has(d.id)).length;
   const visible = scopedDocuments.filter(
     (d) => kind === 'all' || (kind === 'issues' && issueIds.has(d.id)) || d.kind === kind,
   );
@@ -468,7 +486,7 @@ export function KnowledgeCenter({
                 </button>
               ))}
             </div>
-            <div className="knowledge-list" aria-label={tr('知识资料列表')}>
+            <div className="knowledge-list" aria-label={tr('知识资料列表')} aria-busy={loading}>
               {visible.map((d) => (
                 <button
                   key={d.id}
@@ -497,9 +515,28 @@ export function KnowledgeCenter({
             <small className="knowledge-count">
               {visible.length}
               {tr(' 项结果 · 共 ')}
-              {scopedDocuments.length}
+              {state?.page?.total ?? scopedDocuments.length}
               {tr(' 份记忆')}
             </small>
+            {state?.page && (state.page.offset > 0 || state.page.nextOffset !== null) && (
+              <div className="knowledge-pagination">
+                <button
+                  disabled={busy || loading || state.page.offset === 0}
+                  onClick={() => setOffset(Math.max(0, state.page!.offset - state.page!.limit))}
+                >
+                  {tr('上一页')}
+                </button>
+                <span>
+                  {state.page.offset + 1}–{state.page.offset + visible.length} / {state.page.total}
+                </span>
+                <button
+                  disabled={busy || loading || state.page.nextOffset === null}
+                  onClick={() => setOffset(state.page!.nextOffset!)}
+                >
+                  {tr('下一页')}
+                </button>
+              </div>
+            )}
           </aside>
           <main
             className="knowledge-reader"

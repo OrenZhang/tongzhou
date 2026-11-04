@@ -164,17 +164,29 @@ export class ClientCommands {
       {
         name: 'client_catalog',
         description:
-          '发现CoSail所有模块的功能与配置。内容保存用 contentWrite，偏好配置用 personalizationState/savePersonalization。无参数列出摘要；module 是模块名（如 Skills），method 是操作名（如 snapshot）。查询操作参数示例：{"method":"snapshot"}。manual 表示需要用户在对应页面操作。',
+          '发现CoSail模块的真实功能。可用 query 按操作名、模块或说明搜索（如“提交”“contentWrite”），按 nextOffset 继续分页；module 精确筛选模块，method 查询一个操作的完整参数。返回当前 sessionId，操作当前任务时使用。内容保存用 contentWrite，偏好配置用 personalizationState/savePersonalization。manual 仅表示该操作需要用户在对应页面处理。',
         parameters: {
           type: 'object',
-          properties: { module: { type: 'string' }, method: { type: 'string' } },
+          properties: {
+            module: { type: 'string' },
+            method: { type: 'string' },
+            query: { type: 'string', description: '操作名、模块或说明中的关键词；空格分隔多个词' },
+            offset: { type: 'integer', minimum: 0 },
+            limit: { type: 'integer', minimum: 1, maximum: 100 },
+          },
           additionalProperties: false,
         },
       },
       '查询客户端能力目录',
       async (input) => {
         const filter = z
-          .object({ module: z.string().optional(), method: z.string().optional() })
+          .object({
+            module: z.string().max(200).optional(),
+            method: z.string().max(200).optional(),
+            query: z.string().max(200).optional(),
+            offset: z.number().int().min(0).default(0),
+            limit: z.number().int().min(1).max(100).default(50),
+          })
           .strict()
           .parse(input);
         // A method passed as a module is an unambiguous discovery request, not an execution.
@@ -188,13 +200,27 @@ export class ClientCommands {
             ? '未找到指定操作或模块。下面返回本轮实际注册的能力总览；请使用其中的准确 name 查询参数，不能据此判断模块不可用，也不要猜测操作名。'
             : undefined;
         const catalog = lookupError ? this.describe() : matched;
+        const terms = filter.query?.trim().toLowerCase().split(/\s+/).filter(Boolean) ?? [];
+        const methods = catalog.methods.filter((m) => {
+          const text = `${m.name} ${m.module} ${m.description}`.toLowerCase();
+          return lookupError || terms.every((term) => text.includes(term));
+        });
+        // Keep each discovery receipt bounded and valid JSON; detail is fetched by exact name.
+        const offset = !lookupError && filter.method ? 0 : filter.offset;
+        const page = methods.slice(offset, offset + filter.limit);
         return {
           ...(lookupError ? { isError: true } : {}),
           text: JSON.stringify({
             ...catalog,
             ...(lookupError ? { lookupError, requested: filter } : {}),
+            sessionId,
+            total: methods.length,
+            offset,
+            nextOffset: offset + page.length < methods.length ? offset + page.length : null,
+            read: page.filter((m) => m.access === 'query').map((m) => m.name),
+            change: page.filter((m) => m.access === 'change').map((m) => m.name),
             readOnly,
-            methods: catalog.methods.map(({ arguments: args, ...m }) => {
+            methods: page.map(({ arguments: args, ...m }) => {
               const reason =
                 policy?.unavailable(m.name) ??
                 this.handlers.get(m.name)!.operation.unavailable?.(sessionId) ??

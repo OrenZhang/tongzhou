@@ -6,6 +6,7 @@ import type { ApplicationHost } from '../../application/host';
 import { readFile, writeFile, stat } from 'node:fs/promises';
 import type { Store } from '../../services/storage/store';
 import type { Session, Run } from '../../../src/shared/types';
+import { isUserSession } from '../../../src/shared/session-scope';
 import { operation, manual, type ClientOperation } from '../../core/tools/client-commands';
 import { idSchema } from '../../services/storage/validation';
 import { DataMaintenance } from '../../services/storage/data-maintenance';
@@ -22,19 +23,49 @@ export function registerTaskServices(
   const dialog = host.dialogs;
   const session = idSchema.describe('sessionId'),
     terminal = idSchema.describe('terminalId');
-  const idle = (projectId?: string) => {
+  const idle = (projectId?: string, callerSessionId?: string) => {
+    const caller = callerSessionId ? store.get<Session>('session', callerSessionId) : undefined;
     if (
       services
         .snapshot()
         .runs.some(
           (r) =>
             r.status === 'running' &&
-            (!projectId || store.get<Session>('session', r.sessionId).projectId === projectId),
+            (!projectId || store.get<Session>('session', r.sessionId).projectId === projectId) &&
+            !(
+              projectId &&
+              caller?.projectId === projectId &&
+              isUserSession(caller) &&
+              r.sessionId === caller.id &&
+              !r.agents?.some(
+                (a) => ['pending', 'running', 'waiting'].includes(a.status) || a.pendingAction,
+              )
+            ),
         )
     )
       throw new Error('请先停止相关运行任务');
   };
-  const checkpointIdle = (runId: string) => idle(store.get<any>('runChanges', runId).projectId);
+  const checkpointAction = (
+    action: 'restore' | 'stage',
+    runId: string,
+    file: string,
+    callerSessionId?: string,
+  ) => {
+    idSchema.parse(runId);
+    idle(store.get<any>('runChanges', runId).projectId, callerSessionId);
+    return services.checkpoints[action](runId, z.string().max(2000).parse(file));
+  };
+  const commit = (id: string, message: string, expected: string, callerSessionId?: string) => {
+    idle(idSchema.parse(id), callerSessionId);
+    return services.checkpoints.commit(
+      id,
+      z.string().trim().min(1).max(2000).parse(message),
+      z
+        .string()
+        .regex(/^[a-f0-9]{64}$/)
+        .parse(expected),
+    );
+  };
   register(
     'taskState',
     operation('任务与终端', 'query', '读取会话任务记忆、恢复检查点、终端状态和验证证据', [session]),
@@ -187,25 +218,25 @@ export function registerTaskServices(
   );
   register(
     'restoreRunFile',
-    operation('改动与交付', 'change', '恢复文件到本轮开始前；文件后续已变更时拒绝覆盖', [
-      idSchema,
-      z.string().max(2000),
-    ]),
-    (id, file) => {
-      checkpointIdle(idSchema.parse(id));
-      return services.checkpoints.restore(id, z.string().max(2000).parse(file));
-    },
+    operation(
+      '改动与交付',
+      'change',
+      '恢复文件到本轮开始前；文件后续已变更或同项目有其他任务时拒绝覆盖',
+      [idSchema, z.string().max(2000)],
+      { chat: ([id, file], current) => checkpointAction('restore', id, file, current) },
+    ),
+    (id, file) => checkpointAction('restore', id, file),
   );
   register(
     'stageRunFile',
-    operation('改动与交付', 'change', '将已审阅且内容未变化的文件暂存到 Git', [
-      idSchema,
-      z.string().max(2000),
-    ]),
-    (id, file) => {
-      checkpointIdle(idSchema.parse(id));
-      return services.checkpoints.stage(id, z.string().max(2000).parse(file));
-    },
+    operation(
+      '改动与交付',
+      'change',
+      '将已审阅且内容未变化的检查点文件暂存到 Git；同项目其他任务须先结束',
+      [idSchema, z.string().max(2000)],
+      { chat: ([id, file], current) => checkpointAction('stage', id, file, current) },
+    ),
+    (id, file) => checkpointAction('stage', id, file),
   );
   register(
     'reviewStaged',
@@ -219,18 +250,9 @@ export function registerTaskServices(
       'change',
       '提交项目当前全部已暂存内容；先用 reviewStaged 审阅，传回相同 hash',
       [idSchema, z.string().trim().min(1).max(2000), z.string().regex(/^[a-f0-9]{64}$/)],
+      { chat: ([id, message, expected], current) => commit(id, message, expected, current) },
     ),
-    (id, message, expected) => {
-      idle(idSchema.parse(id));
-      return services.checkpoints.commit(
-        id,
-        z.string().trim().min(1).max(2000).parse(message),
-        z
-          .string()
-          .regex(/^[a-f0-9]{64}$/)
-          .parse(expected),
-      );
-    },
+    (id, message, expected) => commit(id, message, expected),
   );
   const maintenance = new DataMaintenance(store, dataDir),
     password = z.string().min(12).max(256);

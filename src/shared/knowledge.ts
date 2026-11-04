@@ -139,12 +139,25 @@ export interface KnowledgeInput {
 export interface KnowledgeSettings {
   autoCollect: boolean;
 }
+export interface KnowledgeQuery {
+  kind?: KnowledgeKind;
+  issuesOnly?: boolean;
+  offset?: number;
+  limit?: number;
+}
 export interface KnowledgeState {
   root: string;
   settings: KnowledgeSettings;
   documents: KnowledgeSummary[];
   folders: KnowledgeFolder[];
   total: number;
+  page?: {
+    offset: number;
+    limit: number;
+    total: number;
+    issuesTotal: number;
+    nextOffset: number | null;
+  };
   issues: { id: string; title: string; reason: string }[];
   memoryQueue: {
     pending: number;

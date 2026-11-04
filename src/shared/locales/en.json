@@ -891,7 +891,7 @@
   "重试电源设置": "Retry power settings",
   "正在读取电源状态…": "Reading power status…",
   "工作数据与诊断": "Workspace data & diagnostics",
-  "加密备份包含会话、配置、附件、作品和文本检查点；项目文件请另外用 Git 保存。备份不含登录凭据，恢复后连接默认停用，需要重新授权。": "Encrypted backups include conversations, settings, attachments, assets and text checkpoints. Back up project files separately with Git. Credentials are excluded; restored connections are disabled until reauthorized.",
+  "加密备份包含会话、配置、附件、作品、画布与白板、工作流运行记录和文本检查点；项目文件请另外用 Git 保存。备份不含登录凭据，恢复后连接默认停用，需要重新授权。": "Encrypted backups include conversations, settings, attachments, assets, canvases and whiteboards, workflow run history, and text checkpoints. Back up project files separately with Git. Credentials are excluded; restored connections are disabled until reauthorized.",
   "备份密码": "Backup password",
   "备份密码（至少 12 个字符）": "Backup password (at least 12 characters)",
   "创建加密备份": "Create encrypted backup",

@@ -30,6 +30,7 @@ import type {
   KnowledgeSummary,
   KnowledgeFolder,
   KnowledgeFolderInput,
+  KnowledgeQuery,
 } from '../../../src/shared/knowledge';
 import {
   knowledgeFolderBranch,
@@ -67,6 +68,12 @@ export const knowledgeFolderInput = z.object({
     .regex(/^[^\\/\r\n\x00-\x1f]+$/, '目录名称不能含路径分隔符或控制字符'),
   parentId: id.nullable().optional(),
   version: z.number().int().positive().optional(),
+});
+export const knowledgeQuery = z.object({
+  kind: z.enum(['source', 'wiki', 'memory']).optional(),
+  issuesOnly: z.boolean().optional(),
+  offset: z.number().int().min(0).default(0),
+  limit: z.number().int().min(1).max(100).default(100),
 });
 const hash = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
 const summary = ({
@@ -640,6 +647,8 @@ export class Knowledge {
       sessionId = this.store.get<Session>('session', sessionId).knowledgeScopeSession ?? sessionId;
     const q = z.string().max(500).parse(query).trim();
     const tokens = terms(q);
+    // Symbolic identifiers and single-character queries can have no lexical tokens.
+    if (q && !tokens.length) tokens.push(q.toLowerCase());
     return this.all()
       .map((d) => this.projectMemory(d, sessionId, projectId))
       .filter((d): d is KnowledgeDocument => !!d)
@@ -670,7 +679,9 @@ export class Knowledge {
     projectId?: string,
     _sessionId?: string,
     folderId?: string | null,
+    options: KnowledgeQuery = {},
   ): KnowledgeState {
+    const page = knowledgeQuery.parse(options);
     const docs = this.all();
     const folders = this.folders();
     const branch = folderId ? knowledgeFolderBranch(folders, folderId) : undefined;
@@ -701,20 +712,30 @@ export class Knowledge {
         );
       return reasons.map((reason) => ({ id: d.id, title: d.title, reason }));
     });
+    const issueIds = new Set(issues.map((issue) => issue.id));
+    const matching = this.search(query, undefined, projectId, Number.MAX_SAFE_INTEGER).filter(
+      (d) =>
+        (!page.kind || d.kind === page.kind) &&
+        (folderId === undefined ||
+          (d.kind !== 'memory' &&
+            (folderId === '*' ||
+              (folderId === null ? !d.folderId : !!d.folderId && branch!.has(d.folderId))))),
+    );
+    const issuesTotal = matching.filter((d) => issueIds.has(d.id)).length;
+    const documents = page.issuesOnly ? matching.filter((d) => issueIds.has(d.id)) : matching;
     return {
       root: this.root,
       settings: this.settings(),
-      documents: this.search(query, undefined, projectId, Number.MAX_SAFE_INTEGER)
-        .filter(
-          (d) =>
-            folderId === undefined ||
-            (d.kind !== 'memory' &&
-              (folderId === '*' ||
-                (folderId === null ? !d.folderId : !!d.folderId && branch!.has(d.folderId)))),
-        )
-        .slice(0, 100),
+      documents: documents.slice(page.offset, page.offset + page.limit),
       folders,
       total: docs.length,
+      page: {
+        offset: page.offset,
+        limit: page.limit,
+        total: documents.length,
+        issuesTotal,
+        nextOffset: page.offset + page.limit < documents.length ? page.offset + page.limit : null,
+      },
       issues,
       memoryQueue: this.memory.queueState(),
     };

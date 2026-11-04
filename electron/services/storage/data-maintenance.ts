@@ -33,6 +33,9 @@ const allowed = (name: string): boolean =>
       name,
     ) ||
     /^\.tzhou\/attachments\/[a-f0-9-]{36}$/.test(name) ||
+    /^\.tzhou\/canvas\/(?:definitions|runs|imports)\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\.json$/.test(
+      name,
+    ) ||
     /^\.tzhou\/artifacts\/[a-f0-9-]{36}\.[a-z0-9]{1,8}$/.test(name) ||
     /^\.tzhou\/checkpoints\/[a-f0-9]{64}$/.test(name) ||
     /^\.tzhou\/knowledge\/(?:index\.md|folders\.json|files\/[a-f0-9-]{36}\.[a-z0-9]{1,8})$/.test(

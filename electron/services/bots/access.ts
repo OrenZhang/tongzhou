@@ -6,8 +6,11 @@ import type {
 } from '../../../src/shared/types';
 import type { Store } from '../storage/store';
 import { botSettings } from './settings';
+import { isUserSession } from '../../../src/shared/session-scope';
 
-export function activeBot(store: Store, context: BotExecutionContext): BotConfig {
+type BotSessionScope = Omit<BotExecutionContext, 'conversationId'> & { conversationId?: string };
+
+export function activeBot(store: Store, context: BotSessionScope): BotConfig {
   const bot = store.list<BotConfig>('bot').find((b) => b.id === context.botId);
   if (!bot || !bot.allowedSenders.includes(context.sender))
     throw new Error('机器人连接或用户授权已失效');
@@ -15,12 +18,19 @@ export function activeBot(store: Store, context: BotExecutionContext): BotConfig
     throw new Error('机器人群授权已失效');
   return bot;
 }
-export function botSessions(store: Store, context: BotExecutionContext): Session[] {
+export function botSessions(store: Store, context: BotSessionScope): Session[] {
   activeBot(store, context);
   const settings = botSettings(store);
   return store.list<Session>('session').filter((s) => {
-    if (s.parentId || s.memoryJob || s.knowledgeJob || s.automationJob) return false;
-    if (s.botConversation) return s.id === context.conversationId;
+    if (!isUserSession(s)) return false;
+    if (s.botConversation)
+      return (
+        (!context.conversationId || s.id === context.conversationId) &&
+        s.botConversation.botId === context.botId &&
+        s.botConversation.sender === context.sender &&
+        s.botConversation.chat === context.chat &&
+        s.botConversation.group === context.group
+      );
     return settings.mode === 'workbench';
   });
 }

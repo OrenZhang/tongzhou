@@ -68,7 +68,9 @@
     "test:codex-platform": "node scripts/testing/codex-platform-smoke.mjs",
     "test:codex-interactions": "node scripts/testing/codex-interactions-smoke.mjs",
     "probe:electron-node": "node scripts/testing/electron-node-probe.mjs",
-    "test:canvas-controls": "node scripts/testing/canvas-control-flow-smoke.mjs"
+    "test:canvas-controls": "node scripts/testing/canvas-control-flow-smoke.mjs",
+    "test:knowledge-pagination": "node scripts/testing/knowledge-pagination-smoke.mjs",
+    "test:work-capabilities": "vitest run tests/integration/work-capabilities.test.ts"
   },
   "dependencies": {
     "@minimax-ai/code": "0.4.12",

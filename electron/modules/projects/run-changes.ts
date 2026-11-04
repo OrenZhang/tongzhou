@@ -1,6 +1,6 @@
 import { managedDirectory } from '../../services/storage/local-files';
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, writeFile, readdir, lstat, rm } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, readdir, lstat, realpath, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { createTwoFilesPatch } from 'diff';
 import { commandResult, within, withFileLock } from '../../core/tools/workspace';
@@ -22,6 +22,13 @@ export class ChangeCheckpoints {
   private blob(id: string) {
     if (!/^[a-f0-9]{64}$/.test(id)) throw new Error('无效检查点');
     return path.join(this.root(), id);
+  }
+  private async mutateProject<T>(projectId: string, action: (project: Project) => Promise<T>) {
+    const project = this.store.get<Project>('project', projectId);
+    const root = await realpath(project.path);
+    // Share the lock across project aliases and Checkpoints instances. Keep the
+    // reviewed fingerprint and the corresponding Git write in one critical section.
+    return withFileLock(root, () => action({ ...project, path: root }));
   }
   private async capture(root: string) {
     const result = new Map<string, string>();
@@ -127,49 +134,53 @@ export class ChangeCheckpoints {
     );
   }
   async restore(runId: string, file: string) {
-    const c = this.store.get<RunChanges>('runChanges', runId),
-      f = c.files.find((f) => f.path === file);
-    if (!f || !c.finishedAt) throw new Error('检查点文件不存在或仍在运行');
-    const project = this.store.get<Project>('project', c.projectId);
-    const target = await within(project.path, file, true);
-    return withFileLock(target, async () => {
-      const current = await readFile(target).catch((e) => {
+    const { projectId } = this.store.get<RunChanges>('runChanges', runId);
+    return this.mutateProject(projectId, async (project) => {
+      const c = this.store.get<RunChanges>('runChanges', runId),
+        f = c.files.find((f) => f.path === file);
+      if (!f || !c.finishedAt) throw new Error('检查点文件不存在或仍在运行');
+      const target = await within(project.path, file, true);
+      return withFileLock(target, async () => {
+        const current = await readFile(target).catch((e) => {
+          if (e.code === 'ENOENT') return null;
+          throw e;
+        });
+        if ((current ? hash(current) : null) !== f.after)
+          throw new Error('文件在本轮结束后已被修改，未覆盖。请先审阅最新差异。');
+        // Never reset to HEAD: restore exactly the pre-turn user content.
+        if (f.before) {
+          const data = await readFile(this.blob(f.before));
+          await mkdir(path.dirname(target), { recursive: true });
+          await writeFile(target, data);
+        } else await rm(target);
+        f.restored = true;
+        this.store.put('runChanges', c);
+        return '已恢复到本轮开始前的内容';
+      });
+    });
+  }
+  async stage(runId: string, file: string) {
+    const { projectId } = this.store.get<RunChanges>('runChanges', runId);
+    return this.mutateProject(projectId, async (project) => {
+      const c = this.store.get<RunChanges>('runChanges', runId),
+        f = c.files.find((f) => f.path === file);
+      if (!f || !c.finishedAt) throw new Error('检查点不存在');
+      const current = await readFile(await within(project.path, file, true)).catch((e) => {
         if (e.code === 'ENOENT') return null;
         throw e;
       });
       if ((current ? hash(current) : null) !== f.after)
-        throw new Error('文件在本轮结束后已被修改，未覆盖。请先审阅最新差异。');
-      // Never reset to HEAD: restore exactly the pre-turn user content.
-      if (f.before) {
-        const data = await readFile(this.blob(f.before));
-        await mkdir(path.dirname(target), { recursive: true });
-        await writeFile(target, data);
-      } else await rm(target);
-      f.restored = true;
-      this.store.put('runChanges', c);
-      return '已恢复到本轮开始前的内容';
+        throw new Error('文件已变化，请重新审阅后暂存');
+      const r = await commandResult(
+        'git',
+        ['--literal-pathspecs', 'add', '--', file],
+        project.path,
+        AbortSignal.timeout(15000),
+        15000,
+      );
+      if (r.exitCode !== 0) throw new Error(r.output);
+      return '已暂存文件';
     });
-  }
-  async stage(runId: string, file: string) {
-    const c = this.store.get<RunChanges>('runChanges', runId),
-      f = c.files.find((f) => f.path === file);
-    if (!f || !c.finishedAt) throw new Error('检查点不存在');
-    const project = this.store.get<Project>('project', c.projectId);
-    const current = await readFile(await within(project.path, file, true)).catch((e) => {
-      if (e.code === 'ENOENT') return null;
-      throw e;
-    });
-    if ((current ? hash(current) : null) !== f.after)
-      throw new Error('文件已变化，请重新审阅后暂存');
-    const r = await commandResult(
-      'git',
-      ['--literal-pathspecs', 'add', '--', file],
-      project.path,
-      AbortSignal.timeout(15000),
-      15000,
-    );
-    if (r.exitCode !== 0) throw new Error(r.output);
-    return '已暂存文件';
   }
   async staged(projectId: string) {
     const p = this.store.get<Project>('project', projectId);
@@ -185,17 +196,18 @@ export class ChangeCheckpoints {
     return { patch: r.stdout, hash: hash(Buffer.from(r.stdout)) };
   }
   async commit(projectId: string, message: string, expected: string) {
-    if ((await this.staged(projectId)).hash !== expected)
-      throw new Error('已暂存内容在审阅后发生变化，请重新检查');
-    const p = this.store.get<Project>('project', projectId);
-    const r = await commandResult(
-      'git',
-      ['commit', '-m', message],
-      p.path,
-      AbortSignal.timeout(120000),
-      120000,
-    );
-    if (r.exitCode !== 0) throw new Error(r.output);
-    return r.output;
+    return this.mutateProject(projectId, async (project) => {
+      if ((await this.staged(projectId)).hash !== expected)
+        throw new Error('已暂存内容在审阅后发生变化，请重新检查');
+      const r = await commandResult(
+        'git',
+        ['commit', '-m', message],
+        project.path,
+        AbortSignal.timeout(120000),
+        120000,
+      );
+      if (r.exitCode !== 0) throw new Error(r.output);
+      return r.output;
+    });
   }
 }

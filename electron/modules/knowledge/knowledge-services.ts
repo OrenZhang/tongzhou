@@ -18,7 +18,7 @@ import {
   type ClientOperation,
 } from '../../core/tools/client-commands';
 import { absolutePathSchema } from '../../services/storage/file-transfer';
-import { knowledgeInput, knowledgeFolderInput } from './knowledge';
+import { knowledgeInput, knowledgeFolderInput, knowledgeQuery } from './knowledge';
 import type { Store } from '../../services/storage/store';
 import type { Session } from '../../../src/shared/types';
 
@@ -237,8 +237,9 @@ export function registerKnowledgeServices(
         .union([id, z.literal('*')])
         .nullable()
         .optional(),
+      knowledgeQuery.optional(),
     ]),
-    (query, project, session, folder) => k.state(query, project, session, folder),
+    (query, project, session, folder, options) => k.state(query, project, session, folder, options),
   );
   register(
     'knowledgeRead',

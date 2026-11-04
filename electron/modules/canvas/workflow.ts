@@ -11,7 +11,7 @@ import { checkedNodeText } from './text-source';
 import { splitPlugin } from './split-plugin';
 import { registerControlPlugins } from './control-plugins';
 import { planCanvasExecution, type CanvasExecutionPlan } from './execution-plan';
-import { CanvasExecution, canvasEdgeActive } from './execution';
+import { CanvasExecution, canvasEdgeActive, canvasRunNodes } from './execution';
 import { registerWorkflowPlugins, type CanvasNotify } from './workflow-plugins';
 import { routeCanvasOutput } from '../../../src/shared/canvas-ports';
 import { createMcpNodePlugin, type McpNodeOptions } from './plugin-sdk';
@@ -531,6 +531,16 @@ export class CanvasWorkflows {
           scopedSignal,
         ),
       inputs: (id, scopedSignal) => this.inputsFor(run, id, options, scopedSignal),
+      cacheContext: (id, opts) => {
+        try {
+          return this.executionContext(run, run.definition.nodes.find((n) => n.id === id)!, opts)
+            .fingerprint;
+        } catch (error) {
+          // A branch may never execute. Record unavailable configuration in its cache key;
+          // executeNode still resolves and validates it strictly when the branch is activated.
+          return { unavailable: error instanceof Error ? error.message : String(error) };
+        }
+      },
       history: () =>
         this.canvases.runs
           .list()
@@ -538,20 +548,7 @@ export class CanvasWorkflows {
             (r) => r.id !== run.id && r.canvasId === run.canvasId && r.sessionId === run.sessionId,
           )
           .sort((a, b) => b.startedAt - a.startedAt),
-      validateOutput: async (output) => {
-        try {
-          for (const ref of output.resources) {
-            this.resources.validate(ref);
-            if (ref.kind === 'artifact') this.domains.artifacts.bytes(ref.id);
-            if (ref.kind === 'content' && this.domains.content.document(ref.id).blob)
-              this.domains.knowledge.originalBytes(ref.id);
-            if (ref.kind === 'file') await this.resources.fileBytes(ref);
-          }
-          return true;
-        } catch {
-          return false;
-        }
-      },
+      validateOutput: (output) => this.reusableOutput(output),
     });
     try {
       await runtime.execute();
@@ -568,6 +565,68 @@ export class CanvasWorkflows {
       run.endedAt = Date.now();
       this.persist(run);
     }
+  }
+  private async reusableOutput(output: CanvasOutput) {
+    try {
+      for (const ref of output.resources) {
+        this.resources.validate(ref);
+        if (ref.kind === 'artifact') this.domains.artifacts.bytes(ref.id);
+        if (ref.kind === 'content' && this.domains.content.document(ref.id).blob)
+          this.domains.knowledge.originalBytes(ref.id);
+        if (ref.kind === 'file') await this.resources.fileBytes(ref);
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  /** Resolve the same effective settings for execution and every level of cache lookup. */
+  private executionContext(run: CanvasRun, node: CanvasNode, options: CanvasExecute) {
+    const session = this.store.get<Session>('session', run.sessionId);
+    const providerId = node.providerId || options.providerId || session.providerId;
+    const provider =
+      node.kind === 'agent' || (node.kind === 'image' && !node.media)
+        ? this.store.get<Provider>('provider', providerId)
+        : undefined;
+    const model =
+      node.model ||
+      (node.providerId && node.providerId !== session.providerId
+        ? provider?.models[0]
+        : options.model || session.model) ||
+      '';
+    // The canvas specialist orchestrates the graph; transform nodes need their own task role.
+    const agentId =
+      node.agentId || (isCanvasAgent(builtinAgent(session.agentId) ?? {}) ? '' : session.agentId);
+    const agent = agentId ? agentProfile(this.store, agentId) : undefined;
+    const ownerPermission = effectivePermission(
+      session,
+      this.store.defaultPermission(),
+      session.agentId ? agentProfile(this.store, session.agentId) : undefined,
+    );
+    if (ownerPermission === 'read-only') throw new Error('会话已切换为只读，工作流停止');
+    const permission = effectivePermission(
+      { ...session, permission: ownerPermission },
+      this.store.defaultPermission(),
+      agent,
+    );
+    return {
+      providerId,
+      model,
+      agentId,
+      permission,
+      fingerprint: {
+        providerId,
+        provider,
+        model,
+        agentId,
+        agent,
+        permission,
+        plugins: this.store.list('plugin'),
+        skills: this.store
+          .list('skill')
+          .map((s: any) => ({ id: s.id, enabled: s.enabled, files: s.files })),
+      },
+    };
   }
   private async executeNode(
     run: CanvasRun,
@@ -595,38 +654,13 @@ export class CanvasWorkflows {
       (node.kind === 'resource' || node.media?.mode === 'existing') && node.resource
         ? await this.resources.resolveNode(node)
         : undefined;
-    const session = this.store.get<Session>('session', run.sessionId);
-    const providerId = node.providerId || options.providerId || session.providerId;
-    const selectedProvider =
-      node.kind === 'agent' || (node.kind === 'image' && !node.media)
-        ? this.store.get<Provider>('provider', providerId)
-        : undefined;
-    const model =
-      node.model ||
-      (node.providerId && node.providerId !== session.providerId
-        ? selectedProvider?.models[0]
-        : options.model || session.model) ||
-      '';
-    // The canvas specialist orchestrates the graph; transform nodes need their own task role.
-    const agentId =
-      node.agentId || (isCanvasAgent(builtinAgent(session.agentId) ?? {}) ? '' : session.agentId);
-    const ownerPermission = effectivePermission(
-      session,
-      this.store.defaultPermission(),
-      session.agentId ? agentProfile(this.store, session.agentId) : undefined,
-    );
-    if (ownerPermission === 'read-only') throw new Error('会话已切换为只读，工作流停止');
-    const permission = effectivePermission(
-      { ...session, permission: ownerPermission },
-      this.store.defaultPermission(),
-      agentId ? agentProfile(this.store, agentId) : undefined,
+    const { providerId, model, agentId, permission, fingerprint } = this.executionContext(
+      run,
+      node,
+      options,
     );
     const { x: _x, y: _y, width: _width, height: _height, group: _group, ...config } = node;
     step.inputs = inputs;
-    const provider =
-      node.kind === 'agent' || (node.kind === 'image' && !node.media)
-        ? this.store.get<Provider>('provider', providerId)
-        : undefined;
     step.fingerprint = digest({
       config,
       executionKey: step.executionKey,
@@ -634,14 +668,7 @@ export class CanvasWorkflows {
       ...(options.saveResource ? { saveResource: true } : {}),
       inputs,
       own,
-      provider,
-      model,
-      agent: agentId ? agentProfile(this.store, agentId) : undefined,
-      permission,
-      plugins: this.store.list('plugin'),
-      skills: this.store
-        .list('skill')
-        .map((s: any) => ({ id: s.id, enabled: s.enabled, files: s.files })),
+      ...fingerprint,
     });
     const cached =
       options.reuse &&
@@ -655,7 +682,7 @@ export class CanvasWorkflows {
                 r.id !== run.id && r.canvasId === run.canvasId && r.sessionId === run.sessionId,
             )
             .sort((a, b) => b.startedAt - a.startedAt)
-            .flatMap((r) => Object.values(r.nodes))
+            .flatMap((r) => canvasRunNodes(r.nodes))
             .find(
               (s) =>
                 ['completed', 'cached'].includes(s.status) &&
@@ -663,15 +690,7 @@ export class CanvasWorkflows {
                 s.output,
             )
         : undefined;
-    let reusable = !!cached;
-    if (cached?.output)
-      for (const ref of cached.output.resources)
-        try {
-          this.resources.validate(ref);
-        } catch {
-          reusable = false;
-        }
-    if (cached?.output && reusable) {
+    if (cached?.output && (await this.reusableOutput(cached.output))) {
       step.output = cached.output;
       step.generation = cached.generation;
       step.generationFingerprint = cached.generationFingerprint;

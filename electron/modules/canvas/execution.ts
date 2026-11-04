@@ -19,6 +19,15 @@ const iterationExternal = (external: CanvasRun['external'], key: string) =>
     ),
   );
 
+const canvasRunNodeEntries = (nodes: Record<string, CanvasNodeRun>): [string, CanvasNodeRun][] =>
+  Object.entries(nodes).flatMap(([id, node]) => [
+    [id, node] as [string, CanvasNodeRun],
+    ...(node.iterations ?? []).flatMap((iteration) => canvasRunNodeEntries(iteration.nodes)),
+  ]);
+
+export const canvasRunNodes = (nodes: Record<string, CanvasNodeRun>): CanvasNodeRun[] =>
+  canvasRunNodeEntries(nodes).map(([, node]) => node);
+
 export function canvasEdgeActive(run: CanvasRun, edge: CanvasEdge) {
   const source = run.nodes[edge.from];
   if (!source) return false;
@@ -47,6 +56,7 @@ interface ExecutionHost {
   inputs(id: string, signal: AbortSignal): Promise<CanvasOutput[]>;
   history(): CanvasRun[];
   validateOutput(output: CanvasOutput): Promise<boolean>;
+  cacheContext(id: string, options: CanvasExecute): unknown;
 }
 
 /** One shared execution budget and semaphore cover independent branches and nested loop bodies. */
@@ -245,25 +255,25 @@ export class CanvasExecution {
             .map((e) => this.run.nodes[e.from]?.output),
           edges: this.run.definition.edges.filter((e) => loop.members.has(e.to)),
           plugins: [...loop.members].map((id) => this.run.nodes[id].plugin),
+          contexts: [...loop.members].map((id) => this.host.cacheContext(id, options)),
         }),
       )
       .digest('hex');
     step.iterationFingerprint = fingerprint;
-    const descendants = (nodes: Record<string, CanvasNodeRun>): CanvasNodeRun[] =>
-      Object.values(nodes).flatMap((node) => [
-        node,
-        ...(node.iterations ?? []).flatMap((iteration) => descendants(iteration.nodes)),
-      ]);
-    const previous = options.reuse
+    const history = options.reuse
       ? this.host
           .history()
-          .flatMap((run) => descendants(run.nodes).map((state) => ({ run, state })))
-          .filter(
-            ({ state }) =>
-              state.iterationFingerprint === fingerprint &&
-              state.executionKey === step.executionKey,
+          .flatMap((run) =>
+            canvasRunNodeEntries(run.nodes).map(([id, state]) => ({ run, id, state })),
           )
+          .filter(({ id, state }) => id === loop.start && state.executionKey === step.executionKey)
       : [];
+    const previous = history.filter(({ state }) => state.iterationFingerprint === fingerprint);
+    const cacheableBody = [...loop.body].every(
+      (id) =>
+        this.host.plugins.get(this.run.definition.nodes.find((n) => n.id === id)!).definition
+          .cache !== 'never',
+    );
     step.iterations = [];
     step.status = 'running';
     if (!values.length) this.skip([...loop.body], '遍历输入为空');
@@ -277,22 +287,29 @@ export class CanvasExecution {
         state.iterations?.some((item) => item.index === index),
       );
       const old = previousItem?.state.iterations?.find((item) => item.index === index);
-      const oldExternal =
-        old?.external ?? iterationExternal(previousItem?.run.external, executionKey);
+      // Remote-job safety is independent of cache compatibility. A configuration change or
+      // fingerprint upgrade must not silently resubmit a task whose outcome is still unknown.
+      const latest = history.find(({ state }) =>
+        state.iterations?.some((item) => item.index === index),
+      );
+      const latestItem = latest?.state.iterations?.find((item) => item.index === index);
+      const latestExternal =
+        latestItem?.external ?? iterationExternal(latest?.run.external, executionKey);
       if (
-        old &&
-        !['completed', 'cached'].includes(old.status) &&
-        (Object.values(old.nodes).some((n) =>
+        latestItem &&
+        !['completed', 'cached'].includes(latestItem.status) &&
+        (canvasRunNodes(latestItem.nodes).some((n) =>
           n.generation?.some((g) => g.remoteTaskId && g.status !== 'completed'),
         ) ||
-          Object.values(oldExternal).some((task) => task.promptId || task.uncertain))
+          Object.values(latestExternal).some((task) => task.promptId || task.uncertain))
       )
         throw new Error('失败轮次仍有远端媒体任务 ID，请先检查原任务；关闭结果复用后才会重新提交');
-      const reusable =
+      const previousSuccess =
         old &&
         ['completed', 'cached'].includes(old.status) &&
         old.output &&
         (await this.host.validateOutput(old.output));
+      const reusable = previousSuccess && cacheableBody;
       const iteration: CanvasIteration = reusable
         ? { ...structuredClone(old), status: 'cached' }
         : {
@@ -330,7 +347,9 @@ export class CanvasExecution {
         if (!reusable) {
           const failed = await this.scope(loop.body, {
             ...options,
-            reuse: false,
+            // Revisit non-cacheable nodes, retaining unchanged paid outputs from a successful
+            // iteration. Failed iterations still rerun their body as one recovery unit.
+            reuse: !!previousSuccess,
             regenerate: undefined,
             resumeRunId: undefined,
           });

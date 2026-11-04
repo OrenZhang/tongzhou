@@ -1,6 +1,7 @@
 import { BotNotifications } from '../bots/notifications';
 import { botSchema, publicBot } from '../bots/config';
 import { botSettings, botSettingsSchema } from '../bots/settings';
+import { botSessions } from '../bots/access';
 import { createHash, randomUUID } from 'node:crypto';
 import type { Store } from '../storage/store';
 import type { TaskService, ChangePublisher } from '../../core/task-contracts';
@@ -197,17 +198,12 @@ export class Bots {
     const bindingId = createHash('sha256')
       .update(JSON.stringify([botId, m.sender, m.chat]))
       .digest('hex');
-    const sessions = this.store
-      .list<Session>('session')
-      .filter(
-        (s) =>
-          !s.archived &&
-          !s.parentId &&
-          (!s.botConversation ||
-            (s.botConversation.botId === b.id &&
-              s.botConversation.sender === m.sender &&
-              s.botConversation.chat === m.chat)),
-      );
+    const sessions = botSessions(this.store, {
+      botId,
+      sender: m.sender,
+      chat: m.chat,
+      group: m.group,
+    }).filter((s) => !s.archived);
     const selected =
       this.store.list<any>('botBinding').find((x) => x.id === bindingId)?.sessionId ??
       (sessions.length === 1 ? sessions[0].id : undefined);

@@ -640,6 +640,18 @@
   margin-top: auto;
   padding-top: 8px;
 }
+.knowledge-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.knowledge-pagination button {
+  padding: 5px 8px;
+  font-size: 11px;
+}
 .knowledge-list-empty {
   padding: 28px 8px;
   color: var(--muted);

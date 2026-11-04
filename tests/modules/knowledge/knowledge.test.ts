@@ -6,6 +6,7 @@ import { ClientCommands } from '../../../electron/core/tools/client-commands';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { Store } from '../../../electron/services/storage/store';
 import { Knowledge } from '../../../electron/modules/knowledge/knowledge';
 import { KNOWLEDGE_ORGANIZER_ID } from '../../../src/shared/builtin-agents';
@@ -288,6 +289,89 @@ describe('local knowledge lifecycle', () => {
     const pdf = k.importFile('report.pdf', Buffer.from('%PDF binary'));
     expect(pdf.indexed).toBe(false);
     expect(k.state().issues.some((i) => i.id === pdf.id && i.reason.includes('正文'))).toBe(true);
+  });
+  it('filters daily memories before pagination and reports all pending memories across pages', () => {
+    const { k, store } = fixture();
+    const base = k.save({ title: '旧记忆', content: '共同正文', kind: 'memory' });
+    const memories = Array.from({ length: 105 }, (_, i) => ({
+      ...base,
+      id: randomUUID(),
+      title: `每日记忆 ${i}`,
+      createdAt: i,
+      updatedAt: i,
+      status: i < 3 ? ('draft' as const) : ('ready' as const),
+      projectId: i === 104 ? 'project-a' : undefined,
+    }));
+    k.documents.remove(base.id);
+    for (const memory of memories) k.documents.put(memory);
+    for (let i = 0; i < 110; i++)
+      k.documents.put({
+        ...base,
+        id: randomUUID(),
+        title: `较新普通资料 ${i}`,
+        kind: 'source',
+        updatedAt: 1000 + i,
+      });
+    const handlers = new Map<string, any>();
+    registerKnowledgeServices((name, _definition, handler) => handlers.set(name, handler), store, {
+      knowledge: k,
+      changed: () => {},
+    } as any);
+    const state = handlers.get('knowledgeState');
+    // Existing four-argument callers retain the same default result shape and limit.
+    expect(state().documents).toHaveLength(100);
+    expect(state().total).toBe(215);
+    const first = state('', undefined, undefined, undefined, { kind: 'memory' });
+    expect(first.documents).toHaveLength(100);
+    expect(first.documents.every((d: any) => d.kind === 'memory')).toBe(true);
+    expect(first.page).toMatchObject({ total: 105, issuesTotal: 3, offset: 0, nextOffset: 100 });
+    const last = state('', undefined, undefined, undefined, { kind: 'memory', offset: 100 });
+    expect(last.documents.map((d: any) => d.id)).toEqual(
+      memories
+        .slice(0, 5)
+        .reverse()
+        .map((d) => d.id),
+    );
+    expect(last.page).toMatchObject({ total: 105, nextOffset: null });
+    const pending = state('', undefined, undefined, undefined, {
+      kind: 'memory',
+      issuesOnly: true,
+    });
+    expect(pending.documents.map((d: any) => d.id)).toEqual(
+      memories
+        .slice(0, 3)
+        .reverse()
+        .map((d) => d.id),
+    );
+    expect(pending.page).toMatchObject({ total: 3, issuesTotal: 3, nextOffset: null });
+    expect(
+      state('每日记忆', 'project-a', undefined, undefined, { kind: 'memory' }).documents.map(
+        (d: any) => d.id,
+      ),
+    ).toEqual([memories[104].id]);
+    // Dedicated Agent search remains unfiltered by the workspace's memory view.
+    expect(k.search('共同正文', undefined, undefined, 300)).toHaveLength(215);
+    expect(() => k.state('', undefined, undefined, undefined, { offset: -1 })).toThrow();
+    expect(() => k.state('', undefined, undefined, undefined, { limit: 101 })).toThrow();
+  });
+  it('finds literal queries that have no lexical tokens without changing word searches', () => {
+    const { k } = fixture();
+    const cpp = k.save({ title: 'C++', content: '编译与单元测试 compilation', kind: 'source' });
+    const csharp = k.save({ title: 'C#', content: '编码约定 conventions', kind: 'source' });
+    const symbol = k.save({ title: 'λ', content: '函数表达式', kind: 'source' });
+    expect(k.search(' C++ ').map((d) => d.id)).toEqual([cpp.id]);
+    expect(k.search('c#').map((d) => d.id)).toEqual([csharp.id]);
+    expect(k.search('λ').map((d) => d.id)).toEqual([symbol.id]);
+    expect(
+      k
+        .search('c')
+        .map((d) => d.id)
+        .sort(),
+    ).toEqual([cpp.id, csharp.id].sort());
+    expect(k.search('COMPILATION').map((d) => d.id)).toEqual([cpp.id]);
+    expect(k.search('编译').map((d) => d.id)).toEqual([cpp.id]);
+    expect(k.search('')).toHaveLength(3);
+    expect(k.search('F#')).toHaveLength(0);
   });
   it('keeps revisions, rejects stale writes, marks changed sources and restores without losing history', () => {
     const { k } = fixture();

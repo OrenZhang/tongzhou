@@ -528,6 +528,7 @@ export interface TongzhouAPI {
     projectId?: string,
     sessionId?: string,
     folderId?: string | null,
+    options?: import('./knowledge').KnowledgeQuery,
   ): Promise<KnowledgeState>;
   knowledgeFolderSave(
     input: import('./knowledge').KnowledgeFolderInput,

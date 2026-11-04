@@ -626,6 +626,72 @@ describe('media plugin nodes', () => {
     ]);
     expect((await f.calls()).filter((call) => call.name === 'text_to_image')).toHaveLength(3);
   });
+  it('reuses each paid image when a loop must refresh a non-cacheable downstream template', async () => {
+    const f = await fixture();
+    const control = (
+      id: string,
+      pluginId: string,
+      config?: Record<string, unknown>,
+    ): CanvasNode => ({ id, kind: 'plugin', pluginId, config, title: id, x: 0, y: 0 });
+    const edge = (from: string, to: string, fromPort = 'result', toPort = 'context') => ({
+      id: from + ':' + to,
+      from,
+      to,
+      fromPort,
+      toPort,
+      kind: 'dependency' as const,
+    });
+    const c = f.system.domains.canvases.save({
+      title: '图片与本轮时间',
+      viewport: { x: 0, y: 0, zoom: 1 },
+      selection: [],
+      nodes: [
+        { id: 'source', kind: 'text', title: '列表', x: 0, y: 0, text: '["红衣人物","蓝衣人物"]' },
+        control('loop', 'workflow.foreach', { endNodeId: 'end' }),
+        image(1),
+        control('imageResult', 'workflow.join'),
+        { ...control('clock', 'workflow.template'), text: '{{time}}' },
+        control('end', 'workflow.collect'),
+      ],
+      edges: [
+        edge('source', 'loop'),
+        edge('loop', 'image', 'item', 'prompt'),
+        edge('image', 'imageResult'),
+        edge('imageResult', 'clock'),
+        edge('clock', 'end'),
+      ],
+    });
+    const first = await f.run(c),
+      second = await f.run(c);
+    expect(first.status).toBe('completed');
+    expect(second.status).toBe('completed');
+    expect(second.nodes.end.output?.value).toEqual(
+      Array(2).fill(new Date(second.startedAt).toISOString()),
+    );
+    expect(second.nodes.loop.iterations?.map((item) => item.status)).toEqual([
+      'completed',
+      'completed',
+    ]);
+    expect(second.nodes.loop.iterations?.map((item) => item.nodes.image.status)).toEqual([
+      'cached',
+      'cached',
+    ]);
+    expect((await f.calls()).filter((call) => call.name === 'text_to_image')).toHaveLength(2);
+    for (let i = 0; i < 2; i++)
+      expect(second.nodes.loop.iterations![i].nodes.image.output?.resources).toEqual(
+        first.nodes.loop.iterations![i].nodes.image.output?.resources,
+      );
+    const original = first.nodes.loop.iterations![0].nodes.image.output!.resources[0];
+    if (original.kind !== 'artifact') throw new Error('Expected generated image');
+    await rm(f.system.domains.artifacts.openPath(original.id));
+    const repaired = await f.run(c);
+    expect(repaired.status).toBe('completed');
+    expect(repaired.nodes.loop.iterations?.map((item) => item.nodes.image.status)).toEqual([
+      'completed',
+      'cached',
+    ]);
+    expect((await f.calls()).filter((call) => call.name === 'text_to_image')).toHaveLength(3);
+  });
   it('saves generated originals into a selected directory and defaults to managed artifacts', async () => {
     const f = await fixture(),
       folder = path.join(f.root, '输出目录'),

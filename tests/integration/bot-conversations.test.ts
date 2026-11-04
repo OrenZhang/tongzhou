@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { Store } from '../../electron/services/storage/store';
 import { Bots } from '../../electron/services/channels/bots';
 import { botClientPolicy } from '../../electron/services/bots/client-policy';
-import { botPermission } from '../../electron/services/bots/access';
+import { botPermission, botSessions } from '../../electron/services/bots/access';
 import { ClientCommands, operation } from '../../electron/core/tools/client-commands';
 import { ToolScope } from '../../electron/core/tools/extensions';
 import type { BotConfig, Run, RunInput, Session } from '../../src/shared/types';
@@ -180,6 +180,99 @@ it('controls all regular sessions but isolates other bot conversations and forbi
   expect(policy.unavailable('contentWrite')).toBeUndefined();
   f.bots.remove(f.config.id);
   expect((await scope.call('client_query', { method: 'snapshot' })).isError).toBe(true);
+});
+
+const backgroundContexts: [string, Partial<Session>][] = [
+  ['child', { parentId: 'parent' }],
+  ['memory', { memoryJob: 'memory-job' }],
+  ['knowledge', { knowledgeJob: true }],
+  ['automation', { automationJob: 'automation-job' }],
+  ['document', { contentContext: { libraryId: 'default', documentId: 'document' } }],
+  ['canvas', { canvasContext: { canvasId: 'canvas', workflowRunId: 'workflow', nodeId: 'node' } }],
+];
+it.each(backgroundContexts)(
+  'excludes %s workers from slash commands and invalidates previously selected sessions',
+  async (_kind, context) => {
+    const f = fixture();
+    f.bots.saveSettings({
+      providerId: 'provider',
+      model: 'model',
+      permission: 'ask',
+      mode: 'workbench',
+    });
+    const regular = f.store.createSession(),
+      target = f.store.createSession();
+    let sequence = 0;
+    const command = (text: string) =>
+      f.bots.receive('bot', { ...f.message, id: `command-${++sequence}`, text });
+    expect(await command('/use ' + target.id)).toContain('当前会话');
+    const worker = { ...target, ...context, title: 'Hidden worker', model: 'model' };
+    f.store.put('session', worker);
+    const scope = {
+      botId: 'bot',
+      sender: f.message.sender,
+      chat: f.message.chat,
+      group: f.message.group,
+    };
+    expect(botSessions(f.store, scope).map((s) => s.id)).toEqual([regular.id]);
+    const listed = await command('/sessions');
+    expect(listed).toContain(regular.id.slice(0, 8));
+    expect(listed).not.toContain(target.id.slice(0, 8));
+    expect(listed).not.toContain(worker.title);
+    expect(await command('/use ' + target.id)).toContain('不在授权范围');
+    expect(await command('/status ' + target.id)).toContain('查看可见会话');
+    for (const text of ['/stop', '/rename changed remotely', '/archive', '/run work'])
+      expect(await command(text)).toContain('请先 /use');
+    expect(f.runtime.cancel).not.toHaveBeenCalled();
+    expect(f.runtime.start).not.toHaveBeenCalled();
+    expect(f.runtime.enqueue).not.toHaveBeenCalled();
+    expect(f.store.get<Session>('session', target.id)).toEqual(worker);
+  },
+);
+it('keeps slash controls available for regular chats and scopes bot conversations to their exact identity', async () => {
+  const f = fixture();
+  f.bots.saveSettings({
+    providerId: 'provider',
+    model: 'model',
+    permission: 'ask',
+    mode: 'workbench',
+  });
+  const regular = f.store.createSession();
+  const identity = { botId: 'bot', sender: 'alice', chat: 'alice', group: false };
+  const own = f.store.put('session', {
+    ...f.store.createSession(),
+    botConversation: identity,
+  });
+  const other = f.store.put('session', {
+    ...f.store.createSession(),
+    botConversation: { ...identity, sender: 'bob' },
+  });
+  const group = f.store.put('session', {
+    ...f.store.createSession(),
+    botConversation: { ...identity, group: true },
+  });
+  let sequence = 0;
+  const command = (text: string) =>
+    f.bots.receive('bot', { ...f.message, id: `command-${++sequence}`, text });
+  const listed = await command('/sessions');
+  for (const id of [regular.id, own.id]) expect(listed).toContain(id.slice(0, 8));
+  for (const id of [other.id, group.id]) {
+    expect(listed).not.toContain(id.slice(0, 8));
+    expect(await command('/use ' + id)).toContain('不在授权范围');
+    expect(botSessions(f.store, { ...identity, conversationId: id })).not.toContainEqual(
+      f.store.get('session', id),
+    );
+  }
+  expect(await command('/use ' + own.id)).toContain('当前会话');
+  expect(await command('/use ' + regular.id)).toContain('当前会话');
+  expect(await command('/rename Updated')).toContain('已重命名');
+  expect(await command('/stop')).toContain('已请求停止');
+  expect(f.runtime.cancel).toHaveBeenCalledExactlyOnceWith(regular.id);
+  expect(await command('/archive')).toContain('已归档');
+  expect(f.store.get<Session>('session', regular.id)).toMatchObject({
+    title: 'Updated',
+    archived: true,
+  });
 });
 it('returns the exact delegated session result after the router completes, only once', async () => {
   const f = fixture();
