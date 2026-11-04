@@ -1,37 +1,50 @@
-# CoSail v1.0.5
+# CoSail v1.0.6
 
-**同舟 CoSail · 与 AI 同行，让想法抵达。**
+**同舟 CoSail：从编码、验证到交付，让 AI 与工作模块一起完成任务。**
 
-本版打通模型能力与画布选择，补齐内容库的手动分类和引用维护。
+本版加强任务交付与模块联动，为画布补齐复杂编排，并修复图片预览、缓存、备份和记忆列表问题。
 
-- **模型与画布**：分别标记文本、图片理解、图像/视频/音频生成等能力，绑定实际媒体工具；画布按节点与模式筛选。工具目录明确列出模型时可辅助匹配，多个工具同名时由用户选择。
-- **执行一致性**：界面与 AI 使用同一生成模型目录；检查模型枚举、工具可用性和参考图/首尾帧模式。绑定变更时明确提示，不静默切换服务。媒体专用模型不会被自动路由到聊天接口。
-- **通用内容库**：增加类型与标签筛选，支持手动维护目录、自定义类型、标签及来源引用。保留稳定文档 ID 和版本；单独调整分类不会刷新已有来源版本，并发修改时拒绝覆盖。
-- **漫剧技能**：完善项目公共资产、章节引用、提示词及生成记录的维护规范，复用现有内容库，不把个人知识库固定成漫剧结构。
-- **白板插图**：修复选好图片后停留等待放置，自动保存导致图片无法落位的问题。
-- **会话稳定性**：技能策略初始化遇到临时文件写入失败时有限重试，持续失败仍停止；不会重复模型请求或生成任务。
-- **本次 main 累积更新**：包含 ComfyUI 工作流接入和漫剧制作资料。桌面客户端统一使用 Electron，移除预览宿主的专用代码与依赖，保留独立执行核心；ComfyUI 的真实模型出图仍需用户服务验收。
+## 中文
 
-能力标记不会凭空增加接口支持。生成使用所绑定插件的连接与认证；不包含任意 OpenAI 兼容地址的通用媒体直连、infinite-canvas 远程节点插件兼容或 WebDAV 同步。语音识别目前仅记录能力，没有新增转写节点。
+- **编码与交付**：AI 项目任务可以通过业务工具暂存已完成检查点的改动、审阅暂存区并提交，不再被自身运行状态阻塞。同项目其他任务和原生子任务仍会阻止冲突操作；审批及内容指纹检查保留。暂存、恢复和提交按项目串行，防止并发操作把未审阅文件带入提交。
+- **任务验证**：等待子任务不再占用实际完成检查的重试次数。检查失败后可在同一任务中继续修复，连续无进展会明确停止。新增验收覆盖保留用户改动、修复代码、真实检查失败后重试、交付说明入库与读回、保存记忆及下一轮恢复。
+- **AI 与模块联动**：客户端能力目录支持按名称、模块和说明搜索，分页发现能力，查询准确参数，并定位当前会话。编码任务能够调用现有内容库和任务记忆完成交接。
+- **复杂画布**：支持条件分支、逐项遍历、嵌套循环、独立分支并行、汇合与失败分支；可配置并发和执行步数，查看逐项运行记录。遍历按项顺序推进，每项内部可并行执行独立节点。
+- **图片与缓存**：修复图片预览及资源解析；循环重新执行不可缓存节点，同时保留仍有效且允许缓存的成功媒体输出。模型、角色、权限或插件配置变化会影响缓存；原件缺失不再误报可复用。带有未完成远端任务的失败轮次不会自动重复提交。
+- **资料与可靠性**：每日记忆按类型筛选后分页，普通资料不会再挤掉旧记忆；符号查询可检索。备份恢复包含画布、白板、导入工作流和运行历史。机器人任务范围排除内部及后台会话。
+- **文档与桌面**：重写独立的[中文 README](https://github.com/OrenZhang/tongzhou/blob/main/README.md) 与 [English README](https://github.com/OrenZhang/tongzhou/blob/main/README.en.md)，补充能力、任务示例、安装和开发指引；桌面客户端统一使用 Electron。
 
 ## English
 
-**CoSail · Sail with AI. Bring ideas to life.**
+**CoSail connects coding, verification and delivery with the modules where your work lives.**
 
-- **Models and canvas**: classify model capabilities separately and bind image, video or audio generation to actual tools. Canvas choices are filtered by node and mode; exact tool-catalog IDs assist configuration without guessing from names.
-- **Consistent execution**: the UI and AI share the same generation catalog. Model IDs, available tools and reference/frame modes are validated. Changed bindings require reselection; media-only models are excluded from chat routing.
-- **General-purpose content library**: filter by type and tags, edit folders and custom metadata, and maintain versioned source references. Classification changes preserve source versions, and concurrent edits cannot silently overwrite content.
-- **Comic-production skill**: project assets, chapter references, prompt variants and generation records use the shared content library without imposing a comic-specific structure on personal knowledge.
-- **Whiteboard images**: preserve a pending cursor image while choosing its position; autosave no longer removes it before placement.
-- **Session reliability**: bounded retries handle transient skill-policy configuration writes during initialization, without replaying model requests or generation tasks.
-- **Accumulated main updates** include ComfyUI workflow integration and production references. Desktop builds use Electron; preview-host code and dependencies have been removed while retaining the independent execution core. Live ComfyUI generation requires validation against your service.
-
-Generation uses the bound plugin's connection and credentials. Capability labels do not add unsupported APIs. Generic media endpoints, remote infinite-canvas plugins and WebDAV sync are not included; transcription is a capability label only.
+- **Code delivery**: AI project tasks can stage completed checkpoint changes, review the Git index and commit without being blocked by their own running state. Approval and content checks remain in place; other active project tasks and native subtasks still block conflicting operations. Staging, restoring and committing share a project lock so concurrent operations cannot add unreviewed files to a commit.
+- **Task verification**: waiting for subtasks no longer consumes command verification attempts. Failed checks can continue in the same task for repair; repeated lack of progress stops explicitly. Integration coverage follows user changes through code repair, real command failures, delivery documents, task memory and the next conversation turn.
+- **AI and module integration**: search the client capability catalog by name, module or description, page through results, inspect exact arguments and identify the current session. Coding tasks can use the existing content library and task memory to save and recover their handoff.
+- **Canvas orchestration**: conditional branches, iteration, nested loops, parallel independent branches, joins and failure branches, with concurrency and step limits plus per-item history. Items run sequentially; independent nodes within an item can run in parallel.
+- **Images and caching**: fixes image previews and resource resolution. Loops rerun non-cacheable nodes while retaining valid successful media from cacheable nodes. Effective model, role, permission and plugin settings affect cache reuse, missing originals invalidate cached output, and failed iterations with unresolved remote jobs are not silently resubmitted.
+- **Knowledge and reliability**: daily memories are filtered before pagination, so newer ordinary documents no longer hide older memories. Symbol-only searches work. Backups include canvases, whiteboards, imported workflows and run history. Bot task access excludes internal and background sessions.
+- **Documentation and desktop**: separate Chinese and English READMEs explain capabilities, task examples, installation and development. Desktop builds use Electron.
 
 ## 安装包 / Downloads
 
-Windows：`win-x64.exe`。Apple Silicon：`mac-arm64.dmg`。Intel Mac：`mac-x64.dmg`。macOS ZIP 用于更新通道。Linux：`linux-x86_64.AppImage` 或 `linux-amd64.deb`。各平台校验文件为 `SHA256SUMS-*`。
+| 平台 / Platform     | 文件 / File                                                            |
+| ------------------- | ---------------------------------------------------------------------- |
+| Windows x64         | `CoSail-1.0.6-win-x64.exe`                                             |
+| macOS Apple Silicon | `CoSail-1.0.6-mac-arm64.dmg`                                           |
+| macOS Intel         | `CoSail-1.0.6-mac-x64.dmg`                                             |
+| Linux x64           | `CoSail-1.0.6-linux-x86_64.AppImage` or `CoSail-1.0.6-linux-amd64.deb` |
 
-Linux 电脑控制目前面向 X11 / XWayland；电源与合盖功能仅支持 Windows / macOS。未配置发布证书的安装包未签名，macOS 未签名版本及 Linux 版本通过下载新版安装包更新。
+macOS ZIP、更新清单与各平台 `SHA256SUMS-*` 校验文件随安装包提供。Linux 电脑控制面向 X11 / XWayland；电源与合盖功能限 Windows / macOS。未配置签名证书时提供未签名包；未签名 macOS 和 Linux 客户端通过下载新版安装包更新。
 
-Choose the installer for your operating system and architecture. Platform-specific `SHA256SUMS-*` files are included. Linux computer control requires X11/XWayland. Unsigned macOS builds and Linux builds are updated by downloading a new installer.
+macOS ZIP files, update manifests and platform-specific `SHA256SUMS-*` files are included. Linux computer control requires X11/XWayland. Power and lid controls are available on Windows/macOS. Packages are unsigned when signing credentials are not configured; unsigned macOS and Linux builds update through a new installer download.
+
+## 升级说明 / Upgrade notes
+
+升级后请重新导出备份：旧版备份未包含的画布数据无法由旧备份恢复，需要从仍保留数据的客户端重新导出。模型和媒体生成使用你配置的服务及认证，能力与费用由对应服务决定；本地存储不代表云端模型调用离线运行。
+
+Export a fresh backup after upgrading. Older archives cannot restore canvas data they never contained; re-export from a client that still has the data. Models and media generation use your configured services and credentials. Their capabilities and costs depend on the provider; local storage does not make cloud inference offline.
+
+本版调整了缓存指纹。升级后首次重跑旧流程时，旧成功结果可能无法复用并产生新的生成费用；已有产物和运行记录仍保留。未完成远端任务仍需先检查，关闭结果复用表示明确重新提交。
+
+Cache fingerprints have changed. The first rerun of an older workflow may regenerate previously successful results and incur new provider charges; existing outputs and history are retained. Check unresolved remote jobs first. Turning off result reuse explicitly allows a new submission.
