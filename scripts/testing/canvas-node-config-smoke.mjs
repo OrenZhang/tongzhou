@@ -9,6 +9,45 @@ const root = await mkdtemp(path.resolve('test-results/canvas-node-config-'));
 const env = { ...process.env, TONGZHOU_USER_DATA: path.join(root, 'profile') };
 delete env.ELECTRON_RUN_AS_NODE;
 delete env.TONGZHOU_DEV_URL;
+const controlFields = {
+  condition: [
+    ['输入序号', 'fill', '2'],
+    ['字段路径', 'fill', 'value.score'],
+    ['判断方式', 'selectOption', 'gte'],
+    ['比较值', 'fill', '60'],
+  ],
+  foreach: [
+    ['遍历输入来源', 'selectOption', 'resources'],
+    ['配对汇总节点', 'selectOption', 'loop-end'],
+    ['最大遍历项数', 'fill', '12'],
+    ['单项失败时', 'selectOption', 'continue'],
+  ],
+  join: [['汇合方式', 'selectOption', 'all']],
+  collect: [],
+};
+const expectedControlConfig = {
+  condition: { input: 2, field: 'value.score', operator: 'gte', value: '60' },
+  foreach: { source: 'resources', endNodeId: 'loop-end', maxItems: 12, onError: 'continue' },
+  join: { mode: 'all' },
+};
+async function checkControlFields(config, control, edit = false) {
+  assert(Object.hasOwn(controlFields, control), `Missing editor coverage for ${control}`);
+  assert.equal(await config.getByLabel('处理要求', { exact: true }).count(), 0);
+  for (const [label, action, value] of controlFields[control]) {
+    const field = config.getByLabel(label, { exact: true });
+    if (edit) await field[action](value);
+    assert.equal(await field.inputValue(), value, label);
+  }
+  if (control === 'collect')
+    assert.equal(
+      await config
+        .getByText('汇总配对循环的每项结果，保持原数组顺序。请将循环外节点连接到汇总输出。', {
+          exact: true,
+        })
+        .isVisible(),
+      true,
+    );
+}
 const app = await electron.launch({ args: ['.'], env });
 try {
   const page = await app.firstWindow();
@@ -22,6 +61,17 @@ try {
     const fixtures = [];
     for (const definition of definitions) {
       if (definition.adapter === 'mcp') continue;
+      const pairedNode =
+        definition.control === 'foreach'
+          ? { id: 'loop-end', pluginId: 'workflow.collect', title: '配对汇总' }
+          : definition.control === 'collect'
+            ? {
+                id: 'loop-start',
+                pluginId: 'workflow.foreach',
+                title: '配对遍历',
+                config: { endNodeId: 'node' },
+              }
+            : undefined;
       const canvas = await api.canvasSave({
         title: `手动配置 ${definition.name}`,
         nodes: [
@@ -36,8 +86,20 @@ try {
             height: 260,
             ...definition.defaults,
           },
+          ...(pairedNode ? [{ kind: 'plugin', x: 440, y: 40, ...pairedNode }] : []),
         ],
-        edges: [],
+        edges: pairedNode
+          ? [
+              {
+                id: 'loop-pair',
+                from: definition.control === 'foreach' ? 'node' : 'loop-start',
+                to: definition.control === 'foreach' ? 'loop-end' : 'node',
+                kind: 'dependency',
+                fromPort: 'item',
+                toPort: 'context',
+              },
+            ]
+          : [],
         selection: [],
         viewport: { x: 25, y: 25, zoom: 1 },
       });
@@ -46,6 +108,11 @@ try {
     return fixtures;
   });
   assert(fixtures.length >= 15);
+  for (const control of Object.keys(controlFields))
+    assert(
+      fixtures.some(({ definition }) => definition.control === control),
+      `Missing ${control} plugin`,
+    );
   await openSidebar(page, '创作');
   for (const { canvasId, definition } of fixtures) {
     console.log(`Check manual editor: ${definition.id} (${canvasId})`);
@@ -54,7 +121,7 @@ try {
       (name) => document.querySelector('.canvas-node-label')?.textContent === name,
       definition.name,
     );
-    const node = page.locator('.canvas-node');
+    const node = page.locator('.canvas-node').first();
     await node.locator('header').click();
     const config = page.getByRole('region', { name: '节点配置', exact: true });
     await config.waitFor();
@@ -76,7 +143,9 @@ try {
             : definition.kind === 'resource'
               ? '自定义提示词'
               : '处理要求');
-      if (definition.id === 'comfyui.workflow') {
+      if (definition.control) {
+        await checkControlFields(config, definition.control, true);
+      } else if (definition.id === 'comfyui.workflow') {
         await config
           .getByLabel('API 工作流 JSON', { exact: true })
           .fill('{"1":{"class_type":"Synthetic","inputs":{}}}');
@@ -95,7 +164,31 @@ try {
     const savedNode = saved.canvas.nodes[0];
     if (!['image', 'video'].includes(definition.kind)) {
       assert.equal(savedNode.title, `手动 ${definition.name}`);
-      if (definition.id === 'comfyui.workflow')
+      if (definition.control) {
+        assert.deepEqual(savedNode.config, expectedControlConfig[definition.control]);
+        assert.equal(savedNode.text, definition.defaults?.text);
+        if (definition.control === 'foreach')
+          assert.equal(
+            saved.canvas.nodes.find((n) => n.id === savedNode.config.endNodeId)?.pluginId,
+            'workflow.collect',
+          );
+        if (definition.control === 'collect')
+          assert.equal(
+            saved.canvas.nodes.find((n) => n.id === 'loop-start')?.config.endNodeId,
+            savedNode.id,
+          );
+        if (['foreach', 'collect'].includes(definition.control))
+          assert.deepEqual(saved.canvas.edges, [
+            {
+              id: 'loop-pair',
+              from: definition.control === 'foreach' ? 'node' : 'loop-start',
+              to: definition.control === 'foreach' ? 'loop-end' : 'node',
+              kind: 'dependency',
+              fromPort: 'item',
+              toPort: 'context',
+            },
+          ]);
+      } else if (definition.id === 'comfyui.workflow')
         assert.deepEqual(JSON.parse(savedNode.config.workflow), {
           1: { class_type: 'Synthetic', inputs: {} },
         });
@@ -103,6 +196,7 @@ try {
     }
     await node.locator('header').click();
     await config.waitFor();
+    if (definition.control) await checkControlFields(config, definition.control);
     await page.locator('.canvas-board').click({ position: { x: 10, y: 10 } });
     await config.waitFor({ state: 'hidden' });
   }
